@@ -221,7 +221,7 @@ See [Custom Rules Guide](docs/custom-rules.md) for details.
 ```bash
 git clone https://github.com/santosr2/terratidy
 cd terratidy
-mise install    # Install Go 1.24 and tools
+mise install    # Install Go 1.25 and tools
 make setup      # Install dependencies
 make build      # Build binary
 ```

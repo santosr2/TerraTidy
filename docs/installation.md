@@ -53,7 +53,7 @@ docker run --rm -v $(pwd):/app -w /app ghcr.io/santosr2/terratidy check
 
 ## From Source
 
-Requires Go 1.24+:
+Requires Go 1.25+:
 
 ```bash
 go install github.com/santosr2/terratidy/cmd/terratidy@latest

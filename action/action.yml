@@ -1,0 +1,107 @@
+name: 'TerraTidy'
+description: 'Run TerraTidy quality checks on Terraform/Terragrunt code'
+branding:
+  icon: 'check-circle'
+  color: 'blue'
+
+inputs:
+  version:
+    description: 'TerraTidy version to install'
+    required: false
+    default: 'latest'
+  command:
+    description: 'Command to run'
+    required: false
+    default: 'check'
+  format:
+    description: 'Output format (text|json|sarif)'
+    required: false
+    default: 'sarif'
+  config_path:
+    description: 'Path to config file'
+    required: false
+    default: ''
+  working_directory:
+    description: 'Working directory'
+    required: false
+    default: '.'
+  upload_sarif:
+    description: 'Automatically upload SARIF to GitHub Code Scanning'
+    required: false
+    default: 'true'
+  severity_threshold:
+    description: 'Minimum severity level to fail (info|warning|error)'
+    required: false
+    default: 'warning'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Setup TerraTidy
+      shell: bash
+      run: |
+        echo "Installing TerraTidy ${{ inputs.version }}..."
+        
+        # Determine OS and architecture
+        OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+        ARCH=$(uname -m)
+        
+        case $ARCH in
+          x86_64) ARCH="amd64" ;;
+          aarch64|arm64) ARCH="arm64" ;;
+        esac
+        
+        # Download binary
+        if [ "${{ inputs.version }}" = "latest" ]; then
+          DOWNLOAD_URL="https://github.com/santosr2/terratidy/releases/latest/download/terratidy-${OS}-${ARCH}"
+        else
+          DOWNLOAD_URL="https://github.com/santosr2/terratidy/releases/download/${{ inputs.version }}/terratidy-${OS}-${ARCH}"
+        fi
+        
+        echo "Downloading from: $DOWNLOAD_URL"
+        curl -sSL "$DOWNLOAD_URL" -o terratidy
+        chmod +x terratidy
+        sudo mv terratidy /usr/local/bin/terratidy
+        
+        echo "✅ TerraTidy installed successfully"
+        terratidy version
+
+    - name: Cache TerraTidy
+      uses: actions/cache@v4
+      with:
+        path: /usr/local/bin/terratidy
+        key: terratidy-${{ inputs.version }}-${{ runner.os }}-${{ runner.arch }}
+
+    - name: Run TerraTidy
+      shell: bash
+      working-directory: ${{ inputs.working_directory }}
+      run: |
+        ARGS=""
+        
+        if [ -n "${{ inputs.config_path }}" ]; then
+          ARGS="$ARGS --config ${{ inputs.config_path }}"
+        fi
+        
+        if [ -n "${{ inputs.format }}" ]; then
+          ARGS="$ARGS --format ${{ inputs.format }}"
+        fi
+        
+        if [ -n "${{ inputs.severity_threshold }}" ]; then
+          ARGS="$ARGS --severity-threshold ${{ inputs.severity_threshold }}"
+        fi
+        
+        echo "Running: terratidy ${{ inputs.command }} $ARGS"
+        
+        if [ "${{ inputs.format }}" = "sarif" ]; then
+          terratidy ${{ inputs.command }} $ARGS > terratidy-results.sarif
+        else
+          terratidy ${{ inputs.command }} $ARGS
+        fi
+
+    - name: Upload SARIF
+      if: inputs.upload_sarif == 'true' && inputs.format == 'sarif'
+      uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: ${{ inputs.working_directory }}/terratidy-results.sarif
+        category: terratidy
+

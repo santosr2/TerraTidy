@@ -1,0 +1,6 @@
+[tools]
+go = "1.25"
+pre-commit = "4"
+terraform = "1.10"
+terragrunt = "latest"
+golangci-lint = "latest"

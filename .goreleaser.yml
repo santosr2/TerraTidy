@@ -1,0 +1,107 @@
+version: 2
+
+project_name: terratidy
+
+before:
+  hooks:
+    - go mod tidy
+    - go mod download
+
+builds:
+  - id: terratidy
+    binary: terratidy
+    main: ./cmd/terratidy
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+      - -X main.commit={{.Commit}}
+      - -X main.date={{.Date}}
+
+archives:
+  - id: terratidy
+    format: tar.gz
+    name_template: "{{ .ProjectName }}-{{ .Version }}-{{ .Os }}-{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        format: zip
+    files:
+      - LICENSE
+      - README.md
+      - CHANGELOG.md
+
+checksum:
+  name_template: 'checksums.txt'
+  algorithm: sha256
+
+changelog:
+  sort: asc
+  use: github
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^chore:'
+      - Merge pull request
+      - Merge branch
+  groups:
+    - title: 'New Features'
+      regexp: "^.*feat[(\\w)]*:+.*$"
+      order: 0
+    - title: 'Bug Fixes'
+      regexp: "^.*fix[(\\w)]*:+.*$"
+      order: 1
+    - title: 'Performance Improvements'
+      regexp: "^.*perf[(\\w)]*:+.*$"
+      order: 2
+    - title: 'Documentation'
+      regexp: "^.*docs[(\\w)]*:+.*$"
+      order: 3
+    - title: 'Other Changes'
+      order: 999
+
+release:
+  github:
+    owner: santosr2
+    name: terratidy
+  draft: false
+  prerelease: auto
+  name_template: "{{.ProjectName}} {{.Version}}"
+  header: |
+    ## What's Changed
+
+brews:
+  - name: terratidy
+    repository:
+      owner: santosr2
+      name: homebrew-tap
+    folder: Formula
+    homepage: https://github.com/santosr2/terratidy
+    description: "Terraform/Terragrunt quality platform"
+    license: MIT
+    test: |
+      system "#{bin}/terratidy version"
+    install: |
+      bin.install "terratidy"
+
+dockers:
+  - image_templates:
+      - "ghcr.io/santosr2/terratidy:{{ .Tag }}"
+      - "ghcr.io/santosr2/terratidy:v{{ .Major }}"
+      - "ghcr.io/santosr2/terratidy:v{{ .Major }}.{{ .Minor }}"
+      - "ghcr.io/santosr2/terratidy:latest"
+    dockerfile: Dockerfile
+    build_flag_templates:
+      - "--label=org.opencontainers.image.created={{.Date}}"
+      - "--label=org.opencontainers.image.title={{.ProjectName}}"
+      - "--label=org.opencontainers.image.revision={{.FullCommit}}"
+      - "--label=org.opencontainers.image.version={{.Version}}"
+

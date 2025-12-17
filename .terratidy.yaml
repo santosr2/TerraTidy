@@ -1,0 +1,26 @@
+# TerraTidy Configuration
+version: 1
+
+# Enable/disable engines
+engines:
+  fmt:
+    enabled: true
+  style:
+    enabled: true
+  lint:
+    enabled: true
+  policy:
+    enabled: false  # Opt-in for policy checking
+
+# Global settings
+severity_threshold: warning  # info|warning|error
+fail_fast: false
+parallel: true
+
+# Plugin configuration
+plugins:
+  enabled: true
+  directories:
+    - .terratidy/rules
+    - ~/.terratidy/rules
+

@@ -1,0 +1,44 @@
+# TerraTidy Pre-commit Hooks
+# To use these hooks, add to your .pre-commit-config.yaml:
+#
+# repos:
+#   - repo: https://github.com/santosr2/terratidy
+#     rev: v0.1.0  # Use the ref you want to point at
+#     hooks:
+#       - id: terratidy-fmt
+#       - id: terratidy-style
+#       - id: terratidy-lint
+#       - id: terratidy-check
+
+- id: terratidy-fmt
+  name: TerraTidy Format
+  description: Format Terraform and Terragrunt files
+  entry: terratidy fmt
+  language: system
+  files: \.(tf|hcl)$
+  pass_filenames: false
+
+- id: terratidy-style
+  name: TerraTidy Style  
+  description: Check and fix style issues
+  entry: terratidy style --fix
+  language: system
+  files: \.(tf|hcl)$
+  pass_filenames: false
+
+- id: terratidy-lint
+  name: TerraTidy Lint
+  description: Run linting checks
+  entry: terratidy lint
+  language: system
+  files: \.(tf|hcl)$
+  pass_filenames: false
+
+- id: terratidy-check
+  name: TerraTidy Check All
+  description: Run all quality checks
+  entry: terratidy check
+  language: system
+  files: \.(tf|hcl)$
+  pass_filenames: false
+

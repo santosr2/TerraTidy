@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="920" height="240" viewBox="0 0 920 240" role="img" aria-label="TerraTidy banner">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#2DD4BF"/>
+      <stop offset="1" stop-color="#60A5FA"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="0" y="0" width="920" height="240" rx="28" fill="#0B1220"/>
+  <path d="M0 170c170-70 300-70 460 0s290 70 460 0v70H0z" fill="url(#g)" opacity="0.10"/>
+
+  <g transform="translate(48,48)">
+    <rect x="0" y="0" width="144" height="144" rx="32" fill="url(#g)" opacity="0.18"/>
+    <rect x="0" y="0" width="144" height="144" rx="32" fill="#0B1220" opacity="0.72"/>
+    <path d="M30 44h84v18H79v62H61V62H30z" fill="url(#g)"/>
+    <path d="M26 112c18 14 74 14 92 0" fill="none" stroke="url(#g)" stroke-width="4" stroke-linecap="round"/>
+    <path d="M114 18l2.2 7.2 7.8 2.2-7.8 2.2-2.2 7.4-2.2-7.4-7.8-2.2 7.8-2.2z" fill="#60A5FA"/>
+  </g>
+
+  <g transform="translate(230,98)">
+    <text x="0" y="0" font-size="54"
+          font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial"
+          fill="#E5E7EB">TerraTidy</text>
+    <text x="0" y="42" font-size="20"
+          font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial"
+          fill="#94A3B8">fmt · style · lint · policy</text>
+  </g>
+</svg>

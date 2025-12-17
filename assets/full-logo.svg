@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="200" viewBox="0 0 640 200" role="img" aria-label="TerraTidy logo">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#2DD4BF"/>
+      <stop offset="1" stop-color="#60A5FA"/>
+    </linearGradient>
+    <filter id="soft" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="2"/>
+      <feOffset dx="0" dy="1" result="o"/>
+      <feColorMatrix in="o" type="matrix"
+        values="0 0 0 0 0
+                0 0 0 0 0
+                0 0 0 0 0
+                0 0 0 .25 0"/>
+      <feMerge>
+        <feMergeNode/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Mark -->
+  <g transform="translate(30,30)" filter="url(#soft)">
+    <!-- Rounded tile -->
+    <rect x="0" y="0" width="140" height="140" rx="28" fill="#0B1220"/>
+    <rect x="0" y="0" width="140" height="140" rx="28" fill="url(#g)" opacity="0.12"/>
+
+    <!-- TT monogram -->
+    <path d="M28 44h84v18H79v62H61V62H28z" fill="url(#g)"/>
+    <path d="M28 44h84v18H79v62H61V62H28z" fill="#FFFFFF" opacity="0.10"/>
+
+    <!-- Sparkle (tidy) -->
+    <g transform="translate(104,26)">
+      <path d="M12 0l2.2 7.2L22 9.4l-7.8 2.2L12 19l-2.2-7.4L2 9.4l7.8-2.2z" fill="url(#g)"/>
+      <circle cx="26" cy="18" r="3" fill="#60A5FA" opacity="0.9"/>
+    </g>
+
+    <!-- Subtle globe arc -->
+    <path d="M24 112c18 14 74 14 92 0" fill="none" stroke="url(#g)" stroke-width="4" stroke-linecap="round" opacity="0.9"/>
+  </g>
+
+  <!-- Wordmark -->
+  <g transform="translate(200,78)">
+    <!-- Simple vector wordmark using paths-free text; most renderers support system sans -->
+    <text x="0" y="0" font-size="44" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial"
+          fill="#0B1220" letter-spacing="0.5">TerraTidy</text>
+    <text x="0" y="34" font-size="16" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial"
+          fill="#334155">fmt • style • lint • policy</text>
+  </g>
+</svg>

@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="180" height="28" viewBox="0 0 180 28" role="img" aria-label="TerraTidy failing">
+  <rect x="0" y="0" width="180" height="28" rx="8" fill="#0B1220"/>
+  <rect x="0" y="0" width="76" height="28" rx="8" fill="#F43F5E" opacity="0.95"/>
+  <text x="10" y="19" font-size="13"
+        font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial"
+        fill="#0B1220">TerraTidy</text>
+  <text x="88" y="19" font-size="13"
+        font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial"
+        fill="#E5E7EB">failing</text>
+  <path d="M156 9l12 12M168 9l-12 12" fill="none" stroke="#E5E7EB" stroke-width="2" stroke-linecap="round"/>
+</svg>

@@ -4,12 +4,12 @@ on:
   push:
     branches: [main]
     paths:
-      - 'docs/site/**'
-      - '.github/workflows/docs.yml'
+      - "docs/site/**"
+      - ".github/workflows/docs.yml"
   pull_request:
     branches: [main]
     paths:
-      - 'docs/site/**'
+      - "docs/site/**"
 
 permissions:
   contents: read
@@ -29,7 +29,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.x'
+          python-version: "3.x"
 
       - name: Install dependencies
         run: pip install -r docs/site/requirements.txt

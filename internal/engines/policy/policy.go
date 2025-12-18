@@ -65,7 +65,7 @@ func (e *Engine) Name() string {
 
 // Run executes policy checks on the given files
 func (e *Engine) Run(ctx context.Context, files []string) ([]sdk.Finding, error) {
-	var allFindings []sdk.Finding
+	allFindings := []sdk.Finding{}
 
 	// Load policies
 	policies, err := e.loadPolicies()
@@ -427,12 +427,14 @@ func (e *Engine) GetInput(files []string) ([]byte, error) {
 	return json.MarshalIndent(data, "", "  ")
 }
 
-// builtinPolicies contains default policies
+// builtinPolicies contains default policies (OPA v1 Rego syntax)
 var builtinPolicies = []string{
 	// Required version policy
 	`package terraform
 
-deny[msg] {
+import rego.v1
+
+deny contains msg if {
     count(input.terraform) == 0
     msg := {
         "msg": "Missing terraform block with required_version",
@@ -441,7 +443,7 @@ deny[msg] {
     }
 }
 
-deny[msg] {
+deny contains msg if {
     tf := input.terraform
     not tf.required_version
     msg := {
@@ -454,7 +456,9 @@ deny[msg] {
 	// Required providers policy
 	`package terraform
 
-deny[msg] {
+import rego.v1
+
+deny contains msg if {
     count(input.providers) > 0
     count(input.terraform) == 0
     msg := {
@@ -467,8 +471,10 @@ deny[msg] {
 	// Security policies
 	`package terraform
 
-deny[msg] {
-    resource := input.resources[_]
+import rego.v1
+
+deny contains msg if {
+    some resource in input.resources
     resource.type == "aws_security_group"
     contains(resource.ingress, "0.0.0.0/0")
     contains(resource.ingress, "22")
@@ -480,8 +486,8 @@ deny[msg] {
     }
 }
 
-deny[msg] {
-    resource := input.resources[_]
+deny contains msg if {
+    some resource in input.resources
     resource.type == "aws_s3_bucket"
     resource.acl == "\"public-read\""
     msg := {
@@ -492,8 +498,8 @@ deny[msg] {
     }
 }
 
-deny[msg] {
-    resource := input.resources[_]
+deny contains msg if {
+    some resource in input.resources
     resource.type == "aws_db_instance"
     resource.publicly_accessible == "true"
     msg := {
@@ -507,8 +513,10 @@ deny[msg] {
 	// Tagging policies
 	`package terraform
 
-warn[msg] {
-    resource := input.resources[_]
+import rego.v1
+
+warn contains msg if {
+    some resource in input.resources
     resource.type == "aws_instance"
     not resource.tags
     msg := {
@@ -519,8 +527,8 @@ warn[msg] {
     }
 }
 
-warn[msg] {
-    resource := input.resources[_]
+warn contains msg if {
+    some resource in input.resources
     resource.type == "aws_s3_bucket"
     not resource.tags
     msg := {
@@ -534,8 +542,10 @@ warn[msg] {
 	// Module source policy
 	`package terraform
 
-warn[msg] {
-    module := input.modules[_]
+import rego.v1
+
+warn contains msg if {
+    some module in input.modules
     not module.version
     not startswith(module.source, "\"./")
     not startswith(module.source, "\"../")

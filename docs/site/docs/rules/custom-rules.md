@@ -89,11 +89,16 @@ For simpler custom rules, use OPA policies.
 
 ### Basic Policy
 
+TerraTidy uses OPA v1, which requires the `import rego.v1` statement and updated
+rule syntax with `contains` and `if` keywords.
+
 ```rego
 package terraform
 
-deny[msg] {
-    resource := input.resources[_]
+import rego.v1
+
+deny contains msg if {
+    some resource in input.resources
     resource.type == "aws_instance"
     not has_environment_tag(resource)
     msg := {
@@ -105,7 +110,7 @@ deny[msg] {
     }
 }
 
-has_environment_tag(resource) {
+has_environment_tag(resource) if {
     tags := resource.tags
     contains(tags, "Environment")
 }
@@ -116,17 +121,19 @@ has_environment_tag(resource) {
 ```rego
 package terraform
 
+import rego.v1
+
 # Helper function to check for required tags
-missing_required_tags(resource, required) = missing {
-    provided := {tag | resource.tags[tag]}
+missing_required_tags(resource, required) := missing if {
+    provided := {tag | some tag, _ in resource.tags}
     missing := required - provided
 }
 
 # Check all taggable resources
-deny[msg] {
+deny contains msg if {
     required_tags := {"Environment", "Team", "CostCenter"}
-    resource := input.resources[_]
-    taggable_types[resource.type]
+    some resource in input.resources
+    resource.type in taggable_types
     missing := missing_required_tags(resource, required_tags)
     count(missing) > 0
     msg := {
@@ -152,11 +159,13 @@ taggable_types := {
 ```rego
 package terraform
 
+import rego.v1
+
 # Read from external data
 import data.config
 
-deny[msg] {
-    resource := input.resources[_]
+deny contains msg if {
+    some resource in input.resources
     resource.type == "aws_instance"
     not valid_instance_type(resource.instance_type)
     msg := {
@@ -167,8 +176,9 @@ deny[msg] {
     }
 }
 
-valid_instance_type(t) {
-    config.approved_instance_types[_] == t
+valid_instance_type(t) if {
+    some approved in config.approved_instance_types
+    approved == t
 }
 ```
 
@@ -232,9 +242,10 @@ opa eval --input test-input.json \
 ```rego
 package terraform_test
 
+import rego.v1
 import data.terraform
 
-test_require_encryption_pass {
+test_require_encryption_pass if {
     result := terraform.deny with input as {
         "resources": [{
             "type": "aws_ebs_volume",
@@ -245,7 +256,7 @@ test_require_encryption_pass {
     count(result) == 0
 }
 
-test_require_encryption_fail {
+test_require_encryption_fail if {
     result := terraform.deny with input as {
         "resources": [{
             "type": "aws_ebs_volume",

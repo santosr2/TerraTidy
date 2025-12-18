@@ -36,17 +36,20 @@ engines:
 
 ## Writing Policies
 
-Policies are written in Rego and evaluated against a JSON representation of your
-Terraform modules.
+Policies are written in Rego (v1 syntax) and evaluated against a JSON representation
+of your Terraform modules. TerraTidy uses OPA v1, which requires the `import rego.v1`
+statement and updated rule syntax.
 
 ### Basic Policy Structure
 
 ```rego
 package terraform
 
+import rego.v1
+
 # Deny rule - creates an error
-deny[msg] {
-    resource := input.resources[_]
+deny contains msg if {
+    some resource in input.resources
     resource.type == "aws_s3_bucket"
     not resource.versioning
     msg := {
@@ -58,8 +61,8 @@ deny[msg] {
 }
 
 # Warn rule - creates a warning
-warn[msg] {
-    resource := input.resources[_]
+warn contains msg if {
+    some resource in input.resources
     resource.type == "aws_instance"
     not resource.tags
     msg := {
@@ -70,6 +73,12 @@ warn[msg] {
     }
 }
 ```
+
+### Key Rego v1 Syntax Changes
+
+- Add `import rego.v1` at the top of every policy file
+- Use `deny contains msg if { ... }` instead of `deny[msg] { ... }`
+- Use `some resource in input.resources` instead of `resource := input.resources[_]`
 
 ### Input Structure
 
@@ -119,8 +128,10 @@ TerraTidy includes several built-in policies:
 ```rego
 package terraform
 
-deny[msg] {
-    resource := input.resources[_]
+import rego.v1
+
+deny contains msg if {
+    some resource in input.resources
     resource.type == "aws_ebs_volume"
     resource.encrypted != "true"
     msg := {
@@ -137,9 +148,11 @@ deny[msg] {
 ```rego
 package terraform
 
-deny[msg] {
-    resource := input.resources[_]
-    not re_match("^[a-z][a-z0-9_]*$", resource.name)
+import rego.v1
+
+deny contains msg if {
+    some resource in input.resources
+    not regex.match("^[a-z][a-z0-9_]*$", resource.name)
     msg := {
         "msg": sprintf("Resource %s.%s must use snake_case naming", [resource.type, resource.name]),
         "rule": "naming-convention",
@@ -154,11 +167,13 @@ deny[msg] {
 ```rego
 package terraform
 
-expensive_types := ["aws_instance", "aws_db_instance", "aws_elasticache_cluster"]
+import rego.v1
 
-warn[msg] {
-    resource := input.resources[_]
-    resource.type == expensive_types[_]
+expensive_types := {"aws_instance", "aws_db_instance", "aws_elasticache_cluster"}
+
+warn contains msg if {
+    some resource in input.resources
+    resource.type in expensive_types
     not resource.tags.CostCenter
     msg := {
         "msg": sprintf("%s %s should have a CostCenter tag", [resource.type, resource.name]),

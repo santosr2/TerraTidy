@@ -204,8 +204,10 @@ func TestEngine_CustomPolicy(t *testing.T) {
 
 	policyContent := `package terraform
 
-deny[msg] {
-    resource := input.resources[_]
+import rego.v1
+
+deny contains msg if {
+    some resource in input.resources
     resource.type == "aws_instance"
     msg := {
         "msg": "Custom policy: EC2 instance detected",

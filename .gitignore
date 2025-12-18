@@ -30,3 +30,59 @@ go.work.sum
 # Editor/IDE
 # .idea/
 # .vscode/
+
+# Custom
+IDEA.md
+
+# Build outputs
+bin/
+dist/
+*.exe
+
+# Dependencies
+vendor/
+
+# Test artifacts
+coverage.out
+coverage.html
+*.coverprofile
+
+# IDE
+.idea/
+.vscode/
+
+# Misc
+*.swp
+*.swo
+*~
+.DS_Store
+
+# TerraTidy specific
+test_fixtures/
+.terratidy/
+tmp/
+
+# Benchmark results
+benchmarks/
+
+# Coverage reports
+coverage/
+
+# Keep AI assistant configs tracked
+!.claude/
+!.cursor/
+
+*.bkp
+
+.agent-os
+.claude
+.cursor
+.vscode
+.cursor
+.github/copilot*
+.github
+!.github/workflows
+tools
+revive.toml
+.opencode
+.ai-config-complete.md

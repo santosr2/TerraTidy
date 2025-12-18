@@ -23,4 +23,3 @@ plugins:
   directories:
     - .terratidy/rules
     - ~/.terratidy/rules
-

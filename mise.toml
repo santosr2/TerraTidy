@@ -1,6 +1,73 @@
 [tools]
 go = "1.25"
 pre-commit = "4"
-terraform = "1.10"
+terraform = "latest"
 terragrunt = "latest"
 golangci-lint = "latest"
+node = "latest"  # For repomix and other Node-based tools
+python = "3.13"
+"go:github.com/steveyegge/beads/cmd/bd" = "latest"
+uv = "latest"
+
+[tasks.setup]
+description = "Setup development environment"
+run = """
+  echo "📦 Installing Go tools..."
+  go install golang.org/x/perf/cmd/benchstat@latest
+  go install github.com/air-verse/air@latest
+  go install mvdan.cc/gofumpt@latest
+  go install honnef.co/go/tools/cmd/staticcheck@latest
+  go install github.com/mgechev/revive@latest
+  go install golang.org/x/vuln/cmd/govulncheck@latest
+  # Note: gocov has compatibility issues with Go 1.25
+  # Using native Go coverage tools instead (go test -coverprofile + go tool cover -html)
+
+  echo "📦 Installing Node tools..."
+  npm install -g repomix
+
+  echo "📦 Installing Python tools (MCP servers)..."
+  pip3 install --user beads-mcp || echo "⚠️  Beads install failed (optional)"
+
+  echo ""
+  echo "✅ Development environment ready!"
+  echo ""
+  echo "Available commands:"
+  echo "  make context       - Generate AI context"
+  echo "  make hot-reload    - Development with auto-rebuild"
+  echo "  make check         - Run all quality checks"
+  echo "  make vuln          - Check for vulnerabilities"
+  echo ""
+  echo "📖 Next steps:"
+  echo "  1. Configure MCP servers (see docs/MCP_SETUP.md)"
+  echo "  2. Generate context: make context"
+  echo "  3. Read docs/CURSOR_AI_SETUP.md"
+"""
+
+# TODO: add `bd init`
+[tasks.context]
+description = "Generate AI context"
+run = "bash tools/scripts/generate-context.sh"
+
+[tasks.coverage]
+description = "Generate coverage report"
+run = "bash tools/scripts/coverage-report.sh"
+
+[tasks.benchmark]
+description = "Run benchmarks"
+run = "bash tools/scripts/benchmark.sh"
+
+[tasks.deps-graph]
+description = "Generate dependency graph"
+run = "go mod graph | bash tools/scripts/mod-graph.sh > docs/dependencies.svg"
+
+[tasks.clean]
+description = "Clean all generated files"
+run = "make clean-all"
+
+[tasks.uninstall]
+description = "Uninstall all development tools"
+run = "make uninstall-tools"
+
+[tasks.uninstall-force]
+description = "Force uninstall tools without confirmation"
+run = "make uninstall-tools-force"

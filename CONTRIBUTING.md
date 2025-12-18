@@ -7,6 +7,7 @@ Thank you for your interest in contributing to TerraTidy!
 1. Fork the repository
 2. Clone your fork: `git clone https://github.com/santosr2/terratidy`
 3. Set up development environment:
+
    ```bash
    mise install
    make setup
@@ -52,6 +53,7 @@ Follow [Conventional Commits](https://www.conventionalcommits.org/):
 ### AI Development
 
 We support AI-assisted development! See:
+
 - [AGENT.md](AGENT.md) for AI development guide
 - [CLAUDE.md](CLAUDE.md) for Claude-specific instructions
 
@@ -81,4 +83,3 @@ make test-rule RULE=my-rule
 ## Code of Conduct
 
 Be respectful and inclusive. We're here to build great software together!
-

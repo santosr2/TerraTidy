@@ -29,21 +29,25 @@ TerraTidy uses a library-first architecture where all tools are imported as Go l
 ### Engines (`internal/engines/`)
 
 #### Fmt Engine
+
 - Uses `github.com/hashicorp/hcl/v2/hclwrite`
 - Formats .tf and .hcl files
 - No terraform CLI needed
 
 #### Style Engine
+
 - HCL AST parsing
 - Custom style rules
 - Autofix capability
 
 #### Lint Engine
+
 - Imports `github.com/terraform-linters/tflint`
 - Direct API calls, no subprocess
 - Plugin support
 
 #### Policy Engine
+
 - Uses `github.com/open-policy-agent/opa/rego`
 - Evaluates Rego policies
 - Conftest-compatible
@@ -64,7 +68,7 @@ Supports three rule formats:
 
 ## Data Flow
 
-```
+```text
 User Command
     ↓
 CLI Parser
@@ -167,4 +171,3 @@ type Rule interface {
 - Real-time checking in editors
 - Incremental analysis (only changed files)
 - Distributed caching for monorepos
-

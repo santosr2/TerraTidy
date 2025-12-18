@@ -16,12 +16,12 @@ const (
 
 // Finding represents a rule violation or issue found in a file
 type Finding struct {
-	Rule     string    `json:"rule"`
-	Message  string    `json:"message"`
-	File     string    `json:"file"`
-	Location hcl.Range `json:"location"`
-	Severity Severity  `json:"severity"`
-	Fixable  bool      `json:"fixable"`
+	Rule     string                 `json:"rule"`
+	Message  string                 `json:"message"`
+	File     string                 `json:"file"`
+	Location hcl.Range              `json:"location"`
+	Severity Severity               `json:"severity"`
+	Fixable  bool                   `json:"fixable"`
 	FixFunc  func() ([]byte, error) `json:"-"`
 }
 
@@ -40,4 +40,3 @@ type Rule interface {
 	Check(ctx *Context, file *hcl.File) ([]Finding, error)
 	Fix(ctx *Context, file *hcl.File) ([]byte, error)
 }
-

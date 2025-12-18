@@ -205,7 +205,7 @@ engines:
 
 	// Write all files
 	files := map[string]string{
-		".terratidy.yaml":                mainConfig,
+		".terratidy.yaml":                       mainConfig,
 		filepath.Join(configDir, "fmt.yaml"):    fmtConfig,
 		filepath.Join(configDir, "style.yaml"):  styleConfig,
 		filepath.Join(configDir, "lint.yaml"):   lintConfig,

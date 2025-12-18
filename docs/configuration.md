@@ -148,4 +148,3 @@ terratidy config validate
 ## Examples
 
 See [examples](../examples/) directory for complete configurations.
-

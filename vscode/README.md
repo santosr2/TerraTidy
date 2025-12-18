@@ -1,6 +1,7 @@
 # TerraTidy for Visual Studio Code
 
-TerraTidy is a comprehensive quality platform for Terraform and Terragrunt. This extension brings TerraTidy's powerful formatting, style checking, linting, and policy enforcement capabilities directly into VS Code.
+TerraTidy is a comprehensive quality platform for Terraform and Terragrunt.
+This extension brings TerraTidy's powerful formatting, style checking, linting, and policy enforcement capabilities directly into VS Code.
 
 ## Features
 

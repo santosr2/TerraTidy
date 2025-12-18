@@ -4,7 +4,7 @@
 
 ![TerraTidy Logo](assets/terratidy-icon.svg)
 
-**A comprehensive quality platform for Terraform and Terragrunt**
+<b>A comprehensive quality platform for Terraform and Terragrunt</b>
 
 [![Build Status](https://github.com/santosr2/terratidy/workflows/Test/badge.svg)](https://github.com/santosr2/terratidy/actions)
 [![Go Report Card](https://goreportcard.com/badge/github.com/santosr2/terratidy)](https://goreportcard.com/report/github.com/santosr2/terratidy)
@@ -23,12 +23,12 @@ TerraTidy is a single-binary quality platform for Terraform and Terragrunt that 
 
 ### Key Features
 
-✅ **Single Binary** - No external dependencies, all tools vendored  
-⚡ **10-100x Faster** - Library-first architecture, no subprocess overhead  
-🔌 **Extensible** - Custom rules in Go, YAML, or Bash  
-📦 **Modular Config** - Split large configs into organized files  
-🎯 **Great DX** - Interactive setup, hot-reload dev mode, helpful errors  
-🔧 **Auto-fix** - Automatically fix formatting and style issues  
+✅ **Single Binary** - No external dependencies, all tools vendored
+⚡ **10-100x Faster** - Library-first architecture, no subprocess overhead
+🔌 **Extensible** - Custom rules in Go, YAML, or Bash
+📦 **Modular Config** - Split large configs into organized files
+🎯 **Great DX** - Interactive setup, hot-reload dev mode, helpful errors
+🔧 **Auto-fix** - Automatically fix formatting and style issues
 🌐 **Multi-platform** - Linux, macOS, Windows (amd64 & arm64)
 
 ## Installation
@@ -75,7 +75,7 @@ terratidy check
 
 Example output:
 
-```
+```log
 ✅ fmt: All files formatted correctly (23 files)
 ⚠️  style: 3 issues found
   ├─ main.tf:12:1 [style.block_order] resource arguments out of order
@@ -206,13 +206,28 @@ See [Custom Rules Guide](docs/custom-rules.md) for details.
 
 ## Documentation
 
+### User Documentation
+
 - [Installation](docs/installation.md)
 - [Configuration](docs/configuration.md)
 - [Rules Catalog](docs/rules.md)
 - [Custom Rules](docs/custom-rules.md)
 - [Integrations](docs/integrations.md)
-- [Development](docs/development.md)
+
+### Developer Documentation
+
 - [Architecture](docs/architecture.md)
+- [Development](docs/development.md)
+- [Contributing](CONTRIBUTING.md)
+- [Development Tools](docs/DEVELOPMENT_TOOLS.md)
+- [Uninstall Guide](docs/UNINSTALL.md)
+
+### AI-Assisted Development ✨
+
+- **[Getting Started with AI](GETTING_STARTED_WITH_AI.md)** ← **Start Here!**
+- [Cursor AI Setup](docs/CURSOR_AI_SETUP.md) - Complete Cursor + Sonnet 4.5 guide
+- [MCP Servers Setup](docs/MCP_SETUP.md) - Claude Desktop + MCP
+- [AI Tools Summary](docs/AI_TOOLS_SUMMARY.md) - Quick reference
 
 ## Development
 
@@ -221,9 +236,9 @@ See [Custom Rules Guide](docs/custom-rules.md) for details.
 ```bash
 git clone https://github.com/santosr2/terratidy
 cd terratidy
-mise install    # Install Go 1.25 and tools
-make setup      # Install dependencies
-make build      # Build binary
+mise install        # Install Go 1.25 and tools
+mise run setup      # Install dev tools (repomix, air, etc.)
+make build          # Build binary
 ```
 
 ### Run Tests
@@ -232,7 +247,42 @@ make build      # Build binary
 make test           # Unit tests
 make integration    # Integration tests
 make lint           # Run linters
+make check          # All checks
 ```
+
+### AI-Assisted Development
+
+TerraTidy is designed for AI-assisted development with **Cursor + Claude Sonnet 4.5**.
+
+**Quick Start:**
+
+```bash
+# 1. Setup tools
+mise run setup
+
+# 2. Generate AI context
+make context
+
+# 3. Open in Cursor and start coding!
+```
+
+**Essential commands:**
+
+```bash
+make context         # Generate AI context for LLMs
+make hot-reload      # Development with auto-rebuild
+make coverage-report # Detailed test coverage
+make benchmark       # Run performance benchmarks
+```
+
+**See complete guide:** [docs/CURSOR_AI_SETUP.md](docs/CURSOR_AI_SETUP.md)
+
+Project includes:
+
+- `AGENT.md` - Complete AI development guide
+- `.claude/` - Claude Code configuration (agents, commands, skills, MCP)
+- `.cursor/` - Cursor IDE configuration (rules, settings)
+- `tools/` - Development tools (repomix, air, etc.)
 
 ## Contributing
 
@@ -245,6 +295,7 @@ MIT License - see [LICENSE](LICENSE) for details.
 ## Acknowledgments
 
 Built with:
+
 - [HashiCorp HCL](https://github.com/hashicorp/hcl) for parsing
 - [TFLint](https://github.com/terraform-linters/tflint) for linting
 - [Open Policy Agent](https://github.com/open-policy-agent/opa) for policies

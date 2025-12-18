@@ -17,7 +17,7 @@ var rootCmd = &cobra.Command{
 	Use:   "terratidy",
 	Short: "TerraTidy - Terraform/Terragrunt Quality Platform",
 	Long: `TerraTidy is a comprehensive quality platform for Terraform and Terragrunt.
-	
+
 It provides formatting, style checking, linting, and policy enforcement
 in a single binary with no external dependencies.`,
 	SilenceUsage:  true,
@@ -37,4 +37,3 @@ func init() {
 func Execute() error {
 	return rootCmd.Execute()
 }
-

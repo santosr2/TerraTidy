@@ -35,4 +35,3 @@ USER terratidy
 
 ENTRYPOINT ["terratidy"]
 CMD ["--help"]
-

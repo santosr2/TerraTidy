@@ -71,4 +71,3 @@ terratidy version
 
 - [Quick Start Guide](../README.md#quick-start)
 - [Configuration](./configuration.md)
-

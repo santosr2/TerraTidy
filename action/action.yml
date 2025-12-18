@@ -41,28 +41,28 @@ runs:
       shell: bash
       run: |
         echo "Installing TerraTidy ${{ inputs.version }}..."
-        
+
         # Determine OS and architecture
         OS=$(uname -s | tr '[:upper:]' '[:lower:]')
         ARCH=$(uname -m)
-        
+
         case $ARCH in
           x86_64) ARCH="amd64" ;;
           aarch64|arm64) ARCH="arm64" ;;
         esac
-        
+
         # Download binary
         if [ "${{ inputs.version }}" = "latest" ]; then
           DOWNLOAD_URL="https://github.com/santosr2/terratidy/releases/latest/download/terratidy-${OS}-${ARCH}"
         else
           DOWNLOAD_URL="https://github.com/santosr2/terratidy/releases/download/${{ inputs.version }}/terratidy-${OS}-${ARCH}"
         fi
-        
+
         echo "Downloading from: $DOWNLOAD_URL"
         curl -sSL "$DOWNLOAD_URL" -o terratidy
         chmod +x terratidy
         sudo mv terratidy /usr/local/bin/terratidy
-        
+
         echo "✅ TerraTidy installed successfully"
         terratidy version
 
@@ -77,21 +77,21 @@ runs:
       working-directory: ${{ inputs.working_directory }}
       run: |
         ARGS=""
-        
+
         if [ -n "${{ inputs.config_path }}" ]; then
           ARGS="$ARGS --config ${{ inputs.config_path }}"
         fi
-        
+
         if [ -n "${{ inputs.format }}" ]; then
           ARGS="$ARGS --format ${{ inputs.format }}"
         fi
-        
+
         if [ -n "${{ inputs.severity_threshold }}" ]; then
           ARGS="$ARGS --severity-threshold ${{ inputs.severity_threshold }}"
         fi
-        
+
         echo "Running: terratidy ${{ inputs.command }} $ARGS"
-        
+
         if [ "${{ inputs.format }}" = "sarif" ]; then
           terratidy ${{ inputs.command }} $ARGS > terratidy-results.sarif
         else
@@ -104,4 +104,3 @@ runs:
       with:
         sarif_file: ${{ inputs.working_directory }}/terratidy-results.sarif
         category: terratidy
-

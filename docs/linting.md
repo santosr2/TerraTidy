@@ -164,7 +164,7 @@ terratidy lint --rule terraform_required_version --rule terraform_documented_var
 
 TerraTidy provides clear, actionable output:
 
-```
+```log
 🔍 Running linter on 5 file(s)...
 
 ❌ main.tf:1:1 - Missing terraform required_version constraint (lint.terraform_required_version)

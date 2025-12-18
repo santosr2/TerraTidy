@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Run TerraTidy
         uses: santosr2/terratidy@v1
 ```
@@ -56,7 +56,7 @@ jobs:
       - uses: santosr2/terratidy@v1
         with:
           working_directory: './projects/project-a'
-          
+
   check-project-b:
     runs-on: ubuntu-latest
     steps:
@@ -73,7 +73,7 @@ jobs:
 | `version` | TerraTidy version to install | No | `latest` |
 | `command` | Command to run (check, fmt, style, lint, policy) | No | `check` |
 | `format` | Output format (text, json, sarif) | No | `sarif` |
-| `config_path` | Path to config file | No | ` ` |
+| `config_path` | Path to config file | No | `` |
 | `working_directory` | Working directory | No | `.` |
 | `upload_sarif` | Auto-upload SARIF to Code Scanning | No | `true` |
 | `severity_threshold` | Minimum severity to fail (info, warning, error) | No | `warning` |
@@ -125,4 +125,3 @@ steps:
     with:
       working_directory: ${{ matrix.directory }}
 ```
-

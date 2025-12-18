@@ -1,0 +1,171 @@
+name: 'TerraTidy'
+description: 'Run TerraTidy to lint, format, and enforce style in your Terraform/Terragrunt code'
+author: 'santosr2'
+branding:
+  icon: 'check-circle'
+  color: 'purple'
+
+inputs:
+  version:
+    description: 'TerraTidy version to use (e.g., v1.0.0, latest)'
+    required: false
+    default: 'latest'
+  config:
+    description: 'Path to TerraTidy configuration file'
+    required: false
+    default: '.terratidy.yaml'
+  profile:
+    description: 'Configuration profile to use'
+    required: false
+    default: ''
+  format:
+    description: 'Output format (text, json, json-compact, sarif, html)'
+    required: false
+    default: 'text'
+  working-directory:
+    description: 'Working directory to run TerraTidy in'
+    required: false
+    default: '.'
+  engines:
+    description: 'Comma-separated list of engines to run (fmt,style,lint,policy)'
+    required: false
+    default: ''
+  fix:
+    description: 'Auto-fix issues when possible'
+    required: false
+    default: 'false'
+  fail-on-error:
+    description: 'Fail the action if errors are found'
+    required: false
+    default: 'true'
+  fail-on-warning:
+    description: 'Fail the action if warnings are found'
+    required: false
+    default: 'false'
+  github-token:
+    description: 'GitHub token for PR annotations'
+    required: false
+    default: ''
+
+outputs:
+  findings-count:
+    description: 'Total number of findings'
+    value: ${{ steps.terratidy.outputs.findings-count }}
+  errors-count:
+    description: 'Number of error-level findings'
+    value: ${{ steps.terratidy.outputs.errors-count }}
+  warnings-count:
+    description: 'Number of warning-level findings'
+    value: ${{ steps.terratidy.outputs.warnings-count }}
+  sarif-file:
+    description: 'Path to SARIF output file (if sarif format used)'
+    value: ${{ steps.terratidy.outputs.sarif-file }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Setup Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.25'
+        cache: false
+
+    - name: Install TerraTidy
+      shell: bash
+      run: |
+        if [ "${{ inputs.version }}" = "latest" ]; then
+          go install github.com/santosr2/terratidy/cmd/terratidy@latest
+        else
+          go install github.com/santosr2/terratidy/cmd/terratidy@${{ inputs.version }}
+        fi
+        echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
+
+    - name: Run TerraTidy
+      id: terratidy
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+      run: |
+        # Build command arguments
+        ARGS=""
+
+        # Config file
+        if [ -f "${{ inputs.config }}" ]; then
+          ARGS="$ARGS --config ${{ inputs.config }}"
+        fi
+
+        # Profile
+        if [ -n "${{ inputs.profile }}" ]; then
+          ARGS="$ARGS --profile ${{ inputs.profile }}"
+        fi
+
+        # Engines
+        if [ -n "${{ inputs.engines }}" ]; then
+          ARGS="$ARGS --engines ${{ inputs.engines }}"
+        fi
+
+        # Fix mode
+        if [ "${{ inputs.fix }}" = "true" ]; then
+          ARGS="$ARGS --fix"
+        fi
+
+        # Output format
+        FORMAT="${{ inputs.format }}"
+        ARGS="$ARGS --format $FORMAT"
+
+        # SARIF output file
+        SARIF_FILE=""
+        if [ "$FORMAT" = "sarif" ]; then
+          SARIF_FILE="${{ inputs.working-directory }}/terratidy-results.sarif"
+          ARGS="$ARGS --output $SARIF_FILE"
+          echo "sarif-file=$SARIF_FILE" >> $GITHUB_OUTPUT
+        fi
+
+        # Run TerraTidy and capture output
+        set +e
+        OUTPUT=$(terratidy run $ARGS 2>&1)
+        EXIT_CODE=$?
+        set -e
+
+        echo "$OUTPUT"
+
+        # Parse findings counts from JSON output
+        if [ "$FORMAT" = "json" ] || [ "$FORMAT" = "json-compact" ]; then
+          FINDINGS=$(echo "$OUTPUT" | jq -r '.summary.total // 0')
+          ERRORS=$(echo "$OUTPUT" | jq -r '.summary.errors // 0')
+          WARNINGS=$(echo "$OUTPUT" | jq -r '.summary.warnings // 0')
+        else
+          # For other formats, use exit code heuristics
+          FINDINGS=$EXIT_CODE
+          ERRORS=0
+          WARNINGS=0
+          if [ $EXIT_CODE -ne 0 ]; then
+            ERRORS=$EXIT_CODE
+          fi
+        fi
+
+        echo "findings-count=$FINDINGS" >> $GITHUB_OUTPUT
+        echo "errors-count=$ERRORS" >> $GITHUB_OUTPUT
+        echo "warnings-count=$WARNINGS" >> $GITHUB_OUTPUT
+
+        # Determine if we should fail
+        SHOULD_FAIL=false
+
+        if [ "${{ inputs.fail-on-error }}" = "true" ] && [ "$ERRORS" -gt 0 ]; then
+          SHOULD_FAIL=true
+        fi
+
+        if [ "${{ inputs.fail-on-warning }}" = "true" ] && [ "$WARNINGS" -gt 0 ]; then
+          SHOULD_FAIL=true
+        fi
+
+        if [ "$SHOULD_FAIL" = "true" ]; then
+          exit 1
+        fi
+
+    - name: Upload SARIF
+      if: inputs.format == 'sarif' && inputs.github-token != ''
+      uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: ${{ steps.terratidy.outputs.sarif-file }}

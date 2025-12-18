@@ -1,0 +1,72 @@
+# TerraTidy Configuration Example
+# This file shows all available configuration options
+
+version: 1
+
+# Global settings
+severity_threshold: warning  # Fail on warnings and above (info|warning|error)
+fail_fast: false            # Stop on first error
+parallel: true              # Run engines in parallel (future)
+
+# Engine configuration
+engines:
+  # Format engine - uses hclwrite.Format()
+  fmt:
+    enabled: true
+    config: {}
+
+  # Style engine - custom layout and spacing rules
+  style:
+    enabled: true
+    config:
+      # Auto-fix mode (default: false)
+      fix: false
+
+      # Enable specific rules
+      rules:
+        style.blank-line-between-blocks:
+          enabled: true
+          severity: warning
+
+        style.block-label-case:
+          enabled: true
+          severity: error
+
+  # Lint engine - TFLint integration
+  lint:
+    enabled: true
+    config:
+      # Path to .tflint.hcl (default: .tflint.hcl)
+      config_file: .tflint.hcl
+
+      # Additional TFLint arguments
+      args: []
+
+  # Policy engine - OPA/Conftest (future)
+  policy:
+    enabled: false
+    config:
+      policy_dir: policy
+      args: []
+
+# Custom rules (future)
+custom_rules:
+  # Example custom rule configuration
+  # custom.my-rule:
+  #   enabled: true
+  #   severity: warning
+  #   config:
+  #     option1: value1
+
+# Plugin configuration (future)
+plugins:
+  enabled: false
+  directories:
+    - .terratidy/plugins
+
+# Override rules for specific paths
+overrides:
+  rules:
+    # Disable specific rules for test files
+    style.blank-line-between-blocks:
+      enabled: false

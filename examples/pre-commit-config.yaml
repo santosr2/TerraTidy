@@ -1,0 +1,73 @@
+# Example .pre-commit-config.yaml for TerraTidy
+#
+# Installation:
+#   1. Install pre-commit: pip install pre-commit
+#   2. Copy this file to .pre-commit-config.yaml
+#   3. Run: pre-commit install
+#
+# Usage:
+#   - Runs automatically on git commit
+#   - Manual run: pre-commit run --all-files
+#   - Update hooks: pre-commit autoupdate
+
+repos:
+  # TerraTidy hooks
+  - repo: local
+    hooks:
+      # Format check - ensures files are formatted
+      - id: terratidy-fmt
+        name: TerraTidy Format Check
+        entry: terratidy fmt --check
+        language: system
+        files: \.(tf|hcl)$
+        pass_filenames: true
+        description: Check Terraform/Terragrunt formatting
+
+      # Style check - ensures style guidelines
+      - id: terratidy-style
+        name: TerraTidy Style Check
+        entry: terratidy style --check
+        language: system
+        files: \.(tf|hcl)$
+        pass_filenames: true
+        description: Check Terraform/Terragrunt style
+
+      # Lint check - runs TFLint
+      - id: terratidy-lint
+        name: TerraTidy Lint
+        entry: terratidy lint
+        language: system
+        files: \.(tf|hcl)$
+        pass_filenames: true
+        description: Run TFLint checks
+
+      # All checks - comprehensive check (choose this OR the individual ones above)
+      # - id: terratidy-check
+      #   name: TerraTidy Check All
+      #   entry: terratidy check
+      #   language: system
+      #   files: \.(tf|hcl)$
+      #   pass_filenames: true
+      #   description: Run all TerraTidy checks
+
+  # Optional: Standard Terraform hooks
+  - repo: https://github.com/antonbabenko/pre-commit-terraform
+    rev: v1.83.5
+    hooks:
+      - id: terraform_validate
+      - id: terraform_docs
+        args:
+          - --hook-config=--path-to-file=README.md
+          - --hook-config=--add-to-existing-file=true
+          - --hook-config=--create-file-if-not-exist=true
+
+# Configuration
+default_install_hook_types:
+  - pre-commit
+  - commit-msg
+
+default_stages:
+  - commit
+
+# Skip specific hooks (example)
+# SKIP=terratidy-lint git commit -m "Skip lint"

@@ -1,0 +1,51 @@
+version: 1
+
+# Lint engine configuration
+engines:
+  fmt:
+    enabled: true
+
+  style:
+    enabled: true
+
+  lint:
+    enabled: true
+    config_file: .tflint.hcl
+
+    # Enable specific plugins (optional)
+    plugins:
+      - aws
+      # - google
+      # - azurerm
+
+    # Rule configuration
+    rules:
+      # Terraform core rules
+      terraform_required_version:
+        enabled: true
+        severity: error
+
+      terraform_deprecated_syntax:
+        enabled: true
+        severity: warning
+
+      terraform_unused_declarations:
+        enabled: true
+        severity: warning
+
+      terraform_documented_variables:
+        enabled: true
+        severity: warning
+
+      # AWS-specific rules (requires aws plugin)
+      # aws_instance_invalid_type:
+      #   enabled: true
+      #   severity: error
+
+  policy:
+    enabled: false
+
+# Global settings
+severity_threshold: warning
+fail_fast: false
+output: text

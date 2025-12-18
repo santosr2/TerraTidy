@@ -1,0 +1,133 @@
+# Example GitHub Actions workflow for TerraTidy
+#
+# Installation:
+#   1. Copy this file to .github/workflows/terratidy.yml
+#   2. Commit and push
+#
+# Features:
+#   - Runs on pull requests and pushes to main
+#   - Uploads SARIF results to GitHub Code Scanning
+#   - Adds annotations to PR diffs
+#   - Caches TerraTidy binary for faster runs
+
+name: Terraform Quality
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - '**.tf'
+      - '**.hcl'
+      - '.github/workflows/terratidy.yml'
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - '**.tf'
+      - '**.hcl'
+
+permissions:
+  contents: read
+  security-events: write  # For SARIF upload
+  pull-requests: write    # For PR comments
+
+jobs:
+  terratidy:
+    name: TerraTidy Quality Checks
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install TerraTidy
+        run: |
+          # Replace with actual release URL when available
+          # curl -L https://github.com/santosr2/terratidy/releases/download/v1.0.0/terratidy-linux-amd64 -o terratidy
+          # For now, build from source
+
+          # Install Go
+          sudo snap install go --classic
+
+          # Build TerraTidy
+          go build -o terratidy ./cmd/terratidy
+          chmod +x terratidy
+          sudo mv terratidy /usr/local/bin/
+
+      - name: Run TerraTidy Check
+        id: terratidy
+        continue-on-error: true
+        run: |
+          terratidy check --format text | tee terratidy-output.txt
+          echo "exit_code=$?" >> $GITHUB_OUTPUT
+
+      - name: Run TerraTidy with SARIF output
+        if: always()
+        run: |
+          terratidy check --format sarif > terratidy.sarif || true
+
+      - name: Upload SARIF to GitHub
+        if: always()
+        uses: github/codeql-action/upload-sarif@v2
+        with:
+          sarif_file: terratidy.sarif
+          category: terratidy
+
+      - name: Comment on PR
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const output = fs.readFileSync('terratidy-output.txt', 'utf8');
+
+            const comment = `## TerraTidy Results
+
+            \`\`\`
+            ${output}
+            \`\`\`
+
+            [View detailed results in Security tab](https://github.com/${{ github.repository }}/security/code-scanning)
+            `;
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
+
+      - name: Fail if checks failed
+        if: steps.terratidy.outputs.exit_code != '0'
+        run: exit 1
+
+  # Optional: Auto-fix on push
+  terratidy-fix:
+    name: Auto-fix Issues
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install TerraTidy
+        run: |
+          # Install Go
+          sudo snap install go --classic
+
+          # Build TerraTidy
+          go build -o terratidy ./cmd/terratidy
+          chmod +x terratidy
+
+      - name: Run TerraTidy Fix
+        run: ./terratidy fix
+
+      - name: Commit changes
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add -A
+          git diff --quiet && git diff --staged --quiet || git commit -m "Auto-fix: TerraTidy formatting and style"
+          git push

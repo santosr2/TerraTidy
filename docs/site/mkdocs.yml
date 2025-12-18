@@ -1,0 +1,109 @@
+site_name: TerraTidy
+site_description: A comprehensive quality platform for Terraform and Terragrunt
+site_author: santosr2
+site_url: https://santosr2.github.io/terratidy
+
+repo_name: santosr2/terratidy
+repo_url: https://github.com/santosr2/terratidy
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: deep purple
+      accent: purple
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: deep purple
+      accent: purple
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - search.highlight
+    - search.share
+    - content.code.copy
+    - content.code.annotate
+
+plugins:
+  - search
+  - minify:
+      minify_html: true
+
+markdown_extensions:
+  - abbr
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - md_in_html
+  - toc:
+      permalink: true
+  - pymdownx.arithmatex:
+      generic: true
+  - pymdownx.betterem:
+      smart_enable: all
+  - pymdownx.caret
+  - pymdownx.details
+  - pymdownx.emoji
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.keys
+  - pymdownx.magiclink:
+      repo_url_shorthand: true
+      user: santosr2
+      repo: terratidy
+  - pymdownx.mark
+  - pymdownx.smartsymbols
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - pymdownx.tilde
+
+nav:
+  - Home: index.md
+  - Getting Started:
+    - Installation: getting-started/installation.md
+    - Quick Start: getting-started/quickstart.md
+    - Configuration: getting-started/configuration.md
+  - User Guide:
+    - Commands: user-guide/commands.md
+    - Engines:
+      - Format (fmt): user-guide/engines/fmt.md
+      - Style: user-guide/engines/style.md
+      - Lint: user-guide/engines/lint.md
+      - Policy: user-guide/engines/policy.md
+    - Output Formats: user-guide/output-formats.md
+    - Profiles: user-guide/profiles.md
+  - Rules Reference:
+    - Style Rules: rules/style-rules.md
+    - Lint Rules: rules/lint-rules.md
+    - Custom Rules: rules/custom-rules.md
+  - Integrations:
+    - GitHub Actions: integrations/github-actions.md
+    - Pre-commit Hooks: integrations/pre-commit.md
+    - VS Code Extension: integrations/vscode.md
+    - LSP Support: integrations/lsp.md
+  - Development:
+    - Architecture: development/architecture.md
+    - Plugin System: development/plugins.md
+    - Contributing: development/contributing.md
+  - Changelog: changelog.md
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/santosr2/terratidy
+  version:
+    provider: mike

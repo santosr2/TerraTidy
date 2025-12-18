@@ -224,6 +224,20 @@ func TestGetFormatter(t *testing.T) {
 			wantType: "*output.JSONFormatter",
 		},
 		{
+			name:     "sarif format",
+			format:   "sarif",
+			verbose:  false,
+			wantErr:  false,
+			wantType: "*output.SARIFFormatter",
+		},
+		{
+			name:     "html format",
+			format:   "html",
+			verbose:  false,
+			wantErr:  false,
+			wantType: "*output.HTMLFormatter",
+		},
+		{
 			name:     "empty format (defaults to text)",
 			format:   "",
 			verbose:  false,
@@ -353,6 +367,191 @@ func TestSARIFFormatter(t *testing.T) {
 			// Verify results count
 			if len(run.Results) != len(tt.findings) {
 				t.Errorf("len(Results) = %d, want %d", len(run.Results), len(tt.findings))
+			}
+		})
+	}
+}
+
+func TestHTMLFormatter(t *testing.T) {
+	tests := []struct {
+		name     string
+		findings []sdk.Finding
+		version  string
+	}{
+		{
+			name:     "no findings",
+			findings: []sdk.Finding{},
+			version:  "1.0.0",
+		},
+		{
+			name: "single finding",
+			findings: []sdk.Finding{
+				{
+					Rule:     "test.rule",
+					Message:  "Test message",
+					File:     "test.tf",
+					Severity: sdk.SeverityError,
+					Fixable:  true,
+					Location: hcl.Range{
+						Start: hcl.Pos{Line: 1, Column: 1},
+						End:   hcl.Pos{Line: 1, Column: 10},
+					},
+				},
+			},
+			version: "1.0.0",
+		},
+		{
+			name: "multiple findings different files",
+			findings: []sdk.Finding{
+				{
+					Rule:     "test.error",
+					Message:  "Error finding",
+					File:     "main.tf",
+					Severity: sdk.SeverityError,
+					Fixable:  false,
+					Location: hcl.Range{
+						Start: hcl.Pos{Line: 1, Column: 1},
+						End:   hcl.Pos{Line: 1, Column: 10},
+					},
+				},
+				{
+					Rule:     "test.warning",
+					Message:  "Warning finding",
+					File:     "main.tf",
+					Severity: sdk.SeverityWarning,
+					Fixable:  true,
+					Location: hcl.Range{
+						Start: hcl.Pos{Line: 5, Column: 1},
+						End:   hcl.Pos{Line: 5, Column: 10},
+					},
+				},
+				{
+					Rule:     "test.info",
+					Message:  "Info finding",
+					File:     "variables.tf",
+					Severity: sdk.SeverityInfo,
+					Fixable:  false,
+					Location: hcl.Range{
+						Start: hcl.Pos{Line: 10, Column: 1},
+						End:   hcl.Pos{Line: 10, Column: 10},
+					},
+				},
+			},
+			version: "2.0.0",
+		},
+		{
+			name: "special characters in message",
+			findings: []sdk.Finding{
+				{
+					Rule:     "test.xss",
+					Message:  "<script>alert('xss')</script>",
+					File:     "test.tf",
+					Severity: sdk.SeverityWarning,
+					Fixable:  false,
+					Location: hcl.Range{
+						Start: hcl.Pos{Line: 1, Column: 1},
+						End:   hcl.Pos{Line: 1, Column: 10},
+					},
+				},
+			},
+			version: "1.0.0",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			formatter := &HTMLFormatter{Title: "TerraTidy Report", Version: tt.version}
+			var buf bytes.Buffer
+			err := formatter.Format(tt.findings, &buf)
+			if err != nil {
+				t.Fatalf("Format() error = %v", err)
+			}
+
+			output := buf.String()
+
+			// Verify it's HTML
+			if !strings.Contains(output, "<!DOCTYPE html>") {
+				t.Error("Output should start with DOCTYPE")
+			}
+			if !strings.Contains(output, "<html") {
+				t.Error("Output should contain <html> tag")
+			}
+			if !strings.Contains(output, "</html>") {
+				t.Error("Output should contain closing </html> tag")
+			}
+
+			// Verify title
+			if !strings.Contains(output, "<title>TerraTidy Report</title>") {
+				t.Error("Output should contain title")
+			}
+
+			// Verify version in footer
+			if !strings.Contains(output, tt.version) {
+				t.Errorf("Output should contain version %s", tt.version)
+			}
+
+			// Verify summary cards
+			if !strings.Contains(output, "Total Issues") {
+				t.Error("Output should contain summary cards")
+			}
+
+			if len(tt.findings) == 0 {
+				// Verify no issues message
+				if !strings.Contains(output, "All checks passed") {
+					t.Error("Output should show 'All checks passed' for no findings")
+				}
+			} else {
+				// Verify findings are present
+				for _, f := range tt.findings {
+					if !strings.Contains(output, escapeHTML(f.Rule)) {
+						t.Errorf("Output should contain rule %s", f.Rule)
+					}
+				}
+			}
+
+			// Verify XSS protection for special characters test
+			if tt.name == "special characters in message" {
+				if strings.Contains(output, "<script>") {
+					t.Error("Output should escape HTML special characters")
+				}
+				if !strings.Contains(output, "&lt;script&gt;") {
+					t.Error("Output should contain escaped script tag")
+				}
+			}
+
+			// Verify fixable badge appears for fixable findings
+			hasFixable := false
+			for _, f := range tt.findings {
+				if f.Fixable {
+					hasFixable = true
+					break
+				}
+			}
+			if hasFixable && !strings.Contains(output, "Fixable") {
+				t.Error("Output should contain Fixable badge for fixable findings")
+			}
+		})
+	}
+}
+
+func TestEscapeHTML(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"hello", "hello"},
+		{"<script>", "&lt;script&gt;"},
+		{"a & b", "a &amp; b"},
+		{"\"quoted\"", "&quot;quoted&quot;"},
+		{"it's", "it&#39;s"},
+		{"<div class=\"foo\">bar</div>", "&lt;div class=&quot;foo&quot;&gt;bar&lt;/div&gt;"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			result := escapeHTML(tt.input)
+			if result != tt.expected {
+				t.Errorf("escapeHTML(%q) = %q, want %q", tt.input, result, tt.expected)
 			}
 		})
 	}

@@ -1,0 +1,194 @@
+{
+  "name": "terratidy",
+  "displayName": "TerraTidy",
+  "description": "TerraTidy - Terraform and Terragrunt quality platform for formatting, style checking, linting, and policy enforcement",
+  "version": "0.1.0",
+  "publisher": "santosr2",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/santosr2/terratidy"
+  },
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Linters",
+    "Formatters",
+    "Programming Languages"
+  ],
+  "keywords": [
+    "terraform",
+    "terragrunt",
+    "hcl",
+    "linter",
+    "formatter",
+    "infrastructure as code",
+    "iac"
+  ],
+  "icon": "images/icon.png",
+  "galleryBanner": {
+    "color": "#5C4EE5",
+    "theme": "dark"
+  },
+  "activationEvents": [
+    "onLanguage:terraform",
+    "onLanguage:terraform-vars",
+    "onLanguage:hcl",
+    "workspaceContains:**/*.tf",
+    "workspaceContains:**/*.tfvars",
+    "workspaceContains:**/*.hcl",
+    "workspaceContains:.terratidy.yaml"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "terratidy.run",
+        "title": "TerraTidy: Run All Checks"
+      },
+      {
+        "command": "terratidy.format",
+        "title": "TerraTidy: Format Document"
+      },
+      {
+        "command": "terratidy.lint",
+        "title": "TerraTidy: Lint"
+      },
+      {
+        "command": "terratidy.style",
+        "title": "TerraTidy: Check Style"
+      },
+      {
+        "command": "terratidy.fix",
+        "title": "TerraTidy: Fix All Issues"
+      },
+      {
+        "command": "terratidy.init",
+        "title": "TerraTidy: Initialize Configuration"
+      },
+      {
+        "command": "terratidy.showOutput",
+        "title": "TerraTidy: Show Output"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "when": "resourceLangId == terraform || resourceLangId == hcl",
+          "command": "terratidy.run",
+          "group": "terratidy@1"
+        },
+        {
+          "when": "resourceLangId == terraform || resourceLangId == hcl",
+          "command": "terratidy.fix",
+          "group": "terratidy@2"
+        }
+      ],
+      "explorer/context": [
+        {
+          "when": "resourceExtname == .tf || resourceExtname == .hcl",
+          "command": "terratidy.run",
+          "group": "terratidy@1"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "TerraTidy",
+      "properties": {
+        "terratidy.executablePath": {
+          "type": "string",
+          "default": "",
+          "description": "Path to the terratidy executable. Leave empty to use PATH."
+        },
+        "terratidy.configPath": {
+          "type": "string",
+          "default": "",
+          "description": "Path to terratidy configuration file. Leave empty to use default (.terratidy.yaml)."
+        },
+        "terratidy.profile": {
+          "type": "string",
+          "default": "",
+          "description": "Configuration profile to use."
+        },
+        "terratidy.runOnSave": {
+          "type": "boolean",
+          "default": false,
+          "description": "Run TerraTidy checks when saving a file."
+        },
+        "terratidy.formatOnSave": {
+          "type": "boolean",
+          "default": false,
+          "description": "Format Terraform files on save using TerraTidy."
+        },
+        "terratidy.fixOnSave": {
+          "type": "boolean",
+          "default": false,
+          "description": "Auto-fix issues on save."
+        },
+        "terratidy.engines.fmt": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable format engine."
+        },
+        "terratidy.engines.style": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable style engine."
+        },
+        "terratidy.engines.lint": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable lint engine."
+        },
+        "terratidy.engines.policy": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable policy engine."
+        },
+        "terratidy.severityThreshold": {
+          "type": "string",
+          "enum": ["info", "warning", "error"],
+          "default": "warning",
+          "description": "Minimum severity level to show in diagnostics."
+        },
+        "terratidy.trace.server": {
+          "type": "string",
+          "enum": ["off", "messages", "verbose"],
+          "default": "off",
+          "description": "Traces the communication between VS Code and the TerraTidy language server."
+        }
+      }
+    },
+    "languages": [
+      {
+        "id": "terraform",
+        "extensions": [".tf", ".tfvars"],
+        "aliases": ["Terraform", "terraform"]
+      },
+      {
+        "id": "hcl",
+        "extensions": [".hcl"],
+        "aliases": ["HCL", "hcl"]
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "lint": "eslint src --ext ts",
+    "test": "node ./out/test/runTest.js",
+    "package": "vsce package",
+    "publish": "vsce publish"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "@types/vscode": "^1.85.0",
+    "@typescript-eslint/eslint-plugin": "^6.13.0",
+    "@typescript-eslint/parser": "^6.13.0",
+    "@vscode/vsce": "^2.22.0",
+    "eslint": "^8.55.0",
+    "typescript": "^5.3.2"
+  }
+}

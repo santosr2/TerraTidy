@@ -1,0 +1,17 @@
+# Minimal TerraTidy Configuration
+# Just enable all checks with defaults
+
+version: 1
+
+engines:
+  fmt:
+    enabled: true
+
+  style:
+    enabled: true
+
+  lint:
+    enabled: true
+
+  policy:
+    enabled: false  # Requires OPA/Conftest setup

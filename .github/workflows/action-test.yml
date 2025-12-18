@@ -1,0 +1,101 @@
+name: Test GitHub Action
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'action.yml'
+      - '.github/workflows/action-test.yml'
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'action.yml'
+      - '.github/workflows/action-test.yml'
+
+jobs:
+  test-action:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Create test Terraform files
+        shell: bash
+        run: |
+          mkdir -p test-terraform
+          cat > test-terraform/main.tf << 'EOF'
+          terraform {
+            required_version = ">= 1.0"
+            required_providers {
+              aws = {
+                source  = "hashicorp/aws"
+                version = "~> 5.0"
+              }
+            }
+          }
+
+          provider "aws" {
+            region = "us-east-1"
+          }
+
+          resource "aws_s3_bucket" "example" {
+            bucket = "my-tf-test-bucket"
+            tags = {
+              Name = "My bucket"
+              Environment = "Test"
+            }
+          }
+          EOF
+
+      - name: Run TerraTidy Action (text format)
+        uses: ./
+        with:
+          working-directory: test-terraform
+          format: text
+          fail-on-error: 'false'
+
+      - name: Run TerraTidy Action (json format)
+        id: json-test
+        uses: ./
+        with:
+          working-directory: test-terraform
+          format: json
+          fail-on-error: 'false'
+
+      - name: Check JSON outputs
+        shell: bash
+        run: |
+          echo "Findings: ${{ steps.json-test.outputs.findings-count }}"
+          echo "Errors: ${{ steps.json-test.outputs.errors-count }}"
+          echo "Warnings: ${{ steps.json-test.outputs.warnings-count }}"
+
+  test-sarif:
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Create test Terraform files
+        run: |
+          mkdir -p test-terraform
+          cat > test-terraform/main.tf << 'EOF'
+          resource "aws_instance" "example" {
+            ami           = "ami-12345678"
+            instance_type = "t2.micro"
+          }
+          EOF
+
+      - name: Run TerraTidy Action (SARIF format)
+        uses: ./
+        with:
+          working-directory: test-terraform
+          format: sarif
+          fail-on-error: 'false'
+          github-token: ${{ secrets.GITHUB_TOKEN }}

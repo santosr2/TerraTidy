@@ -9,36 +9,86 @@
 #       - id: terratidy-style
 #       - id: terratidy-lint
 #       - id: terratidy-check
+#
+# For fix mode:
+#       - id: terratidy-fix
 
 - id: terratidy-fmt
   name: TerraTidy Format
   description: Format Terraform and Terragrunt files
   entry: terratidy fmt
-  language: system
-  files: \.(tf|hcl)$
+  language: golang
+  minimum_pre_commit_version: '3.2.0'
+  types: [terraform]
+  types_or: [hcl]
+  pass_filenames: false
+
+- id: terratidy-fmt-check
+  name: TerraTidy Format Check
+  description: Check formatting without modifying files
+  entry: terratidy fmt --check
+  language: golang
+  minimum_pre_commit_version: '3.2.0'
+  types: [terraform]
+  types_or: [hcl]
   pass_filenames: false
 
 - id: terratidy-style
-  name: TerraTidy Style  
+  name: TerraTidy Style
+  description: Check style issues
+  entry: terratidy style
+  language: golang
+  minimum_pre_commit_version: '3.2.0'
+  types: [terraform]
+  types_or: [hcl]
+  pass_filenames: false
+
+- id: terratidy-style-fix
+  name: TerraTidy Style Fix
   description: Check and fix style issues
   entry: terratidy style --fix
-  language: system
-  files: \.(tf|hcl)$
+  language: golang
+  minimum_pre_commit_version: '3.2.0'
+  types: [terraform]
+  types_or: [hcl]
   pass_filenames: false
 
 - id: terratidy-lint
   name: TerraTidy Lint
   description: Run linting checks
   entry: terratidy lint
-  language: system
-  files: \.(tf|hcl)$
+  language: golang
+  minimum_pre_commit_version: '3.2.0'
+  types: [terraform]
+  types_or: [hcl]
   pass_filenames: false
 
 - id: terratidy-check
   name: TerraTidy Check All
-  description: Run all quality checks
+  description: Run all quality checks (fmt, style, lint, policy)
   entry: terratidy check
-  language: system
-  files: \.(tf|hcl)$
+  language: golang
+  minimum_pre_commit_version: '3.2.0'
+  types: [terraform]
+  types_or: [hcl]
   pass_filenames: false
 
+- id: terratidy-fix
+  name: TerraTidy Fix All
+  description: Auto-fix all fixable issues
+  entry: terratidy fix
+  language: golang
+  minimum_pre_commit_version: '3.2.0'
+  types: [terraform]
+  types_or: [hcl]
+  pass_filenames: false
+
+- id: terratidy-policy
+  name: TerraTidy Policy
+  description: Run policy checks using OPA/Rego
+  entry: terratidy policy
+  language: golang
+  minimum_pre_commit_version: '3.2.0'
+  types: [terraform]
+  types_or: [hcl]
+  pass_filenames: false

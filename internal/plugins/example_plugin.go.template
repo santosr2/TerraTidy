@@ -1,0 +1,115 @@
+// Example TerraTidy Rule Plugin
+// Build with: go build -buildmode=plugin -o myplugin.so myplugin.go
+//
+// This file serves as a template for creating custom TerraTidy plugins.
+// Copy this file, modify it to implement your custom rules, and build it
+// as a Go plugin.
+
+package main
+
+import (
+	"github.com/hashicorp/hcl/v2"
+	"github.com/santosr2/terratidy/internal/plugins"
+	"github.com/santosr2/terratidy/pkg/sdk"
+)
+
+// PluginMetadata provides information about this plugin
+var PluginMetadata = &plugins.PluginMetadata{
+	Name:        "my-custom-rules",
+	Version:     "1.0.0",
+	Description: "Custom rules for my organization",
+	Author:      "Your Name",
+	Type:        plugins.PluginTypeRule,
+}
+
+// MyPlugin implements the RulePlugin interface
+type MyPlugin struct {
+	rules []sdk.Rule
+}
+
+// New creates a new instance of the plugin
+func New() plugins.RulePlugin {
+	p := &MyPlugin{}
+	p.rules = []sdk.Rule{
+		&MyCustomRule{},
+	}
+	return p
+}
+
+// GetRules returns all rules provided by this plugin
+func (p *MyPlugin) GetRules() []sdk.Rule {
+	return p.rules
+}
+
+// MyCustomRule is an example custom rule
+type MyCustomRule struct{}
+
+// Name returns the rule name
+func (r *MyCustomRule) Name() string {
+	return "custom.my-rule"
+}
+
+// Description returns a description of the rule
+func (r *MyCustomRule) Description() string {
+	return "Example custom rule that checks for specific patterns"
+}
+
+// Severity returns the default severity
+func (r *MyCustomRule) Severity() sdk.Severity {
+	return sdk.SeverityWarning
+}
+
+// Check checks the given HCL file against this rule
+func (r *MyCustomRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Finding, error) {
+	var findings []sdk.Finding
+
+	// Get the root body
+	body := file.Body
+	if body == nil {
+		return findings, nil
+	}
+
+	// Example: Check for resources without tags
+	// This is a simplified example - real implementations would be more sophisticated
+	content, _, diags := body.PartialContent(&hcl.BodySchema{
+		Blocks: []hcl.BlockHeaderSchema{
+			{Type: "resource", LabelNames: []string{"type", "name"}},
+		},
+	})
+	if diags.HasErrors() {
+		return findings, nil
+	}
+
+	for _, block := range content.Blocks {
+		if block.Type == "resource" {
+			// Check for tags attribute
+			hasTag := false
+			attrs, _ := block.Body.JustAttributes()
+			for name := range attrs {
+				if name == "tags" {
+					hasTag = true
+					break
+				}
+			}
+
+			if !hasTag {
+				findings = append(findings, sdk.Finding{
+					Rule:     r.Name(),
+					Message:  "Resource is missing tags attribute",
+					File:     ctx.File,
+					Severity: r.Severity(),
+					Location: block.DefRange,
+					Fixable:  false,
+				})
+			}
+		}
+	}
+
+	return findings, nil
+}
+
+// Fix attempts to fix the issue (optional)
+func (r *MyCustomRule) Fix(ctx *sdk.Context, file *hcl.File) error {
+	// Implement fix logic if the issue is auto-fixable
+	return nil
+}

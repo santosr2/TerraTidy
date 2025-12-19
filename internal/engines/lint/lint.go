@@ -231,6 +231,7 @@ func (e *Engine) registerRules() {
 		&TerraformNamingConventionRule{},
 		&TerraformUnusedDeclarationsRule{},
 		&TerraformResourceCountRule{},
+		&TerraformHardcodedSecretsRule{},
 	)
 }
 
@@ -822,6 +823,142 @@ func (r *TerraformResourceCountRule) Check(ctx *RuleContext) []sdk.Finding {
 	}
 
 	return findings
+}
+
+// TerraformHardcodedSecretsRule detects potential hardcoded secrets.
+type TerraformHardcodedSecretsRule struct{}
+
+// Name returns the rule identifier.
+func (r *TerraformHardcodedSecretsRule) Name() string {
+	return "lint.terraform-hardcoded-secrets"
+}
+
+// Description returns a human-readable description of the rule.
+func (r *TerraformHardcodedSecretsRule) Description() string {
+	return "Detects potential hardcoded secrets like AWS keys, passwords, and API tokens"
+}
+
+// Secret patterns to detect
+var secretPatterns = []struct {
+	name    string
+	pattern *regexp.Regexp
+}{
+	{"AWS Access Key", regexp.MustCompile(`AKIA[0-9A-Z]{16}`)},
+	{"AWS Secret Key", regexp.MustCompile(`(?i)(aws_secret_access_key|secret_key)\s*=\s*"[A-Za-z0-9/+=]{40}"`)},
+	{"Generic API Key", regexp.MustCompile(`(?i)(api_key|apikey|api_token)\s*=\s*"[A-Za-z0-9_\-]{20,}"`)},
+	{"Private Key", regexp.MustCompile(`-----BEGIN (RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----`)},
+	{"Generic Secret", regexp.MustCompile(`(?i)(password|passwd|secret|token)\s*=\s*"[^"$]{8,}"`)},
+}
+
+// Sensitive attribute names that should use variables
+var sensitiveAttributes = []string{
+	"password", "secret", "token", "api_key", "apikey",
+	"access_key", "secret_key", "private_key", "auth_token",
+	"credentials", "connection_string",
+}
+
+// Check examines files for hardcoded secrets.
+func (r *TerraformHardcodedSecretsRule) Check(ctx *RuleContext) []sdk.Finding {
+	var findings []sdk.Finding
+	lines := strings.Split(string(ctx.Content), "\n")
+
+	// Check for secret patterns in file content
+	for i, line := range lines {
+		for _, sp := range secretPatterns {
+			if sp.pattern.MatchString(line) {
+				// Skip if it's using a variable reference
+				if strings.Contains(line, "var.") || strings.Contains(line, "local.") ||
+					strings.Contains(line, "data.") || strings.Contains(line, "module.") {
+					continue
+				}
+
+				findings = append(findings, sdk.Finding{
+					Rule:    r.Name(),
+					Message: fmt.Sprintf("Potential hardcoded %s detected", sp.name),
+					File:    ctx.File,
+					Location: hcl.Range{
+						Filename: ctx.File,
+						Start:    hcl.Pos{Line: i + 1, Column: 1},
+					},
+					Severity: sdk.SeverityError,
+					Fixable:  false,
+				})
+			}
+		}
+	}
+
+	// Check for sensitive attributes with literal string values
+	for _, block := range ctx.Body.Blocks {
+		r.checkBlockForSecrets(ctx, block, &findings)
+	}
+
+	return findings
+}
+
+// checkBlockForSecrets recursively checks blocks for hardcoded secrets.
+func (r *TerraformHardcodedSecretsRule) checkBlockForSecrets(
+	ctx *RuleContext,
+	block *hclsyntax.Block,
+	findings *[]sdk.Finding,
+) {
+	for attrName, attr := range block.Body.Attributes {
+		// Check if attribute name is sensitive
+		isSensitive := false
+		for _, sensitive := range sensitiveAttributes {
+			if strings.Contains(strings.ToLower(attrName), sensitive) {
+				isSensitive = true
+				break
+			}
+		}
+
+		if !isSensitive {
+			continue
+		}
+
+		// Check if the value is a literal string (not a variable reference)
+		if templateExpr, ok := attr.Expr.(*hclsyntax.TemplateExpr); ok {
+			// Template with only literal parts is a hardcoded string
+			allLiteral := true
+			for _, part := range templateExpr.Parts {
+				if _, isLit := part.(*hclsyntax.LiteralValueExpr); !isLit {
+					allLiteral = false
+					break
+				}
+			}
+			if allLiteral && len(templateExpr.Parts) > 0 {
+				// Get the string value to check if it's not empty/placeholder
+				exprBytes := ctx.Content[attr.Expr.Range().Start.Byte:attr.Expr.Range().End.Byte]
+				exprStr := string(exprBytes)
+
+				// Skip if it looks like a placeholder
+				if strings.Contains(exprStr, "CHANGE_ME") ||
+					strings.Contains(exprStr, "REPLACE") ||
+					strings.Contains(exprStr, "TODO") ||
+					exprStr == `""` {
+					continue
+				}
+
+				msg := fmt.Sprintf(
+					"Sensitive attribute '%s' has a hardcoded value. "+
+						"Use a variable or secret manager instead",
+					attrName,
+				)
+				*findings = append(*findings, sdk.Finding{
+					Rule:     r.Name(),
+					Message:  msg,
+					File:     ctx.File,
+					Location: attr.Range(),
+					Severity: sdk.SeverityWarning,
+					Fixable:  false,
+				})
+			}
+		}
+	}
+
+	// Recursively check nested blocks
+	for _, nested := range block.Body.Blocks {
+		r.checkBlockForSecrets(ctx, nested, findings)
+	}
 }
 
 // ============================================================================

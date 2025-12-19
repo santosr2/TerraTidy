@@ -397,8 +397,8 @@ func TestEngine_GetAllRules(t *testing.T) {
 	engine := New(nil)
 	rules := engine.GetAllRules()
 
-	// Verify we have all 10 rules registered
-	assert.Len(t, rules, 10, "should have 10 rules registered")
+	// Verify we have all 11 rules registered
+	assert.Len(t, rules, 11, "should have 11 rules registered")
 
 	// Verify each rule has required methods
 	for _, rule := range rules {

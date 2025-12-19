@@ -14,7 +14,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Configuration system with imports and profiles
 - Pre-commit hooks support
 - GitHub Action
-- AI development documentation (AGENTS.md, .claude/, .cursor/, .opencode/, .github/copilot/)
 - Comprehensive documentation
 - CI/CD pipelines
 - Release automation with GoReleaser

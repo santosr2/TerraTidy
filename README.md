@@ -7,7 +7,9 @@
 <b>A comprehensive quality platform for Terraform and Terragrunt</b>
 
 [![Build Status](https://github.com/santosr2/terratidy/workflows/Test/badge.svg)](https://github.com/santosr2/terratidy/actions)
+[![codecov](https://codecov.io/gh/santosr2/terratidy/branch/main/graph/badge.svg)](https://codecov.io/gh/santosr2/terratidy)
 [![Go Report Card](https://goreportcard.com/badge/github.com/santosr2/terratidy)](https://goreportcard.com/report/github.com/santosr2/terratidy)
+[![Go Version](https://img.shields.io/github/go-mod/go-version/santosr2/terratidy)](go.mod)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 </div>

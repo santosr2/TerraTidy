@@ -36,13 +36,6 @@ test-coverage: ## Run tests with coverage report
 	@go tool cover -html=coverage.out -o coverage.html
 	@echo "Coverage report generated: coverage.html"
 
-coverage-html: ## Generate HTML coverage report
-	@echo "Generating HTML coverage report..."
-	@mkdir -p coverage
-	@go test -v -race -coverprofile=coverage.out -covermode=atomic ./...
-	@go tool cover -html=coverage.out -o coverage/index.html
-	@echo "✓ Coverage report: coverage/index.html"
-
 lint: ## Run linters
 	@echo "Running linters..."
 	@if command -v golangci-lint > /dev/null; then \

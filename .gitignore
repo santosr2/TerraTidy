@@ -80,8 +80,6 @@ coverage/
 .vscode
 .cursor
 .github/copilot*
-.github
-!.github/workflows
+.github/README.md
 tools
 .opencode
-.ai-config-complete.md

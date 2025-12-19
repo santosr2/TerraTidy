@@ -66,7 +66,7 @@ func (s *Server) Run() error {
 
 		if err := s.handleMessage(msg); err != nil {
 			// Log error but continue processing
-			fmt.Fprintf(os.Stderr, "Error handling message: %v\n", err)
+			_, _ = fmt.Fprintf(os.Stderr, "Error handling message: %v\n", err)
 		}
 	}
 }
@@ -211,8 +211,8 @@ func (s *Server) handleInitialize(msg RequestMessage) error {
 	return s.sendResult(msg.ID, result)
 }
 
-// handleInitialized handles the initialized notification
-func (s *Server) handleInitialized(msg RequestMessage) error {
+// handleInitialized handles the initialized notification.
+func (s *Server) handleInitialized(_ RequestMessage) error {
 	s.initialized = true
 	return nil
 }
@@ -379,13 +379,13 @@ func (s *Server) publishDiagnostics(uri string) error {
 	if err != nil {
 		return fmt.Errorf("creating temp file: %w", err)
 	}
-	defer os.Remove(tempFile.Name())
+	defer func() { _ = os.Remove(tempFile.Name()) }()
 
 	if _, err := tempFile.WriteString(doc.Content); err != nil {
-		tempFile.Close()
+		_ = tempFile.Close()
 		return fmt.Errorf("writing temp file: %w", err)
 	}
-	tempFile.Close()
+	_ = tempFile.Close()
 
 	// Run lint and style checks
 	ctx := context.Background()

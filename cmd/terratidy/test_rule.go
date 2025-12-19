@@ -61,7 +61,7 @@ type ExpectedResults struct {
 	Findings []ExpectedFinding `yaml:"findings" json:"findings"`
 }
 
-func runTestRule(cmd *cobra.Command, args []string) error {
+func runTestRule(_ *cobra.Command, args []string) error {
 	rulePath := args[0]
 
 	// Check if rule file exists

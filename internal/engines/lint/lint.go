@@ -269,17 +269,20 @@ func parseSeverity(severity string) sdk.Severity {
 // Built-in Lint Rules
 // ============================================================================
 
-// TerraformRequiredVersionRule checks for terraform required_version constraint
+// TerraformRequiredVersionRule checks for terraform required_version constraint.
 type TerraformRequiredVersionRule struct{}
 
+// Name returns the rule identifier.
 func (r *TerraformRequiredVersionRule) Name() string {
 	return "lint.terraform-required-version"
 }
 
+// Description returns a human-readable description of the rule.
 func (r *TerraformRequiredVersionRule) Description() string {
 	return "Ensures terraform block contains a required_version constraint"
 }
 
+// Check examines files for required_version constraints.
 func (r *TerraformRequiredVersionRule) Check(ctx *RuleContext) []sdk.Finding {
 	var findings []sdk.Finding
 
@@ -311,17 +314,20 @@ func (r *TerraformRequiredVersionRule) Check(ctx *RuleContext) []sdk.Finding {
 	return findings
 }
 
-// TerraformRequiredProvidersRule checks for required_providers block
+// TerraformRequiredProvidersRule checks for required_providers block.
 type TerraformRequiredProvidersRule struct{}
 
+// Name returns the rule identifier.
 func (r *TerraformRequiredProvidersRule) Name() string {
 	return "lint.terraform-required-providers"
 }
 
+// Description returns a human-readable description of the rule.
 func (r *TerraformRequiredProvidersRule) Description() string {
 	return "Ensures terraform block contains required_providers with version constraints"
 }
 
+// Check examines files for required_providers configuration.
 func (r *TerraformRequiredProvidersRule) Check(ctx *RuleContext) []sdk.Finding {
 	var findings []sdk.Finding
 
@@ -352,20 +358,23 @@ func (r *TerraformRequiredProvidersRule) Check(ctx *RuleContext) []sdk.Finding {
 	return findings
 }
 
-// TerraformDeprecatedSyntaxRule checks for deprecated interpolation syntax
+// TerraformDeprecatedSyntaxRule checks for deprecated interpolation syntax.
 type TerraformDeprecatedSyntaxRule struct{}
 
+// Name returns the rule identifier.
 func (r *TerraformDeprecatedSyntaxRule) Name() string {
 	return "lint.terraform-deprecated-syntax"
 }
 
+// Description returns a human-readable description of the rule.
 func (r *TerraformDeprecatedSyntaxRule) Description() string {
 	return "Detects deprecated interpolation-only expressions like \"${var.x}\""
 }
 
-// deprecatedInterpolationRegex matches "${...}" patterns that should be simplified
+// deprecatedInterpolationRegex matches "${...}" patterns that should be simplified.
 var deprecatedInterpolationRegex = regexp.MustCompile(`"\$\{([^}]+)\}"`)
 
+// Check examines files for deprecated syntax patterns.
 func (r *TerraformDeprecatedSyntaxRule) Check(ctx *RuleContext) []sdk.Finding {
 	var findings []sdk.Finding
 	lines := strings.Split(string(ctx.Content), "\n")
@@ -377,11 +386,18 @@ func (r *TerraformDeprecatedSyntaxRule) Check(ctx *RuleContext) []sdk.Finding {
 				inner := line[match[2]:match[3]]
 				// Only flag if it's a simple reference (var.x, local.x, etc.)
 				if isSimpleReference(inner) {
+					msg := fmt.Sprintf(
+						"Deprecated interpolation-only expression: use %s instead of \"${%s}\"",
+						inner, inner,
+					)
 					findings = append(findings, sdk.Finding{
-						Rule:     r.Name(),
-						Message:  fmt.Sprintf("Deprecated interpolation-only expression: use %s instead of \"${%s}\"", inner, inner),
-						File:     ctx.File,
-						Location: hcl.Range{Filename: ctx.File, Start: hcl.Pos{Line: i + 1, Column: match[0] + 1}},
+						Rule:    r.Name(),
+						Message: msg,
+						File:    ctx.File,
+						Location: hcl.Range{
+							Filename: ctx.File,
+							Start:    hcl.Pos{Line: i + 1, Column: match[0] + 1},
+						},
 						Severity: sdk.SeverityWarning,
 						Fixable:  true,
 					})
@@ -393,7 +409,7 @@ func (r *TerraformDeprecatedSyntaxRule) Check(ctx *RuleContext) []sdk.Finding {
 	return findings
 }
 
-// isSimpleReference checks if the string is a simple variable/local reference
+// isSimpleReference checks if the string is a simple variable/local reference.
 func isSimpleReference(s string) bool {
 	s = strings.TrimSpace(s)
 	// Simple references: var.x, local.x, data.x.y, module.x.y
@@ -403,20 +419,24 @@ func isSimpleReference(s string) bool {
 	}
 
 	prefix := parts[0]
-	return prefix == "var" || prefix == "local" || prefix == "data" || prefix == "module" || prefix == "each" || prefix == "count"
+	return prefix == "var" || prefix == "local" || prefix == "data" ||
+		prefix == "module" || prefix == "each" || prefix == "count"
 }
 
-// TerraformDocumentedVariablesRule ensures variables have descriptions
+// TerraformDocumentedVariablesRule ensures variables have descriptions.
 type TerraformDocumentedVariablesRule struct{}
 
+// Name returns the rule identifier.
 func (r *TerraformDocumentedVariablesRule) Name() string {
 	return "lint.terraform-documented-variables"
 }
 
+// Description returns a human-readable description of the rule.
 func (r *TerraformDocumentedVariablesRule) Description() string {
 	return "Ensures all variables have description attributes"
 }
 
+// Check examines variable blocks for description attributes.
 func (r *TerraformDocumentedVariablesRule) Check(ctx *RuleContext) []sdk.Finding {
 	var findings []sdk.Finding
 
@@ -453,17 +473,20 @@ func (r *TerraformDocumentedVariablesRule) Check(ctx *RuleContext) []sdk.Finding
 	return findings
 }
 
-// TerraformTypedVariablesRule ensures variables have type constraints
+// TerraformTypedVariablesRule ensures variables have type constraints.
 type TerraformTypedVariablesRule struct{}
 
+// Name returns the rule identifier.
 func (r *TerraformTypedVariablesRule) Name() string {
 	return "lint.terraform-typed-variables"
 }
 
+// Description returns a human-readable description of the rule.
 func (r *TerraformTypedVariablesRule) Description() string {
 	return "Ensures all variables have explicit type constraints"
 }
 
+// Check examines variable blocks for type constraints.
 func (r *TerraformTypedVariablesRule) Check(ctx *RuleContext) []sdk.Finding {
 	var findings []sdk.Finding
 
@@ -500,17 +523,20 @@ func (r *TerraformTypedVariablesRule) Check(ctx *RuleContext) []sdk.Finding {
 	return findings
 }
 
-// TerraformDocumentedOutputsRule ensures outputs have descriptions
+// TerraformDocumentedOutputsRule ensures outputs have descriptions.
 type TerraformDocumentedOutputsRule struct{}
 
+// Name returns the rule identifier.
 func (r *TerraformDocumentedOutputsRule) Name() string {
 	return "lint.terraform-documented-outputs"
 }
 
+// Description returns a human-readable description of the rule.
 func (r *TerraformDocumentedOutputsRule) Description() string {
 	return "Ensures all outputs have description attributes"
 }
 
+// Check examines output blocks for description attributes.
 func (r *TerraformDocumentedOutputsRule) Check(ctx *RuleContext) []sdk.Finding {
 	var findings []sdk.Finding
 
@@ -547,17 +573,20 @@ func (r *TerraformDocumentedOutputsRule) Check(ctx *RuleContext) []sdk.Finding {
 	return findings
 }
 
-// TerraformModulePinnedSourceRule ensures module sources are pinned to versions
+// TerraformModulePinnedSourceRule ensures module sources are pinned to versions.
 type TerraformModulePinnedSourceRule struct{}
 
+// Name returns the rule identifier.
 func (r *TerraformModulePinnedSourceRule) Name() string {
 	return "lint.terraform-module-pinned-source"
 }
 
+// Description returns a human-readable description of the rule.
 func (r *TerraformModulePinnedSourceRule) Description() string {
 	return "Ensures module sources are pinned to specific versions"
 }
 
+// Check examines module blocks for version pinning.
 func (r *TerraformModulePinnedSourceRule) Check(ctx *RuleContext) []sdk.Finding {
 	var findings []sdk.Finding
 
@@ -612,9 +641,13 @@ func (r *TerraformModulePinnedSourceRule) Check(ctx *RuleContext) []sdk.Finding 
 		// Check for git sources without ref
 		if strings.Contains(sourceExpr, "git::") || strings.Contains(sourceExpr, "github.com") {
 			if !strings.Contains(sourceExpr, "?ref=") && !strings.Contains(sourceExpr, "//") {
+				msg := fmt.Sprintf(
+					"Module '%s' from git should specify a ref (tag, branch, or commit)",
+					moduleName,
+				)
 				findings = append(findings, sdk.Finding{
 					Rule:     r.Name(),
-					Message:  fmt.Sprintf("Module '%s' from git should specify a ref (tag, branch, or commit)", moduleName),
+					Message:  msg,
 					File:     ctx.File,
 					Location: block.Range(),
 					Severity: sdk.SeverityWarning,
@@ -627,19 +660,23 @@ func (r *TerraformModulePinnedSourceRule) Check(ctx *RuleContext) []sdk.Finding 
 	return findings
 }
 
-// TerraformNamingConventionRule checks resource naming conventions
+// TerraformNamingConventionRule checks resource naming conventions.
 type TerraformNamingConventionRule struct{}
 
+// Name returns the rule identifier.
 func (r *TerraformNamingConventionRule) Name() string {
 	return "lint.terraform-naming-convention"
 }
 
+// Description returns a human-readable description of the rule.
 func (r *TerraformNamingConventionRule) Description() string {
 	return "Ensures resources follow naming conventions (snake_case)"
 }
 
+// snakeCasePattern matches valid snake_case identifiers.
 var snakeCasePattern = regexp.MustCompile(`^[a-z][a-z0-9_]*$`)
 
+// Check examines resource names for naming convention compliance.
 func (r *TerraformNamingConventionRule) Check(ctx *RuleContext) []sdk.Finding {
 	var findings []sdk.Finding
 
@@ -673,17 +710,20 @@ func (r *TerraformNamingConventionRule) Check(ctx *RuleContext) []sdk.Finding {
 	return findings
 }
 
-// TerraformUnusedDeclarationsRule checks for unused variables and locals
+// TerraformUnusedDeclarationsRule checks for unused variables and locals.
 type TerraformUnusedDeclarationsRule struct{}
 
+// Name returns the rule identifier.
 func (r *TerraformUnusedDeclarationsRule) Name() string {
 	return "lint.terraform-unused-declarations"
 }
 
+// Description returns a human-readable description of the rule.
 func (r *TerraformUnusedDeclarationsRule) Description() string {
 	return "Detects declared but unused variables and locals"
 }
 
+// Check examines variables and locals for usage.
 func (r *TerraformUnusedDeclarationsRule) Check(ctx *RuleContext) []sdk.Finding {
 	var findings []sdk.Finding
 
@@ -733,17 +773,20 @@ func (r *TerraformUnusedDeclarationsRule) Check(ctx *RuleContext) []sdk.Finding 
 	return findings
 }
 
-// TerraformResourceCountRule checks for high resource counts
+// TerraformResourceCountRule checks for high resource counts.
 type TerraformResourceCountRule struct{}
 
+// Name returns the rule identifier.
 func (r *TerraformResourceCountRule) Name() string {
 	return "lint.terraform-resource-count"
 }
 
+// Description returns a human-readable description of the rule.
 func (r *TerraformResourceCountRule) Description() string {
 	return "Warns when a file has too many resources (suggests splitting)"
 }
 
+// Check counts resources in a file and warns if above threshold.
 func (r *TerraformResourceCountRule) Check(ctx *RuleContext) []sdk.Finding {
 	var findings []sdk.Finding
 
@@ -761,11 +804,18 @@ func (r *TerraformResourceCountRule) Check(ctx *RuleContext) []sdk.Finding {
 	}
 
 	if resourceCount > threshold {
+		msg := fmt.Sprintf(
+			"File has %d resources (threshold: %d). Consider splitting into multiple files",
+			resourceCount, threshold,
+		)
 		findings = append(findings, sdk.Finding{
-			Rule:     r.Name(),
-			Message:  fmt.Sprintf("File has %d resources (threshold: %d). Consider splitting into multiple files", resourceCount, threshold),
-			File:     ctx.File,
-			Location: hcl.Range{Filename: ctx.File, Start: hcl.Pos{Line: 1, Column: 1}},
+			Rule:    r.Name(),
+			Message: msg,
+			File:    ctx.File,
+			Location: hcl.Range{
+				Filename: ctx.File,
+				Start:    hcl.Pos{Line: 1, Column: 1},
+			},
 			Severity: sdk.SeverityInfo,
 			Fixable:  false,
 		})

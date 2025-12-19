@@ -38,7 +38,7 @@ The server provides:
   - Real-time diagnostics
   - Document formatting
   - Code actions for fixable issues`,
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, _ []string) {
 		server := lsp.NewServer(os.Stdin, os.Stdout)
 		if err := server.Run(); err != nil {
 			os.Exit(1)

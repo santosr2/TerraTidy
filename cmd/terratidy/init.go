@@ -47,7 +47,7 @@ func init() {
 	rootCmd.AddCommand(initCmd)
 }
 
-func runInit(cmd *cobra.Command, args []string) error {
+func runInit(_ *cobra.Command, _ []string) error {
 	configPath := ".terratidy.yaml"
 
 	// Check if config already exists
@@ -75,7 +75,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 	}
 
 	// Write configuration file
-	if err := os.WriteFile(configPath, []byte(config), 0644); err != nil {
+	if err := os.WriteFile(configPath, []byte(config), 0o644); err != nil {
 		return fmt.Errorf("writing config file: %w", err)
 	}
 
@@ -142,7 +142,7 @@ func readLine(reader *bufio.Reader) string {
 func initSplitConfig() error {
 	// Create .terratidy directory
 	configDir := ".terratidy"
-	if err := os.MkdirAll(configDir, 0755); err != nil {
+	if err := os.MkdirAll(configDir, 0o755); err != nil {
 		return fmt.Errorf("creating config directory: %w", err)
 	}
 
@@ -213,7 +213,7 @@ engines:
 	}
 
 	for path, content := range files {
-		if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 			return fmt.Errorf("writing %s: %w", path, err)
 		}
 		fmt.Printf("Created %s\n", path)
@@ -362,7 +362,11 @@ overrides:
 }
 
 // generateCustomConfig generates a custom configuration based on user choices.
-func generateCustomConfig(fmtEnabled, styleEnabled, lintEnabled, policyEnabled bool, severity string, failFast bool) string {
+func generateCustomConfig(
+	fmtEnabled, styleEnabled, lintEnabled, policyEnabled bool,
+	severity string,
+	failFast bool,
+) string {
 	return fmt.Sprintf(`# TerraTidy Configuration
 # Generated with interactive setup
 version: 1

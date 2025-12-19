@@ -58,7 +58,7 @@ resource "aws_instance" "example" {
 			tmpDir := t.TempDir()
 			tmpFile := filepath.Join(tmpDir, "main.tf")
 
-			err := os.WriteFile(tmpFile, []byte(tt.content), 0644)
+			err := os.WriteFile(tmpFile, []byte(tt.content), 0o644)
 			require.NoError(t, err)
 
 			engine := New(tt.config)
@@ -115,7 +115,7 @@ func TestTerraformRequiredVersionRule(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			tmpDir := t.TempDir()
 			tmpFile := filepath.Join(tmpDir, "main.tf")
-			require.NoError(t, os.WriteFile(tmpFile, []byte(tt.content), 0644))
+			require.NoError(t, os.WriteFile(tmpFile, []byte(tt.content), 0o644))
 
 			engine := New(nil)
 			findings, err := engine.Run(context.Background(), []string{tmpFile})
@@ -165,7 +165,7 @@ func TestTerraformDocumentedVariablesRule(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			tmpDir := t.TempDir()
 			tmpFile := filepath.Join(tmpDir, "variables.tf")
-			require.NoError(t, os.WriteFile(tmpFile, []byte(tt.content), 0644))
+			require.NoError(t, os.WriteFile(tmpFile, []byte(tt.content), 0o644))
 
 			engine := New(nil)
 			findings, err := engine.Run(context.Background(), []string{tmpFile})
@@ -214,7 +214,7 @@ func TestTerraformTypedVariablesRule(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			tmpDir := t.TempDir()
 			tmpFile := filepath.Join(tmpDir, "variables.tf")
-			require.NoError(t, os.WriteFile(tmpFile, []byte(tt.content), 0644))
+			require.NoError(t, os.WriteFile(tmpFile, []byte(tt.content), 0o644))
 
 			engine := New(nil)
 			findings, err := engine.Run(context.Background(), []string{tmpFile})
@@ -269,7 +269,7 @@ func TestTerraformNamingConventionRule(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			tmpDir := t.TempDir()
 			tmpFile := filepath.Join(tmpDir, "main.tf")
-			require.NoError(t, os.WriteFile(tmpFile, []byte(tt.content), 0644))
+			require.NoError(t, os.WriteFile(tmpFile, []byte(tt.content), 0o644))
 
 			engine := New(nil)
 			findings, err := engine.Run(context.Background(), []string{tmpFile})
@@ -325,7 +325,7 @@ func TestTerraformModulePinnedSourceRule(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			tmpDir := t.TempDir()
 			tmpFile := filepath.Join(tmpDir, "main.tf")
-			require.NoError(t, os.WriteFile(tmpFile, []byte(tt.content), 0644))
+			require.NoError(t, os.WriteFile(tmpFile, []byte(tt.content), 0o644))
 
 			engine := New(nil)
 			findings, err := engine.Run(context.Background(), []string{tmpFile})
@@ -374,7 +374,7 @@ func TestTerraformDeprecatedSyntaxRule(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			tmpDir := t.TempDir()
 			tmpFile := filepath.Join(tmpDir, "main.tf")
-			require.NoError(t, os.WriteFile(tmpFile, []byte(tt.content), 0644))
+			require.NoError(t, os.WriteFile(tmpFile, []byte(tt.content), 0o644))
 
 			engine := New(nil)
 			findings, err := engine.Run(context.Background(), []string{tmpFile})
@@ -414,7 +414,7 @@ func TestEngine_RuleDisabling(t *testing.T) {
   ami = "ami-12345"
 }
 `
-	require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0644))
+	require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0o644))
 
 	// Test with required_version rule disabled
 	engine := New(&Config{
@@ -441,7 +441,7 @@ func TestEngine_ContextCancellation(t *testing.T) {
   ami = "ami-12345"
 }
 `
-	require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0644))
+	require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0o644))
 
 	engine := New(nil)
 
@@ -506,7 +506,7 @@ func TestTerraformResourceCountRule(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	tmpFile := filepath.Join(tmpDir, "main.tf")
-	require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0644))
+	require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0o644))
 
 	engine := New(nil)
 	findings, err := engine.Run(context.Background(), []string{tmpFile})
@@ -576,7 +576,7 @@ func TestTerraformDocumentedOutputsRule(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			tmpDir := t.TempDir()
 			tmpFile := filepath.Join(tmpDir, "outputs.tf")
-			require.NoError(t, os.WriteFile(tmpFile, []byte(tt.content), 0644))
+			require.NoError(t, os.WriteFile(tmpFile, []byte(tt.content), 0o644))
 
 			engine := New(nil)
 			findings, err := engine.Run(context.Background(), []string{tmpFile})
@@ -629,8 +629,8 @@ variable "instance_type" {
 }
 `
 
-	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "main.tf"), []byte(mainContent), 0644))
-	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "variables.tf"), []byte(varsContent), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "main.tf"), []byte(mainContent), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "variables.tf"), []byte(varsContent), 0o644))
 
 	engine := New(nil)
 	findings, err := engine.Run(context.Background(), []string{

@@ -1,0 +1,84 @@
+# Revive configuration for TerraTidy
+# https://github.com/mgechev/revive
+
+# Enable all rules by default
+enableAllRules = false
+
+# Specific severity levels: warning, error
+[rule.blank-imports]
+[rule.context-as-argument]
+[rule.context-keys-type]
+[rule.dot-imports]
+[rule.error-return]
+[rule.error-strings]
+[rule.error-naming]
+[rule.exported]
+  arguments = ["checkPrivateReceivers", "sayRepetitiveInsteadOfStutters"]
+[rule.if-return]
+[rule.increment-decrement]
+[rule.var-naming]
+  arguments = [["ID", "URL", "HTTP", "API", "HCL", "TF", "SDK", "CLI", "OPA"]]
+[rule.var-declaration]
+[rule.package-comments]
+[rule.range]
+[rule.receiver-naming]
+[rule.time-naming]
+[rule.unexported-return]
+[rule.indent-error-flow]
+[rule.errorf]
+[rule.empty-block]
+[rule.superfluous-else]
+[rule.unused-parameter]
+  severity = "warning"
+[rule.unreachable-code]
+[rule.redefines-builtin-id]
+[rule.bool-literal-in-expr]
+[rule.constant-logical-expr]
+
+# Go-specific TerraTidy rules
+[rule.import-shadowing]
+[rule.empty-lines]
+[rule.modifies-parameter]
+[rule.modifies-value-receiver]
+[rule.early-return]
+[rule.unconditional-recursion]
+[rule.identical-branches]
+[rule.defer]
+  arguments = [["call-chain", "loop", "method-call", "recover", "return"]]
+[rule.waitgroup-by-value]
+[rule.atomic]
+[rule.line-length-limit]
+  arguments = [120]
+[rule.call-to-gc]
+[rule.duplicated-imports]
+[rule.string-of-int]
+[rule.range-val-in-closure]
+[rule.range-val-address]
+[rule.unhandled-error]
+  arguments = ["fmt.Printf", "fmt.Println", "fmt.Print"]
+
+# Code complexity
+# TODO: Re-enable these rules once refactoring is complete
+# These rules are temporarily disabled to focus on functional changes.
+# Tracked for re-enablement in future iteration.
+#
+# [rule.cognitive-complexity]
+#   arguments = [15]
+# [rule.cyclomatic]
+#   arguments = [15]
+# [rule.function-length]
+#   arguments = [50, 100]  # statements, lines
+# [rule.argument-limit]
+#   arguments = [5]
+# [rule.max-public-structs]
+#   arguments = [10]
+[rule.function-result-limit]
+  arguments = [3]
+
+# Naming conventions
+[rule.confusing-naming]
+[rule.confusing-results]
+
+# Comments and documentation
+[rule.comment-spacings]
+  arguments = ["nolint", "TODO", "FIXME", "BUG", "NOTE"]

@@ -32,7 +32,7 @@ func init() {
 	rootCmd.AddCommand(fixCmd)
 }
 
-func runFix(cmd *cobra.Command, args []string) error {
+func runFix(_ *cobra.Command, args []string) error {
 	// Get target files (respecting --changed flag)
 	files, err := getTargetFiles(args, changed)
 	if err != nil {

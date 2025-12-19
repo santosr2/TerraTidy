@@ -31,10 +31,10 @@ Plugin directories can be configured in .terratidy.yaml:
 var pluginsListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List installed plugins",
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, _ []string) {
 		cfg, err := config.Load(cfgFile)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
+			_, _ = fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
 			os.Exit(1)
 		}
 
@@ -45,7 +45,7 @@ var pluginsListCmd = &cobra.Command{
 
 		manager := plugins.NewManager(cfg.Plugins.Directories)
 		if err := manager.LoadAll(); err != nil {
-			fmt.Fprintf(os.Stderr, "Error loading plugins: %v\n", err)
+			_, _ = fmt.Fprintf(os.Stderr, "Error loading plugins: %v\n", err)
 			os.Exit(1)
 		}
 
@@ -60,18 +60,18 @@ var pluginsListCmd = &cobra.Command{
 		}
 
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-		fmt.Fprintln(w, "NAME\tVERSION\tTYPE\tDESCRIPTION")
-		fmt.Fprintln(w, "----\t-------\t----\t-----------")
+		_, _ = fmt.Fprintln(w, "NAME\tVERSION\tTYPE\tDESCRIPTION")
+		_, _ = fmt.Fprintln(w, "----\t-------\t----\t-----------")
 
 		for _, p := range pluginList {
-			fmt.Fprintf(w, "%s\t%s\t%s\t%s\n",
+			_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\n",
 				p.Metadata.Name,
 				p.Metadata.Version,
 				p.Metadata.Type,
 				p.Metadata.Description,
 			)
 		}
-		w.Flush()
+		_ = w.Flush()
 	},
 }
 
@@ -79,18 +79,18 @@ var pluginsInfoCmd = &cobra.Command{
 	Use:   "info [plugin-name]",
 	Short: "Show detailed information about a plugin",
 	Args:  cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, args []string) {
 		pluginName := args[0]
 
 		cfg, err := config.Load(cfgFile)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
+			_, _ = fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
 			os.Exit(1)
 		}
 
 		manager := plugins.NewManager(cfg.Plugins.Directories)
 		if err := manager.LoadAll(); err != nil {
-			fmt.Fprintf(os.Stderr, "Error loading plugins: %v\n", err)
+			_, _ = fmt.Fprintf(os.Stderr, "Error loading plugins: %v\n", err)
 			os.Exit(1)
 		}
 
@@ -103,7 +103,7 @@ var pluginsInfoCmd = &cobra.Command{
 		}
 
 		if found == nil {
-			fmt.Fprintf(os.Stderr, "Plugin not found: %s\n", pluginName)
+			_, _ = fmt.Fprintf(os.Stderr, "Plugin not found: %s\n", pluginName)
 			os.Exit(1)
 		}
 
@@ -140,13 +140,13 @@ var pluginsInitCmd = &cobra.Command{
 	Use:   "init [name]",
 	Short: "Initialize a new plugin project",
 	Args:  cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, args []string) {
 		pluginName := args[0]
 
 		// Create plugin directory
 		dir := filepath.Join(".", pluginName)
-		if err := os.MkdirAll(dir, 0755); err != nil {
-			fmt.Fprintf(os.Stderr, "Error creating directory: %v\n", err)
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			_, _ = fmt.Fprintf(os.Stderr, "Error creating directory: %v\n", err)
 			os.Exit(1)
 		}
 
@@ -217,8 +217,8 @@ func (r *ExampleRule) Fix(ctx *sdk.Context, file *hcl.File) error {
 `, pluginName, pluginName, pluginName, pluginName)
 
 		mainPath := filepath.Join(dir, "main.go")
-		if err := os.WriteFile(mainPath, []byte(mainContent), 0644); err != nil {
-			fmt.Fprintf(os.Stderr, "Error writing main.go: %v\n", err)
+		if err := os.WriteFile(mainPath, []byte(mainContent), 0o644); err != nil {
+			_, _ = fmt.Fprintf(os.Stderr, "Error writing main.go: %v\n", err)
 			os.Exit(1)
 		}
 
@@ -231,8 +231,8 @@ require github.com/santosr2/terratidy v0.1.0
 `, pluginName)
 
 		goModPath := filepath.Join(dir, "go.mod")
-		if err := os.WriteFile(goModPath, []byte(goModContent), 0644); err != nil {
-			fmt.Fprintf(os.Stderr, "Error writing go.mod: %v\n", err)
+		if err := os.WriteFile(goModPath, []byte(goModContent), 0o644); err != nil {
+			_, _ = fmt.Fprintf(os.Stderr, "Error writing go.mod: %v\n", err)
 			os.Exit(1)
 		}
 
@@ -253,8 +253,8 @@ clean:
 `, pluginName, pluginName, pluginName, pluginName)
 
 		makefilePath := filepath.Join(dir, "Makefile")
-		if err := os.WriteFile(makefilePath, []byte(makefileContent), 0644); err != nil {
-			fmt.Fprintf(os.Stderr, "Error writing Makefile: %v\n", err)
+		if err := os.WriteFile(makefilePath, []byte(makefileContent), 0o644); err != nil {
+			_, _ = fmt.Fprintf(os.Stderr, "Error writing Makefile: %v\n", err)
 			os.Exit(1)
 		}
 

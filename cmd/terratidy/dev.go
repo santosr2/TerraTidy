@@ -43,7 +43,7 @@ func init() {
 	rootCmd.AddCommand(devCmd)
 }
 
-func runDev(cmd *cobra.Command, args []string) error {
+func runDev(_ *cobra.Command, _ []string) error {
 	fmt.Println("Starting development mode...")
 	fmt.Printf("  Watching: %s\n", devWatch)
 	fmt.Printf("  Target:   %s\n", devTarget)
@@ -84,7 +84,7 @@ func runDev(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("creating watcher: %w", err)
 	}
-	defer watcher.Close()
+	defer func() { _ = watcher.Close() }()
 
 	// Watch the directory and subdirectories
 	err = filepath.Walk(devWatch, func(path string, info os.FileInfo, err error) error {

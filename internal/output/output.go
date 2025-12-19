@@ -1,3 +1,6 @@
+// Package output provides formatters for TerraTidy findings.
+// It supports multiple output formats including text, JSON, SARIF, and HTML
+// for displaying analysis results to users.
 package output
 
 import (
@@ -22,7 +25,7 @@ type TextFormatter struct {
 // Format implements the Formatter interface for text output
 func (f *TextFormatter) Format(findings []sdk.Finding, w io.Writer) error {
 	if len(findings) == 0 {
-		fmt.Fprintln(w, "✓ No issues found")
+		_, _ = fmt.Fprintln(w, "✓ No issues found")
 		return nil
 	}
 
@@ -38,7 +41,7 @@ func (f *TextFormatter) Format(findings []sdk.Finding, w io.Writer) error {
 		}
 
 		if f.Verbose {
-			fmt.Fprintf(w, "%s %s:%d:%d: %s (%s)\n",
+			_, _ = fmt.Fprintf(w, "%s %s:%d:%d: %s (%s)\n",
 				icon,
 				finding.File,
 				finding.Location.Start.Line,
@@ -47,7 +50,7 @@ func (f *TextFormatter) Format(findings []sdk.Finding, w io.Writer) error {
 				finding.Rule,
 			)
 		} else {
-			fmt.Fprintf(w, "%s %s: %s (%s)\n",
+			_, _ = fmt.Fprintf(w, "%s %s: %s (%s)\n",
 				icon,
 				finding.File,
 				finding.Message,
@@ -198,7 +201,11 @@ func (f *HTMLFormatter) Format(findings []sdk.Finding, w io.Writer) error {
 	return err
 }
 
-func (f *HTMLFormatter) generateHTML(findings []sdk.Finding, byFile map[string][]sdk.Finding, errors, warnings, info int) string {
+func (f *HTMLFormatter) generateHTML(
+	findings []sdk.Finding,
+	byFile map[string][]sdk.Finding,
+	errors, warnings, info int,
+) string {
 	total := len(findings)
 
 	return fmt.Sprintf(`<!DOCTYPE html>

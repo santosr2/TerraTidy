@@ -36,7 +36,7 @@ Use --changed to only lint files that have been modified in git.`,
 
   # Enable specific rules
   terratidy lint --rule terraform_required_version`,
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(_ *cobra.Command, args []string) error {
 		// Get target files (respecting --changed flag)
 		files, err := getTargetFiles(args, changed)
 		if err != nil {

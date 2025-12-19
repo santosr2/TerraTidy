@@ -293,8 +293,13 @@ func (e *Engine) extractBlockData(block *hclsyntax.Block, content []byte) map[st
 	return data
 }
 
-// evaluatePolicies evaluates all policies against the module data
-func (e *Engine) evaluatePolicies(ctx context.Context, policies []string, moduleData map[string]any, dir string) ([]sdk.Finding, error) {
+// evaluatePolicies evaluates all policies against the module data.
+func (e *Engine) evaluatePolicies(
+	ctx context.Context,
+	policies []string,
+	moduleData map[string]any,
+	dir string,
+) ([]sdk.Finding, error) {
 	var findings []sdk.Finding
 
 	// Build the Rego query

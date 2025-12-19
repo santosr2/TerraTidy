@@ -39,7 +39,7 @@ func TestEngine_Run_NoPolices(t *testing.T) {
   instance_type = "t2.micro"
 }
 `
-	require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0644))
+	require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0o644))
 
 	// Engine with no custom policies will use built-in policies
 	engine := New(nil)
@@ -73,7 +73,7 @@ resource "aws_instance" "example" {
   }
 }
 `
-	require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0644))
+	require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0o644))
 
 	engine := New(nil)
 	findings, err := engine.Run(context.Background(), []string{tmpFile})
@@ -92,7 +92,7 @@ func TestEngine_Run_ContextCancellation(t *testing.T) {
   ami = "ami-12345"
 }
 `
-	require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0644))
+	require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0o644))
 
 	engine := New(nil)
 
@@ -138,8 +138,8 @@ output "instance_id" {
   value       = aws_instance.example.id
 }
 `
-	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "main.tf"), []byte(mainContent), 0644))
-	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "variables.tf"), []byte(varsContent), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "main.tf"), []byte(mainContent), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "variables.tf"), []byte(varsContent), 0o644))
 
 	engine := New(nil)
 	data, err := engine.parseModuleToJSON([]string{
@@ -176,7 +176,7 @@ func TestEngine_GetInput(t *testing.T) {
   ami = "ami-12345"
 }
 `
-	require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0644))
+	require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0o644))
 
 	engine := New(nil)
 	jsonData, err := engine.GetInput([]string{tmpFile})
@@ -196,11 +196,11 @@ func TestEngine_CustomPolicy(t *testing.T) {
   instance_type = "t2.micro"
 }
 `
-	require.NoError(t, os.WriteFile(tfFile, []byte(tfContent), 0644))
+	require.NoError(t, os.WriteFile(tfFile, []byte(tfContent), 0o644))
 
 	// Create custom policy
 	policyDir := filepath.Join(tmpDir, "policies")
-	require.NoError(t, os.MkdirAll(policyDir, 0755))
+	require.NoError(t, os.MkdirAll(policyDir, 0o755))
 
 	policyContent := `package terraform
 
@@ -216,7 +216,7 @@ deny contains msg if {
     }
 }
 `
-	require.NoError(t, os.WriteFile(filepath.Join(policyDir, "custom.rego"), []byte(policyContent), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(policyDir, "custom.rego"), []byte(policyContent), 0o644))
 
 	engine := New(&Config{
 		PolicyDirs: []string{policyDir},
@@ -344,8 +344,8 @@ variable "instance_type" {
 }
 `
 
-	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "main.tf"), []byte(mainContent), 0644))
-	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "variables.tf"), []byte(varsContent), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "main.tf"), []byte(mainContent), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "variables.tf"), []byte(varsContent), 0o644))
 
 	engine := New(nil)
 	findings, err := engine.Run(context.Background(), []string{

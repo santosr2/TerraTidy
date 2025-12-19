@@ -16,7 +16,7 @@ var versionCmd = &cobra.Command{
 	Use:   "version",
 	Short: "Print version information",
 	Long:  `Display version, build, and runtime information for TerraTidy.`,
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(_ *cobra.Command, _ []string) error {
 		if versionJSON {
 			fmt.Printf(`{
   "version": "%s",

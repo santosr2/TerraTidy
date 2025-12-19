@@ -83,6 +83,5 @@ coverage/
 .github
 !.github/workflows
 tools
-revive.toml
 .opencode
 .ai-config-complete.md

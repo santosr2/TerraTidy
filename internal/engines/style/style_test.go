@@ -66,7 +66,7 @@ resource "aws_instance" "example2" {
 			// Create temp file
 			tmpDir := t.TempDir()
 			tmpFile := filepath.Join(tmpDir, "test.tf")
-			if err := os.WriteFile(tmpFile, []byte(tt.content), 0644); err != nil {
+			if err := os.WriteFile(tmpFile, []byte(tt.content), 0o644); err != nil {
 				t.Fatalf("failed to create temp file: %v", err)
 			}
 
@@ -141,7 +141,7 @@ resource "aws_instance" "b" {
 		t.Run(tt.name, func(t *testing.T) {
 			tmpDir := t.TempDir()
 			tmpFile := filepath.Join(tmpDir, "test.tf")
-			if err := os.WriteFile(tmpFile, []byte(tt.content), 0644); err != nil {
+			if err := os.WriteFile(tmpFile, []byte(tt.content), 0o644); err != nil {
 				t.Fatalf("failed to create temp file: %v", err)
 			}
 
@@ -210,7 +210,7 @@ func TestBlockLabelCaseRule(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			tmpDir := t.TempDir()
 			tmpFile := filepath.Join(tmpDir, "test.tf")
-			require.NoError(t, os.WriteFile(tmpFile, []byte(tt.content), 0644))
+			require.NoError(t, os.WriteFile(tmpFile, []byte(tt.content), 0o644))
 
 			engine := New(nil)
 			findings, err := engine.Run(context.Background(), []string{tmpFile})
@@ -285,7 +285,7 @@ func TestForEachCountFirstRule(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			tmpDir := t.TempDir()
 			tmpFile := filepath.Join(tmpDir, "test.tf")
-			require.NoError(t, os.WriteFile(tmpFile, []byte(tt.content), 0644))
+			require.NoError(t, os.WriteFile(tmpFile, []byte(tt.content), 0o644))
 
 			engine := New(nil)
 			findings, err := engine.Run(context.Background(), []string{tmpFile})
@@ -352,7 +352,7 @@ func TestLifecycleAtEndRule(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			tmpDir := t.TempDir()
 			tmpFile := filepath.Join(tmpDir, "test.tf")
-			require.NoError(t, os.WriteFile(tmpFile, []byte(tt.content), 0644))
+			require.NoError(t, os.WriteFile(tmpFile, []byte(tt.content), 0o644))
 
 			engine := New(nil)
 			findings, err := engine.Run(context.Background(), []string{tmpFile})
@@ -413,7 +413,7 @@ func TestSourceVersionGroupedRule(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			tmpDir := t.TempDir()
 			tmpFile := filepath.Join(tmpDir, "test.tf")
-			require.NoError(t, os.WriteFile(tmpFile, []byte(tt.content), 0644))
+			require.NoError(t, os.WriteFile(tmpFile, []byte(tt.content), 0o644))
 
 			engine := New(nil)
 			findings, err := engine.Run(context.Background(), []string{tmpFile})
@@ -474,7 +474,7 @@ func TestVariableOrderRule(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			tmpDir := t.TempDir()
 			tmpFile := filepath.Join(tmpDir, "test.tf")
-			require.NoError(t, os.WriteFile(tmpFile, []byte(tt.content), 0644))
+			require.NoError(t, os.WriteFile(tmpFile, []byte(tt.content), 0o644))
 
 			engine := New(nil)
 			findings, err := engine.Run(context.Background(), []string{tmpFile})
@@ -524,7 +524,7 @@ func TestOutputOrderRule(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			tmpDir := t.TempDir()
 			tmpFile := filepath.Join(tmpDir, "test.tf")
-			require.NoError(t, os.WriteFile(tmpFile, []byte(tt.content), 0644))
+			require.NoError(t, os.WriteFile(tmpFile, []byte(tt.content), 0o644))
 
 			engine := New(nil)
 			findings, err := engine.Run(context.Background(), []string{tmpFile})
@@ -587,7 +587,7 @@ terraform {
 		t.Run(tt.name, func(t *testing.T) {
 			tmpDir := t.TempDir()
 			tmpFile := filepath.Join(tmpDir, "test.tf")
-			require.NoError(t, os.WriteFile(tmpFile, []byte(tt.content), 0644))
+			require.NoError(t, os.WriteFile(tmpFile, []byte(tt.content), 0o644))
 
 			engine := New(nil)
 			findings, err := engine.Run(context.Background(), []string{tmpFile})
@@ -644,7 +644,7 @@ func TestNoEmptyBlocksRule(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			tmpDir := t.TempDir()
 			tmpFile := filepath.Join(tmpDir, "test.tf")
-			require.NoError(t, os.WriteFile(tmpFile, []byte(tt.content), 0644))
+			require.NoError(t, os.WriteFile(tmpFile, []byte(tt.content), 0o644))
 
 			engine := New(nil)
 			findings, err := engine.Run(context.Background(), []string{tmpFile})
@@ -687,7 +687,7 @@ resource "aws_instance" "example2" {
   ami = "ami-67890"
 }
 `
-	require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0644))
+	require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0o644))
 
 	// Test with rule disabled
 	engine := New(&Config{
@@ -714,7 +714,7 @@ func TestEngine_ContextCancellation(t *testing.T) {
   ami = "ami-12345"
 }
 `
-	require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0644))
+	require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0o644))
 
 	engine := New(nil)
 
@@ -740,8 +740,8 @@ func TestEngine_MultipleFiles(t *testing.T) {
   type        = string
 }
 `
-	require.NoError(t, os.WriteFile(tmpFile1, []byte(content1), 0644))
-	require.NoError(t, os.WriteFile(tmpFile2, []byte(content2), 0644))
+	require.NoError(t, os.WriteFile(tmpFile1, []byte(content1), 0o644))
+	require.NoError(t, os.WriteFile(tmpFile2, []byte(content2), 0o644))
 
 	engine := New(nil)
 	findings, err := engine.Run(context.Background(), []string{tmpFile1, tmpFile2})

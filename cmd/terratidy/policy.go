@@ -45,7 +45,7 @@ Use --changed to only check files that have been modified in git.`,
 
   # Show input JSON for debugging policies
   terratidy policy --show-input`,
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(_ *cobra.Command, args []string) error {
 		// Get target files (respecting --changed flag)
 		files, err := getTargetFiles(args, changed)
 		if err != nil {

@@ -13,9 +13,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-var (
-	configOutputFormat string
-)
+var configOutputFormat string
 
 var configCmd = &cobra.Command{
 	Use:   "config",
@@ -112,7 +110,7 @@ func init() {
 	rootCmd.AddCommand(configCmd)
 }
 
-func runConfigShow(cmd *cobra.Command, args []string) error {
+func runConfigShow(_ *cobra.Command, _ []string) error {
 	cfg, err := config.Load(cfgFile)
 	if err != nil {
 		return fmt.Errorf("loading config: %w", err)
@@ -136,7 +134,7 @@ func runConfigShow(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func runConfigValidate(cmd *cobra.Command, args []string) error {
+func runConfigValidate(_ *cobra.Command, _ []string) error {
 	configPath := cfgFile
 	if configPath == "" {
 		configPath = ".terratidy.yaml"
@@ -206,7 +204,11 @@ func validateConfig(cfg *config.Config) []string {
 	if cfg.SeverityThreshold != "" {
 		validSeverities := map[string]bool{"info": true, "warning": true, "error": true}
 		if !validSeverities[strings.ToLower(cfg.SeverityThreshold)] {
-			issues = append(issues, fmt.Sprintf("invalid severity_threshold: %s (use info, warning, or error)", cfg.SeverityThreshold))
+			msg := fmt.Sprintf(
+				"invalid severity_threshold: %s (use info, warning, or error)",
+				cfg.SeverityThreshold,
+			)
+			issues = append(issues, msg)
 		}
 	}
 
@@ -219,7 +221,7 @@ func validateConfig(cfg *config.Config) []string {
 	return issues
 }
 
-func runConfigSplit(cmd *cobra.Command, args []string) error {
+func runConfigSplit(_ *cobra.Command, _ []string) error {
 	configPath := cfgFile
 	if configPath == "" {
 		configPath = ".terratidy.yaml"
@@ -238,7 +240,7 @@ func runConfigSplit(cmd *cobra.Command, args []string) error {
 
 	// Create .terratidy directory
 	configDir := ".terratidy"
-	if err := os.MkdirAll(configDir, 0755); err != nil {
+	if err := os.MkdirAll(configDir, 0o755); err != nil {
 		return fmt.Errorf("creating config directory: %w", err)
 	}
 
@@ -307,7 +309,7 @@ fail_fast: %t
 parallel: %t
 `, cfg.Version, cfg.SeverityThreshold, cfg.FailFast, cfg.Parallel)
 
-	if err := os.WriteFile(configPath, []byte(mainCfg), 0644); err != nil {
+	if err := os.WriteFile(configPath, []byte(mainCfg), 0o644); err != nil {
 		return fmt.Errorf("writing main config: %w", err)
 	}
 	fmt.Printf("  Updated %s\n", configPath)
@@ -317,7 +319,7 @@ parallel: %t
 	return nil
 }
 
-func runConfigMerge(cmd *cobra.Command, args []string) error {
+func runConfigMerge(_ *cobra.Command, _ []string) error {
 	configPath := cfgFile
 	if configPath == "" {
 		configPath = ".terratidy.yaml"
@@ -346,7 +348,7 @@ func runConfigMerge(cmd *cobra.Command, args []string) error {
 `
 	finalOutput := header + string(output)
 
-	if err := os.WriteFile(configPath, []byte(finalOutput), 0644); err != nil {
+	if err := os.WriteFile(configPath, []byte(finalOutput), 0o644); err != nil {
 		return fmt.Errorf("writing merged config: %w", err)
 	}
 
@@ -354,7 +356,7 @@ func runConfigMerge(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func runConfigInitProfile(cmd *cobra.Command, args []string) error {
+func runConfigInitProfile(_ *cobra.Command, args []string) error {
 	profileName := args[0]
 
 	configPath := cfgFile
@@ -396,7 +398,7 @@ func runConfigInitProfile(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("marshaling config: %w", err)
 	}
 
-	if err := os.WriteFile(configPath, output, 0644); err != nil {
+	if err := os.WriteFile(configPath, output, 0o644); err != nil {
 		return fmt.Errorf("writing config: %w", err)
 	}
 
@@ -413,5 +415,5 @@ func writeYAMLFile(path string, data interface{}) error {
 	if err != nil {
 		return fmt.Errorf("marshaling %s: %w", path, err)
 	}
-	return os.WriteFile(path, output, 0644)
+	return os.WriteFile(path, output, 0o644)
 }

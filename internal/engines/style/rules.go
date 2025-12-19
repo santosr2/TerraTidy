@@ -1,10 +1,11 @@
+// Package style provides the style engine and rules for TerraTidy.
+// It enforces consistent code style and formatting conventions in Terraform
+// configurations, such as attribute ordering, block spacing, and naming conventions.
 package style
 
 import (
 	"os"
 	"regexp"
-	"strings"
-	"unicode"
 
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/hclsyntax"
@@ -15,20 +16,20 @@ import (
 // snakeCaseRegex matches valid snake_case identifiers
 var snakeCaseRegex = regexp.MustCompile(`^[a-z][a-z0-9_]*$`)
 
-// dashCaseRegex matches valid dash-case identifiers
-var dashCaseRegex = regexp.MustCompile(`^[a-z][a-z0-9-]*$`)
-
-// BlankLineBetweenBlocksRule ensures blank lines between top-level blocks
+// BlankLineBetweenBlocksRule ensures blank lines between top-level blocks.
 type BlankLineBetweenBlocksRule struct{}
 
+// Name returns the rule identifier.
 func (r *BlankLineBetweenBlocksRule) Name() string {
 	return "style.blank-line-between-blocks"
 }
 
+// Description returns a human-readable description of the rule.
 func (r *BlankLineBetweenBlocksRule) Description() string {
 	return "Ensures there is exactly one blank line between top-level blocks"
 }
 
+// Check examines the file for blank line violations between blocks.
 func (r *BlankLineBetweenBlocksRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Finding, error) {
 	var findings []sdk.Finding
 
@@ -97,21 +98,25 @@ func (r *BlankLineBetweenBlocksRule) fixFile(filePath string) ([]byte, error) {
 	return f.Bytes(), nil
 }
 
-func (r *BlankLineBetweenBlocksRule) Fix(ctx *sdk.Context, file *hcl.File) ([]byte, error) {
+// Fix corrects blank line issues between blocks.
+func (r *BlankLineBetweenBlocksRule) Fix(ctx *sdk.Context, _ *hcl.File) ([]byte, error) {
 	return r.fixFile(ctx.File)
 }
 
-// BlockLabelCaseRule ensures block labels follow naming conventions
+// BlockLabelCaseRule ensures block labels follow naming conventions.
 type BlockLabelCaseRule struct{}
 
+// Name returns the rule identifier.
 func (r *BlockLabelCaseRule) Name() string {
 	return "style.block-label-case"
 }
 
+// Description returns a human-readable description of the rule.
 func (r *BlockLabelCaseRule) Description() string {
 	return "Ensures block labels follow naming conventions (snake_case for resources/data)"
 }
 
+// Check examines block labels for naming convention violations.
 func (r *BlockLabelCaseRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Finding, error) {
 	var findings []sdk.Finding
 
@@ -161,21 +166,25 @@ func (r *BlockLabelCaseRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Find
 	return findings, nil
 }
 
-func (r *BlockLabelCaseRule) Fix(ctx *sdk.Context, file *hcl.File) ([]byte, error) {
+// Fix is a no-op for this rule as block label renaming requires manual review.
+func (r *BlockLabelCaseRule) Fix(_ *sdk.Context, _ *hcl.File) ([]byte, error) {
 	return nil, nil
 }
 
-// ForEachCountFirstRule ensures for_each/count is the first attribute in resource/module blocks
+// ForEachCountFirstRule ensures for_each/count is the first attribute in resource/module blocks.
 type ForEachCountFirstRule struct{}
 
+// Name returns the rule identifier.
 func (r *ForEachCountFirstRule) Name() string {
 	return "style.for-each-count-first"
 }
 
+// Description returns a human-readable description of the rule.
 func (r *ForEachCountFirstRule) Description() string {
 	return "Ensures for_each or count is the first attribute in resource/module blocks"
 }
 
+// Check examines blocks for for_each/count attribute positioning.
 func (r *ForEachCountFirstRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Finding, error) {
 	var findings []sdk.Finding
 
@@ -194,7 +203,7 @@ func (r *ForEachCountFirstRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.F
 		// Find for_each or count attributes
 		var forEachAttr, countAttr *hclsyntax.Attribute
 		var firstAttr *hclsyntax.Attribute
-		var firstAttrLine int = int(^uint(0) >> 1) // max int
+		firstAttrLine := int(^uint(0) >> 1) // max int
 
 		for name, attr := range body.Attributes {
 			if attr.Range().Start.Line < firstAttrLine {
@@ -248,8 +257,12 @@ func (r *ForEachCountFirstRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.F
 	return findings, nil
 }
 
-// fixBlock moves for_each or count to be the first attribute in the block
-func (r *ForEachCountFirstRule) fixBlock(filePath, blockType string, blockLabels []string, attrName string) ([]byte, error) {
+// fixBlock moves for_each or count to be the first attribute in the block.
+func (r *ForEachCountFirstRule) fixBlock(
+	filePath, blockType string,
+	blockLabels []string,
+	attrName string,
+) ([]byte, error) {
 	content, err := os.ReadFile(filePath)
 	if err != nil {
 		return nil, err
@@ -317,7 +330,8 @@ func (r *ForEachCountFirstRule) fixBlock(filePath, blockType string, blockLabels
 	return f.Bytes(), nil
 }
 
-func (r *ForEachCountFirstRule) Fix(ctx *sdk.Context, file *hcl.File) ([]byte, error) {
+// Fix moves for_each/count to be first attribute in each block.
+func (r *ForEachCountFirstRule) Fix(ctx *sdk.Context, _ *hcl.File) ([]byte, error) {
 	// Fix all blocks in the file
 	content, err := os.ReadFile(ctx.File)
 	if err != nil {
@@ -370,17 +384,20 @@ func (r *ForEachCountFirstRule) Fix(ctx *sdk.Context, file *hcl.File) ([]byte, e
 	return f.Bytes(), nil
 }
 
-// LifecycleAtEndRule ensures lifecycle block is at the end of resource blocks
+// LifecycleAtEndRule ensures lifecycle block is at the end of resource blocks.
 type LifecycleAtEndRule struct{}
 
+// Name returns the rule identifier.
 func (r *LifecycleAtEndRule) Name() string {
 	return "style.lifecycle-at-end"
 }
 
+// Description returns a human-readable description of the rule.
 func (r *LifecycleAtEndRule) Description() string {
 	return "Ensures lifecycle block is at the end of resource blocks"
 }
 
+// Check examines resource blocks for lifecycle block positioning.
 func (r *LifecycleAtEndRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Finding, error) {
 	var findings []sdk.Finding
 
@@ -431,21 +448,25 @@ func (r *LifecycleAtEndRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Find
 	return findings, nil
 }
 
-func (r *LifecycleAtEndRule) Fix(ctx *sdk.Context, file *hcl.File) ([]byte, error) {
+// Fix is a no-op for this rule as lifecycle reordering requires manual review.
+func (r *LifecycleAtEndRule) Fix(_ *sdk.Context, _ *hcl.File) ([]byte, error) {
 	return nil, nil
 }
 
-// TagsAtEndRule ensures tags/labels are at the end of resource blocks (before lifecycle)
+// TagsAtEndRule ensures tags/labels are at the end of resource blocks (before lifecycle).
 type TagsAtEndRule struct{}
 
+// Name returns the rule identifier.
 func (r *TagsAtEndRule) Name() string {
 	return "style.tags-at-end"
 }
 
+// Description returns a human-readable description of the rule.
 func (r *TagsAtEndRule) Description() string {
 	return "Ensures tags/labels are near the end of resource blocks (before lifecycle)"
 }
 
+// Check examines resource blocks for tags/labels positioning.
 func (r *TagsAtEndRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Finding, error) {
 	var findings []sdk.Finding
 
@@ -521,21 +542,25 @@ func (r *TagsAtEndRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Finding, 
 	return findings, nil
 }
 
-func (r *TagsAtEndRule) Fix(ctx *sdk.Context, file *hcl.File) ([]byte, error) {
+// Fix is a no-op for this rule as tags reordering requires manual review.
+func (r *TagsAtEndRule) Fix(_ *sdk.Context, _ *hcl.File) ([]byte, error) {
 	return nil, nil
 }
 
-// DependsOnOrderRule ensures depends_on is at the end of blocks
+// DependsOnOrderRule ensures depends_on is at the end of blocks.
 type DependsOnOrderRule struct{}
 
+// Name returns the rule identifier.
 func (r *DependsOnOrderRule) Name() string {
 	return "style.depends-on-order"
 }
 
+// Description returns a human-readable description of the rule.
 func (r *DependsOnOrderRule) Description() string {
 	return "Ensures depends_on is at the end of resource/module blocks"
 }
 
+// Check examines blocks for depends_on attribute positioning.
 func (r *DependsOnOrderRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Finding, error) {
 	var findings []sdk.Finding
 
@@ -606,21 +631,25 @@ func (r *DependsOnOrderRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Find
 	return findings, nil
 }
 
-func (r *DependsOnOrderRule) Fix(ctx *sdk.Context, file *hcl.File) ([]byte, error) {
+// Fix is a no-op for this rule as depends_on reordering requires manual review.
+func (r *DependsOnOrderRule) Fix(_ *sdk.Context, _ *hcl.File) ([]byte, error) {
 	return nil, nil
 }
 
-// SourceVersionGroupedRule ensures source and version are grouped together in module blocks
+// SourceVersionGroupedRule ensures source and version are grouped together in module blocks.
 type SourceVersionGroupedRule struct{}
 
+// Name returns the rule identifier.
 func (r *SourceVersionGroupedRule) Name() string {
 	return "style.source-version-grouped"
 }
 
+// Description returns a human-readable description of the rule.
 func (r *SourceVersionGroupedRule) Description() string {
 	return "Ensures source and version are grouped at the start of module blocks"
 }
 
+// Check examines module blocks for source/version attribute grouping.
 func (r *SourceVersionGroupedRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Finding, error) {
 	var findings []sdk.Finding
 
@@ -637,7 +666,7 @@ func (r *SourceVersionGroupedRule) Check(ctx *sdk.Context, file *hcl.File) ([]sd
 		body := block.Body
 
 		var sourceAttr, versionAttr *hclsyntax.Attribute
-		var firstAttrLine int = int(^uint(0) >> 1)
+		firstAttrLine := int(^uint(0) >> 1)
 
 		for name, attr := range body.Attributes {
 			if attr.Range().Start.Line < firstAttrLine {
@@ -699,21 +728,25 @@ func (r *SourceVersionGroupedRule) Check(ctx *sdk.Context, file *hcl.File) ([]sd
 	return findings, nil
 }
 
-func (r *SourceVersionGroupedRule) Fix(ctx *sdk.Context, file *hcl.File) ([]byte, error) {
+// Fix is a no-op for this rule as source/version reordering requires manual review.
+func (r *SourceVersionGroupedRule) Fix(_ *sdk.Context, _ *hcl.File) ([]byte, error) {
 	return nil, nil
 }
 
-// VariableOrderRule ensures variable blocks follow standard ordering
+// VariableOrderRule ensures variable blocks follow standard ordering.
 type VariableOrderRule struct{}
 
+// Name returns the rule identifier.
 func (r *VariableOrderRule) Name() string {
 	return "style.variable-order"
 }
 
+// Description returns a human-readable description of the rule.
 func (r *VariableOrderRule) Description() string {
 	return "Ensures variable blocks follow standard ordering: description, type, default, validation"
 }
 
+// Check examines variable blocks for attribute ordering.
 func (r *VariableOrderRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Finding, error) {
 	var findings []sdk.Finding
 
@@ -809,7 +842,8 @@ func (r *VariableOrderRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Findi
 	return findings, nil
 }
 
-func (r *VariableOrderRule) Fix(ctx *sdk.Context, file *hcl.File) ([]byte, error) {
+// Fix reorders variable attributes to match the standard order.
+func (r *VariableOrderRule) Fix(ctx *sdk.Context, _ *hcl.File) ([]byte, error) {
 	content, err := os.ReadFile(ctx.File)
 	if err != nil {
 		return nil, err
@@ -866,17 +900,20 @@ func (r *VariableOrderRule) Fix(ctx *sdk.Context, file *hcl.File) ([]byte, error
 	return f.Bytes(), nil
 }
 
-// OutputOrderRule ensures output blocks follow standard ordering
+// OutputOrderRule ensures output blocks follow standard ordering.
 type OutputOrderRule struct{}
 
+// Name returns the rule identifier.
 func (r *OutputOrderRule) Name() string {
 	return "style.output-order"
 }
 
+// Description returns a human-readable description of the rule.
 func (r *OutputOrderRule) Description() string {
 	return "Ensures output blocks follow standard ordering: description, value, sensitive"
 }
 
+// Check examines output blocks for attribute ordering.
 func (r *OutputOrderRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Finding, error) {
 	var findings []sdk.Finding
 
@@ -958,7 +995,8 @@ func (r *OutputOrderRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Finding
 	return findings, nil
 }
 
-func (r *OutputOrderRule) Fix(ctx *sdk.Context, file *hcl.File) ([]byte, error) {
+// Fix reorders output attributes to match the standard order.
+func (r *OutputOrderRule) Fix(ctx *sdk.Context, _ *hcl.File) ([]byte, error) {
 	content, err := os.ReadFile(ctx.File)
 	if err != nil {
 		return nil, err
@@ -1015,17 +1053,20 @@ func (r *OutputOrderRule) Fix(ctx *sdk.Context, file *hcl.File) ([]byte, error) 
 	return f.Bytes(), nil
 }
 
-// TerraformBlockFirstRule ensures terraform block is first in the file
+// TerraformBlockFirstRule ensures terraform block is first in the file.
 type TerraformBlockFirstRule struct{}
 
+// Name returns the rule identifier.
 func (r *TerraformBlockFirstRule) Name() string {
 	return "style.terraform-block-first"
 }
 
+// Description returns a human-readable description of the rule.
 func (r *TerraformBlockFirstRule) Description() string {
 	return "Ensures terraform block is the first block in the file"
 }
 
+// Check examines the file for terraform block positioning.
 func (r *TerraformBlockFirstRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Finding, error) {
 	var findings []sdk.Finding
 
@@ -1062,21 +1103,25 @@ func (r *TerraformBlockFirstRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk
 	return findings, nil
 }
 
-func (r *TerraformBlockFirstRule) Fix(ctx *sdk.Context, file *hcl.File) ([]byte, error) {
+// Fix is a no-op for this rule as block reordering requires manual review.
+func (r *TerraformBlockFirstRule) Fix(_ *sdk.Context, _ *hcl.File) ([]byte, error) {
 	return nil, nil
 }
 
-// ProviderBlockOrderRule ensures provider blocks come after terraform block
+// ProviderBlockOrderRule ensures provider blocks come after terraform block.
 type ProviderBlockOrderRule struct{}
 
+// Name returns the rule identifier.
 func (r *ProviderBlockOrderRule) Name() string {
 	return "style.provider-block-order"
 }
 
+// Description returns a human-readable description of the rule.
 func (r *ProviderBlockOrderRule) Description() string {
 	return "Ensures provider blocks come after terraform block"
 }
 
+// Check examines the file for provider block positioning.
 func (r *ProviderBlockOrderRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Finding, error) {
 	var findings []sdk.Finding
 
@@ -1086,7 +1131,7 @@ func (r *ProviderBlockOrderRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.
 	}
 
 	var terraformEndLine int
-	var firstResourceLine int = int(^uint(0) >> 1)
+	firstResourceLine := int(^uint(0) >> 1)
 
 	for _, block := range hclFile.Blocks {
 		if block.Type == "terraform" {
@@ -1132,21 +1177,25 @@ func (r *ProviderBlockOrderRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.
 	return findings, nil
 }
 
-func (r *ProviderBlockOrderRule) Fix(ctx *sdk.Context, file *hcl.File) ([]byte, error) {
+// Fix is a no-op for this rule as provider block reordering requires manual review.
+func (r *ProviderBlockOrderRule) Fix(_ *sdk.Context, _ *hcl.File) ([]byte, error) {
 	return nil, nil
 }
 
-// NoEmptyBlocksRule ensures blocks are not empty
+// NoEmptyBlocksRule ensures blocks are not empty.
 type NoEmptyBlocksRule struct{}
 
+// Name returns the rule identifier.
 func (r *NoEmptyBlocksRule) Name() string {
 	return "style.no-empty-blocks"
 }
 
+// Description returns a human-readable description of the rule.
 func (r *NoEmptyBlocksRule) Description() string {
 	return "Ensures blocks are not empty without content"
 }
 
+// Check examines blocks for empty content.
 func (r *NoEmptyBlocksRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Finding, error) {
 	var findings []sdk.Finding
 
@@ -1178,22 +1227,7 @@ func (r *NoEmptyBlocksRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Findi
 	return findings, nil
 }
 
-func (r *NoEmptyBlocksRule) Fix(ctx *sdk.Context, file *hcl.File) ([]byte, error) {
+// Fix is a no-op for this rule as empty block removal requires manual review.
+func (r *NoEmptyBlocksRule) Fix(_ *sdk.Context, _ *hcl.File) ([]byte, error) {
 	return nil, nil
-}
-
-// isSnakeCase checks if a string is valid snake_case
-func isSnakeCase(s string) bool {
-	if s == "" {
-		return false
-	}
-	for i, r := range s {
-		if i == 0 && !unicode.IsLower(r) {
-			return false
-		}
-		if !unicode.IsLower(r) && !unicode.IsDigit(r) && r != '_' {
-			return false
-		}
-	}
-	return !strings.HasPrefix(s, "_") && !strings.HasSuffix(s, "_") && !strings.Contains(s, "__")
 }

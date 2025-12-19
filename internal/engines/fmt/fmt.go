@@ -1,3 +1,6 @@
+// Package fmt provides the formatting engine for TerraTidy.
+// It uses HCL's hclwrite package to format Terraform configuration files
+// according to the canonical HCL style.
 package fmt
 
 import (
@@ -95,7 +98,7 @@ func (e *Engine) formatFile(path string) (*sdk.Finding, error) {
 	}
 
 	// In normal mode, write the formatted content
-	if err := os.WriteFile(path, formatted, 0644); err != nil {
+	if err := os.WriteFile(path, formatted, 0o644); err != nil {
 		return nil, fmt.Errorf("writing formatted file: %w", err)
 	}
 

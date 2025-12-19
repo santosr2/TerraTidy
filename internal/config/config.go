@@ -1,3 +1,6 @@
+// Package config provides configuration loading and validation for TerraTidy.
+// It supports YAML configuration files with environment variable expansion,
+// profile inheritance, and custom rule configuration.
 package config
 
 import (

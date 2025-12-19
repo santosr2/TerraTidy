@@ -37,7 +37,7 @@ Use --fix to automatically fix fixable style issues.`,
 
   # Check specific paths
   terratidy style ./modules ./environments`,
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(_ *cobra.Command, args []string) error {
 		// Get target files (respecting --changed flag)
 		files, err := getTargetFiles(args, changed)
 		if err != nil {

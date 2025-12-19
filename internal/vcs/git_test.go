@@ -88,7 +88,7 @@ func TestFilterExisting(t *testing.T) {
 
 	// Create some files
 	existingFile := filepath.Join(tmpDir, "exists.tf")
-	require.NoError(t, os.WriteFile(existingFile, []byte(""), 0644))
+	require.NoError(t, os.WriteFile(existingFile, []byte(""), 0o644))
 
 	files := []string{
 		existingFile,
@@ -119,7 +119,7 @@ func TestGit_InRealRepo(t *testing.T) {
 		t.Skip("Not running in a git repository")
 	}
 
-	t.Run("GetChangedFiles", func(t *testing.T) {
+	t.Run("GetChangedFiles", func(_ *testing.T) {
 		// This test just verifies the method doesn't error
 		// The actual files returned depend on repo state
 		_, err := git.GetChangedFiles("")
@@ -194,7 +194,7 @@ func TestGit_NewTempRepo(t *testing.T) {
 
 	// Create and stage a file
 	testFile := filepath.Join(tmpDir, "main.tf")
-	require.NoError(t, os.WriteFile(testFile, []byte("resource {}"), 0644))
+	require.NoError(t, os.WriteFile(testFile, []byte("resource {}"), 0o644))
 
 	cmd = exec.Command("git", "add", "main.tf")
 	cmd.Dir = tmpDir
@@ -212,7 +212,7 @@ func TestGit_NewTempRepo(t *testing.T) {
 	require.NoError(t, cmd.Run())
 
 	// Create an unstaged change
-	require.NoError(t, os.WriteFile(testFile, []byte("resource { updated }"), 0644))
+	require.NoError(t, os.WriteFile(testFile, []byte("resource { updated }"), 0o644))
 
 	t.Run("GetUnstagedFiles", func(t *testing.T) {
 		files, err := git.GetUnstagedFiles()
@@ -222,7 +222,7 @@ func TestGit_NewTempRepo(t *testing.T) {
 
 	// Create an untracked file
 	untrackedFile := filepath.Join(tmpDir, "new.tf")
-	require.NoError(t, os.WriteFile(untrackedFile, []byte("new resource"), 0644))
+	require.NoError(t, os.WriteFile(untrackedFile, []byte("new resource"), 0o644))
 
 	t.Run("GetUntrackedFiles", func(t *testing.T) {
 		files, err := git.GetUntrackedFiles()

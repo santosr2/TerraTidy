@@ -31,7 +31,7 @@ Use --check to verify formatting without making changes.`,
 
   # Only format changed files (git)
   terratidy fmt --changed`,
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(_ *cobra.Command, args []string) error {
 		// Get target files (respecting --changed flag)
 		files, err := getTargetFiles(args, changed)
 		if err != nil {
@@ -74,10 +74,11 @@ Use --check to verify formatting without making changes.`,
 		needsFormatting := 0
 		formatted := 0
 		for _, finding := range findings {
-			if finding.Rule == "fmt.needs-formatting" {
+			switch finding.Rule {
+			case "fmt.needs-formatting":
 				fmt.Printf("  [!] %s: needs formatting\n", finding.File)
 				needsFormatting++
-			} else if finding.Rule == "fmt.formatted" {
+			case "fmt.formatted":
 				fmt.Printf("  [+] %s: formatted\n", finding.File)
 				formatted++
 			}

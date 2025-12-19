@@ -142,8 +142,8 @@ func (e *Engine) checkFile(parser *hclparse.Parser, path string) ([]sdk.Finding,
 	return findings, nil
 }
 
-// applyFixes applies auto-fixes to the file in one optimized pass
-func (e *Engine) applyFixes(ctx *sdk.Context, file *hcl.File, findings []sdk.Finding) error {
+// applyFixes applies auto-fixes to the file in one optimized pass.
+func (e *Engine) applyFixes(ctx *sdk.Context, _ *hcl.File, findings []sdk.Finding) error {
 	// Group findings by fixability
 	var fixableFindings []sdk.Finding
 	for _, f := range findings {
@@ -188,7 +188,7 @@ func (e *Engine) applyFixes(ctx *sdk.Context, file *hcl.File, findings []sdk.Fin
 	}
 
 	// Write the final fixed content back to the file once
-	if err := os.WriteFile(ctx.File, content, 0644); err != nil {
+	if err := os.WriteFile(ctx.File, content, 0o644); err != nil {
 		return fmt.Errorf("writing fixed file: %w", err)
 	}
 

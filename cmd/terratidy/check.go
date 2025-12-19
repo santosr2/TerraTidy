@@ -50,7 +50,7 @@ func init() {
 	rootCmd.AddCommand(checkCmd)
 }
 
-func runCheck(cmd *cobra.Command, args []string) error {
+func runCheck(_ *cobra.Command, args []string) error {
 	// Get target files (respecting --changed flag)
 	files, err := getTargetFiles(args, changed)
 	if err != nil {

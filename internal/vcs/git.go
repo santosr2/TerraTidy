@@ -255,12 +255,13 @@ func (g *Git) ToAbsolutePaths(files []string) ([]string, error) {
 	return result, nil
 }
 
-// GetFileStatus returns the Git status of files (M=modified, A=added, D=deleted, etc.)
+// FileStatus represents the Git status of a file (M=modified, A=added, D=deleted, etc.)
 type FileStatus struct {
 	Path   string
 	Status string
 }
 
+// GetFileStatuses returns the Git status of all changed files in the repository.
 func (g *Git) GetFileStatuses() ([]FileStatus, error) {
 	cmd := exec.Command("git", "status", "--porcelain")
 	cmd.Dir = g.workDir

@@ -1,13 +1,18 @@
+// Package sdk provides the core types and interfaces for TerraTidy rules and engines.
+// It defines the Finding, Context, and Rule types that all engines and rules use
+// to report issues and apply fixes to Terraform configurations.
 package sdk
 
 import (
-	"github.com/hashicorp/hcl/v2"
 	"log"
+
+	"github.com/hashicorp/hcl/v2"
 )
 
-// Severity represents the severity level of a finding
+// Severity represents the severity level of a finding.
 type Severity string
 
+// Severity constants define the available severity levels for findings.
 const (
 	SeverityError   Severity = "error"
 	SeverityWarning Severity = "warning"

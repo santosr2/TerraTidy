@@ -11,6 +11,8 @@ import (
 	"github.com/santosr2/terratidy/internal/engines/lint"
 	"github.com/santosr2/terratidy/internal/engines/style"
 	"github.com/spf13/cobra"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 )
 
 var (
@@ -77,7 +79,7 @@ type RuleInfo struct {
 	Enabled     bool
 }
 
-func runRulesList(cmd *cobra.Command, args []string) error {
+func runRulesList(_ *cobra.Command, _ []string) error {
 	rules := getAllRules()
 
 	// Filter by engine if specified
@@ -110,15 +112,16 @@ func runRulesList(cmd *cobra.Command, args []string) error {
 	currentEngine := ""
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 
+	caser := cases.Title(language.English)
 	for _, rule := range rules {
 		if rule.Engine != currentEngine {
 			if currentEngine != "" {
-				fmt.Fprintln(w)
+				_, _ = fmt.Fprintln(w)
 			}
 			currentEngine = rule.Engine
-			fmt.Fprintf(w, "%s Engine:\n", strings.Title(currentEngine))
-			fmt.Fprintf(w, "  NAME\tSEVERITY\tDESCRIPTION\n")
-			fmt.Fprintf(w, "  ----\t--------\t-----------\n")
+			_, _ = fmt.Fprintf(w, "%s Engine:\n", caser.String(currentEngine))
+			_, _ = fmt.Fprintf(w, "  NAME\tSEVERITY\tDESCRIPTION\n")
+			_, _ = fmt.Fprintf(w, "  ----\t--------\t-----------\n")
 		}
 
 		severity := rule.Severity
@@ -131,10 +134,10 @@ func runRulesList(cmd *cobra.Command, args []string) error {
 			desc = desc[:47] + "..."
 		}
 
-		fmt.Fprintf(w, "  %s\t%s\t%s\n", rule.Name, severity, desc)
+		_, _ = fmt.Fprintf(w, "  %s\t%s\t%s\n", rule.Name, severity, desc)
 	}
 
-	w.Flush()
+	_ = w.Flush()
 
 	fmt.Println()
 	fmt.Println("Use 'terratidy rules list --verbose' for full descriptions")
@@ -143,7 +146,7 @@ func runRulesList(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func runRulesDocs(cmd *cobra.Command, args []string) error {
+func runRulesDocs(_ *cobra.Command, _ []string) error {
 	rules := getAllRules()
 
 	// Filter by engine if specified
@@ -175,7 +178,7 @@ func runRulesDocs(cmd *cobra.Command, args []string) error {
 	for _, rule := range rules {
 		if rule.Engine != currentEngine {
 			currentEngine = rule.Engine
-			fmt.Printf("## %s Engine\n\n", strings.Title(currentEngine))
+			fmt.Printf("## %s Engine\n\n", cases.Title(language.English).String(currentEngine))
 		}
 
 		fmt.Printf("### %s\n\n", rule.Name)
@@ -216,14 +219,46 @@ func getAllRules() []RuleInfo {
 
 	// Add policy rules (built-in)
 	policyRules := []RuleInfo{
-		{Name: "policy.required-terraform-block", Description: "Require terraform block with required_version", Engine: "policy", Severity: "warning", Enabled: true},
-		{Name: "policy.required-version", Description: "Require required_version in terraform block", Engine: "policy", Severity: "warning", Enabled: true},
-		{Name: "policy.required-providers", Description: "Require required_providers block when using providers", Engine: "policy", Severity: "warning", Enabled: true},
-		{Name: "policy.no-public-ssh", Description: "Disallow security groups with public SSH access", Engine: "policy", Severity: "error", Enabled: true},
-		{Name: "policy.no-public-s3", Description: "Disallow S3 buckets with public-read ACL", Engine: "policy", Severity: "error", Enabled: true},
-		{Name: "policy.no-public-rds", Description: "Disallow publicly accessible RDS instances", Engine: "policy", Severity: "error", Enabled: true},
-		{Name: "policy.required-tags", Description: "Require tags on taggable resources", Engine: "policy", Severity: "warning", Enabled: true},
-		{Name: "policy.module-version", Description: "Require version constraint on external modules", Engine: "policy", Severity: "warning", Enabled: true},
+		{
+			Name:        "policy.required-terraform-block",
+			Description: "Require terraform block with required_version",
+			Engine:      "policy", Severity: "warning", Enabled: true,
+		},
+		{
+			Name:        "policy.required-version",
+			Description: "Require required_version in terraform block",
+			Engine:      "policy", Severity: "warning", Enabled: true,
+		},
+		{
+			Name:        "policy.required-providers",
+			Description: "Require required_providers block when using providers",
+			Engine:      "policy", Severity: "warning", Enabled: true,
+		},
+		{
+			Name:        "policy.no-public-ssh",
+			Description: "Disallow security groups with public SSH access",
+			Engine:      "policy", Severity: "error", Enabled: true,
+		},
+		{
+			Name:        "policy.no-public-s3",
+			Description: "Disallow S3 buckets with public-read ACL",
+			Engine:      "policy", Severity: "error", Enabled: true,
+		},
+		{
+			Name:        "policy.no-public-rds",
+			Description: "Disallow publicly accessible RDS instances",
+			Engine:      "policy", Severity: "error", Enabled: true,
+		},
+		{
+			Name:        "policy.required-tags",
+			Description: "Require tags on taggable resources",
+			Engine:      "policy", Severity: "warning", Enabled: true,
+		},
+		{
+			Name:        "policy.module-version",
+			Description: "Require version constraint on external modules",
+			Engine:      "policy", Severity: "warning", Enabled: true,
+		},
 	}
 	rules = append(rules, policyRules...)
 

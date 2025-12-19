@@ -40,7 +40,7 @@ engines:
   policy:
     enabled: true
 `
-	require.NoError(t, os.WriteFile(configPath, []byte(content), 0644))
+	require.NoError(t, os.WriteFile(configPath, []byte(content), 0o644))
 
 	cfg, err := Load(configPath)
 	require.NoError(t, err)
@@ -68,11 +68,11 @@ engines:
     enabled: true
 `
 	mainPath := filepath.Join(tmpDir, ".terratidy.yaml")
-	require.NoError(t, os.WriteFile(mainPath, []byte(mainConfig), 0644))
+	require.NoError(t, os.WriteFile(mainPath, []byte(mainConfig), 0o644))
 
 	// Create configs directory
 	configsDir := filepath.Join(tmpDir, "configs")
-	require.NoError(t, os.MkdirAll(configsDir, 0755))
+	require.NoError(t, os.MkdirAll(configsDir, 0o755))
 
 	// Create imported config
 	importedConfig := `custom_rules:
@@ -81,7 +81,7 @@ engines:
     severity: warning
 `
 	importPath := filepath.Join(configsDir, "custom.yaml")
-	require.NoError(t, os.WriteFile(importPath, []byte(importedConfig), 0644))
+	require.NoError(t, os.WriteFile(importPath, []byte(importedConfig), 0o644))
 
 	cfg, err := Load(mainPath)
 	require.NoError(t, err)
@@ -100,7 +100,7 @@ engines:
   fmt:
     enabled: [invalid yaml
 `
-	require.NoError(t, os.WriteFile(configPath, []byte(content), 0644))
+	require.NoError(t, os.WriteFile(configPath, []byte(content), 0o644))
 
 	_, err := Load(configPath)
 	assert.Error(t, err)
@@ -116,7 +116,7 @@ engines:
   fmt:
     enabled: true
 `
-	require.NoError(t, os.WriteFile(configPath, []byte(content), 0644))
+	require.NoError(t, os.WriteFile(configPath, []byte(content), 0o644))
 
 	_, err := Load(configPath)
 	assert.Error(t, err)
@@ -243,7 +243,7 @@ func TestLoadPartialConfig(t *testing.T) {
   partial-rule:
     enabled: true
 `
-	require.NoError(t, os.WriteFile(configPath, []byte(content), 0644))
+	require.NoError(t, os.WriteFile(configPath, []byte(content), 0o644))
 
 	cfg, err := loadPartialConfig(configPath)
 	require.NoError(t, err)
@@ -278,7 +278,7 @@ profiles:
       policy:
         enabled: false
 `
-	require.NoError(t, os.WriteFile(configPath, []byte(content), 0644))
+	require.NoError(t, os.WriteFile(configPath, []byte(content), 0o644))
 
 	cfg, err := Load(configPath)
 	require.NoError(t, err)
@@ -472,8 +472,8 @@ func TestExpandEnvVars(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Set environment variables
 			for k, v := range tt.envVars {
-				os.Setenv(k, v)
-				defer os.Unsetenv(k)
+				_ = os.Setenv(k, v)
+				defer func(key string) { _ = os.Unsetenv(key) }(k)
 			}
 
 			result := expandEnvVars(tt.input)
@@ -487,14 +487,14 @@ func TestLoad_WithEnvVars(t *testing.T) {
 	configPath := filepath.Join(tmpDir, ".terratidy.yaml")
 
 	// Set environment variable
-	os.Setenv("TT_SEVERITY", "error")
-	defer os.Unsetenv("TT_SEVERITY")
+	_ = os.Setenv("TT_SEVERITY", "error")
+	defer func() { _ = os.Unsetenv("TT_SEVERITY") }()
 
 	content := `version: 1
 severity_threshold: ${TT_SEVERITY}
 fail_fast: true
 `
-	require.NoError(t, os.WriteFile(configPath, []byte(content), 0644))
+	require.NoError(t, os.WriteFile(configPath, []byte(content), 0o644))
 
 	cfg, err := Load(configPath)
 	require.NoError(t, err)
@@ -508,12 +508,12 @@ func TestLoad_WithEnvVarsDefault(t *testing.T) {
 	configPath := filepath.Join(tmpDir, ".terratidy.yaml")
 
 	// Ensure the variable is NOT set
-	os.Unsetenv("TT_MISSING_VAR")
+	_ = os.Unsetenv("TT_MISSING_VAR")
 
 	content := `version: 1
 severity_threshold: ${TT_MISSING_VAR:-warning}
 `
-	require.NoError(t, os.WriteFile(configPath, []byte(content), 0644))
+	require.NoError(t, os.WriteFile(configPath, []byte(content), 0o644))
 
 	cfg, err := Load(configPath)
 	require.NoError(t, err)

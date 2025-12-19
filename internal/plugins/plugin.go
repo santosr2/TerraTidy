@@ -185,7 +185,7 @@ func (m *Manager) loadRulePlugin(p *plugin.Plugin, metadata *PluginMetadata) err
 
 	newFunc, ok := sym.(func() RulePlugin)
 	if !ok {
-		return fmt.Errorf("New has wrong signature")
+		return fmt.Errorf("new function has wrong signature")
 	}
 
 	rulePlugin := newFunc()
@@ -215,7 +215,7 @@ func (m *Manager) loadEnginePlugin(p *plugin.Plugin, metadata *PluginMetadata) e
 
 	newFunc, ok := sym.(func() EnginePlugin)
 	if !ok {
-		return fmt.Errorf("New has wrong signature")
+		return fmt.Errorf("new function has wrong signature")
 	}
 
 	engine := newFunc()
@@ -241,7 +241,7 @@ func (m *Manager) loadFormatterPlugin(p *plugin.Plugin, metadata *PluginMetadata
 
 	newFunc, ok := sym.(func() FormatterPlugin)
 	if !ok {
-		return fmt.Errorf("New has wrong signature")
+		return fmt.Errorf("new function has wrong signature")
 	}
 
 	formatter := newFunc()

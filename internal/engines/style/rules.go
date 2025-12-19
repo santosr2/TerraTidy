@@ -570,65 +570,83 @@ func (r *DependsOnOrderRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Find
 	}
 
 	for _, block := range hclFile.Blocks {
-		if block.Type != "resource" && block.Type != "module" && block.Type != "data" {
+		if !isDependsOnRelevantBlock(block.Type) {
 			continue
 		}
-
-		body := block.Body
-
-		var dependsOnAttr *hclsyntax.Attribute
-		var lifecycleBlock *hclsyntax.Block
-
-		for name, attr := range body.Attributes {
-			if name == "depends_on" {
-				dependsOnAttr = attr
-			}
-		}
-
-		for _, nested := range body.Blocks {
-			if nested.Type == "lifecycle" {
-				lifecycleBlock = nested
-			}
-		}
-
-		if dependsOnAttr == nil {
-			continue
-		}
-
-		dependsOnLine := dependsOnAttr.Range().Start.Line
-
-		// Check if depends_on is before lifecycle (it should be)
-		if lifecycleBlock != nil && dependsOnLine > lifecycleBlock.Range().Start.Line {
-			findings = append(findings, sdk.Finding{
-				Rule:     r.Name(),
-				Message:  "depends_on should be before lifecycle block",
-				File:     ctx.File,
-				Location: dependsOnAttr.Range(),
-				Severity: sdk.SeverityWarning,
-				Fixable:  false,
-			})
-		}
-
-		// Check if there are attributes after depends_on (excluding lifecycle)
-		for name, attr := range body.Attributes {
-			if name != "depends_on" && attr.Range().Start.Line > dependsOnLine {
-				// Skip tags-related which are also at the end
-				if name != "tags" && name != "tags_all" && name != "labels" {
-					findings = append(findings, sdk.Finding{
-						Rule:     r.Name(),
-						Message:  "depends_on should be near the end of the block",
-						File:     ctx.File,
-						Location: dependsOnAttr.Range(),
-						Severity: sdk.SeverityInfo,
-						Fixable:  false,
-					})
-					break
-				}
-			}
-		}
+		blockFindings := r.checkDependsOnBlock(ctx, block)
+		findings = append(findings, blockFindings...)
 	}
 
 	return findings, nil
+}
+
+func isDependsOnRelevantBlock(blockType string) bool {
+	return blockType == "resource" || blockType == "module" || blockType == "data"
+}
+
+func (r *DependsOnOrderRule) checkDependsOnBlock(ctx *sdk.Context, block *hclsyntax.Block) []sdk.Finding {
+	var findings []sdk.Finding
+	body := block.Body
+
+	dependsOnAttr := findAttribute(body.Attributes, "depends_on")
+	if dependsOnAttr == nil {
+		return findings
+	}
+
+	lifecycleBlock := findNestedBlock(body.Blocks, "lifecycle")
+	dependsOnLine := dependsOnAttr.Range().Start.Line
+
+	if lifecycleBlock != nil && dependsOnLine > lifecycleBlock.Range().Start.Line {
+		findings = append(findings, sdk.Finding{
+			Rule:     r.Name(),
+			Message:  "depends_on should be before lifecycle block",
+			File:     ctx.File,
+			Location: dependsOnAttr.Range(),
+			Severity: sdk.SeverityWarning,
+			Fixable:  false,
+		})
+	}
+
+	if r.hasAttributesAfterDependsOn(body.Attributes, dependsOnLine) {
+		findings = append(findings, sdk.Finding{
+			Rule:     r.Name(),
+			Message:  "depends_on should be near the end of the block",
+			File:     ctx.File,
+			Location: dependsOnAttr.Range(),
+			Severity: sdk.SeverityInfo,
+			Fixable:  false,
+		})
+	}
+
+	return findings
+}
+
+func findAttribute(attrs hclsyntax.Attributes, name string) *hclsyntax.Attribute {
+	for n, attr := range attrs {
+		if n == name {
+			return attr
+		}
+	}
+	return nil
+}
+
+func findNestedBlock(blocks hclsyntax.Blocks, blockType string) *hclsyntax.Block {
+	for _, b := range blocks {
+		if b.Type == blockType {
+			return b
+		}
+	}
+	return nil
+}
+
+func (r *DependsOnOrderRule) hasAttributesAfterDependsOn(attrs hclsyntax.Attributes, dependsOnLine int) bool {
+	endAttrs := map[string]bool{"depends_on": true, "tags": true, "tags_all": true, "labels": true}
+	for name, attr := range attrs {
+		if !endAttrs[name] && attr.Range().Start.Line > dependsOnLine {
+			return true
+		}
+	}
+	return false
 }
 
 // Fix is a no-op for this rule as depends_on reordering requires manual review.
@@ -746,6 +764,22 @@ func (r *VariableOrderRule) Description() string {
 	return "Ensures variable blocks follow standard ordering: description, type, default, validation"
 }
 
+// varAttrPos represents an attribute position for ordering checks.
+type varAttrPos struct {
+	name  string
+	line  int
+	order int
+}
+
+// varAttrOrder defines the expected order for variable attributes.
+var varAttrOrder = map[string]int{
+	"description": 1,
+	"type":        2,
+	"default":     3,
+	"sensitive":   4,
+	"nullable":    5,
+}
+
 // Check examines variable blocks for attribute ordering.
 func (r *VariableOrderRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Finding, error) {
 	var findings []sdk.Finding
@@ -755,91 +789,98 @@ func (r *VariableOrderRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Findi
 		return findings, nil
 	}
 
-	// Expected order for variable attributes
-	attrOrder := map[string]int{
-		"description": 1,
-		"type":        2,
-		"default":     3,
-		"sensitive":   4,
-		"nullable":    5,
-	}
-
 	for _, block := range hclFile.Blocks {
 		if block.Type != "variable" {
 			continue
 		}
-
-		body := block.Body
-
-		// Collect attributes with their lines
-		type attrPos struct {
-			name  string
-			line  int
-			order int
-		}
-		var attrs []attrPos
-
-		for name, attr := range body.Attributes {
-			if order, ok := attrOrder[name]; ok {
-				attrs = append(attrs, attrPos{
-					name:  name,
-					line:  attr.Range().Start.Line,
-					order: order,
-				})
-			}
-		}
-
-		// Check validation blocks
-		for _, nested := range body.Blocks {
-			if nested.Type == "validation" {
-				attrs = append(attrs, attrPos{
-					name:  "validation",
-					line:  nested.Range().Start.Line,
-					order: 6,
-				})
-			}
-		}
-
-		// Sort by line and check order
-		if len(attrs) >= 2 {
-			for i := 0; i < len(attrs)-1; i++ {
-				for j := i + 1; j < len(attrs); j++ {
-					// If attr j appears before attr i in the file, but should come after
-					if attrs[j].line < attrs[i].line && attrs[j].order > attrs[i].order {
-						filePath := ctx.File
-						findings = append(findings, sdk.Finding{
-							Rule:     r.Name(),
-							Message:  attrs[j].name + " should come after " + attrs[i].name + " in variable block",
-							File:     ctx.File,
-							Location: block.Range(),
-							Severity: sdk.SeverityInfo,
-							Fixable:  true,
-							FixFunc: func() ([]byte, error) {
-								return r.Fix(&sdk.Context{File: filePath}, nil)
-							},
-						})
-					}
-					// If attr i appears before attr j in the file, but should come after
-					if attrs[i].line < attrs[j].line && attrs[i].order > attrs[j].order {
-						filePath := ctx.File
-						findings = append(findings, sdk.Finding{
-							Rule:     r.Name(),
-							Message:  attrs[i].name + " should come after " + attrs[j].name + " in variable block",
-							File:     ctx.File,
-							Location: block.Range(),
-							Severity: sdk.SeverityInfo,
-							Fixable:  true,
-							FixFunc: func() ([]byte, error) {
-								return r.Fix(&sdk.Context{File: filePath}, nil)
-							},
-						})
-					}
-				}
-			}
-		}
+		blockFindings := r.checkVariableBlock(ctx, block)
+		findings = append(findings, blockFindings...)
 	}
 
 	return findings, nil
+}
+
+func (r *VariableOrderRule) checkVariableBlock(ctx *sdk.Context, block *hclsyntax.Block) []sdk.Finding {
+	attrs := r.collectVariableAttrs(block.Body)
+	return r.findOrderViolations(ctx, block, attrs)
+}
+
+func (r *VariableOrderRule) collectVariableAttrs(body *hclsyntax.Body) []varAttrPos {
+	var attrs []varAttrPos
+
+	for name, attr := range body.Attributes {
+		if order, ok := varAttrOrder[name]; ok {
+			attrs = append(attrs, varAttrPos{
+				name:  name,
+				line:  attr.Range().Start.Line,
+				order: order,
+			})
+		}
+	}
+
+	for _, nested := range body.Blocks {
+		if nested.Type == "validation" {
+			attrs = append(attrs, varAttrPos{
+				name:  "validation",
+				line:  nested.Range().Start.Line,
+				order: 6,
+			})
+		}
+	}
+
+	return attrs
+}
+
+func (r *VariableOrderRule) findOrderViolations(
+	ctx *sdk.Context, block *hclsyntax.Block, attrs []varAttrPos,
+) []sdk.Finding {
+	var findings []sdk.Finding
+	if len(attrs) < 2 {
+		return findings
+	}
+
+	for i := 0; i < len(attrs)-1; i++ {
+		for j := i + 1; j < len(attrs); j++ {
+			if finding := r.checkAttrPair(ctx, block, attrs[i], attrs[j]); finding != nil {
+				findings = append(findings, *finding)
+			}
+		}
+	}
+	return findings
+}
+
+func (r *VariableOrderRule) checkAttrPair(ctx *sdk.Context, block *hclsyntax.Block, a, b varAttrPos) *sdk.Finding {
+	filePath := ctx.File
+
+	if b.line < a.line && b.order > a.order {
+		return &sdk.Finding{
+			Rule:     r.Name(),
+			Message:  b.name + " should come after " + a.name + " in variable block",
+			File:     ctx.File,
+			Location: block.Range(),
+			Severity: sdk.SeverityInfo,
+			Fixable:  true,
+			FixFunc: func() ([]byte, error) {
+				return r.Fix(&sdk.Context{File: filePath}, nil)
+			},
+		}
+	}
+
+	if a.line < b.line && a.order > b.order {
+		return &sdk.Finding{
+			Rule:     r.Name(),
+			Message:  a.name + " should come after " + b.name + " in variable block",
+			File:     ctx.File,
+			Location: block.Range(),
+			Severity: sdk.SeverityInfo,
+			Fixable:  true,
+			FixFunc: func() ([]byte, error) {
+				return r.Fix(&sdk.Context{File: filePath}, nil)
+			},
+		}
+	}
+
+	return nil
 }
 
 // Fix reorders variable attributes to match the standard order.
@@ -913,6 +954,14 @@ func (r *OutputOrderRule) Description() string {
 	return "Ensures output blocks follow standard ordering: description, value, sensitive"
 }
 
+// outputAttrOrder defines the expected order for output attributes.
+var outputAttrOrder = map[string]int{
+	"description": 1,
+	"value":       2,
+	"sensitive":   3,
+	"depends_on":  4,
+}
+
 // Check examines output blocks for attribute ordering.
 func (r *OutputOrderRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Finding, error) {
 	var findings []sdk.Finding
@@ -922,77 +971,88 @@ func (r *OutputOrderRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Finding
 		return findings, nil
 	}
 
-	// Expected order for output attributes
-	attrOrder := map[string]int{
-		"description": 1,
-		"value":       2,
-		"sensitive":   3,
-		"depends_on":  4,
-	}
-
 	for _, block := range hclFile.Blocks {
 		if block.Type != "output" {
 			continue
 		}
-
-		body := block.Body
-
-		// Collect attributes with their lines
-		type attrPos struct {
-			name  string
-			line  int
-			order int
-		}
-		var attrs []attrPos
-
-		for name, attr := range body.Attributes {
-			if order, ok := attrOrder[name]; ok {
-				attrs = append(attrs, attrPos{
-					name:  name,
-					line:  attr.Range().Start.Line,
-					order: order,
-				})
-			}
-		}
-
-		// Check order
-		if len(attrs) >= 2 {
-			for i := 0; i < len(attrs)-1; i++ {
-				for j := i + 1; j < len(attrs); j++ {
-					if attrs[j].line < attrs[i].line && attrs[j].order > attrs[i].order {
-						filePath := ctx.File
-						findings = append(findings, sdk.Finding{
-							Rule:     r.Name(),
-							Message:  attrs[j].name + " should come after " + attrs[i].name + " in output block",
-							File:     ctx.File,
-							Location: block.Range(),
-							Severity: sdk.SeverityInfo,
-							Fixable:  true,
-							FixFunc: func() ([]byte, error) {
-								return r.Fix(&sdk.Context{File: filePath}, nil)
-							},
-						})
-					}
-					if attrs[i].line < attrs[j].line && attrs[i].order > attrs[j].order {
-						filePath := ctx.File
-						findings = append(findings, sdk.Finding{
-							Rule:     r.Name(),
-							Message:  attrs[i].name + " should come after " + attrs[j].name + " in output block",
-							File:     ctx.File,
-							Location: block.Range(),
-							Severity: sdk.SeverityInfo,
-							Fixable:  true,
-							FixFunc: func() ([]byte, error) {
-								return r.Fix(&sdk.Context{File: filePath}, nil)
-							},
-						})
-					}
-				}
-			}
-		}
+		blockFindings := r.checkOutputBlock(ctx, block)
+		findings = append(findings, blockFindings...)
 	}
 
 	return findings, nil
+}
+
+func (r *OutputOrderRule) checkOutputBlock(ctx *sdk.Context, block *hclsyntax.Block) []sdk.Finding {
+	attrs := r.collectOutputAttrs(block.Body)
+	return r.findOutputOrderViolations(ctx, block, attrs)
+}
+
+func (r *OutputOrderRule) collectOutputAttrs(body *hclsyntax.Body) []varAttrPos {
+	var attrs []varAttrPos
+
+	for name, attr := range body.Attributes {
+		if order, ok := outputAttrOrder[name]; ok {
+			attrs = append(attrs, varAttrPos{
+				name:  name,
+				line:  attr.Range().Start.Line,
+				order: order,
+			})
+		}
+	}
+
+	return attrs
+}
+
+func (r *OutputOrderRule) findOutputOrderViolations(
+	ctx *sdk.Context, block *hclsyntax.Block, attrs []varAttrPos,
+) []sdk.Finding {
+	var findings []sdk.Finding
+	if len(attrs) < 2 {
+		return findings
+	}
+
+	for i := 0; i < len(attrs)-1; i++ {
+		for j := i + 1; j < len(attrs); j++ {
+			if finding := r.checkOutputAttrPair(ctx, block, attrs[i], attrs[j]); finding != nil {
+				findings = append(findings, *finding)
+			}
+		}
+	}
+	return findings
+}
+
+func (r *OutputOrderRule) checkOutputAttrPair(ctx *sdk.Context, block *hclsyntax.Block, a, b varAttrPos) *sdk.Finding {
+	filePath := ctx.File
+
+	if b.line < a.line && b.order > a.order {
+		return &sdk.Finding{
+			Rule:     r.Name(),
+			Message:  b.name + " should come after " + a.name + " in output block",
+			File:     ctx.File,
+			Location: block.Range(),
+			Severity: sdk.SeverityInfo,
+			Fixable:  true,
+			FixFunc: func() ([]byte, error) {
+				return r.Fix(&sdk.Context{File: filePath}, nil)
+			},
+		}
+	}
+
+	if a.line < b.line && a.order > b.order {
+		return &sdk.Finding{
+			Rule:     r.Name(),
+			Message:  a.name + " should come after " + b.name + " in output block",
+			File:     ctx.File,
+			Location: block.Range(),
+			Severity: sdk.SeverityInfo,
+			Fixable:  true,
+			FixFunc: func() ([]byte, error) {
+				return r.Fix(&sdk.Context{File: filePath}, nil)
+			},
+		}
+	}
+
+	return nil
 }
 
 // Fix reorders output attributes to match the standard order.

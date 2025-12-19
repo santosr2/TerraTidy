@@ -159,7 +159,17 @@ func (e *Engine) loadPolicies() ([]string, error) {
 
 // parseModuleToJSON parses Terraform files and converts to JSON representation for OPA
 func (e *Engine) parseModuleToJSON(files []string) (map[string]any, error) {
-	moduleData := map[string]any{
+	moduleData := newModuleData()
+
+	for _, file := range files {
+		e.parseFileIntoModule(file, moduleData)
+	}
+
+	return moduleData, nil
+}
+
+func newModuleData() map[string]any {
+	return map[string]any{
 		"resources": []any{},
 		"data":      []any{},
 		"modules":   []any{},
@@ -170,81 +180,74 @@ func (e *Engine) parseModuleToJSON(files []string) (map[string]any, error) {
 		"terraform": map[string]any{},
 		"_files":    []string{},
 	}
+}
 
-	for _, file := range files {
-		content, err := os.ReadFile(file)
-		if err != nil {
-			continue
+func (e *Engine) parseFileIntoModule(file string, moduleData map[string]any) {
+	content, err := os.ReadFile(file)
+	if err != nil {
+		return
+	}
+
+	hclFile, diags := e.parser.ParseHCL(content, file)
+	if diags.HasErrors() {
+		return
+	}
+
+	body, ok := hclFile.Body.(*hclsyntax.Body)
+	if !ok {
+		return
+	}
+
+	moduleData["_files"] = append(moduleData["_files"].([]string), file)
+
+	for _, block := range body.Blocks {
+		blockData := e.extractBlockData(block, content)
+		blockData["_file"] = file
+		e.addBlockToModule(block, blockData, moduleData)
+	}
+}
+
+func (e *Engine) addBlockToModule(block *hclsyntax.Block, blockData, moduleData map[string]any) {
+	switch block.Type {
+	case "resource":
+		addLabeledBlock(blockData, block.Labels, 2, "type", "name")
+		appendToSlice(moduleData, "resources", blockData)
+	case "data":
+		addLabeledBlock(blockData, block.Labels, 2, "type", "name")
+		appendToSlice(moduleData, "data", blockData)
+	case "module":
+		addLabeledBlock(blockData, block.Labels, 1, "name")
+		appendToSlice(moduleData, "modules", blockData)
+	case "variable":
+		addLabeledBlock(blockData, block.Labels, 1, "name")
+		appendToSlice(moduleData, "variables", blockData)
+	case "output":
+		addLabeledBlock(blockData, block.Labels, 1, "name")
+		appendToSlice(moduleData, "outputs", blockData)
+	case "locals":
+		appendToSlice(moduleData, "locals", blockData)
+	case "provider":
+		addLabeledBlock(blockData, block.Labels, 1, "name")
+		appendToSlice(moduleData, "providers", blockData)
+	case "terraform":
+		for k, v := range blockData {
+			moduleData["terraform"].(map[string]any)[k] = v
 		}
+	}
+}
 
-		hclFile, diags := e.parser.ParseHCL(content, file)
-		if diags.HasErrors() {
-			continue
-		}
-
-		body, ok := hclFile.Body.(*hclsyntax.Body)
-		if !ok {
-			continue
-		}
-
-		moduleData["_files"] = append(moduleData["_files"].([]string), file)
-
-		for _, block := range body.Blocks {
-			blockData := e.extractBlockData(block, content)
-			blockData["_file"] = file
-
-			switch block.Type {
-			case "resource":
-				if len(block.Labels) >= 2 {
-					blockData["type"] = block.Labels[0]
-					blockData["name"] = block.Labels[1]
-				}
-				moduleData["resources"] = append(moduleData["resources"].([]any), blockData)
-
-			case "data":
-				if len(block.Labels) >= 2 {
-					blockData["type"] = block.Labels[0]
-					blockData["name"] = block.Labels[1]
-				}
-				moduleData["data"] = append(moduleData["data"].([]any), blockData)
-
-			case "module":
-				if len(block.Labels) >= 1 {
-					blockData["name"] = block.Labels[0]
-				}
-				moduleData["modules"] = append(moduleData["modules"].([]any), blockData)
-
-			case "variable":
-				if len(block.Labels) >= 1 {
-					blockData["name"] = block.Labels[0]
-				}
-				moduleData["variables"] = append(moduleData["variables"].([]any), blockData)
-
-			case "output":
-				if len(block.Labels) >= 1 {
-					blockData["name"] = block.Labels[0]
-				}
-				moduleData["outputs"] = append(moduleData["outputs"].([]any), blockData)
-
-			case "locals":
-				moduleData["locals"] = append(moduleData["locals"].([]any), blockData)
-
-			case "provider":
-				if len(block.Labels) >= 1 {
-					blockData["name"] = block.Labels[0]
-				}
-				moduleData["providers"] = append(moduleData["providers"].([]any), blockData)
-
-			case "terraform":
-				// Merge terraform block data
-				for k, v := range blockData {
-					moduleData["terraform"].(map[string]any)[k] = v
-				}
+func addLabeledBlock(blockData map[string]any, labels []string, minLabels int, keys ...string) {
+	if len(labels) >= minLabels {
+		for i, key := range keys {
+			if i < len(labels) {
+				blockData[key] = labels[i]
 			}
 		}
 	}
+}
 
-	return moduleData, nil
+func appendToSlice(moduleData map[string]any, key string, blockData map[string]any) {
+	moduleData[key] = append(moduleData[key].([]any), blockData)
 }
 
 // extractBlockData extracts data from an HCL block into a map
@@ -293,6 +296,13 @@ func (e *Engine) extractBlockData(block *hclsyntax.Block, content []byte) map[st
 	return data
 }
 
+// policyEvalContext holds context for policy evaluation.
+type policyEvalContext struct {
+	ctx        context.Context
+	moduleData map[string]any
+	dir        string
+}
+
 // evaluatePolicies evaluates all policies against the module data.
 func (e *Engine) evaluatePolicies(
 	ctx context.Context,
@@ -302,60 +312,61 @@ func (e *Engine) evaluatePolicies(
 ) ([]sdk.Finding, error) {
 	var findings []sdk.Finding
 
-	// Build the Rego query
+	evalCtx := &policyEvalContext{ctx: ctx, moduleData: moduleData, dir: dir}
+
 	for _, policy := range policies {
-		// Create a new Rego instance for each policy
-		r := rego.New(
-			rego.Query("data.terraform.deny"),
-			rego.Module("policy.rego", policy),
-			rego.Input(moduleData),
-		)
+		// Evaluate deny rules
+		denyFindings := e.evaluateQuery(evalCtx, policy, "data.terraform.deny", sdk.SeverityError)
+		findings = append(findings, denyFindings...)
 
-		// Evaluate
-		rs, err := r.Eval(ctx)
-		if err != nil {
-			// Log error but continue with other policies
-			continue
-		}
+		// Evaluate warn rules
+		warnFindings := e.evaluateQuery(evalCtx, policy, "data.terraform.warn", sdk.SeverityWarning)
+		findings = append(findings, warnFindings...)
+	}
 
-		// Process results
-		for _, result := range rs {
-			for _, expr := range result.Expressions {
-				if violations, ok := expr.Value.([]any); ok {
-					for _, v := range violations {
-						finding := e.violationToFinding(v, dir)
-						findings = append(findings, finding)
-					}
-				}
+	return findings, nil
+}
+
+// evaluateQuery evaluates a single Rego query and returns findings.
+func (e *Engine) evaluateQuery(
+	evalCtx *policyEvalContext,
+	policy string,
+	query string,
+	severity sdk.Severity,
+) []sdk.Finding {
+	r := rego.New(
+		rego.Query(query),
+		rego.Module("policy.rego", policy),
+		rego.Input(evalCtx.moduleData),
+	)
+
+	rs, err := r.Eval(evalCtx.ctx)
+	if err != nil {
+		return nil
+	}
+
+	return e.extractFindings(rs, evalCtx.dir, severity)
+}
+
+// extractFindings extracts findings from Rego result set.
+func (e *Engine) extractFindings(rs rego.ResultSet, dir string, severity sdk.Severity) []sdk.Finding {
+	var findings []sdk.Finding
+
+	for _, result := range rs {
+		for _, expr := range result.Expressions {
+			violations, ok := expr.Value.([]any)
+			if !ok {
+				continue
 			}
-		}
-
-		// Also check for warnings
-		r = rego.New(
-			rego.Query("data.terraform.warn"),
-			rego.Module("policy.rego", policy),
-			rego.Input(moduleData),
-		)
-
-		rs, err = r.Eval(ctx)
-		if err != nil {
-			continue
-		}
-
-		for _, result := range rs {
-			for _, expr := range result.Expressions {
-				if warnings, ok := expr.Value.([]any); ok {
-					for _, w := range warnings {
-						finding := e.violationToFinding(w, dir)
-						finding.Severity = sdk.SeverityWarning
-						findings = append(findings, finding)
-					}
-				}
+			for _, v := range violations {
+				finding := e.violationToFinding(v, dir)
+				finding.Severity = severity
+				findings = append(findings, finding)
 			}
 		}
 	}
 
-	return findings, nil
+	return findings
 }
 
 // violationToFinding converts a policy violation to a Finding

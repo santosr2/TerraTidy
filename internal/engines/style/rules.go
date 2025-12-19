@@ -479,67 +479,67 @@ func (r *TagsAtEndRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Finding, 
 		if block.Type != "resource" && block.Type != "module" {
 			continue
 		}
-
-		body := block.Body
-
-		var tagsAttr *hclsyntax.Attribute
-		var lifecycleLine int
-		var lastAttrLine int
-
-		// Find tags and lifecycle positions
-		for name, attr := range body.Attributes {
-			if name == "tags" || name == "labels" || name == "tags_all" {
-				tagsAttr = attr
-			}
-			if attr.Range().End.Line > lastAttrLine {
-				lastAttrLine = attr.Range().End.Line
-			}
-		}
-
-		for _, nested := range body.Blocks {
-			if nested.Type == "lifecycle" {
-				lifecycleLine = nested.Range().Start.Line
-			}
-		}
-
-		// If tags exists, check it's positioned correctly
-		if tagsAttr != nil {
-			tagsLine := tagsAttr.Range().Start.Line
-
-			// Tags should be after most attributes but before lifecycle
-			if lifecycleLine > 0 && tagsLine > lifecycleLine {
-				findings = append(findings, sdk.Finding{
-					Rule:     r.Name(),
-					Message:  "tags should be before lifecycle block",
-					File:     ctx.File,
-					Location: tagsAttr.Range(),
-					Severity: sdk.SeverityWarning,
-					Fixable:  false,
-				})
-			}
-
-			// Check if there are many attributes after tags (excluding lifecycle-related)
-			attrsAfterTags := 0
-			for name, attr := range body.Attributes {
-				if attr.Range().Start.Line > tagsLine && name != "tags_all" {
-					attrsAfterTags++
-				}
-			}
-
-			if attrsAfterTags > 2 { // Allow a couple of attributes after
-				findings = append(findings, sdk.Finding{
-					Rule:     r.Name(),
-					Message:  "tags should be near the end of the block",
-					File:     ctx.File,
-					Location: tagsAttr.Range(),
-					Severity: sdk.SeverityInfo,
-					Fixable:  false,
-				})
-			}
-		}
+		blockFindings := r.checkTagsBlock(ctx, block)
+		findings = append(findings, blockFindings...)
 	}
 
 	return findings, nil
+}
+
+func (r *TagsAtEndRule) checkTagsBlock(ctx *sdk.Context, block *hclsyntax.Block) []sdk.Finding {
+	var findings []sdk.Finding
+	body := block.Body
+
+	tagsAttr := findTagsAttribute(body.Attributes)
+	if tagsAttr == nil {
+		return findings
+	}
+
+	lifecycleBlock := findNestedBlock(body.Blocks, "lifecycle")
+	tagsLine := tagsAttr.Range().Start.Line
+
+	if lifecycleBlock != nil && tagsLine > lifecycleBlock.Range().Start.Line {
+		findings = append(findings, sdk.Finding{
+			Rule:     r.Name(),
+			Message:  "tags should be before lifecycle block",
+			File:     ctx.File,
+			Location: tagsAttr.Range(),
+			Severity: sdk.SeverityWarning,
+			Fixable:  false,
+		})
+	}
+
+	if countAttrsAfterTags(body.Attributes, tagsLine) > 2 {
+		findings = append(findings, sdk.Finding{
+			Rule:     r.Name(),
+			Message:  "tags should be near the end of the block",
+			File:     ctx.File,
+			Location: tagsAttr.Range(),
+			Severity: sdk.SeverityInfo,
+			Fixable:  false,
+		})
+	}
+
+	return findings
+}
+
+func findTagsAttribute(attrs hclsyntax.Attributes) *hclsyntax.Attribute {
+	for name, attr := range attrs {
+		if name == "tags" || name == "labels" || name == "tags_all" {
+			return attr
+		}
+	}
+	return nil
+}
+
+func countAttrsAfterTags(attrs hclsyntax.Attributes, tagsLine int) int {
+	count := 0
+	for name, attr := range attrs {
+		if attr.Range().Start.Line > tagsLine && name != "tags_all" {
+			count++
+		}
+	}
+	return count
 }
 
 // Fix is a no-op for this rule as tags reordering requires manual review.
@@ -680,70 +680,78 @@ func (r *SourceVersionGroupedRule) Check(ctx *sdk.Context, file *hcl.File) ([]sd
 		if block.Type != "module" {
 			continue
 		}
-
-		body := block.Body
-
-		var sourceAttr, versionAttr *hclsyntax.Attribute
-		firstAttrLine := int(^uint(0) >> 1)
-
-		for name, attr := range body.Attributes {
-			if attr.Range().Start.Line < firstAttrLine {
-				firstAttrLine = attr.Range().Start.Line
-			}
-			if name == "source" {
-				sourceAttr = attr
-			}
-			if name == "version" {
-				versionAttr = attr
-			}
-		}
-
-		// Check if source is first (after for_each/count)
-		if sourceAttr != nil {
-			sourceLine := sourceAttr.Range().Start.Line
-
-			// Allow for_each/count to be before source
-			for name, attr := range body.Attributes {
-				if name != "source" && name != "for_each" && name != "count" &&
-					attr.Range().Start.Line < sourceLine {
-					findings = append(findings, sdk.Finding{
-						Rule:     r.Name(),
-						Message:  "source should be at the start of module block (after for_each/count if present)",
-						File:     ctx.File,
-						Location: sourceAttr.Range(),
-						Severity: sdk.SeverityWarning,
-						Fixable:  false,
-					})
-					break
-				}
-			}
-		}
-
-		// Check if version immediately follows source
-		if sourceAttr != nil && versionAttr != nil {
-			sourceLine := sourceAttr.Range().End.Line
-			versionLine := versionAttr.Range().Start.Line
-
-			// Check for attributes between source and version
-			for name, attr := range body.Attributes {
-				attrLine := attr.Range().Start.Line
-				if name != "source" && name != "version" &&
-					attrLine > sourceLine && attrLine < versionLine {
-					findings = append(findings, sdk.Finding{
-						Rule:     r.Name(),
-						Message:  "version should immediately follow source in module block",
-						File:     ctx.File,
-						Location: versionAttr.Range(),
-						Severity: sdk.SeverityWarning,
-						Fixable:  false,
-					})
-					break
-				}
-			}
-		}
+		blockFindings := r.checkModuleBlock(ctx, block)
+		findings = append(findings, blockFindings...)
 	}
 
 	return findings, nil
+}
+
+func (r *SourceVersionGroupedRule) checkModuleBlock(ctx *sdk.Context, block *hclsyntax.Block) []sdk.Finding {
+	var findings []sdk.Finding
+	body := block.Body
+
+	sourceAttr := findAttribute(body.Attributes, "source")
+	versionAttr := findAttribute(body.Attributes, "version")
+
+	if sourceAttr != nil {
+		if finding := r.checkSourcePosition(ctx, body.Attributes, sourceAttr); finding != nil {
+			findings = append(findings, *finding)
+		}
+	}
+
+	if sourceAttr != nil && versionAttr != nil {
+		if finding := r.checkVersionFollowsSource(ctx, body.Attributes, sourceAttr, versionAttr); finding != nil {
+			findings = append(findings, *finding)
+		}
+	}
+
+	return findings
+}
+
+func (r *SourceVersionGroupedRule) checkSourcePosition(
+	ctx *sdk.Context, attrs hclsyntax.Attributes, sourceAttr *hclsyntax.Attribute,
+) *sdk.Finding {
+	sourceLine := sourceAttr.Range().Start.Line
+	allowedBefore := map[string]bool{"source": true, "for_each": true, "count": true}
+
+	for name, attr := range attrs {
+		if !allowedBefore[name] && attr.Range().Start.Line < sourceLine {
+			return &sdk.Finding{
+				Rule:     r.Name(),
+				Message:  "source should be at the start of module block (after for_each/count if present)",
+				File:     ctx.File,
+				Location: sourceAttr.Range(),
+				Severity: sdk.SeverityWarning,
+				Fixable:  false,
+			}
+		}
+	}
+	return nil
+}
+
+func (r *SourceVersionGroupedRule) checkVersionFollowsSource(
+	ctx *sdk.Context, attrs hclsyntax.Attributes,
+	sourceAttr, versionAttr *hclsyntax.Attribute,
+) *sdk.Finding {
+	sourceLine := sourceAttr.Range().End.Line
+	versionLine := versionAttr.Range().Start.Line
+
+	for name, attr := range attrs {
+		attrLine := attr.Range().Start.Line
+		if name != "source" && name != "version" &&
+			attrLine > sourceLine && attrLine < versionLine {
+			return &sdk.Finding{
+				Rule:     r.Name(),
+				Message:  "version should immediately follow source in module block",
+				File:     ctx.File,
+				Location: versionAttr.Range(),
+				Severity: sdk.SeverityWarning,
+				Fixable:  false,
+			}
+		}
+	}
+	return nil
 }
 
 // Fix is a no-op for this rule as source/version reordering requires manual review.

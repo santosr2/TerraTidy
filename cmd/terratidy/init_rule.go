@@ -74,14 +74,56 @@ func runInitRule(_ *cobra.Command, _ []string) error {
 }
 
 func createGoRule(name string) error {
-	// Create rule directory
 	ruleDir := filepath.Join(initRuleOutput, "rules", name)
 	if err := os.MkdirAll(ruleDir, 0o755); err != nil {
 		return fmt.Errorf("creating rule directory: %w", err)
 	}
 
-	// Generate Go file
-	goContent := fmt.Sprintf(`// Package %s implements the %s custom rule.
+	if err := writeGoRuleFile(ruleDir, name); err != nil {
+		return err
+	}
+
+	if err := writeGoTestFile(ruleDir, name); err != nil {
+		return err
+	}
+
+	printGoRuleInstructions()
+	return nil
+}
+
+func writeGoRuleFile(ruleDir, name string) error {
+	goContent := goRuleTemplate(name)
+	goFile := filepath.Join(ruleDir, "rule.go")
+	if err := os.WriteFile(goFile, []byte(goContent), 0o644); err != nil {
+		return fmt.Errorf("writing rule.go: %w", err)
+	}
+	fmt.Printf("  Created %s\n", goFile)
+	return nil
+}
+
+func writeGoTestFile(ruleDir, name string) error {
+	testContent := goTestTemplate(name)
+	testFile := filepath.Join(ruleDir, "rule_test.go")
+	if err := os.WriteFile(testFile, []byte(testContent), 0o644); err != nil {
+		return fmt.Errorf("writing rule_test.go: %w", err)
+	}
+	fmt.Printf("  Created %s\n", testFile)
+	return nil
+}
+
+func printGoRuleInstructions() {
+	fmt.Println()
+	fmt.Println("Go rule scaffolding created!")
+	fmt.Println()
+	fmt.Println("Next steps:")
+	fmt.Println("  1. Implement the Check() method in rule.go")
+	fmt.Println("  2. Add test cases in rule_test.go")
+	fmt.Println("  3. Register the rule in your engine")
+}
+
+func goRuleTemplate(name string) string {
+	pkg := toGoPackageName(name)
+	return fmt.Sprintf(`// Package %s implements the %s custom rule.
 package %s
 
 import (
@@ -122,16 +164,11 @@ func (r *Rule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Finding, error) {
 
 	return findings, nil
 }
-`, toGoPackageName(name), name, toGoPackageName(name), name, name, name)
+`, pkg, name, pkg, name, name, name)
+}
 
-	goFile := filepath.Join(ruleDir, "rule.go")
-	if err := os.WriteFile(goFile, []byte(goContent), 0o644); err != nil {
-		return fmt.Errorf("writing rule.go: %w", err)
-	}
-	fmt.Printf("  Created %s\n", goFile)
-
-	// Generate test file
-	testContent := fmt.Sprintf(`package %s
+func goTestTemplate(name string) string {
+	return fmt.Sprintf(`package %s
 
 import (
 	"testing"
@@ -161,22 +198,6 @@ func TestRule_Check(t *testing.T) {
 	})
 }
 `, toGoPackageName(name), name)
-
-	testFile := filepath.Join(ruleDir, "rule_test.go")
-	if err := os.WriteFile(testFile, []byte(testContent), 0o644); err != nil {
-		return fmt.Errorf("writing rule_test.go: %w", err)
-	}
-	fmt.Printf("  Created %s\n", testFile)
-
-	fmt.Println()
-	fmt.Println("Go rule scaffolding created!")
-	fmt.Println()
-	fmt.Println("Next steps:")
-	fmt.Println("  1. Implement the Check() method in rule.go")
-	fmt.Println("  2. Add test cases in rule_test.go")
-	fmt.Println("  3. Register the rule in your engine")
-
-	return nil
 }
 
 func createRegoRule(name string) error {

@@ -86,48 +86,75 @@ func findHCLFilesFromPaths(paths []string) ([]string, error) {
 
 // findHCLFiles recursively finds all .tf and .hcl files in the given paths.
 func findHCLFiles(paths []string) ([]string, error) {
-	var files []string
-	seen := make(map[string]bool)
-
+	collector := newFileCollector()
 	for _, path := range paths {
-		info, err := os.Stat(path)
-		if err != nil {
-			return nil, fmt.Errorf("stat %s: %w", path, err)
-		}
-
-		if info.IsDir() {
-			err := filepath.Walk(path, func(p string, info os.FileInfo, err error) error {
-				if err != nil {
-					return err
-				}
-				// Skip hidden directories and common non-terraform directories
-				if info.IsDir() && shouldSkipDir(p, info.Name()) {
-					return filepath.SkipDir
-				}
-				if !info.IsDir() && isHCLFile(p) && !seen[p] {
-					absPath, err := filepath.Abs(p)
-					if err != nil {
-						absPath = p
-					}
-					files = append(files, absPath)
-					seen[absPath] = true
-				}
-				return nil
-			})
-			if err != nil {
-				return nil, fmt.Errorf("walking %s: %w", path, err)
-			}
-		} else if isHCLFile(path) && !seen[path] {
-			absPath, err := filepath.Abs(path)
-			if err != nil {
-				absPath = path
-			}
-			files = append(files, absPath)
-			seen[absPath] = true
+		if err := collector.collectPath(path); err != nil {
+			return nil, err
 		}
 	}
+	return collector.files, nil
+}
 
-	return files, nil
+// fileCollector collects unique HCL files.
+type fileCollector struct {
+	files []string
+	seen  map[string]bool
+}
+
+func newFileCollector() *fileCollector {
+	return &fileCollector{seen: make(map[string]bool)}
+}
+
+func (c *fileCollector) collectPath(path string) error {
+	info, err := os.Stat(path)
+	if err != nil {
+		return fmt.Errorf("stat %s: %w", path, err)
+	}
+
+	if info.IsDir() {
+		return c.walkDirectory(path)
+	}
+	c.addFileIfHCL(path)
+	return nil
+}
+
+func (c *fileCollector) walkDirectory(dir string) error {
+	err := filepath.Walk(dir, func(p string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info.IsDir() && shouldSkipDir(p, info.Name()) {
+			return filepath.SkipDir
+		}
+		if !info.IsDir() {
+			c.addFileIfHCL(p)
+		}
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("walking %s: %w", dir, err)
+	}
+	return nil
+}
+
+func (c *fileCollector) addFileIfHCL(path string) {
+	if !isHCLFile(path) || c.seen[path] {
+		return
+	}
+	absPath := toAbsPath(path)
+	if c.seen[absPath] {
+		return
+	}
+	c.files = append(c.files, absPath)
+	c.seen[absPath] = true
+}
+
+func toAbsPath(path string) string {
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		return path
+	}
+	return absPath
 }
 
 // shouldSkipDir returns true if the directory should be skipped during traversal.

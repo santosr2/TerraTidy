@@ -33,90 +33,125 @@ func init() {
 }
 
 func runFix(_ *cobra.Command, args []string) error {
-	// Get target files (respecting --changed flag)
 	files, err := getTargetFiles(args, changed)
 	if err != nil {
 		return fmt.Errorf("finding files: %w", err)
 	}
 
 	if len(files) == 0 {
-		if changed {
-			fmt.Println("No changed HCL files found")
-		} else {
-			fmt.Println("No HCL files found")
-		}
+		printNoFilesMessage()
 		return nil
 	}
 
+	printFixHeader(len(files))
+
+	allFindings, totalFixed, err := runAllFixes(files)
+	if err != nil {
+		return err
+	}
+
+	printFixSummary(allFindings, totalFixed)
+	return nil
+}
+
+func printFixHeader(fileCount int) {
 	modeMsg := ""
 	if changed {
 		modeMsg = " (changed files only)"
 	}
-	fmt.Printf("Fixing %s%s...\n\n", formatFileCount(len(files)), modeMsg)
+	fmt.Printf("Fixing %s%s...\n\n", formatFileCount(fileCount), modeMsg)
+}
 
+func runAllFixes(files []string) ([]sdk.Finding, int, error) {
 	ctx := context.Background()
 	var allFindings []sdk.Finding
 	totalFixed := 0
 
-	// 1. Run formatter (auto-fix by default)
+	fmtFindings, formatted, err := runFmtFix(ctx, files)
+	if err != nil {
+		return nil, 0, err
+	}
+	allFindings = append(allFindings, fmtFindings...)
+	totalFixed += formatted
+
+	styleFindings, styleFixed, err := runStyleFix(ctx, files)
+	if err != nil {
+		return nil, 0, err
+	}
+	allFindings = append(allFindings, styleFindings...)
+	totalFixed += styleFixed
+
+	return allFindings, totalFixed, nil
+}
+
+func runFmtFix(ctx context.Context, files []string) ([]sdk.Finding, int, error) {
 	fmt.Println("1. Formatting files...")
 	fmtEngine := fmtengine.New(&fmtengine.Config{Check: false})
-	fmtFindings, err := fmtEngine.Run(ctx, files)
+	findings, err := fmtEngine.Run(ctx, files)
 	if err != nil {
-		return fmt.Errorf("formatting failed: %w", err)
+		return nil, 0, fmt.Errorf("formatting failed: %w", err)
 	}
 
-	// Count formatted files
-	formatted := 0
-	for _, f := range fmtFindings {
+	formatted := countFormattedFiles(findings)
+	fmt.Printf("   Formatted %d file(s)\n\n", formatted)
+	return findings, formatted, nil
+}
+
+func countFormattedFiles(findings []sdk.Finding) int {
+	count := 0
+	for _, f := range findings {
 		if f.Rule == "fmt.formatted" {
-			formatted++
+			count++
 		}
 	}
-	fmt.Printf("   Formatted %d file(s)\n\n", formatted)
-	totalFixed += formatted
-	allFindings = append(allFindings, fmtFindings...)
+	return count
+}
 
-	// 2. Run style fixes
+func runStyleFix(ctx context.Context, files []string) ([]sdk.Finding, int, error) {
 	fmt.Println("2. Fixing style issues...")
 	styleEngine := style.New(&style.Config{
 		Fix:   true,
 		Rules: make(map[string]style.RuleConfig),
 	})
-	styleFindings, err := styleEngine.Run(ctx, files)
+	findings, err := styleEngine.Run(ctx, files)
 	if err != nil {
-		return fmt.Errorf("style fixes failed: %w", err)
+		return nil, 0, fmt.Errorf("style fixes failed: %w", err)
 	}
 
-	// Count fixed style issues
-	styleFixed := 0
-	for _, f := range styleFindings {
+	fixed := countFixedStyleIssues(findings)
+	fmt.Printf("   Fixed %d style issue(s)\n\n", fixed)
+	return findings, fixed, nil
+}
+
+func countFixedStyleIssues(findings []sdk.Finding) int {
+	count := 0
+	for _, f := range findings {
 		if f.Fixable && f.FixFunc != nil {
-			styleFixed++
+			count++
 		}
 	}
-	fmt.Printf("   Fixed %d style issue(s)\n\n", styleFixed)
-	totalFixed += styleFixed
-	allFindings = append(allFindings, styleFindings...)
+	return count
+}
 
-	// Display summary
+func printFixSummary(allFindings []sdk.Finding, totalFixed int) {
 	fmt.Println("---")
 	fmt.Printf("Summary: Fixed %d issue(s)\n", totalFixed)
 
-	// Check for remaining issues
-	remainingIssues := 0
-	for _, f := range allFindings {
-		if !f.Fixable || f.FixFunc == nil {
-			remainingIssues++
-		}
-	}
-
+	remainingIssues := countRemainingIssues(allFindings)
 	if remainingIssues > 0 {
 		fmt.Printf("\n%d issue(s) require manual attention\n", remainingIssues)
 		fmt.Println("\nRun 'terratidy check' to see remaining issues")
 	} else {
 		fmt.Println("\nAll fixable issues resolved!")
 	}
+}
 
-	return nil
+func countRemainingIssues(findings []sdk.Finding) int {
+	count := 0
+	for _, f := range findings {
+		if !f.Fixable || f.FixFunc == nil {
+			count++
+		}
+	}
+	return count
 }

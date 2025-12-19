@@ -222,23 +222,17 @@ func validateConfig(cfg *config.Config) []string {
 }
 
 func runConfigSplit(_ *cobra.Command, _ []string) error {
-	configPath := cfgFile
-	if configPath == "" {
-		configPath = ".terratidy.yaml"
-	}
+	configPath := getConfigPath()
 
-	// Check if file exists
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
 		return fmt.Errorf("configuration file not found: %s", configPath)
 	}
 
-	// Load current config
 	cfg, err := config.Load(configPath)
 	if err != nil {
 		return fmt.Errorf("loading config: %w", err)
 	}
 
-	// Create .terratidy directory
 	configDir := ".terratidy"
 	if err := os.MkdirAll(configDir, 0o755); err != nil {
 		return fmt.Errorf("creating config directory: %w", err)
@@ -246,56 +240,64 @@ func runConfigSplit(_ *cobra.Command, _ []string) error {
 
 	fmt.Println("Splitting configuration...")
 
-	// Create engine-specific configs
-	if cfg.Engines.Fmt.Enabled {
-		fmtCfg := map[string]interface{}{
-			"engines": map[string]interface{}{
-				"fmt": cfg.Engines.Fmt,
-			},
-		}
-		if err := writeYAMLFile(filepath.Join(configDir, "fmt.yaml"), fmtCfg); err != nil {
-			return err
-		}
-		fmt.Printf("  Created %s\n", filepath.Join(configDir, "fmt.yaml"))
+	if err := writeEngineConfigs(cfg, configDir); err != nil {
+		return err
 	}
 
-	if cfg.Engines.Style.Enabled {
-		styleCfg := map[string]interface{}{
-			"engines": map[string]interface{}{
-				"style": cfg.Engines.Style,
-			},
-		}
-		if err := writeYAMLFile(filepath.Join(configDir, "style.yaml"), styleCfg); err != nil {
-			return err
-		}
-		fmt.Printf("  Created %s\n", filepath.Join(configDir, "style.yaml"))
+	if err := writeMainConfig(configPath, cfg); err != nil {
+		return err
 	}
 
-	if cfg.Engines.Lint.Enabled {
-		lintCfg := map[string]interface{}{
-			"engines": map[string]interface{}{
-				"lint": cfg.Engines.Lint,
-			},
-		}
-		if err := writeYAMLFile(filepath.Join(configDir, "lint.yaml"), lintCfg); err != nil {
-			return err
-		}
-		fmt.Printf("  Created %s\n", filepath.Join(configDir, "lint.yaml"))
+	fmt.Println()
+	fmt.Println("Configuration split complete!")
+	return nil
+}
+
+func getConfigPath() string {
+	if cfgFile != "" {
+		return cfgFile
+	}
+	return ".terratidy.yaml"
+}
+
+func writeEngineConfigs(cfg *config.Config, configDir string) error {
+	engines := []struct {
+		name    string
+		enabled bool
+		config  interface{}
+	}{
+		{"fmt", cfg.Engines.Fmt.Enabled, cfg.Engines.Fmt},
+		{"style", cfg.Engines.Style.Enabled, cfg.Engines.Style},
+		{"lint", cfg.Engines.Lint.Enabled, cfg.Engines.Lint},
+		{"policy", cfg.Engines.Policy.Enabled, cfg.Engines.Policy},
 	}
 
-	if cfg.Engines.Policy.Enabled {
-		policyCfg := map[string]interface{}{
-			"engines": map[string]interface{}{
-				"policy": cfg.Engines.Policy,
-			},
+	for _, eng := range engines {
+		if !eng.enabled {
+			continue
 		}
-		if err := writeYAMLFile(filepath.Join(configDir, "policy.yaml"), policyCfg); err != nil {
+		if err := writeEngineConfig(configDir, eng.name, eng.config); err != nil {
 			return err
 		}
-		fmt.Printf("  Created %s\n", filepath.Join(configDir, "policy.yaml"))
 	}
+	return nil
+}
 
-	// Create main config with imports
+func writeEngineConfig(configDir, name string, engineCfg interface{}) error {
+	cfgMap := map[string]interface{}{
+		"engines": map[string]interface{}{
+			name: engineCfg,
+		},
+	}
+	filePath := filepath.Join(configDir, name+".yaml")
+	if err := writeYAMLFile(filePath, cfgMap); err != nil {
+		return err
+	}
+	fmt.Printf("  Created %s\n", filePath)
+	return nil
+}
+
+func writeMainConfig(configPath string, cfg *config.Config) error {
 	mainCfg := fmt.Sprintf(`# TerraTidy Configuration
 # Split configuration - engine settings are in .terratidy/
 version: %d
@@ -313,9 +315,6 @@ parallel: %t
 		return fmt.Errorf("writing main config: %w", err)
 	}
 	fmt.Printf("  Updated %s\n", configPath)
-
-	fmt.Println()
-	fmt.Println("Configuration split complete!")
 	return nil
 }
 

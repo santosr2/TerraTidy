@@ -18,6 +18,16 @@ var (
 	initForce       bool
 )
 
+// customConfigOptions holds the options for generating a custom configuration.
+type customConfigOptions struct {
+	fmtEnabled    bool
+	styleEnabled  bool
+	lintEnabled   bool
+	policyEnabled bool
+	severity      string
+	failFast      bool
+}
+
 var initCmd = &cobra.Command{
 	Use:   "init",
 	Short: "Initialize TerraTidy configuration",
@@ -122,7 +132,15 @@ func interactiveInit() (string, error) {
 
 	fmt.Println()
 
-	return generateCustomConfig(fmtEnabled, styleEnabled, lintEnabled, policyEnabled, severity, failFast), nil
+	opts := customConfigOptions{
+		fmtEnabled:    fmtEnabled,
+		styleEnabled:  styleEnabled,
+		lintEnabled:   lintEnabled,
+		policyEnabled: policyEnabled,
+		severity:      severity,
+		failFast:      failFast,
+	}
+	return generateCustomConfig(opts), nil
 }
 
 func readYesNo(reader *bufio.Reader, defaultYes bool) bool {
@@ -362,11 +380,7 @@ overrides:
 }
 
 // generateCustomConfig generates a custom configuration based on user choices.
-func generateCustomConfig(
-	fmtEnabled, styleEnabled, lintEnabled, policyEnabled bool,
-	severity string,
-	failFast bool,
-) string {
+func generateCustomConfig(opts customConfigOptions) string {
 	return fmt.Sprintf(`# TerraTidy Configuration
 # Generated with interactive setup
 version: 1
@@ -391,5 +405,5 @@ engines:
 
   policy:
     enabled: %t
-`, severity, failFast, fmtEnabled, styleEnabled, lintEnabled, policyEnabled)
+`, opts.severity, opts.failFast, opts.fmtEnabled, opts.styleEnabled, opts.lintEnabled, opts.policyEnabled)
 }

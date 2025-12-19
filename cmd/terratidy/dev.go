@@ -44,24 +44,13 @@ func init() {
 }
 
 func runDev(_ *cobra.Command, _ []string) error {
-	fmt.Println("Starting development mode...")
-	fmt.Printf("  Watching: %s\n", devWatch)
-	fmt.Printf("  Target:   %s\n", devTarget)
-	fmt.Println()
+	printDevHeader()
 
-	// Check if watch directory exists
-	if _, err := os.Stat(devWatch); os.IsNotExist(err) {
-		fmt.Printf("Watch directory does not exist: %s\n", devWatch)
-		fmt.Println()
-		fmt.Println("Create it with:")
-		fmt.Printf("  mkdir -p %s\n", devWatch)
-		fmt.Println()
-		fmt.Println("Or use terratidy init-rule to create a rule:")
-		fmt.Println("  terratidy init-rule --name my-rule --type rego")
+	if !watchDirExists() {
+		printWatchDirMissingHelp()
 		return nil
 	}
 
-	// Find target files
 	targetFiles, err := getTargetFiles([]string{devTarget}, false)
 	if err != nil {
 		return fmt.Errorf("finding target files: %w", err)
@@ -71,23 +60,54 @@ func runDev(_ *cobra.Command, _ []string) error {
 		return fmt.Errorf("no HCL files found in target directory: %s", devTarget)
 	}
 
-	fmt.Printf("Found %d target file(s)\n", len(targetFiles))
-	fmt.Println()
+	fmt.Printf("Found %d target file(s)\n\n", len(targetFiles))
 
-	// Run initial check
 	if err := runDevCheck(targetFiles); err != nil {
 		fmt.Printf("Initial check error: %v\n", err)
 	}
 
-	// Set up file watcher
+	return runFileWatcher()
+}
+
+func printDevHeader() {
+	fmt.Println("Starting development mode...")
+	fmt.Printf("  Watching: %s\n", devWatch)
+	fmt.Printf("  Target:   %s\n", devTarget)
+	fmt.Println()
+}
+
+func watchDirExists() bool {
+	_, err := os.Stat(devWatch)
+	return !os.IsNotExist(err)
+}
+
+func printWatchDirMissingHelp() {
+	fmt.Printf("Watch directory does not exist: %s\n\n", devWatch)
+	fmt.Println("Create it with:")
+	fmt.Printf("  mkdir -p %s\n\n", devWatch)
+	fmt.Println("Or use terratidy init-rule to create a rule:")
+	fmt.Println("  terratidy init-rule --name my-rule --type rego")
+}
+
+func runFileWatcher() error {
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
 		return fmt.Errorf("creating watcher: %w", err)
 	}
 	defer func() { _ = watcher.Close() }()
 
-	// Watch the directory and subdirectories
-	err = filepath.Walk(devWatch, func(path string, info os.FileInfo, err error) error {
+	if err := setupWatchDirs(watcher); err != nil {
+		return err
+	}
+
+	fmt.Println("Watching for changes... (Ctrl+C to stop)")
+	fmt.Println()
+
+	return runWatchLoop(watcher)
+}
+
+func setupWatchDirs(watcher *fsnotify.Watcher) error {
+	err := filepath.Walk(devWatch, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
@@ -100,8 +120,8 @@ func runDev(_ *cobra.Command, _ []string) error {
 		return fmt.Errorf("setting up watch: %w", err)
 	}
 
-	// Also watch target directory for changes
-	err = filepath.Walk(devTarget, func(path string, info os.FileInfo, err error) error {
+	// Also watch target directory (non-fatal if fails)
+	_ = filepath.Walk(devTarget, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
@@ -110,15 +130,11 @@ func runDev(_ *cobra.Command, _ []string) error {
 		}
 		return nil
 	})
-	if err != nil {
-		// Non-fatal if target watch fails
-		fmt.Printf("Warning: could not watch target directory: %v\n", err)
-	}
 
-	fmt.Println("Watching for changes... (Ctrl+C to stop)")
-	fmt.Println()
+	return nil
+}
 
-	// Debounce timer
+func runWatchLoop(watcher *fsnotify.Watcher) error {
 	var debounceTimer *time.Timer
 	debounceDelay := 500 * time.Millisecond
 
@@ -128,36 +144,7 @@ func runDev(_ *cobra.Command, _ []string) error {
 			if !ok {
 				return nil
 			}
-
-			// Only react to write and create events
-			if event.Op&fsnotify.Write == 0 && event.Op&fsnotify.Create == 0 {
-				continue
-			}
-
-			// Check if it's a relevant file
-			ext := filepath.Ext(event.Name)
-			if ext != ".rego" && ext != ".tf" && ext != ".hcl" && ext != ".tfvars" {
-				continue
-			}
-
-			// Debounce multiple rapid events
-			if debounceTimer != nil {
-				debounceTimer.Stop()
-			}
-			debounceTimer = time.AfterFunc(debounceDelay, func() {
-				fmt.Printf("\n[%s] File changed: %s\n\n", time.Now().Format("15:04:05"), event.Name)
-
-				// Refresh target files in case new files were added
-				refreshedFiles, err := getTargetFiles([]string{devTarget}, false)
-				if err != nil {
-					fmt.Printf("Error refreshing files: %v\n", err)
-					return
-				}
-
-				if err := runDevCheck(refreshedFiles); err != nil {
-					fmt.Printf("Check error: %v\n", err)
-				}
-			})
+			debounceTimer = handleWatchEvent(event, debounceTimer, debounceDelay)
 
 		case err, ok := <-watcher.Errors:
 			if !ok {
@@ -166,6 +153,39 @@ func runDev(_ *cobra.Command, _ []string) error {
 			fmt.Printf("Watcher error: %v\n", err)
 		}
 	}
+}
+
+func handleWatchEvent(event fsnotify.Event, timer *time.Timer, delay time.Duration) *time.Timer {
+	if event.Op&fsnotify.Write == 0 && event.Op&fsnotify.Create == 0 {
+		return timer
+	}
+
+	if !isRelevantFile(event.Name) {
+		return timer
+	}
+
+	if timer != nil {
+		timer.Stop()
+	}
+
+	return time.AfterFunc(delay, func() {
+		fmt.Printf("\n[%s] File changed: %s\n\n", time.Now().Format("15:04:05"), event.Name)
+
+		refreshedFiles, err := getTargetFiles([]string{devTarget}, false)
+		if err != nil {
+			fmt.Printf("Error refreshing files: %v\n", err)
+			return
+		}
+
+		if err := runDevCheck(refreshedFiles); err != nil {
+			fmt.Printf("Check error: %v\n", err)
+		}
+	})
+}
+
+func isRelevantFile(name string) bool {
+	ext := filepath.Ext(name)
+	return ext == ".rego" || ext == ".tf" || ext == ".hcl" || ext == ".tfvars"
 }
 
 func runDevCheck(targetFiles []string) error {

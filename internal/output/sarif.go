@@ -113,13 +113,21 @@ type SARIFReplacement struct {
 
 // Format implements the Formatter interface for SARIF output
 func (f *SARIFFormatter) Format(findings []sdk.Finding, w io.Writer) error {
-	// Collect unique rules
+	rules := buildSARIFRules(findings)
+	results := buildSARIFResults(findings)
+	sarif := f.buildSARIFDocument(rules, results)
+
+	encoder := json.NewEncoder(w)
+	encoder.SetIndent("", "  ")
+	return encoder.Encode(sarif)
+}
+
+func buildSARIFRules(findings []sdk.Finding) []SARIFRule {
 	rulesMap := make(map[string]bool)
 	for _, finding := range findings {
 		rulesMap[finding.Rule] = true
 	}
 
-	// Build rules array
 	var rules []SARIFRule
 	for ruleID := range rulesMap {
 		rules = append(rules, SARIFRule{
@@ -132,72 +140,79 @@ func (f *SARIFFormatter) Format(findings []sdk.Finding, w io.Writer) error {
 			},
 		})
 	}
+	return rules
+}
 
-	// Build results
+func buildSARIFResults(findings []sdk.Finding) []SARIFResult {
 	var results []SARIFResult
 	for _, finding := range findings {
-		// Convert severity to SARIF level
-		level := sarifLevel(finding.Severity)
-
-		// Build result
-		result := SARIFResult{
-			RuleID: finding.Rule,
-			Level:  level,
-			Message: SARIFMessage{
-				Text: finding.Message,
-			},
-			Locations: []SARIFLocation{
-				{
-					PhysicalLocation: SARIFPhysicalLocation{
-						ArtifactLocation: SARIFArtifactLocation{
-							URI:       filepath.ToSlash(finding.File),
-							URIBaseID: "%SRCROOT%",
-						},
-						Region: SARIFRegion{
-							StartLine:   finding.Location.Start.Line,
-							StartColumn: finding.Location.Start.Column,
-							EndLine:     finding.Location.End.Line,
-							EndColumn:   finding.Location.End.Column,
-						},
-					},
-				},
-			},
-		}
-
-		// Add fix information if available
-		if finding.Fixable && finding.FixFunc != nil {
-			result.Fixes = []SARIFFix{
-				{
-					Description: SARIFMessage{
-						Text: fmt.Sprintf("Auto-fix available for %s", finding.Rule),
-					},
-					ArtifactChanges: []SARIFArtifactChange{
-						{
-							ArtifactLocation: SARIFArtifactLocation{
-								URI:       filepath.ToSlash(finding.File),
-								URIBaseID: "%SRCROOT%",
-							},
-							Replacements: []SARIFReplacement{
-								{
-									DeletedRegion: SARIFRegion{
-										StartLine:   finding.Location.Start.Line,
-										StartColumn: finding.Location.Start.Column,
-										EndLine:     finding.Location.End.Line,
-										EndColumn:   finding.Location.End.Column,
-									},
-								},
-							},
-						},
-					},
-				},
-			}
-		}
-
+		result := buildSARIFResult(finding)
 		results = append(results, result)
 	}
+	return results
+}
 
-	// Build SARIF document
-	sarif := SARIF{
+func buildSARIFResult(finding sdk.Finding) SARIFResult {
+	result := SARIFResult{
+		RuleID: finding.Rule,
+		Level:  sarifLevel(finding.Severity),
+		Message: SARIFMessage{
+			Text: finding.Message,
+		},
+		Locations: []SARIFLocation{
+			{
+				PhysicalLocation: SARIFPhysicalLocation{
+					ArtifactLocation: SARIFArtifactLocation{
+						URI:       filepath.ToSlash(finding.File),
+						URIBaseID: "%SRCROOT%",
+					},
+					Region: SARIFRegion{
+						StartLine:   finding.Location.Start.Line,
+						StartColumn: finding.Location.Start.Column,
+						EndLine:     finding.Location.End.Line,
+						EndColumn:   finding.Location.End.Column,
+					},
+				},
+			},
+		},
+	}
+
+	if finding.Fixable && finding.FixFunc != nil {
+		result.Fixes = buildSARIFFixes(finding)
+	}
+	return result
+}
+
+func buildSARIFFixes(finding sdk.Finding) []SARIFFix {
+	return []SARIFFix{
+		{
+			Description: SARIFMessage{
+				Text: fmt.Sprintf("Auto-fix available for %s", finding.Rule),
+			},
+			ArtifactChanges: []SARIFArtifactChange{
+				{
+					ArtifactLocation: SARIFArtifactLocation{
+						URI:       filepath.ToSlash(finding.File),
+						URIBaseID: "%SRCROOT%",
+					},
+					Replacements: []SARIFReplacement{
+						{
+							DeletedRegion: SARIFRegion{
+								StartLine:   finding.Location.Start.Line,
+								StartColumn: finding.Location.Start.Column,
+								EndLine:     finding.Location.End.Line,
+								EndColumn:   finding.Location.End.Column,
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+func (f *SARIFFormatter) buildSARIFDocument(rules []SARIFRule, results []SARIFResult) SARIF {
+	return SARIF{
 		Schema:  "https://json.schemastore.org/sarif-2.1.0.json",
 		Version: "2.1.0",
 		Runs: []SARIFRun{
@@ -214,11 +229,6 @@ func (f *SARIFFormatter) Format(findings []sdk.Finding, w io.Writer) error {
 			},
 		},
 	}
-
-	// Encode as JSON
-	encoder := json.NewEncoder(w)
-	encoder.SetIndent("", "  ")
-	return encoder.Encode(sarif)
 }
 
 // sarifLevel converts SDK severity to SARIF level

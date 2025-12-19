@@ -51,91 +51,133 @@ func init() {
 }
 
 func runCheck(_ *cobra.Command, args []string) error {
-	// Get target files (respecting --changed flag)
 	files, err := getTargetFiles(args, changed)
 	if err != nil {
 		return fmt.Errorf("finding files: %w", err)
 	}
 
 	if len(files) == 0 {
-		if changed {
-			fmt.Println("No changed HCL files found")
-		} else {
-			fmt.Println("No HCL files found")
-		}
+		printNoFilesMessage()
 		return nil
 	}
 
+	printCheckHeader(len(files))
+
+	allFindings, err := runAllChecks(files)
+	if err != nil {
+		return err
+	}
+
+	return printCheckSummary(allFindings)
+}
+
+func printNoFilesMessage() {
+	if changed {
+		fmt.Println("No changed HCL files found")
+	} else {
+		fmt.Println("No HCL files found")
+	}
+}
+
+func printCheckHeader(fileCount int) {
 	modeMsg := ""
 	if changed {
 		modeMsg = " (changed files only)"
 	}
-	fmt.Printf("Checking %s%s...\n\n", formatFileCount(len(files)), modeMsg)
+	fmt.Printf("Checking %s%s...\n\n", formatFileCount(fileCount), modeMsg)
+}
 
+func runAllChecks(files []string) ([]sdk.Finding, error) {
 	ctx := context.Background()
 	var allFindings []sdk.Finding
-
 	step := 1
 
-	// 1. Run formatter check
 	if !checkSkipFmt {
-		fmt.Printf("%d. Checking formatting...\n", step)
-		step++
-
-		fmtEngine := fmtengine.New(&fmtengine.Config{Check: true})
-		fmtFindings, err := fmtEngine.Run(ctx, files)
+		findings, err := runFmtCheck(ctx, files, step)
 		if err != nil {
-			return fmt.Errorf("fmt check failed: %w", err)
+			return nil, err
 		}
-		allFindings = append(allFindings, fmtFindings...)
-		fmt.Printf("   Found %d issue(s)\n\n", len(fmtFindings))
+		allFindings = append(allFindings, findings...)
+		step++
 	}
 
-	// 2. Run style checks
 	if !checkSkipStyle {
-		fmt.Printf("%d. Checking style...\n", step)
-		step++
-
-		styleEngine := style.New(&style.Config{
-			Fix:   false,
-			Rules: make(map[string]style.RuleConfig),
-		})
-		styleFindings, err := styleEngine.Run(ctx, files)
+		findings, err := runStyleCheck(ctx, files, step)
 		if err != nil {
-			return fmt.Errorf("style check failed: %w", err)
+			return nil, err
 		}
-		allFindings = append(allFindings, styleFindings...)
-		fmt.Printf("   Found %d issue(s)\n\n", len(styleFindings))
+		allFindings = append(allFindings, findings...)
+		step++
 	}
 
-	// 3. Run linting
 	if !checkSkipLint {
-		fmt.Printf("%d. Running linter...\n", step)
+		findings, err := runLintCheck(ctx, files, step)
+		if err != nil {
+			return nil, err
+		}
+		allFindings = append(allFindings, findings...)
 		step++
-
-		lintEngine := lint.New(&lint.Config{ConfigFile: ".tflint.hcl"})
-		lintFindings, err := lintEngine.Run(ctx, files)
-		if err != nil {
-			return fmt.Errorf("lint check failed: %w", err)
-		}
-		allFindings = append(allFindings, lintFindings...)
-		fmt.Printf("   Found %d issue(s)\n\n", len(lintFindings))
 	}
 
-	// 4. Run policy checks
 	if !checkSkipPolicy {
-		fmt.Printf("%d. Running policy checks...\n", step)
-
-		policyEngine := policy.New(&policy.Config{})
-		policyFindings, err := policyEngine.Run(ctx, files)
+		findings, err := runPolicyCheck(ctx, files, step)
 		if err != nil {
-			return fmt.Errorf("policy check failed: %w", err)
+			return nil, err
 		}
-		allFindings = append(allFindings, policyFindings...)
-		fmt.Printf("   Found %d issue(s)\n\n", len(policyFindings))
+		allFindings = append(allFindings, findings...)
 	}
 
-	// Display summary
+	return allFindings, nil
+}
+
+func runFmtCheck(ctx context.Context, files []string, step int) ([]sdk.Finding, error) {
+	fmt.Printf("%d. Checking formatting...\n", step)
+	fmtEngine := fmtengine.New(&fmtengine.Config{Check: true})
+	findings, err := fmtEngine.Run(ctx, files)
+	if err != nil {
+		return nil, fmt.Errorf("fmt check failed: %w", err)
+	}
+	fmt.Printf("   Found %d issue(s)\n\n", len(findings))
+	return findings, nil
+}
+
+func runStyleCheck(ctx context.Context, files []string, step int) ([]sdk.Finding, error) {
+	fmt.Printf("%d. Checking style...\n", step)
+	styleEngine := style.New(&style.Config{
+		Fix:   false,
+		Rules: make(map[string]style.RuleConfig),
+	})
+	findings, err := styleEngine.Run(ctx, files)
+	if err != nil {
+		return nil, fmt.Errorf("style check failed: %w", err)
+	}
+	fmt.Printf("   Found %d issue(s)\n\n", len(findings))
+	return findings, nil
+}
+
+func runLintCheck(ctx context.Context, files []string, step int) ([]sdk.Finding, error) {
+	fmt.Printf("%d. Running linter...\n", step)
+	lintEngine := lint.New(&lint.Config{ConfigFile: ".tflint.hcl"})
+	findings, err := lintEngine.Run(ctx, files)
+	if err != nil {
+		return nil, fmt.Errorf("lint check failed: %w", err)
+	}
+	fmt.Printf("   Found %d issue(s)\n\n", len(findings))
+	return findings, nil
+}
+
+func runPolicyCheck(ctx context.Context, files []string, step int) ([]sdk.Finding, error) {
+	fmt.Printf("%d. Running policy checks...\n", step)
+	policyEngine := policy.New(&policy.Config{})
+	findings, err := policyEngine.Run(ctx, files)
+	if err != nil {
+		return nil, fmt.Errorf("policy check failed: %w", err)
+	}
+	fmt.Printf("   Found %d issue(s)\n\n", len(findings))
+	return findings, nil
+}
+
+func printCheckSummary(allFindings []sdk.Finding) error {
 	fmt.Println("---")
 	fmt.Printf("Summary: %d total issue(s)\n", len(allFindings))
 
@@ -144,12 +186,18 @@ func runCheck(_ *cobra.Command, args []string) error {
 		return nil
 	}
 
-	// Group findings by severity
-	errors := 0
-	warnings := 0
-	info := 0
+	errors, warnings, info := countBySeverity(allFindings)
+	printSeverityCounts(errors, warnings, info)
+	printCheckHints()
 
-	for _, finding := range allFindings {
+	if errors > 0 {
+		os.Exit(1)
+	}
+	return nil
+}
+
+func countBySeverity(findings []sdk.Finding) (errors, warnings, info int) {
+	for _, finding := range findings {
 		switch finding.Severity {
 		case sdk.SeverityError:
 			errors++
@@ -159,7 +207,10 @@ func runCheck(_ *cobra.Command, args []string) error {
 			info++
 		}
 	}
+	return
+}
 
+func printSeverityCounts(errors, warnings, info int) {
 	fmt.Println()
 	if errors > 0 {
 		fmt.Printf("  Errors:   %d\n", errors)
@@ -170,17 +221,13 @@ func runCheck(_ *cobra.Command, args []string) error {
 	if info > 0 {
 		fmt.Printf("  Info:     %d\n", info)
 	}
+}
 
+func printCheckHints() {
 	fmt.Println()
 	fmt.Println("Run individual commands for details:")
 	fmt.Println("  terratidy fmt --check")
 	fmt.Println("  terratidy style")
 	fmt.Println("  terratidy lint")
 	fmt.Println("  terratidy policy")
-
-	if errors > 0 {
-		os.Exit(1)
-	}
-
-	return nil
 }

@@ -58,20 +58,21 @@ enableAllRules = false
   arguments = ["fmt.Printf", "fmt.Println", "fmt.Print"]
 
 # Code complexity
-# TODO: Re-enable these rules once refactoring is complete
-# These rules are temporarily disabled to focus on functional changes.
-# Tracked for re-enablement in future iteration.
-#
-# [rule.cognitive-complexity]
-#   arguments = [15]
-# [rule.cyclomatic]
-#   arguments = [15]
-# [rule.function-length]
-#   arguments = [50, 100]  # statements, lines
-# [rule.argument-limit]
-#   arguments = [5]
-# [rule.max-public-structs]
-#   arguments = [10]
+# Higher thresholds for AST/HCL parsing code which is inherently complex.
+# HCL style rules and policy engines require traversing nested AST structures
+# which results in higher complexity scores than typical business logic.
+[rule.cognitive-complexity]
+  arguments = [30]
+[rule.cyclomatic]
+  arguments = [25]
+[rule.function-length]
+  arguments = [60, 120]  # statements, lines
+[rule.argument-limit]
+  arguments = [5]
+# Allow more public structs for files with data structures (SARIF, LSP, rules, lint)
+# LSP protocol types and lint rule types are inherently numerous.
+[rule.max-public-structs]
+  arguments = [40]
 [rule.function-result-limit]
   arguments = [3]
 

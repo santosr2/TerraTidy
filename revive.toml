@@ -61,12 +61,16 @@ enableAllRules = false
 # Higher thresholds for AST/HCL parsing code which is inherently complex.
 # HCL style rules and policy engines require traversing nested AST structures
 # which results in higher complexity scores than typical business logic.
+# Test files are excluded as table-driven tests are inherently verbose.
 [rule.cognitive-complexity]
   arguments = [30]
+  exclude = ["**/*_test.go"]
 [rule.cyclomatic]
   arguments = [25]
+  exclude = ["**/*_test.go"]
 [rule.function-length]
   arguments = [60, 120]  # statements, lines
+  exclude = ["**/*_test.go"]
 [rule.argument-limit]
   arguments = [5]
 # Allow more public structs for files with data structures (SARIF, LSP, rules, lint)

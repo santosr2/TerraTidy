@@ -369,3 +369,189 @@ func TestBuiltinPolicies(t *testing.T) {
 		assert.Contains(t, policy, "package terraform", "policy %d should have package declaration", i)
 	}
 }
+
+func TestNewModuleData(t *testing.T) {
+	data := newModuleData()
+
+	// Verify all expected keys exist
+	expectedKeys := []string{"resources", "data", "modules", "variables", "outputs", "locals", "providers", "terraform", "_files"}
+	for _, key := range expectedKeys {
+		_, ok := data[key]
+		assert.True(t, ok, "should have key %s", key)
+	}
+
+	// Verify slices are initialized empty
+	assert.Empty(t, data["resources"].([]any))
+	assert.Empty(t, data["data"].([]any))
+	assert.Empty(t, data["modules"].([]any))
+	assert.Empty(t, data["variables"].([]any))
+	assert.Empty(t, data["outputs"].([]any))
+	assert.Empty(t, data["locals"].([]any))
+	assert.Empty(t, data["providers"].([]any))
+	assert.Empty(t, data["_files"].([]string))
+
+	// Verify terraform is an empty map
+	tfBlock := data["terraform"].(map[string]any)
+	assert.Empty(t, tfBlock)
+}
+
+func TestAddLabeledBlock(t *testing.T) {
+	tests := []struct {
+		name      string
+		labels    []string
+		minLabels int
+		keys      []string
+		wantKeys  map[string]string
+	}{
+		{
+			name:      "resource with type and name",
+			labels:    []string{"aws_instance", "example"},
+			minLabels: 2,
+			keys:      []string{"type", "name"},
+			wantKeys:  map[string]string{"type": "aws_instance", "name": "example"},
+		},
+		{
+			name:      "module with single label",
+			labels:    []string{"vpc"},
+			minLabels: 1,
+			keys:      []string{"name"},
+			wantKeys:  map[string]string{"name": "vpc"},
+		},
+		{
+			name:      "insufficient labels",
+			labels:    []string{"only_one"},
+			minLabels: 2,
+			keys:      []string{"type", "name"},
+			wantKeys:  map[string]string{}, // No keys added
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			blockData := make(map[string]any)
+			addLabeledBlock(blockData, tt.labels, tt.minLabels, tt.keys...)
+
+			for key, want := range tt.wantKeys {
+				got, ok := blockData[key]
+				assert.True(t, ok, "should have key %s", key)
+				assert.Equal(t, want, got)
+			}
+
+			if len(tt.wantKeys) == 0 {
+				// Verify no keys were added for insufficient labels
+				for _, key := range tt.keys {
+					_, ok := blockData[key]
+					assert.False(t, ok, "should not have key %s", key)
+				}
+			}
+		})
+	}
+}
+
+func TestAppendToSlice(t *testing.T) {
+	moduleData := newModuleData()
+
+	// Append to resources
+	blockData1 := map[string]any{"type": "aws_instance", "name": "test1"}
+	blockData2 := map[string]any{"type": "aws_s3_bucket", "name": "test2"}
+
+	appendToSlice(moduleData, "resources", blockData1)
+	appendToSlice(moduleData, "resources", blockData2)
+
+	resources := moduleData["resources"].([]any)
+	assert.Len(t, resources, 2)
+	assert.Equal(t, "aws_instance", resources[0].(map[string]any)["type"])
+	assert.Equal(t, "aws_s3_bucket", resources[1].(map[string]any)["type"])
+}
+
+func TestEvaluateQuery_InvalidPolicy(t *testing.T) {
+	engine := New(nil)
+
+	evalCtx := &policyEvalContext{
+		ctx:        context.Background(),
+		moduleData: newModuleData(),
+		dir:        "/test/dir",
+	}
+
+	// Invalid Rego policy should return nil (error handled gracefully)
+	invalidPolicy := "this is not valid rego {"
+	findings := engine.evaluateQuery(evalCtx, invalidPolicy, "data.terraform.deny", "error")
+
+	assert.Nil(t, findings)
+}
+
+func TestEvaluateQuery_ValidPolicy(t *testing.T) {
+	engine := New(nil)
+
+	moduleData := newModuleData()
+	moduleData["resources"] = []any{
+		map[string]any{
+			"type":  "aws_instance",
+			"name":  "test",
+			"_file": "/test/main.tf",
+		},
+	}
+
+	evalCtx := &policyEvalContext{
+		ctx:        context.Background(),
+		moduleData: moduleData,
+		dir:        "/test/dir",
+	}
+
+	// Policy that always triggers on aws_instance
+	policy := `package terraform
+
+import rego.v1
+
+deny contains msg if {
+    some resource in input.resources
+    resource.type == "aws_instance"
+    msg := {
+        "msg": "Found EC2 instance",
+        "rule": "test-rule"
+    }
+}
+`
+	findings := engine.evaluateQuery(evalCtx, policy, "data.terraform.deny", "error")
+
+	assert.Len(t, findings, 1)
+	assert.Equal(t, "Found EC2 instance", findings[0].Message)
+	assert.Equal(t, "policy.test-rule", findings[0].Rule)
+}
+
+func TestExtractFindings_EmptyResults(t *testing.T) {
+	engine := New(nil)
+
+	// Empty result set
+	findings := engine.extractFindings(nil, "/test/dir", "error")
+	assert.Empty(t, findings)
+}
+
+func TestParseFileIntoModule_NonexistentFile(t *testing.T) {
+	engine := New(nil)
+	moduleData := newModuleData()
+
+	// Should not panic on nonexistent file
+	engine.parseFileIntoModule("/nonexistent/file.tf", moduleData)
+
+	// Module data should remain unchanged
+	assert.Empty(t, moduleData["resources"].([]any))
+	assert.Empty(t, moduleData["_files"].([]string))
+}
+
+func TestParseFileIntoModule_InvalidHCL(t *testing.T) {
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "invalid.tf")
+
+	// Write invalid HCL
+	require.NoError(t, os.WriteFile(tmpFile, []byte("this is { not valid hcl"), 0o644))
+
+	engine := New(nil)
+	moduleData := newModuleData()
+
+	// Should not panic on invalid HCL
+	engine.parseFileIntoModule(tmpFile, moduleData)
+
+	// File should not be added since parsing failed
+	assert.Empty(t, moduleData["_files"].([]string))
+}

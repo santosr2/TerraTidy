@@ -47,7 +47,6 @@ changelog:
   use: github
   filters:
     exclude:
-      - '^docs:'
       - '^test:'
       - '^chore:'
       - Merge pull request

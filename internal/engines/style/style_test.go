@@ -751,3 +751,26 @@ func TestEngine_MultipleFiles(t *testing.T) {
 	// The important thing is no error was returned
 	_ = findings
 }
+
+func TestIsDependsOnRelevantBlock(t *testing.T) {
+	tests := []struct {
+		blockType string
+		want      bool
+	}{
+		{"resource", true},
+		{"module", true},
+		{"data", true},
+		{"variable", false},
+		{"output", false},
+		{"terraform", false},
+		{"locals", false},
+		{"provider", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.blockType, func(t *testing.T) {
+			got := isDependsOnRelevantBlock(tt.blockType)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}

@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"os"
 
-	fmtengine "github.com/santosr2/terratidy/internal/engines/fmt"
+	fmtengine "github.com/santosr2/terratidy/internal/engines/format"
 	"github.com/santosr2/terratidy/internal/engines/lint"
 	"github.com/santosr2/terratidy/internal/engines/policy"
 	"github.com/santosr2/terratidy/internal/engines/style"

@@ -1,7 +1,7 @@
-// Package fmt provides the formatting engine for TerraTidy.
+// Package format provides the formatting engine for TerraTidy.
 // It uses HCL's hclwrite package to format Terraform configuration files
 // according to the canonical HCL style.
-package fmt
+package format
 
 import (
 	"context"

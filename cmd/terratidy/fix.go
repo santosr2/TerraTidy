@@ -5,7 +5,7 @@ import (
 	"context"
 	"fmt"
 
-	fmtengine "github.com/santosr2/terratidy/internal/engines/fmt"
+	fmtengine "github.com/santosr2/terratidy/internal/engines/format"
 	"github.com/santosr2/terratidy/internal/engines/style"
 	"github.com/santosr2/terratidy/pkg/sdk"
 	"github.com/spf13/cobra"

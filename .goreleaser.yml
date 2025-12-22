@@ -82,7 +82,7 @@ brews:
     repository:
       owner: santosr2
       name: homebrew-tap
-    folder: Formula
+    directory: Formula
     homepage: https://github.com/santosr2/terratidy
     description: "Terraform/Terragrunt quality platform"
     license: MIT

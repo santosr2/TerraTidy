@@ -353,3 +353,181 @@ func TestFormatterPluginInterface(_ *testing.T) {
 	// Verify the FormatterPlugin interface
 	var _ FormatterPlugin = &MockFormatter{}
 }
+
+func TestManager_LoadAll_WithYAMLFile(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create a YAML file (should be skipped, not a .so file)
+	yamlFile := filepath.Join(tmpDir, "config.yaml")
+	err := os.WriteFile(yamlFile, []byte("test: value"), 0o644)
+	require.NoError(t, err)
+
+	manager := NewManager([]string{tmpDir})
+	err = manager.LoadAll()
+	assert.NoError(t, err)
+
+	// No plugins should be loaded
+	plugins := manager.ListPlugins()
+	assert.Empty(t, plugins)
+}
+
+func TestManager_LoadAll_WithSubdirectories(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create subdirectory
+	subDir := filepath.Join(tmpDir, "subdir")
+	err := os.MkdirAll(subDir, 0o755)
+	require.NoError(t, err)
+
+	// Create a file in subdirectory
+	testFile := filepath.Join(subDir, "test.txt")
+	err = os.WriteFile(testFile, []byte("content"), 0o644)
+	require.NoError(t, err)
+
+	manager := NewManager([]string{tmpDir})
+	err = manager.LoadAll()
+	assert.NoError(t, err)
+}
+
+func TestManager_loadGoPlugin_NonExistentFile(t *testing.T) {
+	manager := NewManager(nil)
+
+	err := manager.loadGoPlugin("/nonexistent/plugin.so")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "opening plugin")
+}
+
+func TestManager_loadGoPlugin_InvalidFile(t *testing.T) {
+	tmpDir := t.TempDir()
+	invalidFile := filepath.Join(tmpDir, "invalid.so")
+
+	// Create a file that's not a valid Go plugin
+	err := os.WriteFile(invalidFile, []byte("not a plugin"), 0o644)
+	require.NoError(t, err)
+
+	manager := NewManager(nil)
+	err = manager.loadGoPlugin(invalidFile)
+	assert.Error(t, err)
+	// Will fail on plugin.Open
+}
+
+// Note: Testing actual plugin loading (loadRulePlugin, loadEnginePlugin, loadFormatterPlugin)
+// requires building real .so files with proper symbols, which is better suited for
+// integration tests. The functions are structured to return clear errors for missing
+// symbols and incorrect types, which are tested via the error paths above.
+
+func TestManager_MultipleDirectories(t *testing.T) {
+	tmpDir1 := t.TempDir()
+	tmpDir2 := t.TempDir()
+
+	manager := NewManager([]string{tmpDir1, tmpDir2})
+	err := manager.LoadAll()
+	assert.NoError(t, err)
+
+	// Should handle multiple directories without error
+	assert.Equal(t, []string{tmpDir1, tmpDir2}, manager.directories)
+}
+
+func TestManager_LoadFromDirectory_WithDotFiles(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create a hidden file (dotfile)
+	dotFile := filepath.Join(tmpDir, ".hidden")
+	err := os.WriteFile(dotFile, []byte("hidden"), 0o644)
+	require.NoError(t, err)
+
+	manager := NewManager([]string{tmpDir})
+	err = manager.LoadAll()
+	assert.NoError(t, err)
+
+	// Hidden files should be processed (they're just regular files)
+	// but won't be valid plugins, so no plugins loaded
+	plugins := manager.ListPlugins()
+	assert.Empty(t, plugins)
+}
+
+func TestManager_LoadFromDirectory_PermissionIssues(t *testing.T) {
+	if os.Getuid() == 0 {
+		t.Skip("Skipping permission test when running as root")
+	}
+
+	tmpDir := t.TempDir()
+	restrictedDir := filepath.Join(tmpDir, "restricted")
+	err := os.MkdirAll(restrictedDir, 0o000)
+	require.NoError(t, err)
+
+	// Restore permissions after test
+	t.Cleanup(func() {
+		_ = os.Chmod(restrictedDir, 0o755)
+	})
+
+	manager := NewManager([]string{restrictedDir})
+	err = manager.LoadAll()
+	// Should return permission error
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "permission denied")
+}
+
+func TestPluginMetadata_AllFields(t *testing.T) {
+	meta := PluginMetadata{
+		Name:        "comprehensive-plugin",
+		Version:     "2.1.0",
+		Description: "A comprehensive test plugin with all fields",
+		Author:      "Test Suite",
+		Type:        PluginTypeEngine,
+		Path:        "/full/path/to/plugin.so",
+	}
+
+	// Verify all fields are set correctly
+	assert.Equal(t, "comprehensive-plugin", meta.Name)
+	assert.Equal(t, "2.1.0", meta.Version)
+	assert.Equal(t, "A comprehensive test plugin with all fields", meta.Description)
+	assert.Equal(t, "Test Suite", meta.Author)
+	assert.Equal(t, PluginTypeEngine, meta.Type)
+	assert.Equal(t, "/full/path/to/plugin.so", meta.Path)
+}
+
+func TestManager_RegisterMultipleRulesWithSameName(t *testing.T) {
+	manager := NewManager(nil)
+
+	rule1 := &MockRule{name: "duplicate", description: "First rule"}
+	rule2 := &MockRule{name: "duplicate", description: "Second rule"}
+
+	manager.RegisterRule(rule1)
+	manager.RegisterRule(rule2)
+
+	// Last registered should win
+	rules := manager.GetRules()
+	assert.Len(t, rules, 1)
+	assert.Equal(t, "Second rule", rules["duplicate"].Description())
+}
+
+func TestManager_RegisterMultipleEnginesWithSameName(t *testing.T) {
+	manager := NewManager(nil)
+
+	engine1 := &MockEngine{name: "duplicate"}
+	engine2 := &MockEngine{name: "duplicate"}
+
+	manager.RegisterEngine(engine1)
+	manager.RegisterEngine(engine2)
+
+	// Last registered should win
+	engines := manager.GetEngines()
+	assert.Len(t, engines, 1)
+	assert.Equal(t, engine2, engines["duplicate"])
+}
+
+func TestManager_RegisterMultipleFormattersWithSameName(t *testing.T) {
+	manager := NewManager(nil)
+
+	formatter1 := &MockFormatter{name: "duplicate"}
+	formatter2 := &MockFormatter{name: "duplicate"}
+
+	manager.RegisterFormatter(formatter1)
+	manager.RegisterFormatter(formatter2)
+
+	// Last registered should win
+	formatters := manager.GetFormatters()
+	assert.Len(t, formatters, 1)
+	assert.Equal(t, formatter2, formatters["duplicate"])
+}

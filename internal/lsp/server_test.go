@@ -417,3 +417,170 @@ func TestServer_Run_Shutdown(t *testing.T) {
 	err := server.Run()
 	assert.NoError(t, err)
 }
+
+func TestServer_HandleDidChange(t *testing.T) {
+	out := &bytes.Buffer{}
+	server := NewServer(strings.NewReader(""), out)
+	server.initialized = true
+
+	// Add document first
+	server.documents["file:///test.tf"] = &Document{
+		URI:     "file:///test.tf",
+		Content: "initial content",
+		Version: 1,
+	}
+
+	// Create didChange message
+	msgJSON := `{
+		"jsonrpc": "2.0",
+		"method": "textDocument/didChange",
+		"params": {
+			"textDocument": {"uri": "file:///test.tf"},
+			"contentChanges": [{"text": "updated content"}]
+		}
+	}`
+	msg := RequestMessage{}
+	err := json.Unmarshal([]byte(msgJSON), &msg)
+	require.NoError(t, err)
+
+	err = server.handleDidChange(msg)
+	require.NoError(t, err)
+
+	// Document should be updated
+	doc := server.documents["file:///test.tf"]
+	assert.Equal(t, "updated content", doc.Content)
+}
+
+func TestServer_HandleDidSave(t *testing.T) {
+	out := &bytes.Buffer{}
+	server := NewServer(strings.NewReader(""), out)
+	server.initialized = true
+
+	// Add document
+	server.documents["file:///test.tf"] = &Document{
+		URI: "file:///test.tf",
+		Content: `resource "aws_instance" "example" {
+  ami = "ami-12345"
+}`,
+		Version: 1,
+	}
+
+	msgJSON := `{
+		"jsonrpc": "2.0",
+		"method": "textDocument/didSave",
+		"params": {
+			"textDocument": {"uri": "file:///test.tf"}
+		}
+	}`
+	msg := RequestMessage{}
+	err := json.Unmarshal([]byte(msgJSON), &msg)
+	require.NoError(t, err)
+
+	err = server.handleDidSave(msg)
+	require.NoError(t, err)
+
+	// Should publish diagnostics - check output has notification
+	output := out.String()
+	assert.Contains(t, output, "textDocument/publishDiagnostics")
+}
+
+// Note: handleExit calls os.Exit() which terminates the process,
+// so it cannot be unit tested. It's tested via integration tests.
+
+func TestServer_HandleMessage_UnknownMethod(t *testing.T) {
+	out := &bytes.Buffer{}
+	server := NewServer(strings.NewReader(""), out)
+
+	msgJSON := `{
+		"jsonrpc": "2.0",
+		"id": 1,
+		"method": "unknown/method"
+	}`
+
+	err := server.handleMessage(json.RawMessage(msgJSON))
+	require.NoError(t, err) // sendError returns nil after writing error response
+
+	// Check that error response was sent
+	output := out.String()
+	assert.Contains(t, output, "Method not found")
+}
+
+func TestServer_HandleMessage_UnknownNotification(t *testing.T) {
+	out := &bytes.Buffer{}
+	server := NewServer(strings.NewReader(""), out)
+
+	// Notification (no ID)
+	msgJSON := `{
+		"jsonrpc": "2.0",
+		"method": "unknown/notification"
+	}`
+
+	err := server.handleMessage(json.RawMessage(msgJSON))
+	require.NoError(t, err)
+
+	// No response for notifications
+	output := out.String()
+	assert.Empty(t, output)
+}
+
+func TestServer_PublishDiagnostics_EmptyDocument(t *testing.T) {
+	out := &bytes.Buffer{}
+	server := NewServer(strings.NewReader(""), out)
+	server.initialized = true
+
+	// Add empty document
+	server.documents["file:///empty.tf"] = &Document{
+		URI:     "file:///empty.tf",
+		Content: "",
+		Version: 1,
+	}
+
+	err := server.publishDiagnostics("file:///empty.tf")
+	require.NoError(t, err)
+
+	output := out.String()
+	// Should still publish (with empty diagnostics)
+	assert.Contains(t, output, "textDocument/publishDiagnostics")
+	assert.Contains(t, output, "file:///empty.tf")
+}
+
+func TestServer_PublishDiagnostics_WithFindings(t *testing.T) {
+	out := &bytes.Buffer{}
+	server := NewServer(strings.NewReader(""), out)
+	server.initialized = true
+
+	// Add document with style violations
+	server.documents["file:///test.tf"] = &Document{
+		URI: "file:///test.tf",
+		Content: `resource "aws_instance" "example1" {
+  ami = "ami-12345"
+}
+resource "aws_instance" "example2" {
+  ami = "ami-67890"
+}`,
+		Version: 1,
+	}
+
+	err := server.publishDiagnostics("file:///test.tf")
+	require.NoError(t, err)
+
+	output := out.String()
+	assert.Contains(t, output, "textDocument/publishDiagnostics")
+}
+
+func TestServer_HandleMessage_BeforeInitialize(_ *testing.T) {
+	out := &bytes.Buffer{}
+	server := NewServer(strings.NewReader(""), out)
+
+	// Try to send textDocument/didOpen before initialize
+	msgJSON := `{
+		"jsonrpc": "2.0",
+		"method": "textDocument/didOpen",
+		"params": {}
+	}`
+
+	err := server.handleMessage(json.RawMessage(msgJSON))
+	// Should handle gracefully (may return error or nil)
+	// The important thing is it doesn't panic
+	_ = err
+}

@@ -374,7 +374,10 @@ func TestNewModuleData(t *testing.T) {
 	data := newModuleData()
 
 	// Verify all expected keys exist
-	expectedKeys := []string{"resources", "data", "modules", "variables", "outputs", "locals", "providers", "terraform", "_files"}
+	expectedKeys := []string{
+		"resources", "data", "modules", "variables", "outputs",
+		"locals", "providers", "terraform", "_files",
+	}
 	for _, key := range expectedKeys {
 		_, ok := data[key]
 		assert.True(t, ok, "should have key %s", key)

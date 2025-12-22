@@ -1,4 +1,17 @@
 // Package plugins provides a plugin system for extending TerraTidy functionality.
+//
+// The plugin system supports three types of plugins:
+//   - Rule plugins: Custom style/lint rules
+//   - Engine plugins: Custom analysis engines
+//   - Formatter plugins: Custom output formatters
+//
+// Plugins are loaded from .so files (Go plugins) that export specific symbols:
+//   - PluginMetadata: Plugin information
+//   - New: Constructor function returning the plugin instance
+//
+// Note: The actual .so plugin loading functions (loadGoPlugin, loadRulePlugin,
+// loadEnginePlugin, loadFormatterPlugin) are tested via integration tests as
+// they require building real compiled plugin binaries.
 package plugins
 
 import (

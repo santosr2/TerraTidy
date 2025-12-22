@@ -142,6 +142,9 @@ func runRulesList(_ *cobra.Command, _ []string) error {
 	fmt.Println()
 	fmt.Println("Use 'terratidy rules list --verbose' for full descriptions")
 	fmt.Println("Use 'terratidy rules docs' to generate markdown documentation")
+	fmt.Println()
+	fmt.Println("Note: TFLint rules are configured via .tflint.hcl")
+	fmt.Println("      Run 'tflint --help' to see available TFLint rules and options")
 
 	return nil
 }
@@ -205,7 +208,7 @@ func getAllRules() []RuleInfo {
 		})
 	}
 
-	// Get lint rules
+	// Get lint rules (built-in)
 	lintEngine := lint.New(nil)
 	for _, rule := range lintEngine.GetAllRules() {
 		rules = append(rules, RuleInfo{
@@ -216,6 +219,15 @@ func getAllRules() []RuleInfo {
 			Enabled:     true,
 		})
 	}
+
+	// Add TFLint integration note
+	rules = append(rules, RuleInfo{
+		Name:        "lint.tflint",
+		Description: "TFLint integration - runs all enabled TFLint rules (configure via .tflint.hcl)",
+		Engine:      "lint",
+		Severity:    "variable",
+		Enabled:     true,
+	})
 
 	// Add policy rules (built-in)
 	policyRules := []RuleInfo{

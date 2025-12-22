@@ -81,7 +81,7 @@ brews:
   - name: terratidy
     repository:
       owner: santosr2
-      name: homebrew-tap
+      name: TerraTidy
     directory: Formula
     homepage: https://github.com/santosr2/terratidy
     description: "Terraform/Terragrunt quality platform"

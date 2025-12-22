@@ -5,11 +5,13 @@ This extension brings TerraTidy's powerful formatting, style checking, linting, 
 
 ## Features
 
-- **Format on Save**: Automatically format your Terraform files when saving
-- **Real-time Diagnostics**: See issues highlighted in your editor as you type
-- **Quick Fixes**: One-click fixes for common style and formatting issues
-- **Integrated Commands**: Run TerraTidy checks directly from the command palette
-- **Context Menu Integration**: Right-click on files to run TerraTidy commands
+- **Language Server Protocol (LSP) Integration**: Fast, real-time analysis as you type
+- **Real-time Diagnostics**: See issues highlighted in your editor instantly
+- **Auto-formatting**: Format on save or on demand via standard VSCode format command
+- **Code Actions**: Quick fixes for common style and formatting issues
+- **Hover Documentation**: View rule documentation and configuration hints
+- **Workspace Configuration**: Dynamic configuration updates without restart
+- **Multi-engine Support**: Enable/disable fmt, style, lint, and policy engines independently
 
 ## Requirements
 
@@ -53,21 +55,45 @@ The extension provides the following commands:
 
 | Command | Description |
 |---------|-------------|
-| `TerraTidy: Run All Checks` | Run all enabled checks on the current file |
-| `TerraTidy: Format Document` | Format the current Terraform file |
-| `TerraTidy: Lint` | Run linting checks |
-| `TerraTidy: Check Style` | Run style checks |
-| `TerraTidy: Fix All Issues` | Auto-fix all fixable issues |
-| `TerraTidy: Initialize Configuration` | Create a new .terratidy.yaml |
-| `TerraTidy: Show Output` | Show the TerraTidy output channel |
+| `TerraTidy: Initialize Configuration` | Create a new .terratidy.yaml configuration file |
+| `TerraTidy: Show Output` | Show the TerraTidy language server output/logs |
+| `TerraTidy: Restart Language Server` | Restart the LSP server (useful after config changes) |
+
+**Note**: Formatting, diagnostics, and code actions are provided automatically by the LSP server
+and are accessed via standard VSCode features (Format Document command, Problems panel, Quick Fix lightbulb).
 
 ## Usage
 
-### Running Checks
+### Automatic Diagnostics
 
-1. Open a Terraform (`.tf`) or HCL (`.hcl`) file
-2. Press `Cmd+Shift+P` (macOS) or `Ctrl+Shift+P` (Windows/Linux)
-3. Type "TerraTidy" and select a command
+The extension automatically analyzes your Terraform/HCL files as you type. Issues appear:
+
+- As colored underlines in the editor
+- In the Problems panel (`Cmd+Shift+M` / `Ctrl+Shift+M`)
+- With detailed messages on hover
+
+### Formatting
+
+Format the current file:
+
+1. Use the standard Format Document command (`Shift+Alt+F` on Windows/Linux, `Shift+Option+F` on macOS)
+2. Or enable format-on-save in settings
+
+### Code Actions
+
+When you see a diagnostic (underlined issue):
+
+1. Click the lightbulb icon that appears
+2. Or press `Cmd+.` (macOS) / `Ctrl+.` (Windows/Linux)
+3. Select a quick fix from the menu
+
+### Initialize Configuration
+
+To create a `.terratidy.yaml` configuration file:
+
+1. Press `Cmd+Shift+P` (macOS) or `Ctrl+Shift+P` (Windows/Linux)
+2. Type "TerraTidy: Initialize Configuration"
+3. Press Enter
 
 ### Configuring TerraTidy
 

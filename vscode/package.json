@@ -44,55 +44,18 @@
   "contributes": {
     "commands": [
       {
-        "command": "terratidy.run",
-        "title": "TerraTidy: Run All Checks"
-      },
-      {
-        "command": "terratidy.format",
-        "title": "TerraTidy: Format Document"
-      },
-      {
-        "command": "terratidy.lint",
-        "title": "TerraTidy: Lint"
-      },
-      {
-        "command": "terratidy.style",
-        "title": "TerraTidy: Check Style"
-      },
-      {
-        "command": "terratidy.fix",
-        "title": "TerraTidy: Fix All Issues"
-      },
-      {
         "command": "terratidy.init",
         "title": "TerraTidy: Initialize Configuration"
       },
       {
         "command": "terratidy.showOutput",
         "title": "TerraTidy: Show Output"
+      },
+      {
+        "command": "terratidy.restartServer",
+        "title": "TerraTidy: Restart Language Server"
       }
     ],
-    "menus": {
-      "editor/context": [
-        {
-          "when": "resourceLangId == terraform || resourceLangId == hcl",
-          "command": "terratidy.run",
-          "group": "terratidy@1"
-        },
-        {
-          "when": "resourceLangId == terraform || resourceLangId == hcl",
-          "command": "terratidy.fix",
-          "group": "terratidy@2"
-        }
-      ],
-      "explorer/context": [
-        {
-          "when": "resourceExtname == .tf || resourceExtname == .hcl",
-          "command": "terratidy.run",
-          "group": "terratidy@1"
-        }
-      ]
-    },
     "configuration": {
       "title": "TerraTidy",
       "properties": {
@@ -174,21 +137,23 @@
     ]
   },
   "scripts": {
-    "vscode:prepublish": "npm run compile",
+    "vscode:prepublish": "bun run compile",
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
-    "lint": "eslint src --ext ts",
-    "test": "node ./out/test/runTest.js",
+    "lint": "biome check src",
+    "lint:fix": "biome check --write src",
+    "format": "biome format --write src",
     "package": "vsce package",
     "publish": "vsce publish"
   },
+  "dependencies": {
+    "vscode-languageclient": "^9.0.1"
+  },
   "devDependencies": {
+    "@biomejs/biome": "^1.9.4",
     "@types/node": "^20.10.0",
     "@types/vscode": "^1.85.0",
-    "@typescript-eslint/eslint-plugin": "^6.13.0",
-    "@typescript-eslint/parser": "^6.13.0",
     "@vscode/vsce": "^2.22.0",
-    "eslint": "^8.55.0",
     "typescript": "^5.3.2"
   }
 }

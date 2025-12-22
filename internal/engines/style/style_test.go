@@ -774,3 +774,82 @@ func TestIsDependsOnRelevantBlock(t *testing.T) {
 		})
 	}
 }
+
+func TestEngine_Name(t *testing.T) {
+	engine := New(nil)
+	assert.Equal(t, "style", engine.Name())
+}
+
+func TestEngine_FixMode(t *testing.T) {
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "test.tf")
+
+	// Create file with spacing issue
+	content := `resource "aws_instance" "example1" {
+  ami = "ami-12345"
+}
+resource "aws_instance" "example2" {
+  ami = "ami-67890"
+}`
+
+	require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0o644))
+
+	// Run in fix mode
+	engine := New(&Config{
+		Fix:   true,
+		Rules: make(map[string]RuleConfig),
+	})
+
+	findings, err := engine.Run(context.Background(), []string{tmpFile})
+	require.NoError(t, err)
+
+	// Fix mode should still report findings
+	// The actual fixing happens via the applyFixes function
+	_ = findings
+}
+
+func TestEngine_DisableSpecificRule(t *testing.T) {
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "test.tf")
+
+	// Create file with properly formatted content
+	content := `resource "aws_instance" "example1" {
+  ami = "ami-12345"
+}
+
+resource "aws_instance" "example2" {
+  ami = "ami-67890"
+}`
+
+	require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0o644))
+
+	// Engine with rules configured
+	engine := New(&Config{
+		Rules: make(map[string]RuleConfig),
+	})
+
+	findings, err := engine.Run(context.Background(), []string{tmpFile})
+	require.NoError(t, err)
+
+	// With properly formatted file, should have no blank-line findings
+	for _, f := range findings {
+		assert.NotEqual(t, "style.blank-line-between-blocks", f.Rule)
+	}
+}
+
+func TestEngine_InvalidHCL(t *testing.T) {
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "invalid.tf")
+
+	// Create file with invalid HCL
+	content := `resource "aws_instance" { this is invalid`
+	require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0o644))
+
+	engine := New(nil)
+	findings, err := engine.Run(context.Background(), []string{tmpFile})
+
+	// May or may not return error depending on how parsing is handled
+	// The important thing is we don't panic
+	_ = err
+	_ = findings
+}

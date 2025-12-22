@@ -11,7 +11,7 @@ class Terratidy < Formula
   on_macos do
     if Hardware::CPU.intel?
       url "https://github.com/santosr2/terratidy/releases/download/v0.1.0/terratidy-0.1.0-darwin-amd64.tar.gz"
-      sha256 "f1830d05188de3423db2d03c32631b4752aa21c8ca94098734bccd47e4c475ab"
+      sha256 "7f8ef4f05341e4895a4cfb54af28e5924325ea9baf6c550427ac108bc30b6ac2"
 
       def install
         bin.install "terratidy"
@@ -19,7 +19,7 @@ class Terratidy < Formula
     end
     if Hardware::CPU.arm?
       url "https://github.com/santosr2/terratidy/releases/download/v0.1.0/terratidy-0.1.0-darwin-arm64.tar.gz"
-      sha256 "331bf3c133c8084c5d9a62cb23614a4d829d9f911df7a482f40e7c74d933bb8d"
+      sha256 "4094208c33ef3666d1cf26ffbfe5f311a1dc4d194a14b00b9f880bf12e91b25f"
 
       def install
         bin.install "terratidy"
@@ -30,14 +30,14 @@ class Terratidy < Formula
   on_linux do
     if Hardware::CPU.intel? && Hardware::CPU.is_64_bit?
       url "https://github.com/santosr2/terratidy/releases/download/v0.1.0/terratidy-0.1.0-linux-amd64.tar.gz"
-      sha256 "90c1efe29eac1f71a71f1704adf7a282b1e5cad237e739a94e15cbdcdda11ceb"
+      sha256 "a2223eb213ca2f5ec3acd491569ef75b08362f65a8d5b9621383e1660ce51726"
       def install
         bin.install "terratidy"
       end
     end
     if Hardware::CPU.arm? && Hardware::CPU.is_64_bit?
       url "https://github.com/santosr2/terratidy/releases/download/v0.1.0/terratidy-0.1.0-linux-arm64.tar.gz"
-      sha256 "f83e74e123d8889f95fb4d57ff80d7bf5f9c9f6182ffbb941ddee9587a823017"
+      sha256 "67087d49b6fd1c31144276f6ea58e81286f76c192eb4d19586818521c592fd76"
       def install
         bin.install "terratidy"
       end

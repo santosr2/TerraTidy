@@ -240,18 +240,18 @@ func TestGroupFilesByDirectory(t *testing.T) {
 	engine := New(nil)
 
 	files := []string{
-		"/project/modules/vpc/main.tf",
-		"/project/modules/vpc/variables.tf",
-		"/project/modules/ec2/main.tf",
-		"/project/environments/dev/main.tf",
+		filepath.Join("project", "modules", "vpc", "main.tf"),
+		filepath.Join("project", "modules", "vpc", "variables.tf"),
+		filepath.Join("project", "modules", "ec2", "main.tf"),
+		filepath.Join("project", "environments", "dev", "main.tf"),
 	}
 
 	result := engine.groupFilesByDirectory(files)
 
 	assert.Len(t, result, 3, "should have 3 directories")
-	assert.Len(t, result["/project/modules/vpc"], 2)
-	assert.Len(t, result["/project/modules/ec2"], 1)
-	assert.Len(t, result["/project/environments/dev"], 1)
+	assert.Len(t, result[filepath.Join("project", "modules", "vpc")], 2)
+	assert.Len(t, result[filepath.Join("project", "modules", "ec2")], 1)
+	assert.Len(t, result[filepath.Join("project", "environments", "dev")], 1)
 }
 
 func TestParseSeverity(t *testing.T) {

@@ -207,7 +207,7 @@ func TestGit_NewTempRepo(t *testing.T) {
 	})
 
 	// Commit the file
-	cmd = exec.Command("git", "commit", "-m", "initial")
+	cmd = exec.Command("git", "commit", "-m", "initial", "--no-verify")
 	cmd.Dir = tmpDir
 	require.NoError(t, cmd.Run())
 

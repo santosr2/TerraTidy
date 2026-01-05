@@ -163,9 +163,80 @@ func GetFormatter(format string, verbose bool, version string) (Formatter, error
 		return &SARIFFormatter{Version: version}, nil
 	case "html":
 		return &HTMLFormatter{Title: "TerraTidy Report", Version: version}, nil
+	case "github", "gha":
+		return &GitHubActionsFormatter{}, nil
 	default:
 		return nil, fmt.Errorf("unsupported output format: %s", format)
 	}
+}
+
+// GitHubActionsFormatter outputs findings as GitHub Actions workflow commands
+// See: https://docs.github.com/en/actions/using-workflows/workflow-commands-for-github-actions
+type GitHubActionsFormatter struct{}
+
+// Format implements the Formatter interface for GitHub Actions workflow commands
+// Outputs in the format: ::error file={name},line={line},col={col}::{message}
+func (f *GitHubActionsFormatter) Format(findings []sdk.Finding, w io.Writer) error {
+	for _, finding := range findings {
+		command := f.severityToCommand(finding.Severity)
+		file := finding.File
+		line := finding.Location.Start.Line
+		col := finding.Location.Start.Column
+		endLine := finding.Location.End.Line
+		endCol := finding.Location.End.Column
+
+		// Ensure we have valid line numbers (GitHub Actions requires line >= 1)
+		if line < 1 {
+			line = 1
+		}
+		if col < 1 {
+			col = 1
+		}
+
+		// Build the properties string
+		props := fmt.Sprintf("file=%s,line=%d,col=%d", file, line, col)
+
+		// Add end line and column if they span multiple lines
+		if endLine > line {
+			props += fmt.Sprintf(",endLine=%d", endLine)
+			if endCol > 0 {
+				props += fmt.Sprintf(",endColumn=%d", endCol)
+			}
+		}
+
+		// Add title (rule name)
+		props += fmt.Sprintf(",title=%s", finding.Rule)
+
+		// Format the message (escape special characters)
+		message := escapeGitHubMessage(finding.Message)
+
+		_, _ = fmt.Fprintf(w, "::%s %s::%s\n", command, props, message)
+	}
+
+	return nil
+}
+
+// severityToCommand converts SDK severity to GitHub Actions command
+func (f *GitHubActionsFormatter) severityToCommand(severity sdk.Severity) string {
+	switch severity {
+	case sdk.SeverityError:
+		return "error"
+	case sdk.SeverityWarning:
+		return "warning"
+	case sdk.SeverityInfo:
+		return "notice"
+	default:
+		return "warning"
+	}
+}
+
+// escapeGitHubMessage escapes special characters for GitHub Actions workflow commands
+// Newlines become %0A, carriage returns become %0D, and % becomes %25
+func escapeGitHubMessage(s string) string {
+	s = strings.ReplaceAll(s, "%", "%25")
+	s = strings.ReplaceAll(s, "\r", "%0D")
+	s = strings.ReplaceAll(s, "\n", "%0A")
+	return s
 }
 
 // HTMLFormatter outputs findings as an HTML report

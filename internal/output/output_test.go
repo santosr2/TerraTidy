@@ -238,6 +238,20 @@ func TestGetFormatter(t *testing.T) {
 			wantType: "*output.HTMLFormatter",
 		},
 		{
+			name:     "github format",
+			format:   "github",
+			verbose:  false,
+			wantErr:  false,
+			wantType: "*output.GitHubActionsFormatter",
+		},
+		{
+			name:     "gha format alias",
+			format:   "gha",
+			verbose:  false,
+			wantErr:  false,
+			wantType: "*output.GitHubActionsFormatter",
+		},
+		{
 			name:     "empty format (defaults to text)",
 			format:   "",
 			verbose:  false,
@@ -552,6 +566,216 @@ func TestEscapeHTML(t *testing.T) {
 			result := escapeHTML(tt.input)
 			if result != tt.expected {
 				t.Errorf("escapeHTML(%q) = %q, want %q", tt.input, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestGitHubActionsFormatter(t *testing.T) {
+	tests := []struct {
+		name     string
+		findings []sdk.Finding
+		want     []string
+	}{
+		{
+			name:     "no findings",
+			findings: []sdk.Finding{},
+			want:     []string{},
+		},
+		{
+			name: "single error",
+			findings: []sdk.Finding{
+				{
+					Rule:     "test.error",
+					Message:  "Test error message",
+					File:     "test.tf",
+					Severity: sdk.SeverityError,
+					Location: hcl.Range{
+						Start: hcl.Pos{Line: 10, Column: 5},
+						End:   hcl.Pos{Line: 10, Column: 20},
+					},
+				},
+			},
+			want: []string{"::error file=test.tf,line=10,col=5,title=test.error::Test error message"},
+		},
+		{
+			name: "single warning",
+			findings: []sdk.Finding{
+				{
+					Rule:     "test.warning",
+					Message:  "Test warning",
+					File:     "main.tf",
+					Severity: sdk.SeverityWarning,
+					Location: hcl.Range{
+						Start: hcl.Pos{Line: 1, Column: 1},
+						End:   hcl.Pos{Line: 1, Column: 10},
+					},
+				},
+			},
+			want: []string{"::warning file=main.tf,line=1,col=1,title=test.warning::Test warning"},
+		},
+		{
+			name: "single notice (info)",
+			findings: []sdk.Finding{
+				{
+					Rule:     "test.info",
+					Message:  "Test info",
+					File:     "vars.tf",
+					Severity: sdk.SeverityInfo,
+					Location: hcl.Range{
+						Start: hcl.Pos{Line: 5, Column: 3},
+						End:   hcl.Pos{Line: 5, Column: 10},
+					},
+				},
+			},
+			want: []string{"::notice file=vars.tf,line=5,col=3,title=test.info::Test info"},
+		},
+		{
+			name: "multiple findings",
+			findings: []sdk.Finding{
+				{
+					Rule:     "test.error",
+					Message:  "Error 1",
+					File:     "main.tf",
+					Severity: sdk.SeverityError,
+					Location: hcl.Range{
+						Start: hcl.Pos{Line: 1, Column: 1},
+						End:   hcl.Pos{Line: 1, Column: 10},
+					},
+				},
+				{
+					Rule:     "test.warning",
+					Message:  "Warning 1",
+					File:     "main.tf",
+					Severity: sdk.SeverityWarning,
+					Location: hcl.Range{
+						Start: hcl.Pos{Line: 5, Column: 1},
+						End:   hcl.Pos{Line: 5, Column: 10},
+					},
+				},
+			},
+			want: []string{
+				"::error file=main.tf,line=1,col=1,title=test.error::Error 1",
+				"::warning file=main.tf,line=5,col=1,title=test.warning::Warning 1",
+			},
+		},
+		{
+			name: "multiline finding with endLine",
+			findings: []sdk.Finding{
+				{
+					Rule:     "test.multiline",
+					Message:  "Spans multiple lines",
+					File:     "test.tf",
+					Severity: sdk.SeverityWarning,
+					Location: hcl.Range{
+						Start: hcl.Pos{Line: 1, Column: 1},
+						End:   hcl.Pos{Line: 5, Column: 10},
+					},
+				},
+			},
+			want: []string{"::warning file=test.tf,line=1,col=1,endLine=5,endColumn=10,title=test.multiline::Spans multiple lines"},
+		},
+		{
+			name: "message with special characters",
+			findings: []sdk.Finding{
+				{
+					Rule:     "test.special",
+					Message:  "Line 1\nLine 2\rLine 3",
+					File:     "test.tf",
+					Severity: sdk.SeverityWarning,
+					Location: hcl.Range{
+						Start: hcl.Pos{Line: 1, Column: 1},
+						End:   hcl.Pos{Line: 1, Column: 10},
+					},
+				},
+			},
+			want: []string{"::warning file=test.tf,line=1,col=1,title=test.special::Line 1%0ALine 2%0DLine 3"},
+		},
+		{
+			name: "message with percent sign",
+			findings: []sdk.Finding{
+				{
+					Rule:     "test.percent",
+					Message:  "100% coverage",
+					File:     "test.tf",
+					Severity: sdk.SeverityInfo,
+					Location: hcl.Range{
+						Start: hcl.Pos{Line: 1, Column: 1},
+						End:   hcl.Pos{Line: 1, Column: 10},
+					},
+				},
+			},
+			want: []string{"::notice file=test.tf,line=1,col=1,title=test.percent::100%25 coverage"},
+		},
+		{
+			name: "zero line/column defaults to 1",
+			findings: []sdk.Finding{
+				{
+					Rule:     "test.zero",
+					Message:  "Zero position",
+					File:     "test.tf",
+					Severity: sdk.SeverityWarning,
+					Location: hcl.Range{
+						Start: hcl.Pos{Line: 0, Column: 0},
+						End:   hcl.Pos{Line: 0, Column: 0},
+					},
+				},
+			},
+			want: []string{"::warning file=test.tf,line=1,col=1,title=test.zero::Zero position"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			formatter := &GitHubActionsFormatter{}
+			var buf bytes.Buffer
+			err := formatter.Format(tt.findings, &buf)
+			if err != nil {
+				t.Fatalf("Format() error = %v", err)
+			}
+
+			output := buf.String()
+			lines := strings.Split(strings.TrimSuffix(output, "\n"), "\n")
+
+			// Handle empty output case
+			if len(tt.want) == 0 {
+				if output != "" {
+					t.Errorf("expected empty output, got: %q", output)
+				}
+				return
+			}
+
+			if len(lines) != len(tt.want) {
+				t.Errorf("got %d lines, want %d lines\ngot: %v\nwant: %v", len(lines), len(tt.want), lines, tt.want)
+				return
+			}
+
+			for i, want := range tt.want {
+				if lines[i] != want {
+					t.Errorf("line %d mismatch:\ngot:  %q\nwant: %q", i, lines[i], want)
+				}
+			}
+		})
+	}
+}
+
+func TestEscapeGitHubMessage(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"hello", "hello"},
+		{"line1\nline2", "line1%0Aline2"},
+		{"line1\rline2", "line1%0Dline2"},
+		{"100%", "100%25"},
+		{"a\nb\rc%d", "a%0Ab%0Dc%25d"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			result := escapeGitHubMessage(tt.input)
+			if result != tt.expected {
+				t.Errorf("escapeGitHubMessage(%q) = %q, want %q", tt.input, result, tt.expected)
 			}
 		})
 	}

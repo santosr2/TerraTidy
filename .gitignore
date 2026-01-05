@@ -69,9 +69,6 @@ benchmarks/
 coverage/
 
 # Keep AI assistant configs tracked
-!.claude/
-!.cursor/
-
 *.bkp
 
 .agent-os
@@ -83,3 +80,8 @@ coverage/
 .github/README.md
 tools
 .opencode
+AGENTS.md
+GETTING_STARTED*.md
+IMPLEMENTATION_STATUS.md
+MISSING*.md
+QUICKSTART.md

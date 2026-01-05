@@ -8,6 +8,7 @@ node = "latest"  # For repomix and other Node-based tools
 python = "3.13"
 "go:github.com/steveyegge/beads/cmd/bd" = "latest"
 uv = "latest"
+bun = "latest"
 
 [tasks.setup]
 description = "Setup development environment"

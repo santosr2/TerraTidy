@@ -252,40 +252,6 @@ make lint           # Run linters
 make check          # All checks
 ```
 
-### AI-Assisted Development
-
-TerraTidy is designed for AI-assisted development with **Cursor + Claude Sonnet 4.5**.
-
-**Quick Start:**
-
-```bash
-# 1. Setup tools
-mise run setup
-
-# 2. Generate AI context
-make context
-
-# 3. Open in Cursor and start coding!
-```
-
-**Essential commands:**
-
-```bash
-make context         # Generate AI context for LLMs
-make hot-reload      # Development with auto-rebuild
-make coverage-report # Detailed test coverage
-make benchmark       # Run performance benchmarks
-```
-
-**See complete guide:** [docs/CURSOR_AI_SETUP.md](docs/CURSOR_AI_SETUP.md)
-
-Project includes:
-
-- `AGENT.md` - Complete AI development guide
-- `.claude/` - Claude Code configuration (agents, commands, skills, MCP)
-- `.cursor/` - Cursor IDE configuration (rules, settings)
-- `tools/` - Development tools (repomix, air, etc.)
-
 ## Contributing
 
 Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for details.

@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- GitHub Actions annotations output format (`--format github` or `--format gha`)
+- TFLint integration note in `rules list` command output
+
+### Fixed
+
+- VCS test using `--no-verify` for git commits to avoid pre-commit hook interference
+
 ## [0.1.0] - 2025-12-22
 
 ### Added

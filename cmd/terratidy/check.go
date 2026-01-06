@@ -10,6 +10,7 @@ import (
 	"github.com/santosr2/terratidy/internal/engines/lint"
 	"github.com/santosr2/terratidy/internal/engines/policy"
 	"github.com/santosr2/terratidy/internal/engines/style"
+	"github.com/santosr2/terratidy/internal/runner"
 	"github.com/santosr2/terratidy/pkg/sdk"
 	"github.com/spf13/cobra"
 )
@@ -19,6 +20,7 @@ var (
 	checkSkipStyle  bool
 	checkSkipLint   bool
 	checkSkipPolicy bool
+	checkParallel   bool
 )
 
 var checkCmd = &cobra.Command{
@@ -38,7 +40,10 @@ Use --skip-* flags to skip specific engines.`,
   terratidy check --changed
 
   # Skip policy checks
-  terratidy check --skip-policy`,
+  terratidy check --skip-policy
+
+  # Run engines in parallel for faster execution
+  terratidy check --parallel`,
 	RunE: runCheck,
 }
 
@@ -47,6 +52,7 @@ func init() {
 	checkCmd.Flags().BoolVar(&checkSkipStyle, "skip-style", false, "skip style checks")
 	checkCmd.Flags().BoolVar(&checkSkipLint, "skip-lint", false, "skip linting")
 	checkCmd.Flags().BoolVar(&checkSkipPolicy, "skip-policy", false, "skip policy checks")
+	checkCmd.Flags().BoolVarP(&checkParallel, "parallel", "p", false, "run engines in parallel")
 	rootCmd.AddCommand(checkCmd)
 }
 
@@ -89,6 +95,47 @@ func printCheckHeader(fileCount int) {
 
 func runAllChecks(files []string) ([]sdk.Finding, error) {
 	ctx := context.Background()
+
+	if checkParallel {
+		return runAllChecksParallel(ctx, files)
+	}
+	return runAllChecksSequential(ctx, files)
+}
+
+func runAllChecksParallel(ctx context.Context, files []string) ([]sdk.Finding, error) {
+	fmt.Println("Running checks in parallel mode...")
+
+	r := runner.New().SetParallel(true)
+
+	if !checkSkipFmt {
+		r.AddEngine(fmtengine.New(&fmtengine.Config{Check: true}))
+	}
+	if !checkSkipStyle {
+		r.AddEngine(style.New(&style.Config{Fix: false, Rules: make(map[string]style.RuleConfig)}))
+	}
+	if !checkSkipLint {
+		r.AddEngine(lint.New(&lint.Config{ConfigFile: ".tflint.hcl"}))
+	}
+	if !checkSkipPolicy {
+		r.AddEngine(policy.New(&policy.Config{}))
+	}
+
+	results := r.RunWithResults(ctx, files)
+
+	var allFindings []sdk.Finding
+	for _, result := range results {
+		if result.Error != nil {
+			return nil, fmt.Errorf("%s check failed: %w", result.Engine, result.Error)
+		}
+		fmt.Printf("  %s: %d issue(s)\n", result.Engine, len(result.Findings))
+		allFindings = append(allFindings, result.Findings...)
+	}
+	fmt.Println()
+
+	return allFindings, nil
+}
+
+func runAllChecksSequential(ctx context.Context, files []string) ([]sdk.Finding, error) {
 	var allFindings []sdk.Finding
 	step := 1
 

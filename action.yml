@@ -19,9 +19,13 @@ inputs:
     required: false
     default: ''
   format:
-    description: 'Output format (text, json, json-compact, sarif, html)'
+    description: 'Output format (text, json, json-compact, sarif, html, github)'
     required: false
     default: 'text'
+  parallel:
+    description: 'Run engines in parallel for faster execution'
+    required: false
+    default: 'false'
   working-directory:
     description: 'Working directory to run TerraTidy in'
     required: false
@@ -108,6 +112,11 @@ runs:
         # Fix mode
         if [ "${{ inputs.fix }}" = "true" ]; then
           ARGS="$ARGS --fix"
+        fi
+
+        # Parallel mode
+        if [ "${{ inputs.parallel }}" = "true" ]; then
+          ARGS="$ARGS --parallel"
         fi
 
         # Output format

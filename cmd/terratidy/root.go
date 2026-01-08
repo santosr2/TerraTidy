@@ -27,7 +27,7 @@ in a single binary with no external dependencies.`,
 func init() {
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is .terratidy.yaml)")
 	rootCmd.PersistentFlags().StringVar(&profile, "profile", "", "profile to use from config")
-	rootCmd.PersistentFlags().StringVar(&format, "format", "text", "output format (text|json|sarif)")
+	rootCmd.PersistentFlags().StringVar(&format, "format", "text", "output format (text|json|json-compact|sarif|html|github)")
 	rootCmd.PersistentFlags().BoolVar(&changed, "changed", false, "only check changed files")
 	rootCmd.PersistentFlags().StringSliceVar(&paths, "paths", []string{}, "paths to check")
 	rootCmd.PersistentFlags().StringVar(

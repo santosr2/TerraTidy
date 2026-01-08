@@ -179,7 +179,7 @@ repos:
 
 ```yaml
 - name: Run TerraTidy
-  uses: santosr2/terratidy@v1
+  uses: santosr2/terratidy@v0
   with:
     format: sarif
     parallel: true

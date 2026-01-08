@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/santosr2/terratidy/internal/engines/lint"
+	"github.com/santosr2/terratidy/internal/output"
 	"github.com/santosr2/terratidy/pkg/sdk"
 	"github.com/spf13/cobra"
 )
@@ -68,18 +69,28 @@ Use --changed to only lint files that have been modified in git.`,
 			Rules:      ruleConfig,
 		})
 
-		modeMsg := ""
-		if changed {
-			modeMsg = " (changed files only)"
+		// For structured output formats, skip the progress messages
+		useStructuredOutput := format != "" && format != "text"
+
+		if !useStructuredOutput {
+			modeMsg := ""
+			if changed {
+				modeMsg = " (changed files only)"
+			}
+			fmt.Printf("Running linter on %s%s...\n\n", formatFileCount(len(files)), modeMsg)
 		}
-		fmt.Printf("Running linter on %s%s...\n\n", formatFileCount(len(files)), modeMsg)
 
 		findings, err := engine.Run(context.Background(), files)
 		if err != nil {
 			return fmt.Errorf("running linter: %w", err)
 		}
 
-		// Display results
+		// Use structured output if requested
+		if useStructuredOutput {
+			return outputLintResults(findings)
+		}
+
+		// Display results in text format
 		if len(findings) == 0 {
 			fmt.Println("No linting issues found")
 			return nil
@@ -129,6 +140,25 @@ Use --changed to only lint files that have been modified in git.`,
 
 		return nil
 	},
+}
+
+func outputLintResults(findings []sdk.Finding) error {
+	formatter, err := output.GetFormatter(format, true, version)
+	if err != nil {
+		return fmt.Errorf("getting formatter: %w", err)
+	}
+
+	if err := formatter.Format(findings, os.Stdout); err != nil {
+		return fmt.Errorf("formatting output: %w", err)
+	}
+
+	// Exit with error code if there are errors
+	for _, finding := range findings {
+		if finding.Severity == sdk.SeverityError {
+			os.Exit(1)
+		}
+	}
+	return nil
 }
 
 func init() {

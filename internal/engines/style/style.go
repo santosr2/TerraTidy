@@ -7,6 +7,7 @@ import (
 
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/hclparse"
+	"github.com/santosr2/terratidy/internal/cache"
 	"github.com/santosr2/terratidy/pkg/sdk"
 )
 
@@ -79,31 +80,55 @@ func (e *Engine) Run(ctx context.Context, files []string) ([]sdk.Finding, error)
 
 // checkFile checks a single file against all enabled rules
 func (e *Engine) checkFile(parser *hclparse.Parser, path string) ([]sdk.Finding, error) {
-	// Read and parse the file
-	content, err := os.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("reading file: %w", err)
-	}
-
+	var content []byte
 	var file *hcl.File
 	var diags hcl.Diagnostics
 
-	// Try parsing as HCL first
-	file, diags = parser.ParseHCL(content, path)
-	if diags.HasErrors() {
-		// If that fails, try as JSON (for .tf.json files)
-		file, diags = parser.ParseJSON(content, path)
+	// Try to get from cache first
+	if entry, err := cache.Default().GetOrParse(path); err == nil && entry.File != nil {
+		content = entry.Content
+		file = entry.File
+		diags = entry.ParseErrs
+	} else {
+		// Fallback to direct read if cache fails
+		var readErr error
+		content, readErr = os.ReadFile(path)
+		if readErr != nil {
+			return nil, fmt.Errorf("reading file: %w", readErr)
+		}
+
+		// Try parsing as HCL first
+		file, diags = parser.ParseHCL(content, path)
 		if diags.HasErrors() {
-			// If both fail, return a parsing error finding
-			return []sdk.Finding{{
-				Rule:     "style.parse-error",
-				Message:  fmt.Sprintf("Failed to parse file: %s", diags.Error()),
-				File:     path,
-				Severity: sdk.SeverityError,
-				Fixable:  false,
-			}}, nil
+			// If that fails, try as JSON (for .tf.json files)
+			file, diags = parser.ParseJSON(content, path)
 		}
 	}
+
+	// Check for parse errors
+	if diags.HasErrors() {
+		return []sdk.Finding{{
+			Rule:     "style.parse-error",
+			Message:  fmt.Sprintf("Failed to parse file: %s", diags.Error()),
+			File:     path,
+			Severity: sdk.SeverityError,
+			Fixable:  false,
+		}}, nil
+	}
+
+	// Handle case where file is nil (shouldn't happen but be safe)
+	if file == nil {
+		return []sdk.Finding{{
+			Rule:     "style.parse-error",
+			Message:  "Failed to parse file: unknown error",
+			File:     path,
+			Severity: sdk.SeverityError,
+			Fixable:  false,
+		}}, nil
+	}
+
+	// Keep content reference to avoid unused variable error
+	_ = content
 
 	// Create context for rule execution
 	ruleCtx := &sdk.Context{

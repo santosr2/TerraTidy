@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/santosr2/terratidy/internal/engines/style"
+	"github.com/santosr2/terratidy/internal/output"
 	"github.com/santosr2/terratidy/pkg/sdk"
 	"github.com/spf13/cobra"
 )
@@ -59,11 +60,16 @@ Use --fix to automatically fix fixable style issues.`,
 			Rules: make(map[string]style.RuleConfig),
 		})
 
-		modeMsg := ""
-		if changed {
-			modeMsg = " (changed files only)"
+		// For structured output formats, skip the progress messages
+		useStructuredOutput := format != "" && format != "text"
+
+		if !useStructuredOutput {
+			modeMsg := ""
+			if changed {
+				modeMsg = " (changed files only)"
+			}
+			fmt.Printf("Checking style on %s%s...\n\n", formatFileCount(len(files)), modeMsg)
 		}
-		fmt.Printf("Checking style on %s%s...\n\n", formatFileCount(len(files)), modeMsg)
 
 		// Run style checks
 		findings, err := engine.Run(context.Background(), files)
@@ -71,7 +77,12 @@ Use --fix to automatically fix fixable style issues.`,
 			return fmt.Errorf("checking style: %w", err)
 		}
 
-		// Display results
+		// Use structured output if requested
+		if useStructuredOutput {
+			return outputStyleResults(findings)
+		}
+
+		// Display results in text format
 		if len(findings) == 0 {
 			fmt.Println("No style issues found")
 			return nil
@@ -122,6 +133,25 @@ Use --fix to automatically fix fixable style issues.`,
 
 		return nil
 	},
+}
+
+func outputStyleResults(findings []sdk.Finding) error {
+	formatter, err := output.GetFormatter(format, true, version)
+	if err != nil {
+		return fmt.Errorf("getting formatter: %w", err)
+	}
+
+	if err := formatter.Format(findings, os.Stdout); err != nil {
+		return fmt.Errorf("formatting output: %w", err)
+	}
+
+	// Exit with error code if there are errors
+	for _, finding := range findings {
+		if finding.Severity == sdk.SeverityError {
+			os.Exit(1)
+		}
+	}
+	return nil
 }
 
 func init() {

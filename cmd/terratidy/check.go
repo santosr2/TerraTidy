@@ -10,6 +10,7 @@ import (
 	"github.com/santosr2/terratidy/internal/engines/lint"
 	"github.com/santosr2/terratidy/internal/engines/policy"
 	"github.com/santosr2/terratidy/internal/engines/style"
+	"github.com/santosr2/terratidy/internal/output"
 	"github.com/santosr2/terratidy/internal/runner"
 	"github.com/santosr2/terratidy/pkg/sdk"
 	"github.com/spf13/cobra"
@@ -67,14 +68,19 @@ func runCheck(_ *cobra.Command, args []string) error {
 		return nil
 	}
 
-	printCheckHeader(len(files))
+	// For structured output formats, skip the progress messages
+	useStructuredOutput := format != "" && format != "text"
 
-	allFindings, err := runAllChecks(files)
+	if !useStructuredOutput {
+		printCheckHeader(len(files))
+	}
+
+	allFindings, err := runAllChecks(files, useStructuredOutput)
 	if err != nil {
 		return err
 	}
 
-	return printCheckSummary(allFindings)
+	return outputCheckResults(allFindings, useStructuredOutput)
 }
 
 func printNoFilesMessage() {
@@ -93,17 +99,19 @@ func printCheckHeader(fileCount int) {
 	fmt.Printf("Checking %s%s...\n\n", formatFileCount(fileCount), modeMsg)
 }
 
-func runAllChecks(files []string) ([]sdk.Finding, error) {
+func runAllChecks(files []string, quiet bool) ([]sdk.Finding, error) {
 	ctx := context.Background()
 
 	if checkParallel {
-		return runAllChecksParallel(ctx, files)
+		return runAllChecksParallel(ctx, files, quiet)
 	}
-	return runAllChecksSequential(ctx, files)
+	return runAllChecksSequential(ctx, files, quiet)
 }
 
-func runAllChecksParallel(ctx context.Context, files []string) ([]sdk.Finding, error) {
-	fmt.Println("Running checks in parallel mode...")
+func runAllChecksParallel(ctx context.Context, files []string, quiet bool) ([]sdk.Finding, error) {
+	if !quiet {
+		fmt.Println("Running checks in parallel mode...")
+	}
 
 	r := runner.New().SetParallel(true)
 
@@ -127,20 +135,24 @@ func runAllChecksParallel(ctx context.Context, files []string) ([]sdk.Finding, e
 		if result.Error != nil {
 			return nil, fmt.Errorf("%s check failed: %w", result.Engine, result.Error)
 		}
-		fmt.Printf("  %s: %d issue(s)\n", result.Engine, len(result.Findings))
+		if !quiet {
+			fmt.Printf("  %s: %d issue(s)\n", result.Engine, len(result.Findings))
+		}
 		allFindings = append(allFindings, result.Findings...)
 	}
-	fmt.Println()
+	if !quiet {
+		fmt.Println()
+	}
 
 	return allFindings, nil
 }
 
-func runAllChecksSequential(ctx context.Context, files []string) ([]sdk.Finding, error) {
+func runAllChecksSequential(ctx context.Context, files []string, quiet bool) ([]sdk.Finding, error) {
 	var allFindings []sdk.Finding
 	step := 1
 
 	if !checkSkipFmt {
-		findings, err := runFmtCheck(ctx, files, step)
+		findings, err := runFmtCheck(ctx, files, step, quiet)
 		if err != nil {
 			return nil, err
 		}
@@ -149,7 +161,7 @@ func runAllChecksSequential(ctx context.Context, files []string) ([]sdk.Finding,
 	}
 
 	if !checkSkipStyle {
-		findings, err := runStyleCheck(ctx, files, step)
+		findings, err := runStyleCheck(ctx, files, step, quiet)
 		if err != nil {
 			return nil, err
 		}
@@ -158,7 +170,7 @@ func runAllChecksSequential(ctx context.Context, files []string) ([]sdk.Finding,
 	}
 
 	if !checkSkipLint {
-		findings, err := runLintCheck(ctx, files, step)
+		findings, err := runLintCheck(ctx, files, step, quiet)
 		if err != nil {
 			return nil, err
 		}
@@ -167,7 +179,7 @@ func runAllChecksSequential(ctx context.Context, files []string) ([]sdk.Finding,
 	}
 
 	if !checkSkipPolicy {
-		findings, err := runPolicyCheck(ctx, files, step)
+		findings, err := runPolicyCheck(ctx, files, step, quiet)
 		if err != nil {
 			return nil, err
 		}
@@ -177,19 +189,25 @@ func runAllChecksSequential(ctx context.Context, files []string) ([]sdk.Finding,
 	return allFindings, nil
 }
 
-func runFmtCheck(ctx context.Context, files []string, step int) ([]sdk.Finding, error) {
-	fmt.Printf("%d. Checking formatting...\n", step)
+func runFmtCheck(ctx context.Context, files []string, step int, quiet bool) ([]sdk.Finding, error) {
+	if !quiet {
+		fmt.Printf("%d. Checking formatting...\n", step)
+	}
 	fmtEngine := fmtengine.New(&fmtengine.Config{Check: true})
 	findings, err := fmtEngine.Run(ctx, files)
 	if err != nil {
 		return nil, fmt.Errorf("fmt check failed: %w", err)
 	}
-	fmt.Printf("   Found %d issue(s)\n\n", len(findings))
+	if !quiet {
+		fmt.Printf("   Found %d issue(s)\n\n", len(findings))
+	}
 	return findings, nil
 }
 
-func runStyleCheck(ctx context.Context, files []string, step int) ([]sdk.Finding, error) {
-	fmt.Printf("%d. Checking style...\n", step)
+func runStyleCheck(ctx context.Context, files []string, step int, quiet bool) ([]sdk.Finding, error) {
+	if !quiet {
+		fmt.Printf("%d. Checking style...\n", step)
+	}
 	styleEngine := style.New(&style.Config{
 		Fix:   false,
 		Rules: make(map[string]style.RuleConfig),
@@ -198,30 +216,66 @@ func runStyleCheck(ctx context.Context, files []string, step int) ([]sdk.Finding
 	if err != nil {
 		return nil, fmt.Errorf("style check failed: %w", err)
 	}
-	fmt.Printf("   Found %d issue(s)\n\n", len(findings))
+	if !quiet {
+		fmt.Printf("   Found %d issue(s)\n\n", len(findings))
+	}
 	return findings, nil
 }
 
-func runLintCheck(ctx context.Context, files []string, step int) ([]sdk.Finding, error) {
-	fmt.Printf("%d. Running linter...\n", step)
+func runLintCheck(ctx context.Context, files []string, step int, quiet bool) ([]sdk.Finding, error) {
+	if !quiet {
+		fmt.Printf("%d. Running linter...\n", step)
+	}
 	lintEngine := lint.New(&lint.Config{ConfigFile: ".tflint.hcl"})
 	findings, err := lintEngine.Run(ctx, files)
 	if err != nil {
 		return nil, fmt.Errorf("lint check failed: %w", err)
 	}
-	fmt.Printf("   Found %d issue(s)\n\n", len(findings))
+	if !quiet {
+		fmt.Printf("   Found %d issue(s)\n\n", len(findings))
+	}
 	return findings, nil
 }
 
-func runPolicyCheck(ctx context.Context, files []string, step int) ([]sdk.Finding, error) {
-	fmt.Printf("%d. Running policy checks...\n", step)
+func runPolicyCheck(ctx context.Context, files []string, step int, quiet bool) ([]sdk.Finding, error) {
+	if !quiet {
+		fmt.Printf("%d. Running policy checks...\n", step)
+	}
 	policyEngine := policy.New(&policy.Config{})
 	findings, err := policyEngine.Run(ctx, files)
 	if err != nil {
 		return nil, fmt.Errorf("policy check failed: %w", err)
 	}
-	fmt.Printf("   Found %d issue(s)\n\n", len(findings))
+	if !quiet {
+		fmt.Printf("   Found %d issue(s)\n\n", len(findings))
+	}
 	return findings, nil
+}
+
+func outputCheckResults(allFindings []sdk.Finding, useStructuredOutput bool) error {
+	if useStructuredOutput {
+		return outputStructuredResults(allFindings)
+	}
+	return printCheckSummary(allFindings)
+}
+
+func outputStructuredResults(findings []sdk.Finding) error {
+	formatter, err := output.GetFormatter(format, true, version)
+	if err != nil {
+		return fmt.Errorf("getting formatter: %w", err)
+	}
+
+	if err := formatter.Format(findings, os.Stdout); err != nil {
+		return fmt.Errorf("formatting output: %w", err)
+	}
+
+	// Exit with error code if there are errors
+	for _, finding := range findings {
+		if finding.Severity == sdk.SeverityError {
+			os.Exit(1)
+		}
+	}
+	return nil
 }
 
 func printCheckSummary(allFindings []sdk.Finding) error {

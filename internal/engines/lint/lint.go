@@ -17,6 +17,7 @@ import (
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/hclparse"
 	"github.com/hashicorp/hcl/v2/hclsyntax"
+	"github.com/santosr2/terratidy/internal/cache"
 	"github.com/santosr2/terratidy/pkg/sdk"
 )
 
@@ -133,12 +134,33 @@ func (e *Engine) Run(ctx context.Context, files []string) ([]sdk.Finding, error)
 // lintModule runs linting checks on a Terraform module (directory)
 func (e *Engine) lintModule(ctx context.Context, dir string, files []string) ([]sdk.Finding, error) {
 	var findings []sdk.Finding
+	fileCache := cache.Default()
 
 	// Parse all files in the module first for cross-file analysis
 	moduleFiles := make(map[string]*hcl.File)
+	moduleContents := make(map[string][]byte)
 	for _, file := range files {
-		content, err := os.ReadFile(file)
-		if err != nil {
+		// Try cache first
+		entry, err := fileCache.GetOrParse(file)
+		if err == nil && entry.File != nil {
+			if entry.ParseErrs.HasErrors() {
+				findings = append(findings, sdk.Finding{
+					Rule:     "lint.parse-error",
+					Message:  fmt.Sprintf("Failed to parse file: %s", entry.ParseErrs.Error()),
+					File:     file,
+					Severity: sdk.SeverityError,
+					Fixable:  false,
+				})
+				continue
+			}
+			moduleFiles[file] = entry.File
+			moduleContents[file] = entry.Content
+			continue
+		}
+
+		// Fallback to direct read
+		content, readErr := os.ReadFile(file)
+		if readErr != nil {
 			continue
 		}
 
@@ -154,6 +176,7 @@ func (e *Engine) lintModule(ctx context.Context, dir string, files []string) ([]
 			continue
 		}
 		moduleFiles[file] = hclFile
+		moduleContents[file] = content
 	}
 
 	// Process each file with module context
@@ -169,8 +192,8 @@ func (e *Engine) lintModule(ctx context.Context, dir string, files []string) ([]
 			continue
 		}
 
-		content, err := os.ReadFile(file)
-		if err != nil {
+		content, ok := moduleContents[file]
+		if !ok {
 			continue
 		}
 

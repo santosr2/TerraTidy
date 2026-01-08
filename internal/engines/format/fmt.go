@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/hashicorp/hcl/v2/hclwrite"
+	"github.com/santosr2/terratidy/internal/cache"
 	"github.com/santosr2/terratidy/pkg/sdk"
 )
 
@@ -69,10 +70,18 @@ func (e *Engine) Run(ctx context.Context, files []string) ([]sdk.Finding, error)
 
 // formatFile formats a single file and returns a finding if changes are needed
 func (e *Engine) formatFile(path string) (*sdk.Finding, error) {
-	// Read file content
-	content, err := os.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("reading file: %w", err)
+	// Try to get content from cache first
+	var content []byte
+	var err error
+
+	if entry, cacheErr := cache.Default().GetOrParse(path); cacheErr == nil && entry != nil {
+		content = entry.Content
+	} else {
+		// Fallback to direct read
+		content, err = os.ReadFile(path)
+		if err != nil {
+			return nil, fmt.Errorf("reading file: %w", err)
+		}
 	}
 
 	// Format using hclwrite

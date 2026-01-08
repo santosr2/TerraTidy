@@ -20,7 +20,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Run TerraTidy
-        uses: santosr2/terratidy-action@v1
+        uses: santosr2/terratidy-action@v0
         with:
           format: text
 ```
@@ -29,7 +29,7 @@ jobs:
 
 ```yaml
 - name: Run TerraTidy
-  uses: santosr2/terratidy-action@v1
+  uses: santosr2/terratidy-action@v0
   with:
     # TerraTidy version (default: latest)
     version: 'latest'

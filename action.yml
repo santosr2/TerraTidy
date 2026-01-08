@@ -89,7 +89,12 @@ runs:
           # Check if we're in a terratidy checkout (for action testing)
           if [ -f "go.mod" ] && grep -q "github.com/santosr2/terratidy" go.mod 2>/dev/null; then
             # Build from source for local testing
-            go build -o "$(go env GOPATH)/bin/terratidy" ./cmd/terratidy
+            # Get version info for ldflags (shallow clones don't have VCS info)
+            VERSION=$(git describe --tags --always --dirty 2>/dev/null || echo "dev")
+            COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+            DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+            LDFLAGS="-s -w -X main.version=${VERSION} -X main.commit=${COMMIT} -X main.date=${DATE}"
+            go build -ldflags "${LDFLAGS}" -o "$(go env GOPATH)/bin/terratidy" ./cmd/terratidy
           else
             go install github.com/santosr2/terratidy/cmd/terratidy@latest
           fi

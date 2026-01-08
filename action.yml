@@ -137,16 +137,25 @@ runs:
 
         # SARIF output file
         SARIF_FILE=""
+        SARIF_OUTPUT_PATH=""
         if [ "$FORMAT" = "sarif" ]; then
+          # Local filename for terratidy to write to (relative to working directory)
           SARIF_FILE="terratidy-results.sarif"
-          echo "sarif-file=$SARIF_FILE" >> $GITHUB_OUTPUT
+          # Full path from repo root for the upload step
+          SARIF_OUTPUT_PATH="${{ inputs.working-directory }}/terratidy-results.sarif"
+          # Normalize path (remove leading ./ if present)
+          SARIF_OUTPUT_PATH="${SARIF_OUTPUT_PATH#./}"
+          echo "sarif-file=$SARIF_OUTPUT_PATH" >> $GITHUB_OUTPUT
         fi
 
         # Run TerraTidy and capture output
         set +e
         if [ "$FORMAT" = "sarif" ]; then
-          terratidy check $ARGS > "$SARIF_FILE" 2>&1
+          # Redirect only stdout to SARIF file, stderr to a temp file for display
+          terratidy check $ARGS > "$SARIF_FILE" 2>/tmp/terratidy-stderr.txt
           EXIT_CODE=$?
+          # Display stderr (progress messages) to the log
+          cat /tmp/terratidy-stderr.txt || true
           OUTPUT=$(cat "$SARIF_FILE")
         else
           OUTPUT=$(terratidy check $ARGS 2>&1)

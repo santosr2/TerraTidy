@@ -226,6 +226,21 @@ func (e *Engine) getRuleConfig(ruleName string) RuleConfig {
 		return cfg
 	}
 
+	// File organization rules are disabled by default (opt-in)
+	disabledByDefault := map[string]bool{
+		"style.variables-in-file": true,
+		"style.outputs-in-file":   true,
+		"style.providers-in-file": true,
+	}
+
+	if disabledByDefault[ruleName] {
+		return RuleConfig{
+			Enabled:  false,
+			Severity: "info",
+			Options:  make(map[string]interface{}),
+		}
+	}
+
 	// Return default config (enabled by default)
 	return RuleConfig{
 		Enabled:  true,
@@ -242,6 +257,9 @@ func (e *Engine) registerRules() {
 
 	// Naming conventions
 	e.rules = append(e.rules, &BlockLabelCaseRule{})
+	e.rules = append(e.rules, &VariableNamingRule{})
+	e.rules = append(e.rules, &OutputNamingRule{})
+	e.rules = append(e.rules, &LocalNamingRule{})
 
 	// Block ordering
 	e.rules = append(e.rules, &TerraformBlockFirstRule{})
@@ -257,6 +275,11 @@ func (e *Engine) registerRules() {
 	// Variable and output ordering
 	e.rules = append(e.rules, &VariableOrderRule{})
 	e.rules = append(e.rules, &OutputOrderRule{})
+
+	// File organization rules (disabled by default - enable via config)
+	e.rules = append(e.rules, &VariablesInFileRule{})
+	e.rules = append(e.rules, &OutputsInFileRule{})
+	e.rules = append(e.rules, &ProvidersInFileRule{})
 }
 
 // GetAllRules returns all registered rules for listing/documentation

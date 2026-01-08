@@ -1,218 +1,356 @@
 # Lint Rules
 
-Complete reference for lint rules powered by TFLint integration.
+Complete reference for lint rules in TerraTidy. The lint engine provides built-in AST-based analysis rules and optional TFLint integration for additional provider-specific checks.
 
-## Terraform Core Rules
+## Built-in Rules
 
-### terraform_deprecated_syntax
+TerraTidy includes 11 built-in lint rules that work without external dependencies.
 
-Detects deprecated Terraform syntax.
+### terraform-required-version
 
-| Property | Value |
-|----------|-------|
-| Default Severity | Warning |
-| Fixable | Some |
-| Default | Enabled |
+Ensures the terraform block contains a `required_version` constraint.
+
+| Property         | Value                              |
+| ---------------- | ---------------------------------- |
+| Rule ID          | `lint.terraform-required-version`  |
+| Default Severity | Warning                            |
+| Fixable          | No                                 |
+| Default          | Enabled                            |
+
+**Example:**
+
+```hcl
+# Bad - no required_version
+terraform {
+  required_providers {
+    aws = { source = "hashicorp/aws" }
+  }
+}
+
+# Good - required_version specified
+terraform {
+  required_version = ">= 1.0"
+  required_providers {
+    aws = { source = "hashicorp/aws" }
+  }
+}
+```
+
+### terraform-required-providers
+
+Ensures the terraform block contains a `required_providers` block with version constraints.
+
+| Property         | Value                                 |
+| ---------------- | ------------------------------------- |
+| Rule ID          | `lint.terraform-required-providers`   |
+| Default Severity | Info                                  |
+| Fixable          | No                                    |
+| Default          | Enabled                               |
+
+**Example:**
+
+```hcl
+# Bad - no required_providers
+terraform {
+  required_version = ">= 1.0"
+}
+
+# Good - required_providers with versions
+terraform {
+  required_version = ">= 1.0"
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+    }
+  }
+}
+```
+
+### terraform-deprecated-syntax
+
+Detects deprecated interpolation-only expressions like `"${var.x}"`.
+
+| Property         | Value                             |
+| ---------------- | --------------------------------- |
+| Rule ID          | `lint.terraform-deprecated-syntax`|
+| Default Severity | Warning                           |
+| Fixable          | Yes                               |
+| Default          | Enabled                           |
 
 **Example:**
 
 ```hcl
 # Deprecated
 resource "aws_instance" "example" {
-  count = "${var.count}"  # Deprecated interpolation
+  ami = "${var.ami_id}"  # Unnecessary interpolation
 }
 
 # Correct
 resource "aws_instance" "example" {
-  count = var.count
+  ami = var.ami_id
 }
 ```
 
-### terraform_unused_declarations
+### terraform-documented-variables
 
-Finds unused variables, locals, and data sources.
+Ensures all variables have description attributes.
 
-| Property | Value |
-|----------|-------|
-| Default Severity | Warning |
-| Fixable | No |
-| Default | Enabled |
-
-### terraform_required_version
-
-Requires `required_version` in terraform block.
-
-| Property | Value |
-|----------|-------|
-| Default Severity | Warning |
-| Fixable | No |
-| Default | Enabled |
-
-### terraform_required_providers
-
-Requires version constraints for all providers.
-
-| Property | Value |
-|----------|-------|
-| Default Severity | Warning |
-| Fixable | No |
-| Default | Enabled |
-
-## AWS Rules
-
-### aws_instance_invalid_type
-
-Validates EC2 instance types exist.
-
-| Property | Value |
-|----------|-------|
-| Default Severity | Error |
-| Fixable | No |
-| Default | Enabled |
+| Property         | Value                                  |
+| ---------------- | -------------------------------------- |
+| Rule ID          | `lint.terraform-documented-variables`  |
+| Default Severity | Warning                                |
+| Fixable          | No                                     |
+| Default          | Enabled                                |
 
 **Example:**
 
 ```hcl
-# Error: Invalid instance type
-resource "aws_instance" "example" {
-  instance_type = "t2.superxlarge"  # Does not exist
+# Bad - no description
+variable "instance_type" {
+  type = string
+}
+
+# Good - has description
+variable "instance_type" {
+  description = "The EC2 instance type to use"
+  type        = string
 }
 ```
 
-### aws_instance_previous_type
+### terraform-typed-variables
 
-Warns about previous generation instance types.
+Ensures all variables have explicit type constraints.
 
-| Property | Value |
-|----------|-------|
-| Default Severity | Warning |
-| Fixable | No |
-| Default | Enabled |
-
-### aws_security_group_invalid_protocol
-
-Validates security group protocol values.
-
-| Property | Value |
-|----------|-------|
-| Default Severity | Error |
-| Fixable | No |
-| Default | Enabled |
-
-### aws_s3_bucket_invalid_acl
-
-Validates S3 bucket ACL values.
-
-| Property | Value |
-|----------|-------|
-| Default Severity | Error |
-| Fixable | No |
-| Default | Enabled |
-
-### aws_db_instance_invalid_type
-
-Validates RDS instance types.
-
-| Property | Value |
-|----------|-------|
-| Default Severity | Error |
-| Fixable | No |
-| Default | Enabled |
-
-### aws_elasticache_cluster_invalid_type
-
-Validates ElastiCache node types.
-
-| Property | Value |
-|----------|-------|
-| Default Severity | Error |
-| Fixable | No |
-| Default | Enabled |
-
-## Google Cloud Rules
-
-### google_compute_instance_invalid_machine_type
-
-Validates GCE machine types.
-
-| Property | Value |
-|----------|-------|
-| Default Severity | Error |
-| Fixable | No |
-| Default | Enabled |
-
-### google_compute_instance_invalid_zone
-
-Validates GCE zones.
-
-| Property | Value |
-|----------|-------|
-| Default Severity | Error |
-| Fixable | No |
-| Default | Enabled |
-
-## Azure Rules
-
-### azurerm_virtual_machine_invalid_size
-
-Validates Azure VM sizes.
-
-| Property | Value |
-|----------|-------|
-| Default Severity | Error |
-| Fixable | No |
-| Default | Enabled |
-
-### azurerm_resource_invalid_location
-
-Validates Azure resource locations.
-
-| Property | Value |
-|----------|-------|
-| Default Severity | Error |
-| Fixable | No |
-| Default | Enabled |
-
-## Security Rules
-
-### security_group_unrestricted_ingress
-
-Detects security groups allowing unrestricted ingress.
-
-| Property | Value |
-|----------|-------|
-| Default Severity | Warning |
-| Fixable | No |
-| Default | Enabled |
+| Property         | Value                            |
+| ---------------- | -------------------------------- |
+| Rule ID          | `lint.terraform-typed-variables` |
+| Default Severity | Info                             |
+| Fixable          | No                               |
+| Default          | Enabled                          |
 
 **Example:**
 
 ```hcl
-# Warning: Unrestricted ingress
-resource "aws_security_group_rule" "example" {
-  type        = "ingress"
-  from_port   = 22
-  to_port     = 22
-  protocol    = "tcp"
-  cidr_blocks = ["0.0.0.0/0"]  # Too permissive
+# Bad - no type constraint
+variable "instance_type" {
+  description = "The EC2 instance type"
+  default     = "t2.micro"
+}
+
+# Good - explicit type
+variable "instance_type" {
+  description = "The EC2 instance type"
+  type        = string
+  default     = "t2.micro"
 }
 ```
 
-### public_s3_bucket
+### terraform-documented-outputs
 
-Detects S3 buckets with public access.
+Ensures all outputs have description attributes.
 
-| Property | Value |
-|----------|-------|
-| Default Severity | Error |
-| Fixable | No |
-| Default | Enabled |
+| Property         | Value                               |
+| ---------------- | ----------------------------------- |
+| Rule ID          | `lint.terraform-documented-outputs` |
+| Default Severity | Info                                |
+| Fixable          | No                                  |
+| Default          | Enabled                             |
 
-## Configuration
+**Example:**
+
+```hcl
+# Bad - no description
+output "instance_ip" {
+  value = aws_instance.web.public_ip
+}
+
+# Good - has description
+output "instance_ip" {
+  description = "The public IP address of the web instance"
+  value       = aws_instance.web.public_ip
+}
+```
+
+### terraform-module-pinned-source
+
+Ensures module sources are pinned to specific versions or refs.
+
+| Property         | Value                                |
+| ---------------- | ------------------------------------ |
+| Rule ID          | `lint.terraform-module-pinned-source`|
+| Default Severity | Warning                              |
+| Fixable          | No                                   |
+| Default          | Enabled                              |
+
+**Example:**
+
+```hcl
+# Bad - registry module without version
+module "vpc" {
+  source = "terraform-aws-modules/vpc/aws"
+}
+
+# Good - registry module with version
+module "vpc" {
+  source  = "terraform-aws-modules/vpc/aws"
+  version = "5.0.0"
+}
+
+# Bad - git source without ref
+module "vpc" {
+  source = "git::https://github.com/example/module.git"
+}
+
+# Good - git source with ref
+module "vpc" {
+  source = "git::https://github.com/example/module.git?ref=v1.0.0"
+}
+```
+
+### terraform-naming-convention
+
+Ensures resources, data sources, and modules follow naming conventions (snake_case).
+
+| Property         | Value                               |
+| ---------------- | ----------------------------------- |
+| Rule ID          | `lint.terraform-naming-convention`  |
+| Default Severity | Warning                             |
+| Fixable          | No                                  |
+| Default          | Enabled                             |
+
+**Example:**
+
+```hcl
+# Bad - camelCase
+resource "aws_instance" "webServer" { }
+data "aws_ami" "latestAmi" { }
+
+# Good - snake_case
+resource "aws_instance" "web_server" { }
+data "aws_ami" "latest_ami" { }
+```
+
+### terraform-unused-declarations
+
+Detects declared but unused variables and locals.
+
+| Property         | Value                                 |
+| ---------------- | ------------------------------------- |
+| Rule ID          | `lint.terraform-unused-declarations`  |
+| Default Severity | Warning                               |
+| Fixable          | No                                    |
+| Default          | Enabled                               |
+
+**Example:**
+
+```hcl
+# Warning - variable declared but never used
+variable "unused_var" {
+  type = string
+}
+
+resource "aws_instance" "web" {
+  ami = "ami-12345"  # var.unused_var is never referenced
+}
+```
+
+### terraform-resource-count
+
+Warns when a file has too many resources, suggesting it should be split.
+
+| Property         | Value                            |
+| ---------------- | -------------------------------- |
+| Rule ID          | `lint.terraform-resource-count`  |
+| Default Severity | Info                             |
+| Fixable          | No                               |
+| Default          | Enabled                          |
+| Threshold        | 15 resources per file            |
+
+**Configuration:**
+
+```yaml
+engines:
+  lint:
+    rules:
+      terraform-resource-count:
+        enabled: true
+        options:
+          threshold: 10  # Custom threshold
+```
+
+### terraform-hardcoded-secrets
+
+Detects potential hardcoded secrets like AWS keys, passwords, and API tokens.
+
+| Property         | Value                               |
+| ---------------- | ----------------------------------- |
+| Rule ID          | `lint.terraform-hardcoded-secrets`  |
+| Default Severity | Error/Warning                       |
+| Fixable          | No                                  |
+| Default          | Enabled                             |
+
+**Detected patterns:**
+
+- AWS Access Keys (AKIA...)
+- AWS Secret Keys
+- Generic API keys and tokens
+- Private keys (PEM format)
+- Hardcoded passwords in sensitive attributes
+
+**Example:**
+
+```hcl
+# Error - hardcoded AWS key
+provider "aws" {
+  access_key = "AKIAIOSFODNN7EXAMPLE"  # Detected
+  secret_key = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+}
+
+# Good - use variables or environment
+provider "aws" {
+  # Uses AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY env vars
+}
+
+# Warning - hardcoded password
+resource "aws_db_instance" "db" {
+  password = "mySecretPassword123"  # Detected
+}
+
+# Good - use variable
+resource "aws_db_instance" "db" {
+  password = var.db_password
+}
+```
+
+## TFLint Integration
+
+TerraTidy can optionally integrate with TFLint for additional provider-specific rules.
+
+### Enabling TFLint
+
+```yaml
+engines:
+  lint:
+    enabled: true
+    config:
+      use_tflint: true
+      tflint_config: .tflint.hcl
+      fallback_builtin: true  # Use built-in rules if TFLint unavailable
+```
+
+### TFLint Rules
+
+When TFLint is enabled, rules are prefixed with `tflint.`:
+
+- `tflint.terraform_deprecated_syntax`
+- `tflint.aws_instance_invalid_type`
+- `tflint.aws_security_group_invalid_protocol`
+- And many more from TFLint plugins
 
 ### TFLint Config File
 
-Create `.tflint.hcl` for detailed TFLint configuration:
+Create `.tflint.hcl` for TFLint-specific configuration:
 
 ```hcl
 plugin "aws" {
@@ -230,29 +368,41 @@ rule "aws_instance_previous_type" {
 }
 ```
 
+## Configuration
+
 ### TerraTidy Config
 
 ```yaml
 engines:
   lint:
     enabled: true
-    config:
-      tflint_config: .tflint.hcl
     rules:
-      terraform_unused_declarations:
+      terraform-documented-variables:
         enabled: true
-        severity: error
+        severity: warning
+      terraform-typed-variables:
+        enabled: true
+        severity: info
+      terraform-resource-count:
+        enabled: true
+        options:
+          threshold: 20
 ```
 
 ## Disabling Rules
 
-### Inline
+### Inline (TFLint style)
 
 ```hcl
-# tflint-ignore: aws_instance_invalid_type
-resource "aws_instance" "example" {
-  instance_type = "custom.type"
-}
+# tflint-ignore: terraform_naming_convention
+resource "aws_instance" "WebServer" { }
+```
+
+### Inline (TerraTidy style)
+
+```hcl
+# terratidy:ignore:lint.terraform-naming-convention
+resource "aws_instance" "WebServer" { }
 ```
 
 ### Configuration
@@ -261,6 +411,22 @@ resource "aws_instance" "example" {
 engines:
   lint:
     rules:
-      aws_instance_invalid_type:
+      terraform-naming-convention:
         enabled: false
 ```
+
+## Rule Summary
+
+| Rule                          | Severity | Fixable | Description                                    |
+| ----------------------------- | -------- | ------- | ---------------------------------------------- |
+| `terraform-required-version`  | Warning  | No      | Requires terraform required_version constraint |
+| `terraform-required-providers`| Info     | No      | Requires required_providers block              |
+| `terraform-deprecated-syntax` | Warning  | Yes     | Detects deprecated interpolation syntax        |
+| `terraform-documented-variables` | Warning | No   | Variables must have descriptions               |
+| `terraform-typed-variables`   | Info     | No      | Variables must have type constraints           |
+| `terraform-documented-outputs`| Info     | No      | Outputs must have descriptions                 |
+| `terraform-module-pinned-source` | Warning | No   | Module sources must be version-pinned          |
+| `terraform-naming-convention` | Warning  | No      | Resources must use snake_case names            |
+| `terraform-unused-declarations` | Warning | No    | Detects unused variables and locals            |
+| `terraform-resource-count`    | Info     | No      | Warns on too many resources per file           |
+| `terraform-hardcoded-secrets` | Error    | No      | Detects hardcoded secrets and credentials      |

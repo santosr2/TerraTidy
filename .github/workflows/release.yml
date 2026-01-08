@@ -38,3 +38,52 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  update-version-tags:
+    needs: goreleaser
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Update version alias tags
+        run: |
+          # Extract version from tag (e.g., v0.1.0 or v0.1.0-alpha.1)
+          FULL_VERSION=${GITHUB_REF#refs/tags/v}
+
+          # Split version and pre-release identifier
+          BASE_VERSION=$(echo "$FULL_VERSION" | cut -d- -f1)
+          PRERELEASE=$(echo "$FULL_VERSION" | grep -oP '(?<=-)[a-z]+' || echo "")
+
+          MAJOR=$(echo "$BASE_VERSION" | cut -d. -f1)
+          MINOR=$(echo "$BASE_VERSION" | cut -d. -f2)
+
+          # Configure git
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          if [[ -n "$PRERELEASE" ]]; then
+            # Pre-release version (e.g., v0.1.0-alpha.1)
+            # Create pre-release alias tags: v0-alpha, v0.1-alpha
+            echo "Pre-release detected: $PRERELEASE"
+
+            git tag -f "v${MAJOR}-${PRERELEASE}" "${GITHUB_REF#refs/tags/}"
+            git push -f origin "v${MAJOR}-${PRERELEASE}"
+            echo "Updated tag: v${MAJOR}-${PRERELEASE}"
+
+            git tag -f "v${MAJOR}.${MINOR}-${PRERELEASE}" "${GITHUB_REF#refs/tags/}"
+            git push -f origin "v${MAJOR}.${MINOR}-${PRERELEASE}"
+            echo "Updated tag: v${MAJOR}.${MINOR}-${PRERELEASE}"
+          else
+            # Stable release (e.g., v0.1.0)
+            # Create stable alias tags: v0, v0.1
+            echo "Stable release detected"
+
+            git tag -f "v${MAJOR}" "${GITHUB_REF#refs/tags/}"
+            git push -f origin "v${MAJOR}"
+            echo "Updated tag: v${MAJOR}"
+
+            git tag -f "v${MAJOR}.${MINOR}" "${GITHUB_REF#refs/tags/}"
+            git push -f origin "v${MAJOR}.${MINOR}"
+            echo "Updated tag: v${MAJOR}.${MINOR}"
+          fi

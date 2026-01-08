@@ -30,12 +30,20 @@ inputs:
     description: 'Working directory to run TerraTidy in'
     required: false
     default: '.'
-  engines:
-    description: 'Comma-separated list of engines to run (fmt,style,lint,policy)'
+  skip-fmt:
+    description: 'Skip formatting checks'
     required: false
-    default: ''
-  fix:
-    description: 'Auto-fix issues when possible'
+    default: 'false'
+  skip-style:
+    description: 'Skip style checks'
+    required: false
+    default: 'false'
+  skip-lint:
+    description: 'Skip linting checks'
+    required: false
+    default: 'false'
+  skip-policy:
+    description: 'Skip policy checks'
     required: false
     default: 'false'
   fail-on-error:
@@ -104,14 +112,18 @@ runs:
           ARGS="$ARGS --profile ${{ inputs.profile }}"
         fi
 
-        # Engines
-        if [ -n "${{ inputs.engines }}" ]; then
-          ARGS="$ARGS --engines ${{ inputs.engines }}"
+        # Skip flags
+        if [ "${{ inputs.skip-fmt }}" = "true" ]; then
+          ARGS="$ARGS --skip-fmt"
         fi
-
-        # Fix mode
-        if [ "${{ inputs.fix }}" = "true" ]; then
-          ARGS="$ARGS --fix"
+        if [ "${{ inputs.skip-style }}" = "true" ]; then
+          ARGS="$ARGS --skip-style"
+        fi
+        if [ "${{ inputs.skip-lint }}" = "true" ]; then
+          ARGS="$ARGS --skip-lint"
+        fi
+        if [ "${{ inputs.skip-policy }}" = "true" ]; then
+          ARGS="$ARGS --skip-policy"
         fi
 
         # Parallel mode
@@ -126,15 +138,20 @@ runs:
         # SARIF output file
         SARIF_FILE=""
         if [ "$FORMAT" = "sarif" ]; then
-          SARIF_FILE="${{ inputs.working-directory }}/terratidy-results.sarif"
-          ARGS="$ARGS --output $SARIF_FILE"
+          SARIF_FILE="terratidy-results.sarif"
           echo "sarif-file=$SARIF_FILE" >> $GITHUB_OUTPUT
         fi
 
         # Run TerraTidy and capture output
         set +e
-        OUTPUT=$(terratidy run $ARGS 2>&1)
-        EXIT_CODE=$?
+        if [ "$FORMAT" = "sarif" ]; then
+          terratidy check $ARGS > "$SARIF_FILE" 2>&1
+          EXIT_CODE=$?
+          OUTPUT=$(cat "$SARIF_FILE")
+        else
+          OUTPUT=$(terratidy check $ARGS 2>&1)
+          EXIT_CODE=$?
+        fi
         set -e
 
         echo "$OUTPUT"

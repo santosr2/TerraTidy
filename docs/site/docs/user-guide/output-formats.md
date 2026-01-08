@@ -50,7 +50,7 @@ Machine-readable format for automation:
 
 ```json
 {
-  "version": "1.0.0",
+  "version": "0.1.0",
   "timestamp": "2024-01-15T10:30:00Z",
   "summary": {
     "total": 3,

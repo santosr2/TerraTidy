@@ -20,7 +20,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Run TerraTidy
-        uses: santosr2/terratidy-action@v0
+        uses: santosr2/terratidy@v0
         with:
           format: text
 ```
@@ -29,7 +29,7 @@ jobs:
 
 ```yaml
 - name: Run TerraTidy
-  uses: santosr2/terratidy-action@v0
+  uses: santosr2/terratidy@v0
   with:
     # TerraTidy version (default: latest)
     version: 'latest'
@@ -64,12 +64,12 @@ jobs:
 
 ## Outputs
 
-| Output | Description |
-|--------|-------------|
-| `findings-count` | Total number of findings |
-| `errors-count` | Number of error-level findings |
-| `warnings-count` | Number of warning-level findings |
-| `sarif-file` | Path to SARIF file (if sarif format) |
+| Output             | Description                          |
+| ------------------ | ------------------------------------ |
+| `findings-count`   | Total number of findings             |
+| `errors-count`     | Number of error-level findings       |
+| `warnings-count`   | Number of warning-level findings     |
+| `sarif-file`       | Path to SARIF file (if sarif format) |
 
 ## Examples
 
@@ -85,7 +85,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Run TerraTidy
-        uses: santosr2/terratidy-action@v1
+        uses: santosr2/terratidy@v0
         with:
           format: sarif
           fail-on-error: 'false'
@@ -96,7 +96,7 @@ jobs:
 
 ```yaml
 - name: Run TerraTidy CI checks
-  uses: santosr2/terratidy-action@v1
+  uses: santosr2/terratidy@v0
   with:
     profile: ci
     fail-on-warning: 'true'
@@ -115,7 +115,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Run TerraTidy
-        uses: santosr2/terratidy-action@v1
+        uses: santosr2/terratidy@v0
         with:
           working-directory: ${{ matrix.directory }}
 ```
@@ -124,7 +124,7 @@ jobs:
 
 ```yaml
 - name: Check Formatting
-  uses: santosr2/terratidy-action@v1
+  uses: santosr2/terratidy@v0
   with:
     engines: fmt
     fail-on-error: 'true'
@@ -143,7 +143,7 @@ jobs:
           ref: ${{ github.head_ref }}
 
       - name: Run TerraTidy Fix
-        uses: santosr2/terratidy-action@v1
+        uses: santosr2/terratidy@v0
         with:
           fix: 'true'
 
@@ -190,7 +190,7 @@ jobs:
         run: terraform validate
 
       - name: TerraTidy Check
-        uses: santosr2/terratidy-action@v1
+        uses: santosr2/terratidy@v0
         with:
           format: sarif
           profile: ci

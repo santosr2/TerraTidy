@@ -157,6 +157,13 @@ runs:
           # Display stderr (progress messages) to the log
           cat /tmp/terratidy-stderr.txt || true
           OUTPUT=$(cat "$SARIF_FILE")
+        elif [ "$FORMAT" = "json" ] || [ "$FORMAT" = "json-compact" ]; then
+          # For JSON formats, capture stdout separately from stderr
+          terratidy check $ARGS > /tmp/terratidy-output.json 2>/tmp/terratidy-stderr.txt
+          EXIT_CODE=$?
+          # Display stderr (progress messages) to the log
+          cat /tmp/terratidy-stderr.txt || true
+          OUTPUT=$(cat /tmp/terratidy-output.json)
         else
           OUTPUT=$(terratidy check $ARGS 2>&1)
           EXIT_CODE=$?

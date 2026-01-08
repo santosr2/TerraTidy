@@ -9,6 +9,7 @@ python = "3.13"
 "go:github.com/steveyegge/beads/cmd/bd" = "latest"
 uv = "latest"
 bun = "latest"
+"cargo:git-cliff" = "latest"  # Changelog generator
 
 [tasks.setup]
 description = "Setup development environment"
@@ -72,3 +73,11 @@ run = "make uninstall-tools"
 [tasks.uninstall-force]
 description = "Force uninstall tools without confirmation"
 run = "make uninstall-tools-force"
+
+[tasks.changelog]
+description = "Generate CHANGELOG.md from git commits"
+run = "git-cliff --config cliff.toml -o CHANGELOG.md"
+
+[tasks.changelog-preview]
+description = "Preview changelog without writing to file"
+run = "git-cliff --config cliff.toml --unreleased"

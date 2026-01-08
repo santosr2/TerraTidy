@@ -6,7 +6,8 @@ TerraTidy supports multiple output formats for different use cases.
 
 | Format         | Flag                    | Description                    | Use Case                  |
 | -------------- | ----------------------- | ------------------------------ | ------------------------- |
-| `text`         | `--format text`         | Human-readable colored output  | Terminal use              |
+| `text`         | `--format text`         | Human-readable output          | Terminal use (default)    |
+| `table`        | `--format table`        | Colored table with columns     | Terminal, quick review    |
 | `json`         | `--format json`         | Structured JSON                | CI/CD, scripts            |
 | `json-compact` | `--format json-compact` | Single-line JSON               | Logging, streaming        |
 | `sarif`        | `--format sarif`        | SARIF 2.1.0 format             | GitHub Code Scanning      |
@@ -18,6 +19,12 @@ TerraTidy supports multiple output formats for different use cases.
 ```bash
 # Default text output
 terratidy check
+
+# Table format with colors
+terratidy check --format table
+
+# Disable colors (useful for CI or piping)
+terratidy check --format table --color=false
 
 # JSON output
 terratidy check --format json
@@ -34,7 +41,7 @@ terratidy check --format html > report.html
 
 ## Text Format
 
-The default format with colored output:
+The default format for terminal output:
 
 ```text
 main.tf:15:3: error [style.block-label-case] Resource name should use snake_case
@@ -42,6 +49,39 @@ main.tf:23:1: warning [style.tags-at-end] Place tags attribute at end of resourc
 variables.tf:8:1: info [lint.terraform-documented-variables] Variable should have a description
 
 Found 3 issues (1 error, 1 warning, 1 info)
+```
+
+## Table Format
+
+Columnar format with color-coded severity for quick visual scanning:
+
+```bash
+terratidy check --format table
+```
+
+Output:
+
+```text
+SEVERITY   LOCATION                                           MESSAGE
+────────────────────────────────────────────────────────────────────────────────────────────────────
+ERROR      main.tf:15:3                                       Resource name should use snake_case
+WARNING    main.tf:23:1                                       Place tags attribute at end of resource
+INFO       variables.tf:8:1                                   Variable should have a description
+
+────────────────────────────────────────────────────────────────────────────────────────────────────
+Summary: 1 error(s) 1 warning(s) 1 info
+```
+
+Colors:
+
+- **Red**: Errors
+- **Yellow**: Warnings
+- **Cyan**: Info
+
+Use `--color=false` to disable colors:
+
+```bash
+terratidy check --format table --color=false
 ```
 
 ## JSON Format

@@ -135,6 +135,60 @@ resource "aws_instance" "b" {
 `,
 			wantFinding: false,
 		},
+		{
+			name: "comment with one blank line should be valid",
+			content: `resource "aws_instance" "a" {
+  ami = "ami-12345"
+}
+
+# This is a comment about the next block
+resource "aws_instance" "b" {
+  ami = "ami-67890"
+}
+`,
+			wantFinding: false,
+		},
+		{
+			name: "multiple comments with one blank line should be valid",
+			content: `resource "aws_instance" "a" {
+  ami = "ami-12345"
+}
+
+# Comment line 1
+# Comment line 2
+# Comment line 3
+resource "aws_instance" "b" {
+  ami = "ami-67890"
+}
+`,
+			wantFinding: false,
+		},
+		{
+			name: "comment without blank line should report missing blank line",
+			content: `resource "aws_instance" "a" {
+  ami = "ami-12345"
+}
+# This is a comment
+resource "aws_instance" "b" {
+  ami = "ami-67890"
+}
+`,
+			wantFinding: true,
+		},
+		{
+			name: "two blank lines with comment should report too many",
+			content: `resource "aws_instance" "a" {
+  ami = "ami-12345"
+}
+
+
+# This is a comment
+resource "aws_instance" "b" {
+  ami = "ami-67890"
+}
+`,
+			wantFinding: true,
+		},
 	}
 
 	for _, tt := range tests {

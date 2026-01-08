@@ -38,6 +38,13 @@ func (r *BlankLineBetweenBlocksRule) Check(ctx *sdk.Context, file *hcl.File) ([]
 		return findings, nil
 	}
 
+	// Read file content to check for comments and blank lines
+	content, err := os.ReadFile(ctx.File)
+	if err != nil {
+		return nil, err
+	}
+	lines := splitLines(content)
+
 	blocks := hclFile.Blocks
 	for i := 0; i < len(blocks)-1; i++ {
 		currentBlock := blocks[i]
@@ -45,9 +52,11 @@ func (r *BlankLineBetweenBlocksRule) Check(ctx *sdk.Context, file *hcl.File) ([]
 
 		endLine := currentBlock.Range().End.Line
 		startLine := nextBlock.Range().Start.Line
-		linesBetween := startLine - endLine - 1
 
-		if linesBetween < 1 {
+		// Count actual blank lines (excluding comments) between blocks
+		blankLines := countBlankLinesBetween(lines, endLine, startLine)
+
+		if blankLines < 1 {
 			// Capture values for closure
 			filePath := ctx.File
 			findings = append(findings, sdk.Finding{
@@ -61,7 +70,7 @@ func (r *BlankLineBetweenBlocksRule) Check(ctx *sdk.Context, file *hcl.File) ([]
 					return r.fixFile(filePath)
 				},
 			})
-		} else if linesBetween > 1 {
+		} else if blankLines > 1 {
 			// Capture values for closure
 			filePath := ctx.File
 			findings = append(findings, sdk.Finding{
@@ -79,6 +88,55 @@ func (r *BlankLineBetweenBlocksRule) Check(ctx *sdk.Context, file *hcl.File) ([]
 	}
 
 	return findings, nil
+}
+
+// splitLines splits content into lines.
+func splitLines(content []byte) []string {
+	var lines []string
+	start := 0
+	for i, b := range content {
+		if b == '\n' {
+			lines = append(lines, string(content[start:i]))
+			start = i + 1
+		}
+	}
+	if start < len(content) {
+		lines = append(lines, string(content[start:]))
+	}
+	return lines
+}
+
+// countBlankLinesBetween counts actual blank lines (not comments) between two line numbers.
+// Line numbers are 1-indexed (HCL convention).
+func countBlankLinesBetween(lines []string, endLine, startLine int) int {
+	blankCount := 0
+
+	// Lines between endLine and startLine (exclusive of both)
+	for lineNum := endLine + 1; lineNum < startLine; lineNum++ {
+		if lineNum-1 >= len(lines) {
+			continue
+		}
+		line := lines[lineNum-1] // Convert to 0-indexed
+		trimmed := trimLeftWhitespace(line)
+
+		// Count as blank if empty or whitespace-only
+		// Don't count comment lines as blank lines
+		if len(trimmed) == 0 {
+			blankCount++
+		}
+	}
+
+	return blankCount
+}
+
+// trimLeftWhitespace trims leading whitespace from a string.
+func trimLeftWhitespace(s string) string {
+	for i, r := range s {
+		if r != ' ' && r != '\t' {
+			return s[i:]
+		}
+	}
+	return ""
 }
 
 // fixFile fixes blank line issues in the file

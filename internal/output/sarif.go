@@ -166,12 +166,12 @@ func buildSARIFResult(finding sdk.Finding) SARIFResult {
 						URI:       filepath.ToSlash(finding.File),
 						URIBaseID: "%SRCROOT%",
 					},
-					Region: SARIFRegion{
-						StartLine:   finding.Location.Start.Line,
-						StartColumn: finding.Location.Start.Column,
-						EndLine:     finding.Location.End.Line,
-						EndColumn:   finding.Location.End.Column,
-					},
+					Region: buildSARIFRegion(
+						finding.Location.Start.Line,
+						finding.Location.Start.Column,
+						finding.Location.End.Line,
+						finding.Location.End.Column,
+					),
 				},
 			},
 		},
@@ -181,6 +181,16 @@ func buildSARIFResult(finding sdk.Finding) SARIFResult {
 		result.Fixes = buildSARIFFixes(finding)
 	}
 	return result
+}
+
+// buildSARIFRegion creates a SARIF region with valid line/column numbers
+func buildSARIFRegion(startLine, startCol, endLine, endCol int) SARIFRegion {
+	return SARIFRegion{
+		StartLine:   sarifLine(startLine),
+		StartColumn: sarifColumn(startCol),
+		EndLine:     sarifLine(endLine),
+		EndColumn:   sarifColumn(endCol),
+	}
 }
 
 func buildSARIFFixes(finding sdk.Finding) []SARIFFix {
@@ -197,12 +207,12 @@ func buildSARIFFixes(finding sdk.Finding) []SARIFFix {
 					},
 					Replacements: []SARIFReplacement{
 						{
-							DeletedRegion: SARIFRegion{
-								StartLine:   finding.Location.Start.Line,
-								StartColumn: finding.Location.Start.Column,
-								EndLine:     finding.Location.End.Line,
-								EndColumn:   finding.Location.End.Column,
-							},
+							DeletedRegion: buildSARIFRegion(
+								finding.Location.Start.Line,
+								finding.Location.Start.Column,
+								finding.Location.End.Line,
+								finding.Location.End.Column,
+							),
 						},
 					},
 				},
@@ -243,4 +253,20 @@ func sarifLevel(severity sdk.Severity) string {
 	default:
 		return "warning"
 	}
+}
+
+// sarifLine ensures line numbers are at least 1 (SARIF spec requirement)
+func sarifLine(line int) int {
+	if line < 1 {
+		return 1
+	}
+	return line
+}
+
+// sarifColumn ensures column numbers are at least 1 (SARIF spec requirement)
+func sarifColumn(col int) int {
+	if col < 1 {
+		return 1
+	}
+	return col
 }

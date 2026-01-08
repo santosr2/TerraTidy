@@ -260,7 +260,7 @@ func outputCheckResults(allFindings []sdk.Finding, useStructuredOutput bool) err
 }
 
 func outputStructuredResults(findings []sdk.Finding) error {
-	formatter, err := output.GetFormatter(format, true, version)
+	formatter, err := output.GetFormatterWithColor(format, true, version, color)
 	if err != nil {
 		return fmt.Errorf("getting formatter: %w", err)
 	}

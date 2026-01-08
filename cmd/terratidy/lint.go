@@ -143,7 +143,7 @@ Use --changed to only lint files that have been modified in git.`,
 }
 
 func outputLintResults(findings []sdk.Finding) error {
-	formatter, err := output.GetFormatter(format, true, version)
+	formatter, err := output.GetFormatterWithColor(format, true, version, color)
 	if err != nil {
 		return fmt.Errorf("getting formatter: %w", err)
 	}

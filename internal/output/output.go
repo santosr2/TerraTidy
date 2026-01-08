@@ -1,5 +1,5 @@
 // Package output provides formatters for TerraTidy findings.
-// It supports multiple output formats including text, JSON, SARIF, and HTML
+// It supports multiple output formats including text, JSON, SARIF, HTML, and table
 // for displaying analysis results to users.
 package output
 
@@ -7,9 +7,20 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"path/filepath"
 	"strings"
 
 	"github.com/santosr2/terratidy/pkg/sdk"
+)
+
+// ANSI color codes
+const (
+	colorReset  = "\033[0m"
+	colorRed    = "\033[31m"
+	colorYellow = "\033[33m"
+	colorCyan   = "\033[36m"
+	colorGray   = "\033[90m"
+	colorBold   = "\033[1m"
 )
 
 // Formatter defines the interface for output formatters
@@ -152,6 +163,11 @@ func (f *JSONFormatter) Format(findings []sdk.Finding, w io.Writer) error {
 
 // GetFormatter returns the appropriate formatter based on the format string
 func GetFormatter(format string, verbose bool, version string) (Formatter, error) {
+	return GetFormatterWithColor(format, verbose, version, true)
+}
+
+// GetFormatterWithColor returns the appropriate formatter with color control
+func GetFormatterWithColor(format string, verbose bool, version string, color bool) (Formatter, error) {
 	switch format {
 	case "text", "":
 		return &TextFormatter{Verbose: verbose}, nil
@@ -165,8 +181,123 @@ func GetFormatter(format string, verbose bool, version string) (Formatter, error
 		return &HTMLFormatter{Title: "TerraTidy Report", Version: version}, nil
 	case "github", "gha":
 		return &GitHubActionsFormatter{}, nil
+	case "table":
+		return &TableFormatter{Color: color, Verbose: verbose}, nil
 	default:
 		return nil, fmt.Errorf("unsupported output format: %s", format)
+	}
+}
+
+// TableFormatter outputs findings in a colored table format for terminal display
+type TableFormatter struct {
+	Color   bool
+	Verbose bool
+}
+
+// Format implements the Formatter interface for table output
+func (f *TableFormatter) Format(findings []sdk.Finding, w io.Writer) error {
+	if len(findings) == 0 {
+		if f.Color {
+			_, _ = fmt.Fprintf(w, "%s✓ No issues found%s\n", colorCyan, colorReset)
+		} else {
+			_, _ = fmt.Fprintln(w, "✓ No issues found")
+		}
+		return nil
+	}
+
+	// Count by severity
+	var errors, warnings, info int
+	for _, finding := range findings {
+		switch finding.Severity {
+		case sdk.SeverityError:
+			errors++
+		case sdk.SeverityWarning:
+			warnings++
+		case sdk.SeverityInfo:
+			info++
+		}
+	}
+
+	// Print header
+	if f.Color {
+		_, _ = fmt.Fprintf(w, "%s%s%-10s %-50s %s%s\n",
+			colorBold, colorGray, "SEVERITY", "LOCATION", "MESSAGE", colorReset)
+		_, _ = fmt.Fprintf(w, "%s%s%s\n", colorGray, strings.Repeat("─", 100), colorReset)
+	} else {
+		_, _ = fmt.Fprintf(w, "%-10s %-50s %s\n", "SEVERITY", "LOCATION", "MESSAGE")
+		_, _ = fmt.Fprintf(w, "%s\n", strings.Repeat("-", 100))
+	}
+
+	// Print findings
+	for _, finding := range findings {
+		f.printFinding(w, finding)
+	}
+
+	// Print summary
+	_, _ = fmt.Fprintln(w)
+	if f.Color {
+		_, _ = fmt.Fprintf(w, "%s%s%s\n", colorGray, strings.Repeat("─", 100), colorReset)
+		_, _ = fmt.Fprintf(w, "%sSummary:%s ", colorBold, colorReset)
+		if errors > 0 {
+			_, _ = fmt.Fprintf(w, "%s%d error(s)%s ", colorRed, errors, colorReset)
+		}
+		if warnings > 0 {
+			_, _ = fmt.Fprintf(w, "%s%d warning(s)%s ", colorYellow, warnings, colorReset)
+		}
+		if info > 0 {
+			_, _ = fmt.Fprintf(w, "%s%d info%s", colorCyan, info, colorReset)
+		}
+	} else {
+		_, _ = fmt.Fprintf(w, "%s\n", strings.Repeat("-", 100))
+		_, _ = fmt.Fprintf(w, "Summary: %d error(s), %d warning(s), %d info", errors, warnings, info)
+	}
+	_, _ = fmt.Fprintln(w)
+
+	return nil
+}
+
+func (f *TableFormatter) printFinding(w io.Writer, finding sdk.Finding) {
+	severity := string(finding.Severity)
+	severityColor := colorCyan
+
+	switch finding.Severity {
+	case sdk.SeverityError:
+		severityColor = colorRed
+		severity = "ERROR"
+	case sdk.SeverityWarning:
+		severityColor = colorYellow
+		severity = "WARNING"
+	case sdk.SeverityInfo:
+		severityColor = colorCyan
+		severity = "INFO"
+	}
+
+	// Format location - use short filename for readability
+	filename := filepath.Base(finding.File)
+	location := filename
+	if finding.Location.Start.Line > 0 {
+		location = fmt.Sprintf("%s:%d:%d", filename, finding.Location.Start.Line, finding.Location.Start.Column)
+	}
+
+	// Truncate location if too long
+	if len(location) > 48 {
+		location = "..." + location[len(location)-45:]
+	}
+
+	// Format message with rule
+	message := finding.Message
+	if f.Verbose {
+		message = fmt.Sprintf("%s (%s)", finding.Message, finding.Rule)
+	}
+
+	if f.Color {
+		_, _ = fmt.Fprintf(w, "%s%-10s%s %-50s %s\n",
+			severityColor, severity, colorReset,
+			location,
+			message,
+		)
+	} else {
+		_, _ = fmt.Fprintf(w, "%-10s %-50s %s\n", severity, location, message)
 	}
 }
 

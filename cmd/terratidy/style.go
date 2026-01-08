@@ -136,7 +136,7 @@ Use --fix to automatically fix fixable style issues.`,
 }
 
 func outputStyleResults(findings []sdk.Finding) error {
-	formatter, err := output.GetFormatter(format, true, version)
+	formatter, err := output.GetFormatterWithColor(format, true, version, color)
 	if err != nil {
 		return fmt.Errorf("getting formatter: %w", err)
 	}

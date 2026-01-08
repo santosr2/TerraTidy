@@ -16,7 +16,7 @@ TerraTidy is an all-in-one code quality tool for Terraform and Terragrunt that p
 - Single binary with no external dependencies
 - Supports `.tf`, `.tfvars`, and `.hcl` files
 - Auto-fix capability for many issues
-- Multiple output formats (text, JSON, SARIF, HTML)
+- Multiple output formats (text, JSON, SARIF, HTML, GitHub Actions)
 - IDE integrations (VS Code, LSP)
 - CI/CD integrations (GitHub Actions, pre-commit)
 - Extensible plugin system

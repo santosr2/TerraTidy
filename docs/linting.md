@@ -267,9 +267,13 @@ TerraTidy looks for `.tflint.hcl` in:
 1. Current directory
 2. Specified path with `--config-file`
 
+## TFLint Integration
+
+TerraTidy integrates with TFLint for additional linting capabilities. Configure TFLint rules
+via `.tflint.hcl` file. Run `terratidy rules list` to see all available rules including
+TFLint-provided rules.
+
 ## See Also
 
 - [Configuration Guide](./configuration.md)
-- [Style Engine](./style.md)
-- [Custom Rules](./custom-rules.md)
 - [Example Configurations](../examples/)

@@ -106,9 +106,27 @@ terratidy fix
 | `terratidy lint` | Run linting |
 | `terratidy policy` | Run policy checks |
 | `terratidy init` | Initialize configuration |
-| `terratidy config split` | Split config into modules |
+| `terratidy dev` | Development mode with file watching |
+| `terratidy lsp` | Start the Language Server Protocol server |
+| `terratidy init-rule` | Initialize a new custom rule |
+| `terratidy test-rule` | Test a specific rule |
+| `terratidy plugins` | Plugin management commands |
+| `terratidy config` | Configuration management commands |
 | `terratidy rules list` | List available rules |
+| `terratidy rules docs` | Generate markdown documentation |
 | `terratidy version` | Show version info |
+
+### Useful Flags
+
+| Flag                 | Description                                                  |
+| -------------------- | ------------------------------------------------------------ |
+| `--parallel` / `-p`  | Run engines in parallel (faster)                             |
+| `--changed`          | Only check files changed in git                              |
+| `--format`           | Output format: text, json, json-compact, sarif, html, github |
+| `--skip-fmt`         | Skip formatting checks                                       |
+| `--skip-style`       | Skip style checks                                            |
+| `--skip-lint`        | Skip linting checks                                          |
+| `--skip-policy`      | Skip policy checks                                           |
 
 ## Configuration
 
@@ -163,14 +181,18 @@ repos:
 - name: Run TerraTidy
   uses: santosr2/terratidy@v1
   with:
-    command: check
     format: sarif
-    upload_sarif: true
+    parallel: true
+    github-token: ${{ secrets.GITHUB_TOKEN }}
 ```
+
+Available inputs: `version`, `config`, `profile`, `format`, `parallel`, `working-directory`,
+`skip-fmt`, `skip-style`, `skip-lint`, `skip-policy`, `fail-on-error`, `fail-on-warning`, `github-token`.
 
 ### VSCode Extension
 
-Search for "TerraTidy" in the VSCode marketplace or install from [here](https://marketplace.visualstudio.com/items?itemName=santosr2.terratidy).
+The TerraTidy VSCode extension provides real-time diagnostics via LSP.
+See [vscode/README.md](vscode/README.md) for installation instructions.
 
 ## Custom Rules
 
@@ -204,32 +226,17 @@ pattern:
 # Output JSON findings to stdout
 ```
 
-See [Custom Rules Guide](docs/custom-rules.md) for details.
+See [Custom Rules Guide](docs/site/docs/rules/custom-rules.md) for details.
 
 ## Documentation
 
-### User Documentation
-
 - [Installation](docs/installation.md)
 - [Configuration](docs/configuration.md)
-- [Rules Catalog](docs/rules.md)
-- [Custom Rules](docs/custom-rules.md)
-- [Integrations](docs/integrations.md)
-
-### Developer Documentation
-
 - [Architecture](docs/architecture.md)
-- [Development](docs/development.md)
+- [Linting](docs/linting.md)
 - [Contributing](CONTRIBUTING.md)
-- [Development Tools](docs/DEVELOPMENT_TOOLS.md)
-- [Uninstall Guide](docs/UNINSTALL.md)
 
-### AI-Assisted Development ✨
-
-- **[Getting Started with AI](GETTING_STARTED_WITH_AI.md)** ← **Start Here!**
-- [Cursor AI Setup](docs/CURSOR_AI_SETUP.md) - Complete Cursor + Sonnet 4.5 guide
-- [MCP Servers Setup](docs/MCP_SETUP.md) - Claude Desktop + MCP
-- [AI Tools Summary](docs/AI_TOOLS_SUMMARY.md) - Quick reference
+Full documentation is available at [docs/site/docs/](docs/site/docs/).
 
 ## Development
 

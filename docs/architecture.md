@@ -64,7 +64,10 @@ Supports three rule formats:
 
 - Text (human-readable, colored)
 - JSON (structured)
+- JSON Compact (single-line)
 - SARIF (GitHub Code Scanning)
+- HTML (visual reports)
+- GitHub Actions (workflow commands for inline annotations)
 
 ## Data Flow
 
@@ -165,9 +168,16 @@ type Rule interface {
 - **Fixture Tests**: Real Terraform code samples
 - **Benchmarks**: Performance-critical paths
 
+## Implemented Features
+
+- ✅ Language Server Protocol (LSP) support (`internal/lsp/`)
+- ✅ Real-time checking in editors via LSP
+- ✅ Parallel engine execution (`--parallel` flag)
+- ✅ File caching for parsed HCL (`internal/cache/`)
+- ✅ Benchmark suite (`internal/benchmark/`)
+
 ## Future Enhancements
 
-- Language Server Protocol (LSP) support
-- Real-time checking in editors
-- Incremental analysis (only changed files)
+- Incremental analysis (only changed blocks)
 - Distributed caching for monorepos
+- Watch mode improvements

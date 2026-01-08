@@ -4,14 +4,14 @@ TerraTidy supports multiple output formats for different use cases.
 
 ## Available Formats
 
-| Format | Description | Use Case |
-|--------|-------------|----------|
-| `text` | Human-readable colored output | Terminal use |
-| `json` | Machine-readable JSON | CI/CD, scripts |
-| `sarif` | SARIF 2.1.0 format | GitHub, IDE integration |
-| `html` | Interactive HTML report | Reports, sharing |
-| `junit` | JUnit XML format | CI test reporting |
-| `checkstyle` | Checkstyle XML format | Legacy CI systems |
+| Format         | Flag                    | Description                    | Use Case                  |
+| -------------- | ----------------------- | ------------------------------ | ------------------------- |
+| `text`         | `--format text`         | Human-readable colored output  | Terminal use              |
+| `json`         | `--format json`         | Structured JSON                | CI/CD, scripts            |
+| `json-compact` | `--format json-compact` | Single-line JSON               | Logging, streaming        |
+| `sarif`        | `--format sarif`        | SARIF 2.1.0 format             | GitHub Code Scanning      |
+| `html`         | `--format html`         | Visual HTML report             | Reports, sharing          |
+| `github`       | `--format github`       | GitHub Actions workflow cmds   | GitHub Actions inline     |
 
 ## Usage
 
@@ -22,11 +22,14 @@ terratidy check
 # JSON output
 terratidy check --format json
 
-# SARIF for GitHub
+# SARIF for GitHub Code Scanning
 terratidy check --format sarif > results.sarif
 
-# HTML report
-terratidy check --format html --output report.html
+# GitHub Actions annotations (inline in PR)
+terratidy check --format github
+
+# HTML report (redirect to file)
+terratidy check --format html > report.html
 ```
 
 ## Text Format
@@ -34,9 +37,9 @@ terratidy check --format html --output report.html
 The default format with colored output:
 
 ```text
-main.tf:15:3: error [resource-naming] Resource name should use snake_case
-main.tf:23:1: warning [missing-tags] Resource should have tags
-variables.tf:8:1: info [variable-description] Variable should have a description
+main.tf:15:3: error [style.block-label-case] Resource name should use snake_case
+main.tf:23:1: warning [style.tags-at-end] Place tags attribute at end of resource
+variables.tf:8:1: info [lint.terraform-documented-variables] Variable should have a description
 
 Found 3 issues (1 error, 1 warning, 1 info)
 ```
@@ -57,17 +60,24 @@ Machine-readable format for automation:
   },
   "findings": [
     {
-      "rule": "resource-naming",
+      "rule": "style.block-label-case",
       "message": "Resource name should use snake_case",
       "file": "main.tf",
       "line": 15,
       "column": 3,
       "severity": "error",
-      "engine": "style",
       "fixable": true
     }
   ]
 }
+```
+
+## JSON Compact Format
+
+Single-line JSON for log aggregation:
+
+```bash
+terratidy check --format json-compact
 ```
 
 ## SARIF Format
@@ -83,7 +93,7 @@ Static Analysis Results Interchange Format for GitHub integration:
       "tool": {
         "driver": {
           "name": "TerraTidy",
-          "version": "1.0.0",
+          "version": "0.1.0",
           "rules": [...]
         }
       },
@@ -102,83 +112,54 @@ Upload SARIF results to GitHub:
   run: terratidy check --format sarif > results.sarif
 
 - name: Upload SARIF
-  uses: github/codeql-action/upload-sarif@v2
+  uses: github/codeql-action/upload-sarif@v3
   with:
     sarif_file: results.sarif
 ```
 
-## HTML Format
+## GitHub Actions Format
 
-Interactive HTML report with:
-
-- Summary statistics
-- Filterable findings table
-- Syntax-highlighted code snippets
-- Expandable details
+Output GitHub workflow commands for inline PR annotations:
 
 ```bash
-terratidy check --format html --output report.html
+terratidy check --format github
 ```
 
-## JUnit Format
+Output:
 
-For CI/CD test reporting:
-
-```xml
-<?xml version="1.0" encoding="UTF-8"?>
-<testsuites name="TerraTidy" tests="3" failures="1" errors="0">
-  <testsuite name="style" tests="2" failures="1">
-    <testcase name="resource-naming" classname="main.tf">
-      <failure message="Resource name should use snake_case"/>
-    </testcase>
-  </testsuite>
-</testsuites>
+```text
+::error file=main.tf,line=15,col=3,title=style.block-label-case::Resource name should use snake_case
+::warning file=main.tf,line=23,col=1,title=style.tags-at-end::Place tags attribute at end of resource
 ```
 
-### Jenkins Integration
+These annotations appear directly in the GitHub PR "Files changed" view.
 
-```groovy
-pipeline {
-  stages {
-    stage('Lint') {
-      steps {
-        sh 'terratidy check --format junit > terratidy-results.xml'
-      }
-      post {
-        always {
-          junit 'terratidy-results.xml'
-        }
-      }
-    }
-  }
-}
-```
+## HTML Format
 
-## Checkstyle Format
+Visual HTML report with:
 
-Legacy format for older CI systems:
+- Summary statistics
+- Color-coded severity
+- File and line information
+- Rule descriptions
 
-```xml
-<?xml version="1.0" encoding="UTF-8"?>
-<checkstyle version="8.0">
-  <file name="main.tf">
-    <error line="15" column="3" severity="error"
-           message="Resource name should use snake_case"
-           source="terratidy.style.resource-naming"/>
-  </file>
-</checkstyle>
+```bash
+terratidy check --format html > report.html
 ```
 
 ## Output to File
 
-Use `--output` to write to a file:
+Redirect output to a file:
 
 ```bash
 # Write JSON to file
-terratidy check --format json --output results.json
+terratidy check --format json > results.json
 
 # Write HTML report
-terratidy check --format html --output report.html
+terratidy check --format html > report.html
+
+# Write SARIF
+terratidy check --format sarif > results.sarif
 ```
 
 ## Combining with Other Tools
@@ -193,12 +174,19 @@ terratidy check --format json | jq '.findings | map(select(.severity == "error")
 terratidy check --format json | jq '.findings | group_by(.rule) | map({rule: .[0].rule, count: length})'
 ```
 
-### Filtering Output
+### Filtering by Severity
 
 ```bash
-# Show only errors
-terratidy check --severity error
+# Show only errors and above
+terratidy check --severity-threshold error
+```
 
-# Show specific engines
-terratidy check --engines style,lint
+### Skip Specific Engines
+
+```bash
+# Skip policy checks
+terratidy check --skip-policy
+
+# Run only fmt and style
+terratidy check --skip-lint --skip-policy
 ```

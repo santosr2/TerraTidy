@@ -287,5 +287,4 @@ engines:
 
 - **Main Documentation:** [../README.md](../README.md)
 - **Configuration Reference:** [terratidy.yaml](terratidy.yaml)
-- **Development Guide:** [../AGENT.md](../AGENT.md)
-- **Build Progress:** [../BUILD_PROGRESS.md](../BUILD_PROGRESS.md)
+- **Contributing Guide:** [../CONTRIBUTING.md](../CONTRIBUTING.md)

@@ -8,13 +8,6 @@
 brew install santosr2/tap/terratidy
 ```
 
-### Scoop (Windows)
-
-```bash
-scoop bucket add santosr2 https://github.com/santosr2/scoop-bucket
-scoop install terratidy
-```
-
 ## Binary Download
 
 Download from [GitHub Releases](https://github.com/santosr2/terratidy/releases):

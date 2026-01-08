@@ -50,13 +50,6 @@ Follow [Conventional Commits](https://www.conventionalcommits.org/):
 4. Commit with conventional commit messages
 5. Push and create PR
 
-### AI Development
-
-We support AI-assisted development! See:
-
-- [AGENT.md](AGENT.md) for AI development guide
-- [CLAUDE.md](CLAUDE.md) for Claude-specific instructions
-
 ## Adding Features
 
 ### New Rules

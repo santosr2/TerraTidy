@@ -11,10 +11,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - GitHub Actions annotations output format (`--format github` or `--format gha`)
 - TFLint integration note in `rules list` command output
+- Parallel engine execution with `--parallel` / `-p` flag (~24% faster)
+- File caching for parsed HCL files (~65x faster on cache hits)
+- Internal runner package for concurrent engine execution
+- Internal cache package with TTL and LRU eviction
+- Benchmark suite for performance testing
+
+### Changed
+
+- Consolidated GitHub Action (removed duplicate action/ directory)
+- Updated GitHub Action inputs to use `--skip-*` flags instead of `--engines`
 
 ### Fixed
 
 - VCS test using `--no-verify` for git commits to avoid pre-commit hook interference
+- GitHub Action now uses correct `terratidy check` command (was using non-existent `run`)
 
 ## [0.1.0] - 2025-12-22
 

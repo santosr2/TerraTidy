@@ -9,13 +9,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Automated changelog generation with git-cliff
+- Version alias tags for releases (v0, v0.1 for stable; v0-alpha, v0.1-alpha for pre-releases)
+
+### Changed
+
+- Pre-release versions no longer publish to Homebrew or create Docker alias tags (latest, v0, v0.1)
+- Improved release notes with installation instructions and documentation links
+
+### Fixed
+
+- GitHub Action embeds version info via ldflags when building from source
+
+## [0.2.0-alpha] - 2026-01-08
+
+### Added
+
 - GitHub Actions annotations output format (`--format github` or `--format gha`)
+- Table output format with color support (`--format table`)
 - TFLint integration note in `rules list` command output
 - Parallel engine execution with `--parallel` / `-p` flag (~24% faster)
 - File caching for parsed HCL files (~65x faster on cache hits)
 - Internal runner package for concurrent engine execution
 - Internal cache package with TTL and LRU eviction
 - Benchmark suite for performance testing
+- Style rules for naming conventions and file organization
 
 ### Changed
 
@@ -26,6 +44,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - VCS test using `--no-verify` for git commits to avoid pre-commit hook interference
 - GitHub Action now uses correct `terratidy check` command (was using non-existent `run`)
+- GitHub Action SARIF file path for working directory support
+- GitHub Action stdout/stderr separation for JSON and SARIF formats
+- GitHub Action builds from source when testing in terratidy repo
+- SARIF output line/column numbers now comply with spec (must be >= 1)
+- Style engine blank line counting excludes comments
+- Version display uses Go build info when ldflags not set
 
 ## [0.1.0] - 2025-12-22
 
@@ -147,5 +171,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed policy engine test flakiness
 - Corrected configuration inheritance behavior
 
-[Unreleased]: https://github.com/santosr2/terratidy/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/santosr2/terratidy/compare/v0.2.0-alpha...HEAD
+[0.2.0-alpha]: https://github.com/santosr2/terratidy/compare/v0.1.0...v0.2.0-alpha
 [0.1.0]: https://github.com/santosr2/terratidy/releases/tag/v0.1.0

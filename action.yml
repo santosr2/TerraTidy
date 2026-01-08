@@ -86,7 +86,13 @@ runs:
       shell: bash
       run: |
         if [ "${{ inputs.version }}" = "latest" ]; then
-          go install github.com/santosr2/terratidy/cmd/terratidy@latest
+          # Check if we're in a terratidy checkout (for action testing)
+          if [ -f "go.mod" ] && grep -q "github.com/santosr2/terratidy" go.mod 2>/dev/null; then
+            # Build from source for local testing
+            go build -o "$(go env GOPATH)/bin/terratidy" ./cmd/terratidy
+          else
+            go install github.com/santosr2/terratidy/cmd/terratidy@latest
+          fi
         else
           go install github.com/santosr2/terratidy/cmd/terratidy@${{ inputs.version }}
         fi

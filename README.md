@@ -170,7 +170,7 @@ Add to `.pre-commit-config.yaml`:
 ```yaml
 repos:
   - repo: https://github.com/santosr2/terratidy
-    rev: v0.1.0
+    rev: v0.2.0-alpha  # or use a stable version when available
     hooks:
       - id: terratidy-check
 ```

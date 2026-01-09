@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/santosr2/terratidy/internal/engines/style/rules"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -824,7 +825,7 @@ func TestIsDependsOnRelevantBlock(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.blockType, func(t *testing.T) {
-			got := isDependsOnRelevantBlock(tt.blockType)
+			got := rules.IsDependsOnRelevantBlock(tt.blockType)
 			assert.Equal(t, tt.want, got)
 		})
 	}

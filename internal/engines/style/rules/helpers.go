@@ -1,0 +1,304 @@
+// Package rules provides style rules for TerraTidy.
+package rules
+
+import (
+	"regexp"
+	"sort"
+	"strings"
+
+	"github.com/hashicorp/hcl/v2"
+	"github.com/hashicorp/hcl/v2/hclsyntax"
+	"github.com/hashicorp/hcl/v2/hclwrite"
+)
+
+// snakeCaseRegex matches valid snake_case identifiers.
+var snakeCaseRegex = regexp.MustCompile(`^[a-z][a-z0-9_]*$`)
+
+// GetOrderedAttrNames returns attribute names from hclsyntax sorted by line number.
+func GetOrderedAttrNames(syntaxBody *hclsyntax.Body) []string {
+	type attrPos struct {
+		name string
+		line int
+	}
+
+	attrs := make([]attrPos, 0, len(syntaxBody.Attributes))
+	for name, attr := range syntaxBody.Attributes {
+		attrs = append(attrs, attrPos{
+			name: name,
+			line: attr.Range().Start.Line,
+		})
+	}
+
+	sort.Slice(attrs, func(i, j int) bool {
+		return attrs[i].line < attrs[j].line
+	})
+
+	result := make([]string, len(attrs))
+	for i, a := range attrs {
+		result[i] = a.name
+	}
+	return result
+}
+
+// ReorderBlockAttrs reorders attributes in a block according to the specified order.
+// firstAttrs are placed at the start, lastAttrs at the end, others maintain relative order.
+// orderedNames should be the original order of attributes (from hclsyntax parsing).
+func ReorderBlockAttrs(body *hclwrite.Body, orderedNames, firstAttrs, lastAttrs []string) {
+	if len(orderedNames) == 0 {
+		return
+	}
+
+	// Build sets for quick lookup
+	firstSet := make(map[string]bool)
+	for _, name := range firstAttrs {
+		firstSet[name] = true
+	}
+	lastSet := make(map[string]bool)
+	for _, name := range lastAttrs {
+		lastSet[name] = true
+	}
+
+	// Collect attribute info preserving expression tokens
+	attrTokens := make(map[string]hclwrite.Tokens)
+	for name, attr := range body.Attributes() {
+		attrTokens[name] = attr.Expr().BuildTokens(nil)
+	}
+
+	// Categorize attribute names
+	var first, middle, last []string
+	for _, name := range orderedNames {
+		if _, exists := attrTokens[name]; !exists {
+			continue // Skip if attribute doesn't exist in hclwrite body
+		}
+		if firstSet[name] {
+			first = append(first, name)
+		} else if lastSet[name] {
+			last = append(last, name)
+		} else {
+			middle = append(middle, name)
+		}
+	}
+
+	// Sort first and last attributes by priority order
+	sortByPriority := func(names []string, priority []string) {
+		prioMap := make(map[string]int)
+		for i, name := range priority {
+			prioMap[name] = i
+		}
+		sort.SliceStable(names, func(i, j int) bool {
+			pi, oki := prioMap[names[i]]
+			pj, okj := prioMap[names[j]]
+			if oki && okj {
+				return pi < pj
+			}
+			if oki {
+				return true
+			}
+			return !okj
+		})
+	}
+
+	sortByPriority(first, firstAttrs)
+	sortByPriority(last, lastAttrs)
+
+	// Remove all attributes
+	for name := range attrTokens {
+		body.RemoveAttribute(name)
+	}
+
+	// Re-add in the correct order
+	for _, name := range first {
+		body.SetAttributeRaw(name, attrTokens[name])
+	}
+	for _, name := range middle {
+		body.SetAttributeRaw(name, attrTokens[name])
+	}
+	for _, name := range last {
+		body.SetAttributeRaw(name, attrTokens[name])
+	}
+}
+
+// FormatAndCleanBlankLines applies hclwrite.Format and removes extra blank lines inside blocks.
+func FormatAndCleanBlankLines(content []byte) []byte {
+	// First apply hclwrite.Format
+	formatted := hclwrite.Format(content)
+
+	// Remove all blank lines inside blocks
+	lines := SplitLines(formatted)
+	var result []byte
+	insideBlock := 0
+
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		isBlank := len(trimmed) == 0
+		hasOpenBrace := strings.Contains(line, "{")
+		hasCloseBrace := strings.Contains(line, "}")
+
+		// Track block depth (check before updating depth)
+		// For closing braces, we're still "inside" when we see the brace
+		if hasCloseBrace && !hasOpenBrace {
+			insideBlock--
+		}
+
+		// Skip all blank lines inside blocks
+		if insideBlock > 0 && isBlank {
+			// Opening brace line updates depth after this check
+			if hasOpenBrace {
+				insideBlock++
+			}
+			continue
+		}
+
+		// Track block depth for opening braces
+		if hasOpenBrace {
+			insideBlock++
+		}
+
+		result = append(result, line...)
+		result = append(result, '\n')
+	}
+
+	return result
+}
+
+// SplitLines splits content into lines.
+func SplitLines(content []byte) []string {
+	var lines []string
+	start := 0
+	for i, b := range content {
+		if b == '\n' {
+			lines = append(lines, string(content[start:i]))
+			start = i + 1
+		}
+	}
+	if start < len(content) {
+		lines = append(lines, string(content[start:]))
+	}
+	return lines
+}
+
+// TrimLeftWhitespace trims leading whitespace from a string.
+func TrimLeftWhitespace(s string) string {
+	for i, r := range s {
+		if r != ' ' && r != '\t' {
+			return s[i:]
+		}
+	}
+	return ""
+}
+
+// CountBlankLinesBetween counts actual blank lines (not comments) between two line numbers.
+// Line numbers are 1-indexed (HCL convention).
+func CountBlankLinesBetween(lines []string, endLine, startLine int) int {
+	blankCount := 0
+
+	// Lines between endLine and startLine (exclusive of both)
+	for lineNum := endLine + 1; lineNum < startLine; lineNum++ {
+		if lineNum-1 >= len(lines) {
+			continue
+		}
+		line := lines[lineNum-1] // Convert to 0-indexed
+		trimmed := TrimLeftWhitespace(line)
+
+		// Count as blank if empty or whitespace-only
+		// Don't count comment lines as blank lines
+		if len(trimmed) == 0 {
+			blankCount++
+		}
+	}
+
+	return blankCount
+}
+
+// BlockKey creates a unique key for a block based on type and labels.
+func BlockKey(blockType string, labels []string) string {
+	key := blockType
+	for _, l := range labels {
+		key += "." + l
+	}
+	return key
+}
+
+// FindAttribute finds an attribute by name in the attributes map.
+func FindAttribute(attrs hclsyntax.Attributes, name string) *hclsyntax.Attribute {
+	if attr, ok := attrs[name]; ok {
+		return attr
+	}
+	return nil
+}
+
+// FindNestedBlock finds a nested block by type in the blocks slice.
+func FindNestedBlock(blocks hclsyntax.Blocks, blockType string) *hclsyntax.Block {
+	for _, b := range blocks {
+		if b.Type == blockType {
+			return b
+		}
+	}
+	return nil
+}
+
+// IsSnakeCase checks if a string is valid snake_case.
+func IsSnakeCase(s string) bool {
+	return snakeCaseRegex.MatchString(s)
+}
+
+// MatchBlockLabels checks if block labels match expected labels.
+func MatchBlockLabels(labels, expectedLabels []string) bool {
+	if len(labels) != len(expectedLabels) {
+		return false
+	}
+	for i, l := range labels {
+		if l != expectedLabels[i] {
+			return false
+		}
+	}
+	return true
+}
+
+// FindSyntaxBody finds the syntax body for a block matching the given type and labels.
+func FindSyntaxBody(syntaxFile *hclsyntax.Body, blockType string, blockLabels []string) *hclsyntax.Body {
+	for _, block := range syntaxFile.Blocks {
+		if block.Type != blockType {
+			continue
+		}
+		if MatchBlockLabels(block.Labels, blockLabels) {
+			return block.Body
+		}
+	}
+	return nil
+}
+
+// FindWriteBlock finds a block in hclwrite file matching the given type and labels.
+func FindWriteBlock(writeFile *hclwrite.File, blockType string, blockLabels []string) *hclwrite.Block {
+	for _, block := range writeFile.Body().Blocks() {
+		if block.Type() != blockType {
+			continue
+		}
+		if MatchBlockLabels(block.Labels(), blockLabels) {
+			return block
+		}
+	}
+	return nil
+}
+
+// ParseBothFormats parses content with both hclsyntax (for positions) and hclwrite (for modifications).
+func ParseBothFormats(content []byte, filePath string) (*hclsyntax.Body, *hclwrite.File, error) {
+	// Parse with hclsyntax to get attribute ordering
+	syntaxFile, diags := hclsyntax.ParseConfig(content, filePath, hcl.InitialPos)
+	if diags.HasErrors() {
+		return nil, nil, diags
+	}
+
+	syntaxBody, ok := syntaxFile.Body.(*hclsyntax.Body)
+	if !ok {
+		return nil, nil, nil
+	}
+
+	// Parse with hclwrite for modifications
+	writeFile, diags := hclwrite.ParseConfig(content, filePath, hcl.InitialPos)
+	if diags.HasErrors() {
+		return nil, nil, diags
+	}
+
+	return syntaxBody, writeFile, nil
+}

@@ -6,12 +6,164 @@ package style
 import (
 	"os"
 	"regexp"
+	"sort"
+	"strings"
 
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/hclsyntax"
 	"github.com/hashicorp/hcl/v2/hclwrite"
 	"github.com/santosr2/terratidy/pkg/sdk"
 )
+
+// getOrderedAttrNames returns attribute names from hclsyntax sorted by line number.
+func getOrderedAttrNames(syntaxBody *hclsyntax.Body) []string {
+	type attrPos struct {
+		name string
+		line int
+	}
+
+	attrs := make([]attrPos, 0, len(syntaxBody.Attributes))
+	for name, attr := range syntaxBody.Attributes {
+		attrs = append(attrs, attrPos{
+			name: name,
+			line: attr.Range().Start.Line,
+		})
+	}
+
+	sort.Slice(attrs, func(i, j int) bool {
+		return attrs[i].line < attrs[j].line
+	})
+
+	result := make([]string, len(attrs))
+	for i, a := range attrs {
+		result[i] = a.name
+	}
+	return result
+}
+
+// reorderBlockAttrs reorders attributes in a block according to the specified order.
+// firstAttrs are placed at the start, lastAttrs at the end, others maintain relative order.
+// orderedNames should be the original order of attributes (from hclsyntax parsing).
+func reorderBlockAttrs(body *hclwrite.Body, orderedNames, firstAttrs, lastAttrs []string) {
+	if len(orderedNames) == 0 {
+		return
+	}
+
+	// Build sets for quick lookup
+	firstSet := make(map[string]bool)
+	for _, name := range firstAttrs {
+		firstSet[name] = true
+	}
+	lastSet := make(map[string]bool)
+	for _, name := range lastAttrs {
+		lastSet[name] = true
+	}
+
+	// Collect attribute info preserving expression tokens
+	attrTokens := make(map[string]hclwrite.Tokens)
+	for name, attr := range body.Attributes() {
+		attrTokens[name] = attr.Expr().BuildTokens(nil)
+	}
+
+	// Categorize attribute names
+	var first, middle, last []string
+	for _, name := range orderedNames {
+		if _, exists := attrTokens[name]; !exists {
+			continue // Skip if attribute doesn't exist in hclwrite body
+		}
+		if firstSet[name] {
+			first = append(first, name)
+		} else if lastSet[name] {
+			last = append(last, name)
+		} else {
+			middle = append(middle, name)
+		}
+	}
+
+	// Sort first and last attributes by priority order
+	sortByPriority := func(names []string, priority []string) {
+		prioMap := make(map[string]int)
+		for i, name := range priority {
+			prioMap[name] = i
+		}
+		sort.SliceStable(names, func(i, j int) bool {
+			pi, oki := prioMap[names[i]]
+			pj, okj := prioMap[names[j]]
+			if oki && okj {
+				return pi < pj
+			}
+			if oki {
+				return true
+			}
+			return !okj
+		})
+	}
+
+	sortByPriority(first, firstAttrs)
+	sortByPriority(last, lastAttrs)
+
+	// Remove all attributes
+	for name := range attrTokens {
+		body.RemoveAttribute(name)
+	}
+
+	// Re-add in the correct order
+	for _, name := range first {
+		body.SetAttributeRaw(name, attrTokens[name])
+	}
+	for _, name := range middle {
+		body.SetAttributeRaw(name, attrTokens[name])
+	}
+	for _, name := range last {
+		body.SetAttributeRaw(name, attrTokens[name])
+	}
+}
+
+// formatAndCleanBlankLines applies hclwrite.Format and removes extra blank lines inside blocks.
+func formatAndCleanBlankLines(content []byte) []byte {
+	// First apply hclwrite.Format
+	formatted := hclwrite.Format(content)
+
+	// Remove extra blank lines inside blocks
+	lines := splitLines(formatted)
+	var result []byte
+	insideBlock := 0
+	prevBlank := false
+	prevOpenBrace := false
+
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		isBlank := len(trimmed) == 0
+		hasOpenBrace := strings.Contains(line, "{")
+		hasCloseBrace := strings.Contains(line, "}")
+
+		// Track block depth
+		if hasOpenBrace {
+			insideBlock++
+		}
+		if hasCloseBrace {
+			insideBlock--
+		}
+
+		// Skip blank lines immediately after opening brace
+		if insideBlock > 0 && isBlank && prevOpenBrace {
+			prevBlank = true
+			continue
+		}
+
+		// Skip consecutive blank lines inside blocks
+		if insideBlock > 0 && isBlank && prevBlank {
+			continue
+		}
+
+		result = append(result, line...)
+		result = append(result, '\n')
+		prevBlank = isBlank
+		prevOpenBrace = hasOpenBrace && !hasCloseBrace
+	}
+
+	return result
+}
 
 // snakeCaseRegex matches valid snake_case identifiers
 var snakeCaseRegex = regexp.MustCompile(`^[a-z][a-z0-9_]*$`)
@@ -319,20 +471,53 @@ func (r *ForEachCountFirstRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.F
 func (r *ForEachCountFirstRule) fixBlock(
 	filePath, blockType string,
 	blockLabels []string,
-	attrName string,
+	_ string, // attrName - unused, we handle both for_each and count
 ) ([]byte, error) {
 	content, err := os.ReadFile(filePath)
 	if err != nil {
 		return nil, err
 	}
 
-	f, diags := hclwrite.ParseConfig(content, filePath, hcl.InitialPos)
+	// Parse with hclsyntax to get attribute ordering
+	syntaxFile, diags := hclsyntax.ParseConfig(content, filePath, hcl.InitialPos)
 	if diags.HasErrors() {
 		return nil, diags
 	}
 
-	// Find the matching block
-	for _, block := range f.Body().Blocks() {
+	// Parse with hclwrite for modifications
+	writeFile, diags := hclwrite.ParseConfig(content, filePath, hcl.InitialPos)
+	if diags.HasErrors() {
+		return nil, diags
+	}
+
+	// Find syntax body for this block
+	var syntaxBody *hclsyntax.Body
+	for _, block := range syntaxFile.Body.(*hclsyntax.Body).Blocks {
+		if block.Type != blockType {
+			continue
+		}
+		if len(block.Labels) != len(blockLabels) {
+			continue
+		}
+		match := true
+		for i, l := range block.Labels {
+			if l != blockLabels[i] {
+				match = false
+				break
+			}
+		}
+		if match {
+			syntaxBody = block.Body
+			break
+		}
+	}
+
+	if syntaxBody == nil {
+		return content, nil
+	}
+
+	// Find the matching block in hclwrite
+	for _, block := range writeFile.Body().Blocks() {
 		if block.Type() != blockType {
 			continue
 		}
@@ -351,95 +536,75 @@ func (r *ForEachCountFirstRule) fixBlock(
 			continue
 		}
 
-		// Get the attribute
-		attr := block.Body().GetAttribute(attrName)
-		if attr == nil {
-			continue
-		}
-
-		// Get the expression tokens
-		exprTokens := attr.Expr().BuildTokens(nil)
-
-		// Remove the attribute
-		block.Body().RemoveAttribute(attrName)
-
-		// Re-add at the beginning by setting and relying on hclwrite's ordering
-		// hclwrite doesn't have a "prepend" method, so we rebuild the body
-		// Get all current attributes
-		oldAttrs := make(map[string]*hclwrite.Attribute)
-		for name, a := range block.Body().Attributes() {
-			oldAttrs[name] = a
-		}
-
-		// Clear all attributes
-		for name := range oldAttrs {
-			block.Body().RemoveAttribute(name)
-		}
-
-		// Add the target attribute first
-		block.Body().SetAttributeRaw(attrName, exprTokens)
-
-		// Re-add other attributes
-		for name, a := range oldAttrs {
-			block.Body().SetAttributeRaw(name, a.Expr().BuildTokens(nil))
-		}
+		orderedNames := getOrderedAttrNames(syntaxBody)
+		firstAttrs := []string{"for_each", "count"}
+		reorderBlockAttrs(block.Body(), orderedNames, firstAttrs, nil)
+		break
 	}
 
-	return f.Bytes(), nil
+	return formatAndCleanBlankLines(writeFile.Bytes()), nil
 }
 
 // Fix moves for_each/count to be first attribute in each block.
-func (r *ForEachCountFirstRule) Fix(ctx *sdk.Context, _ *hcl.File) ([]byte, error) {
-	// Fix all blocks in the file
+func (r *ForEachCountFirstRule) Fix(ctx *sdk.Context, file *hcl.File) ([]byte, error) {
 	content, err := os.ReadFile(ctx.File)
 	if err != nil {
 		return nil, err
 	}
 
-	f, diags := hclwrite.ParseConfig(content, ctx.File, hcl.InitialPos)
+	// Parse with hclsyntax to get attribute ordering
+	syntaxFile, ok := file.Body.(*hclsyntax.Body)
+	if !ok {
+		return nil, nil
+	}
+
+	// Parse with hclwrite for modifications
+	writeFile, diags := hclwrite.ParseConfig(content, ctx.File, hcl.InitialPos)
 	if diags.HasErrors() {
 		return nil, diags
 	}
 
-	for _, block := range f.Body().Blocks() {
+	// Build a map of block identifiers to their syntax bodies for ordering
+	syntaxBlocks := make(map[string]*hclsyntax.Body)
+	for _, block := range syntaxFile.Blocks {
+		key := blockKey(block.Type, block.Labels)
+		syntaxBlocks[key] = block.Body
+	}
+
+	for _, block := range writeFile.Body().Blocks() {
 		if block.Type() != "resource" && block.Type() != "module" && block.Type() != "data" {
 			continue
 		}
 
-		// Check for for_each first, then count
-		for _, attrName := range []string{"for_each", "count"} {
-			attr := block.Body().GetAttribute(attrName)
-			if attr == nil {
-				continue
-			}
-
-			// Get expression tokens
-			exprTokens := attr.Expr().BuildTokens(nil)
-
-			// Get all current attributes
-			oldAttrs := make(map[string]*hclwrite.Attribute)
-			for name, a := range block.Body().Attributes() {
-				oldAttrs[name] = a
-			}
-
-			// Clear and rebuild with attrName first
-			for name := range oldAttrs {
-				block.Body().RemoveAttribute(name)
-			}
-
-			block.Body().SetAttributeRaw(attrName, exprTokens)
-
-			for name, a := range oldAttrs {
-				if name != attrName {
-					block.Body().SetAttributeRaw(name, a.Expr().BuildTokens(nil))
-				}
-			}
-
-			break // Only process for_each OR count, not both
+		// Check if block has for_each or count
+		hasForEach := block.Body().GetAttribute("for_each") != nil
+		hasCount := block.Body().GetAttribute("count") != nil
+		if !hasForEach && !hasCount {
+			continue
 		}
+
+		// Get ordering from syntax body
+		key := blockKey(block.Type(), block.Labels())
+		syntaxBody, ok := syntaxBlocks[key]
+		if !ok {
+			continue
+		}
+
+		orderedNames := getOrderedAttrNames(syntaxBody)
+		firstAttrs := []string{"for_each", "count"}
+		reorderBlockAttrs(block.Body(), orderedNames, firstAttrs, nil)
 	}
 
-	return f.Bytes(), nil
+	return formatAndCleanBlankLines(writeFile.Bytes()), nil
+}
+
+// blockKey creates a unique key for a block based on type and labels.
+func blockKey(blockType string, labels []string) string {
+	key := blockType
+	for _, l := range labels {
+		key += "." + l
+	}
+	return key
 }
 
 // LifecycleAtEndRule ensures lifecycle block is at the end of resource blocks.
@@ -553,6 +718,14 @@ func (r *TagsAtEndRule) checkTagsBlock(ctx *sdk.Context, block *hclsyntax.Block)
 		return findings
 	}
 
+	// Create fix function for this block
+	filePath := ctx.File
+	blockType := block.Type
+	blockLabels := block.Labels
+	fixFunc := func() ([]byte, error) {
+		return r.fixTagsBlock(filePath, blockType, blockLabels)
+	}
+
 	lifecycleBlock := findNestedBlock(body.Blocks, "lifecycle")
 	tagsLine := tagsAttr.Range().Start.Line
 
@@ -563,7 +736,8 @@ func (r *TagsAtEndRule) checkTagsBlock(ctx *sdk.Context, block *hclsyntax.Block)
 			File:     ctx.File,
 			Location: tagsAttr.Range(),
 			Severity: sdk.SeverityWarning,
-			Fixable:  false,
+			Fixable:  true,
+			FixFunc:  fixFunc,
 		})
 	}
 
@@ -574,11 +748,87 @@ func (r *TagsAtEndRule) checkTagsBlock(ctx *sdk.Context, block *hclsyntax.Block)
 			File:     ctx.File,
 			Location: tagsAttr.Range(),
 			Severity: sdk.SeverityInfo,
-			Fixable:  false,
+			Fixable:  true,
+			FixFunc:  fixFunc,
 		})
 	}
 
 	return findings
+}
+
+// fixTagsBlock reorders a specific block's tags attribute to be at the end.
+func (r *TagsAtEndRule) fixTagsBlock(filePath, blockType string, blockLabels []string) ([]byte, error) {
+	content, err := os.ReadFile(filePath)
+	if err != nil {
+		return nil, err
+	}
+
+	// Parse with hclsyntax to get attribute ordering
+	syntaxFile, diags := hclsyntax.ParseConfig(content, filePath, hcl.InitialPos)
+	if diags.HasErrors() {
+		return nil, diags
+	}
+
+	// Parse with hclwrite for modifications
+	writeFile, diags := hclwrite.ParseConfig(content, filePath, hcl.InitialPos)
+	if diags.HasErrors() {
+		return nil, diags
+	}
+
+	// Find syntax body for this block
+	var syntaxBody *hclsyntax.Body
+	for _, block := range syntaxFile.Body.(*hclsyntax.Body).Blocks {
+		if block.Type != blockType {
+			continue
+		}
+		if len(block.Labels) != len(blockLabels) {
+			continue
+		}
+		match := true
+		for i, l := range block.Labels {
+			if l != blockLabels[i] {
+				match = false
+				break
+			}
+		}
+		if match {
+			syntaxBody = block.Body
+			break
+		}
+	}
+
+	if syntaxBody == nil {
+		return content, nil
+	}
+
+	// Find the matching block in hclwrite
+	for _, block := range writeFile.Body().Blocks() {
+		if block.Type() != blockType {
+			continue
+		}
+		labels := block.Labels()
+		if len(labels) != len(blockLabels) {
+			continue
+		}
+		match := true
+		for i, l := range labels {
+			if l != blockLabels[i] {
+				match = false
+				break
+			}
+		}
+		if !match {
+			continue
+		}
+
+		orderedNames := getOrderedAttrNames(syntaxBody)
+		// tags/labels should be at the end
+		lastAttrs := []string{"tags", "labels", "tags_all"}
+		reorderBlockAttrs(block.Body(), orderedNames, nil, lastAttrs)
+		break
+	}
+
+	return formatAndCleanBlankLines(writeFile.Bytes()), nil
 }
 
 func findTagsAttribute(attrs hclsyntax.Attributes) *hclsyntax.Attribute {
@@ -600,9 +850,58 @@ func countAttrsAfterTags(attrs hclsyntax.Attributes, tagsLine int) int {
 	return count
 }
 
-// Fix is a no-op for this rule as tags reordering requires manual review.
-func (r *TagsAtEndRule) Fix(_ *sdk.Context, _ *hcl.File) ([]byte, error) {
-	return nil, nil
+// Fix moves tags/labels to the end of blocks (before lifecycle if present).
+func (r *TagsAtEndRule) Fix(ctx *sdk.Context, file *hcl.File) ([]byte, error) {
+	content, err := os.ReadFile(ctx.File)
+	if err != nil {
+		return nil, err
+	}
+
+	syntaxFile, ok := file.Body.(*hclsyntax.Body)
+	if !ok {
+		return nil, nil
+	}
+
+	writeFile, diags := hclwrite.ParseConfig(content, ctx.File, hcl.InitialPos)
+	if diags.HasErrors() {
+		return nil, diags
+	}
+
+	// Build a map of block identifiers to their syntax bodies
+	syntaxBlocks := make(map[string]*hclsyntax.Body)
+	for _, block := range syntaxFile.Blocks {
+		if block.Type == "resource" || block.Type == "module" {
+			key := blockKey(block.Type, block.Labels)
+			syntaxBlocks[key] = block.Body
+		}
+	}
+
+	for _, block := range writeFile.Body().Blocks() {
+		if block.Type() != "resource" && block.Type() != "module" {
+			continue
+		}
+
+		// Check if block has tags
+		hasTags := block.Body().GetAttribute("tags") != nil ||
+			block.Body().GetAttribute("labels") != nil ||
+			block.Body().GetAttribute("tags_all") != nil
+		if !hasTags {
+			continue
+		}
+
+		key := blockKey(block.Type(), block.Labels())
+		syntaxBody, ok := syntaxBlocks[key]
+		if !ok {
+			continue
+		}
+
+		orderedNames := getOrderedAttrNames(syntaxBody)
+		// tags/labels should be at the end
+		lastAttrs := []string{"tags", "labels", "tags_all"}
+		reorderBlockAttrs(block.Body(), orderedNames, nil, lastAttrs)
+	}
+
+	return formatAndCleanBlankLines(writeFile.Bytes()), nil
 }
 
 // DependsOnOrderRule ensures depends_on is at the end of blocks.
@@ -752,14 +1051,21 @@ func (r *SourceVersionGroupedRule) checkModuleBlock(ctx *sdk.Context, block *hcl
 	sourceAttr := findAttribute(body.Attributes, "source")
 	versionAttr := findAttribute(body.Attributes, "version")
 
+	// Create fix function that handles all source/version ordering for this block
+	filePath := ctx.File
+	blockLabels := block.Labels
+	fixFunc := func() ([]byte, error) {
+		return r.fixModuleBlock(filePath, blockLabels)
+	}
+
 	if sourceAttr != nil {
-		if finding := r.checkSourcePosition(ctx, body.Attributes, sourceAttr); finding != nil {
+		if finding := r.checkSourcePosition(ctx, body.Attributes, sourceAttr, fixFunc); finding != nil {
 			findings = append(findings, *finding)
 		}
 	}
 
 	if sourceAttr != nil && versionAttr != nil {
-		if finding := r.checkVersionFollowsSource(ctx, body.Attributes, sourceAttr, versionAttr); finding != nil {
+		if finding := r.checkVersionFollowsSource(ctx, body.Attributes, sourceAttr, versionAttr, fixFunc); finding != nil {
 			findings = append(findings, *finding)
 		}
 	}
@@ -767,8 +1073,84 @@ func (r *SourceVersionGroupedRule) checkModuleBlock(ctx *sdk.Context, block *hcl
 	return findings
 }
 
+// fixModuleBlock reorders a specific module block's attributes.
+func (r *SourceVersionGroupedRule) fixModuleBlock(filePath string, blockLabels []string) ([]byte, error) {
+	content, err := os.ReadFile(filePath)
+	if err != nil {
+		return nil, err
+	}
+
+	// Parse with hclsyntax to get attribute ordering
+	syntaxFile, diags := hclsyntax.ParseConfig(content, filePath, hcl.InitialPos)
+	if diags.HasErrors() {
+		return nil, diags
+	}
+
+	// Parse with hclwrite for modifications
+	writeFile, diags := hclwrite.ParseConfig(content, filePath, hcl.InitialPos)
+	if diags.HasErrors() {
+		return nil, diags
+	}
+
+	// Find syntax body for this block
+	var syntaxBody *hclsyntax.Body
+	for _, block := range syntaxFile.Body.(*hclsyntax.Body).Blocks {
+		if block.Type != "module" {
+			continue
+		}
+		if len(block.Labels) != len(blockLabels) {
+			continue
+		}
+		match := true
+		for i, l := range block.Labels {
+			if l != blockLabels[i] {
+				match = false
+				break
+			}
+		}
+		if match {
+			syntaxBody = block.Body
+			break
+		}
+	}
+
+	if syntaxBody == nil {
+		return content, nil
+	}
+
+	// Find the matching block in hclwrite
+	for _, block := range writeFile.Body().Blocks() {
+		if block.Type() != "module" {
+			continue
+		}
+		labels := block.Labels()
+		if len(labels) != len(blockLabels) {
+			continue
+		}
+		match := true
+		for i, l := range labels {
+			if l != blockLabels[i] {
+				match = false
+				break
+			}
+		}
+		if !match {
+			continue
+		}
+
+		orderedNames := getOrderedAttrNames(syntaxBody)
+		// source and version should come after for_each/count but before everything else
+		firstAttrs := []string{"for_each", "count", "source", "version"}
+		reorderBlockAttrs(block.Body(), orderedNames, firstAttrs, nil)
+		break
+	}
+
+	return formatAndCleanBlankLines(writeFile.Bytes()), nil
+}
+
 func (r *SourceVersionGroupedRule) checkSourcePosition(
 	ctx *sdk.Context, attrs hclsyntax.Attributes, sourceAttr *hclsyntax.Attribute,
+	fixFunc func() ([]byte, error),
 ) *sdk.Finding {
 	sourceLine := sourceAttr.Range().Start.Line
 	allowedBefore := map[string]bool{"source": true, "for_each": true, "count": true}
@@ -781,7 +1163,8 @@ func (r *SourceVersionGroupedRule) checkSourcePosition(
 				File:     ctx.File,
 				Location: sourceAttr.Range(),
 				Severity: sdk.SeverityWarning,
-				Fixable:  false,
+				Fixable:  true,
+				FixFunc:  fixFunc,
 			}
 		}
 	}
@@ -791,6 +1174,7 @@ func (r *SourceVersionGroupedRule) checkSourcePosition(
 func (r *SourceVersionGroupedRule) checkVersionFollowsSource(
 	ctx *sdk.Context, attrs hclsyntax.Attributes,
 	sourceAttr, versionAttr *hclsyntax.Attribute,
+	fixFunc func() ([]byte, error),
 ) *sdk.Finding {
 	sourceLine := sourceAttr.Range().End.Line
 	versionLine := versionAttr.Range().Start.Line
@@ -805,16 +1189,63 @@ func (r *SourceVersionGroupedRule) checkVersionFollowsSource(
 				File:     ctx.File,
 				Location: versionAttr.Range(),
 				Severity: sdk.SeverityWarning,
-				Fixable:  false,
+				Fixable:  true,
+				FixFunc:  fixFunc,
 			}
 		}
 	}
 	return nil
 }
 
-// Fix is a no-op for this rule as source/version reordering requires manual review.
-func (r *SourceVersionGroupedRule) Fix(_ *sdk.Context, _ *hcl.File) ([]byte, error) {
-	return nil, nil
+// Fix reorders source/version to be at the start of module blocks (after for_each/count).
+func (r *SourceVersionGroupedRule) Fix(ctx *sdk.Context, file *hcl.File) ([]byte, error) {
+	content, err := os.ReadFile(ctx.File)
+	if err != nil {
+		return nil, err
+	}
+
+	syntaxFile, ok := file.Body.(*hclsyntax.Body)
+	if !ok {
+		return nil, nil
+	}
+
+	writeFile, diags := hclwrite.ParseConfig(content, ctx.File, hcl.InitialPos)
+	if diags.HasErrors() {
+		return nil, diags
+	}
+
+	// Build a map of block identifiers to their syntax bodies
+	syntaxBlocks := make(map[string]*hclsyntax.Body)
+	for _, block := range syntaxFile.Blocks {
+		if block.Type == "module" {
+			key := blockKey(block.Type, block.Labels)
+			syntaxBlocks[key] = block.Body
+		}
+	}
+
+	for _, block := range writeFile.Body().Blocks() {
+		if block.Type() != "module" {
+			continue
+		}
+
+		// Check if block has source
+		if block.Body().GetAttribute("source") == nil {
+			continue
+		}
+
+		key := blockKey(block.Type(), block.Labels())
+		syntaxBody, ok := syntaxBlocks[key]
+		if !ok {
+			continue
+		}
+
+		orderedNames := getOrderedAttrNames(syntaxBody)
+		// source and version should come after for_each/count but before everything else
+		firstAttrs := []string{"for_each", "count", "source", "version"}
+		reorderBlockAttrs(block.Body(), orderedNames, firstAttrs, nil)
+	}
+
+	return formatAndCleanBlankLines(writeFile.Bytes()), nil
 }
 
 // VariableOrderRule ensures variable blocks follow standard ordering.

@@ -192,29 +192,20 @@ func (e *Engine) applyFixes(ctx *sdk.Context, _ *hcl.File, findings []sdk.Findin
 		}
 	}
 
-	// Apply fixes in a single pass by chaining transformations
-	// Read the file once
-	content, err := os.ReadFile(ctx.File)
-	if err != nil {
-		return fmt.Errorf("reading file for fixes: %w", err)
-	}
-
-	// Apply each unique fix
-	// Note: Since fixes operate on file content, we apply them sequentially
-	// but only write to disk once at the end
+	// Apply each unique fix sequentially
+	// Each FixFunc reads from disk, so we write intermediate results
 	for _, finding := range uniqueFindings {
 		fixed, err := finding.FixFunc()
 		if err != nil {
 			return fmt.Errorf("fixing %s: %w", finding.Rule, err)
 		}
 
-		// Update content for next iteration
-		content = fixed
-	}
-
-	// Write the final fixed content back to the file once
-	if err := os.WriteFile(ctx.File, content, 0o644); err != nil {
-		return fmt.Errorf("writing fixed file: %w", err)
+		// Write intermediate result so next FixFunc sees updated content
+		if fixed != nil {
+			if err := os.WriteFile(ctx.File, fixed, 0o644); err != nil {
+				return fmt.Errorf("writing intermediate fix: %w", err)
+			}
+		}
 	}
 
 	return nil

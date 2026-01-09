@@ -6,14 +6,15 @@ Complete reference for all TerraTidy commands.
 
 These flags are available for all commands:
 
-| Flag                   | Description                                             |
-| ---------------------- | ------------------------------------------------------- |
-| `--config`             | Path to configuration file (default: `.terratidy.yaml`) |
-| `--profile`            | Configuration profile to use                            |
-| `--format`             | Output format: `text`, `json`, `sarif`, `html`, `github`|
-| `--paths`              | Paths to check (comma-separated)                        |
-| `--changed`            | Only check files changed in git                         |
-| `--severity-threshold` | Minimum severity: `info`, `warning`, `error`            |
+| Flag                   | Description                                                                       |
+| ---------------------- | --------------------------------------------------------------------------------- |
+| `--config`             | Path to configuration file (default: `.terratidy.yaml`)                           |
+| `--profile`            | Configuration profile to use                                                      |
+| `--format`             | Output format: `text`, `table`, `json`, `json-compact`, `sarif`, `html`, `github` |
+| `--paths`              | Paths to check (comma-separated)                                                  |
+| `--changed`            | Only check files changed in git                                                   |
+| `--color`              | Enable colored output (default: true)                                             |
+| `--severity-threshold` | Minimum severity: `info`, `warning`, `error`                                      |
 
 ## terratidy check
 

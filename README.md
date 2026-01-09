@@ -77,16 +77,31 @@ terratidy check
 
 Example output:
 
-```log
-✅ fmt: All files formatted correctly (23 files)
-⚠️  style: 3 issues found
-  ├─ main.tf:12:1 [style.block_order] resource arguments out of order
-  ├─ variables.tf:5:1 [style.blank_line] missing blank line between variables
-  └─ outputs.tf:8:1 [style.naming] output name should be snake_case
-✅ lint: No issues (ran 47 rules)
-✅ policy: All policies passed
+```text
+Checking 3 files...
 
-💡 Run 'terratidy fix' to auto-fix 2/3 style issues
+1. Checking formatting...
+   Found 0 issue(s)
+
+2. Checking style...
+   Found 2 issue(s)
+
+3. Running linter...
+   Found 1 issue(s)
+
+4. Running policy checks...
+   Found 0 issue(s)
+
+---
+Summary: 3 total issue(s)
+
+  Warnings: 3
+
+Run individual commands for details:
+  terratidy fmt --check
+  terratidy style
+  terratidy lint
+  terratidy policy
 ```
 
 ### 3. Auto-fix Issues

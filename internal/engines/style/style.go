@@ -244,6 +244,7 @@ func (e *Engine) getRuleConfig(ruleName string) RuleConfig {
 func (e *Engine) registerRules() {
 	// Block spacing and structure
 	e.rules = append(e.rules, &BlankLineBetweenBlocksRule{})
+	e.rules = append(e.rules, &NoBlankLinesInsideBlocksRule{})
 	e.rules = append(e.rules, &NoEmptyBlocksRule{})
 
 	// Naming conventions

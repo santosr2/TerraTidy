@@ -124,12 +124,10 @@ func formatAndCleanBlankLines(content []byte) []byte {
 	// First apply hclwrite.Format
 	formatted := hclwrite.Format(content)
 
-	// Remove extra blank lines inside blocks
+	// Remove all blank lines inside blocks
 	lines := splitLines(formatted)
 	var result []byte
 	insideBlock := 0
-	prevBlank := false
-	prevOpenBrace := false
 
 	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
@@ -137,29 +135,28 @@ func formatAndCleanBlankLines(content []byte) []byte {
 		hasOpenBrace := strings.Contains(line, "{")
 		hasCloseBrace := strings.Contains(line, "}")
 
-		// Track block depth
-		if hasOpenBrace {
-			insideBlock++
-		}
-		if hasCloseBrace {
+		// Track block depth (check before updating depth)
+		// For closing braces, we're still "inside" when we see the brace
+		if hasCloseBrace && !hasOpenBrace {
 			insideBlock--
 		}
 
-		// Skip blank lines immediately after opening brace
-		if insideBlock > 0 && isBlank && prevOpenBrace {
-			prevBlank = true
+		// Skip all blank lines inside blocks
+		if insideBlock > 0 && isBlank {
+			// Opening brace line updates depth after this check
+			if hasOpenBrace {
+				insideBlock++
+			}
 			continue
 		}
 
-		// Skip consecutive blank lines inside blocks
-		if insideBlock > 0 && isBlank && prevBlank {
-			continue
+		// Track block depth for opening braces
+		if hasOpenBrace {
+			insideBlock++
 		}
 
 		result = append(result, line...)
 		result = append(result, '\n')
-		prevBlank = isBlank
-		prevOpenBrace = hasOpenBrace && !hasCloseBrace
 	}
 
 	return result
@@ -167,6 +164,105 @@ func formatAndCleanBlankLines(content []byte) []byte {
 
 // snakeCaseRegex matches valid snake_case identifiers
 var snakeCaseRegex = regexp.MustCompile(`^[a-z][a-z0-9_]*$`)
+
+// NoBlankLinesInsideBlocksRule ensures no blank lines inside blocks.
+type NoBlankLinesInsideBlocksRule struct{}
+
+// Name returns the rule identifier.
+func (r *NoBlankLinesInsideBlocksRule) Name() string {
+	return "style.no-blank-lines-inside-blocks"
+}
+
+// Description returns a human-readable description of the rule.
+func (r *NoBlankLinesInsideBlocksRule) Description() string {
+	return "Ensures there are no blank lines inside blocks"
+}
+
+// Check examines the file for blank lines inside blocks.
+func (r *NoBlankLinesInsideBlocksRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Finding, error) {
+	var findings []sdk.Finding
+
+	hclFile, ok := file.Body.(*hclsyntax.Body)
+	if !ok {
+		return findings, nil
+	}
+
+	content, err := os.ReadFile(ctx.File)
+	if err != nil {
+		return nil, err
+	}
+	lines := splitLines(content)
+
+	// Check each block for internal blank lines
+	for _, block := range hclFile.Blocks {
+		blockFindings := r.checkBlock(ctx, block, lines)
+		findings = append(findings, blockFindings...)
+	}
+
+	return findings, nil
+}
+
+func (r *NoBlankLinesInsideBlocksRule) checkBlock(ctx *sdk.Context, block *hclsyntax.Block, lines []string) []sdk.Finding {
+	var findings []sdk.Finding
+
+	startLine := block.Range().Start.Line
+	endLine := block.Range().End.Line
+
+	// Skip if block is a single line
+	if endLine <= startLine+1 {
+		return findings
+	}
+
+	// Check lines inside the block (excluding start/end lines)
+	filePath := ctx.File
+	for lineNum := startLine + 1; lineNum < endLine; lineNum++ {
+		if lineNum-1 >= len(lines) {
+			continue
+		}
+		line := lines[lineNum-1]
+		trimmed := trimLeftWhitespace(line)
+
+		if len(trimmed) == 0 {
+			findings = append(findings, sdk.Finding{
+				Rule:    r.Name(),
+				Message: "Blank line inside block",
+				File:    ctx.File,
+				Location: hcl.Range{
+					Filename: ctx.File,
+					Start:    hcl.Pos{Line: lineNum, Column: 1},
+					End:      hcl.Pos{Line: lineNum, Column: 1},
+				},
+				Severity: sdk.SeverityInfo,
+				Fixable:  true,
+				FixFunc: func() ([]byte, error) {
+					return r.fixFile(filePath)
+				},
+			})
+		}
+	}
+
+	// Also check nested blocks recursively
+	for _, nested := range block.Body.Blocks {
+		nestedFindings := r.checkBlock(ctx, nested, lines)
+		findings = append(findings, nestedFindings...)
+	}
+
+	return findings
+}
+
+// fixFile removes blank lines inside blocks.
+func (r *NoBlankLinesInsideBlocksRule) fixFile(filePath string) ([]byte, error) {
+	content, err := os.ReadFile(filePath)
+	if err != nil {
+		return nil, err
+	}
+	return formatAndCleanBlankLines(content), nil
+}
+
+// Fix removes blank lines inside blocks.
+func (r *NoBlankLinesInsideBlocksRule) Fix(ctx *sdk.Context, _ *hcl.File) ([]byte, error) {
+	return r.fixFile(ctx.File)
+}
 
 // BlankLineBetweenBlocksRule ensures blank lines between top-level blocks.
 type BlankLineBetweenBlocksRule struct{}
@@ -298,14 +394,94 @@ func (r *BlankLineBetweenBlocksRule) fixFile(filePath string) ([]byte, error) {
 		return nil, err
 	}
 
-	// Parse with hclwrite to work with the structure
-	f, diags := hclwrite.ParseConfig(content, filePath, hcl.InitialPos)
+	// Parse to get block positions
+	syntaxFile, diags := hclsyntax.ParseConfig(content, filePath, hcl.InitialPos)
 	if diags.HasErrors() {
 		return nil, diags
 	}
 
-	// Get the formatted output which handles spacing properly
-	return f.Bytes(), nil
+	hclFile, ok := syntaxFile.Body.(*hclsyntax.Body)
+	if !ok {
+		return content, nil
+	}
+
+	// Get original lines
+	lines := splitLines(content)
+
+	// Build a map of line numbers that need adjustments
+	// We'll track where to add/remove blank lines
+	type lineAdjustment struct {
+		afterLine int
+		action    string // "add" or "remove"
+	}
+	var adjustments []lineAdjustment
+
+	blocks := hclFile.Blocks
+	for i := 0; i < len(blocks)-1; i++ {
+		currentBlock := blocks[i]
+		nextBlock := blocks[i+1]
+
+		endLine := currentBlock.Range().End.Line
+		startLine := nextBlock.Range().Start.Line
+
+		// Count actual blank lines between blocks
+		blankLines := countBlankLinesBetween(lines, endLine, startLine)
+
+		if blankLines < 1 {
+			adjustments = append(adjustments, lineAdjustment{
+				afterLine: endLine,
+				action:    "add",
+			})
+		} else if blankLines > 1 {
+			// Need to remove extra blank lines
+			adjustments = append(adjustments, lineAdjustment{
+				afterLine: endLine,
+				action:    "remove",
+			})
+		}
+	}
+
+	if len(adjustments) == 0 {
+		return content, nil
+	}
+
+	// Apply adjustments (process from end to start to keep line numbers valid)
+	var result []string
+	lineNum := 1
+	for lineNum <= len(lines) {
+		line := lines[lineNum-1]
+		result = append(result, line)
+
+		// Check for adjustments at this line
+		for _, adj := range adjustments {
+			if adj.afterLine == lineNum {
+				if adj.action == "add" {
+					// Add a blank line
+					result = append(result, "")
+				} else if adj.action == "remove" {
+					// Skip extra blank lines (but keep one)
+					blankKept := false
+					for lineNum < len(lines) {
+						nextLine := lines[lineNum] // 0-indexed, so lineNum is next
+						trimmed := trimLeftWhitespace(nextLine)
+						if len(trimmed) > 0 {
+							break // Found non-blank line
+						}
+						if !blankKept {
+							result = append(result, "")
+							blankKept = true
+						}
+						lineNum++
+					}
+				}
+			}
+		}
+
+		lineNum++
+	}
+
+	// Join lines with newlines
+	return []byte(strings.Join(result, "\n") + "\n"), nil
 }
 
 // Fix corrects blank line issues between blocks.

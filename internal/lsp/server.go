@@ -204,7 +204,7 @@ func (s *Server) handleInitialize(msg RequestMessage) error {
 		},
 		ServerInfo: &ServerInfo{
 			Name:    "terratidy-lsp",
-			Version: "0.1.0",
+			Version: "0.2.0-alpha",
 		},
 	}
 

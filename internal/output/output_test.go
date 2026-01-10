@@ -780,3 +780,157 @@ func TestEscapeGitHubMessage(t *testing.T) {
 		})
 	}
 }
+
+func TestTableFormatter(t *testing.T) {
+	tests := []struct {
+		name     string
+		findings []sdk.Finding
+		color    bool
+		verbose  bool
+	}{
+		{
+			name:     "no findings with color",
+			findings: []sdk.Finding{},
+			color:    true,
+			verbose:  false,
+		},
+		{
+			name:     "no findings without color",
+			findings: []sdk.Finding{},
+			color:    false,
+			verbose:  false,
+		},
+		{
+			name: "single error with color",
+			findings: []sdk.Finding{
+				{
+					Rule:     "test.error",
+					Message:  "Test error message",
+					File:     "test.tf",
+					Severity: sdk.SeverityError,
+					Location: hcl.Range{
+						Start: hcl.Pos{Line: 10, Column: 5},
+						End:   hcl.Pos{Line: 10, Column: 20},
+					},
+				},
+			},
+			color:   true,
+			verbose: false,
+		},
+		{
+			name: "multiple findings without color verbose",
+			findings: []sdk.Finding{
+				{
+					Rule:     "test.error",
+					Message:  "Error",
+					File:     "test.tf",
+					Severity: sdk.SeverityError,
+					Location: hcl.Range{
+						Start: hcl.Pos{Line: 1, Column: 1},
+					},
+				},
+				{
+					Rule:     "test.warning",
+					Message:  "Warning",
+					File:     "test.tf",
+					Severity: sdk.SeverityWarning,
+					Location: hcl.Range{
+						Start: hcl.Pos{Line: 2, Column: 1},
+					},
+				},
+				{
+					Rule:     "test.info",
+					Message:  "Info",
+					File:     "test.tf",
+					Severity: sdk.SeverityInfo,
+					Location: hcl.Range{
+						Start: hcl.Pos{Line: 3, Column: 1},
+					},
+				},
+			},
+			color:   false,
+			verbose: true,
+		},
+		{
+			name: "long location gets truncated",
+			findings: []sdk.Finding{
+				{
+					Rule:     "test.error",
+					Message:  "Error",
+					File:     "/very/long/path/to/some/deeply/nested/terraform/module/file.tf",
+					Severity: sdk.SeverityError,
+					Location: hcl.Range{
+						Start: hcl.Pos{Line: 100, Column: 50},
+					},
+				},
+			},
+			color:   false,
+			verbose: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			formatter := &TableFormatter{Color: tt.color, Verbose: tt.verbose}
+			var buf bytes.Buffer
+			err := formatter.Format(tt.findings, &buf)
+			if err != nil {
+				t.Fatalf("Format() error = %v", err)
+			}
+
+			output := buf.String()
+
+			if len(tt.findings) == 0 {
+				if !strings.Contains(output, "No issues found") {
+					t.Error("Output should show 'No issues found' for empty findings")
+				}
+			} else {
+				// Verify header is present
+				if !strings.Contains(output, "SEVERITY") {
+					t.Error("Output should contain SEVERITY header")
+				}
+				if !strings.Contains(output, "LOCATION") {
+					t.Error("Output should contain LOCATION header")
+				}
+				if !strings.Contains(output, "MESSAGE") {
+					t.Error("Output should contain MESSAGE header")
+				}
+
+				// Verify summary
+				if !strings.Contains(output, "Summary") {
+					t.Error("Output should contain Summary")
+				}
+			}
+		})
+	}
+}
+
+func TestGetFormatterWithColor(t *testing.T) {
+	t.Run("table format with color enabled", func(t *testing.T) {
+		f, err := GetFormatterWithColor("table", true, "1.0.0", true)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		table, ok := f.(*TableFormatter)
+		if !ok {
+			t.Fatal("expected TableFormatter")
+		}
+		if !table.Color {
+			t.Error("expected Color to be true")
+		}
+	})
+
+	t.Run("table format with color disabled", func(t *testing.T) {
+		f, err := GetFormatterWithColor("table", true, "1.0.0", false)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		table, ok := f.(*TableFormatter)
+		if !ok {
+			t.Fatal("expected TableFormatter")
+		}
+		if table.Color {
+			t.Error("expected Color to be false")
+		}
+	})
+}

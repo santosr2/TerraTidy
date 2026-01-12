@@ -87,9 +87,15 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Update version alias tags
         run: |
+          # Get the tag that triggered this workflow
+          TAG_NAME=${GITHUB_REF#refs/tags/}
+          echo "Processing tag: $TAG_NAME"
+
           # Extract version from tag (e.g., v0.1.0 or v0.1.0-alpha.1)
           FULL_VERSION=${GITHUB_REF#refs/tags/v}
 
@@ -109,23 +115,23 @@ jobs:
             # Create pre-release alias tags: v0-alpha, v0.1-alpha
             echo "Pre-release detected: $PRERELEASE"
 
-            git tag -f "v${MAJOR}-${PRERELEASE}" "${GITHUB_REF#refs/tags/}"
+            git tag -f "v${MAJOR}-${PRERELEASE}" "$TAG_NAME"
             git push -f origin "v${MAJOR}-${PRERELEASE}"
-            echo "Updated tag: v${MAJOR}-${PRERELEASE}"
+            echo "Updated tag: v${MAJOR}-${PRERELEASE} -> $TAG_NAME"
 
-            git tag -f "v${MAJOR}.${MINOR}-${PRERELEASE}" "${GITHUB_REF#refs/tags/}"
+            git tag -f "v${MAJOR}.${MINOR}-${PRERELEASE}" "$TAG_NAME"
             git push -f origin "v${MAJOR}.${MINOR}-${PRERELEASE}"
-            echo "Updated tag: v${MAJOR}.${MINOR}-${PRERELEASE}"
+            echo "Updated tag: v${MAJOR}.${MINOR}-${PRERELEASE} -> $TAG_NAME"
           else
             # Stable release (e.g., v0.1.0)
             # Create stable alias tags: v0, v0.1
             echo "Stable release detected"
 
-            git tag -f "v${MAJOR}" "${GITHUB_REF#refs/tags/}"
+            git tag -f "v${MAJOR}" "$TAG_NAME"
             git push -f origin "v${MAJOR}"
-            echo "Updated tag: v${MAJOR}"
+            echo "Updated tag: v${MAJOR} -> $TAG_NAME"
 
-            git tag -f "v${MAJOR}.${MINOR}" "${GITHUB_REF#refs/tags/}"
+            git tag -f "v${MAJOR}.${MINOR}" "$TAG_NAME"
             git push -f origin "v${MAJOR}.${MINOR}"
-            echo "Updated tag: v${MAJOR}.${MINOR}"
+            echo "Updated tag: v${MAJOR}.${MINOR} -> $TAG_NAME"
           fi

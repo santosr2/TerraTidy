@@ -6,6 +6,8 @@ before:
   hooks:
     - go mod tidy
     - go mod download
+    # Generate version.json for embedded build info
+    - sh -c 'echo "{\"version\":\"{{.Version}}\",\"commit\":\"{{.Commit}}\",\"date\":\"{{.Date}}\"}" > internal/buildinfo/version.json'
 
 builds:
   - id: terratidy
@@ -22,9 +24,9 @@ builds:
       - arm64
     ldflags:
       - -s -w
-      - -X main.version={{.Version}}
-      - -X main.commit={{.Commit}}
-      - -X main.date={{.Date}}
+      - -X github.com/santosr2/terratidy/internal/buildinfo.Version={{.Version}}
+      - -X github.com/santosr2/terratidy/internal/buildinfo.Commit={{.Commit}}
+      - -X github.com/santosr2/terratidy/internal/buildinfo.Date={{.Date}}
 
 archives:
   - id: terratidy

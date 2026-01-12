@@ -50,6 +50,8 @@ postprocessors = []
 conventional_commits = true
 # filter out the commits that are not conventional
 filter_unconventional = true
+# Only consider full semver tags, exclude alias tags like v0-alpha, v0.2-alpha
+tag_pattern = "v[0-9]+\\.[0-9]+\\.[0-9]+.*"
 # process each line of a commit as an individual commit
 split_commits = false
 # regex for preprocessing the commit messages

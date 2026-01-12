@@ -135,3 +135,51 @@ jobs:
             git push -f origin "v${MAJOR}.${MINOR}"
             echo "Updated tag: v${MAJOR}.${MINOR} -> $TAG_NAME"
           fi
+
+  update-docker-tags:
+    needs: goreleaser
+    runs-on: ubuntu-latest
+    steps:
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update Docker alias tags
+        run: |
+          # Get the tag that triggered this workflow
+          TAG_NAME=${GITHUB_REF#refs/tags/}
+          echo "Processing tag: $TAG_NAME"
+
+          # Extract version from tag (e.g., v0.1.0 or v0.1.0-alpha.1)
+          FULL_VERSION=${GITHUB_REF#refs/tags/v}
+
+          # Split version and pre-release identifier
+          BASE_VERSION=$(echo "$FULL_VERSION" | cut -d- -f1)
+          PRERELEASE=$(echo "$FULL_VERSION" | grep -oP '(?<=-)[a-z]+' || echo "")
+
+          MAJOR=$(echo "$BASE_VERSION" | cut -d. -f1)
+          MINOR=$(echo "$BASE_VERSION" | cut -d. -f2)
+
+          IMAGE="ghcr.io/santosr2/terratidy"
+          SOURCE_TAG="${IMAGE}:${TAG_NAME}"
+
+          if [[ -n "$PRERELEASE" ]]; then
+            # Pre-release: create alias tags v0-alpha, v0.1-alpha
+            echo "Pre-release detected: $PRERELEASE"
+
+            docker pull "$SOURCE_TAG"
+
+            docker tag "$SOURCE_TAG" "${IMAGE}:v${MAJOR}-${PRERELEASE}"
+            docker push "${IMAGE}:v${MAJOR}-${PRERELEASE}"
+            echo "Updated Docker tag: v${MAJOR}-${PRERELEASE}"
+
+            docker tag "$SOURCE_TAG" "${IMAGE}:v${MAJOR}.${MINOR}-${PRERELEASE}"
+            docker push "${IMAGE}:v${MAJOR}.${MINOR}-${PRERELEASE}"
+            echo "Updated Docker tag: v${MAJOR}.${MINOR}-${PRERELEASE}"
+          else
+            # Stable release: alias tags are handled by goreleaser
+            echo "Stable release - Docker alias tags handled by goreleaser"
+          fi

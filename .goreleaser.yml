@@ -110,6 +110,8 @@ release:
     - 📋 [Full Changelog](https://github.com/santosr2/terratidy/blob/main/CHANGELOG.md)
     - 🐛 [Report Issues](https://github.com/santosr2/terratidy/issues)
 
+    ---
+
     **Full Changelog**: https://github.com/santosr2/terratidy/compare/{{ .PreviousTag }}...{{ .Tag }}
 
 brews:

@@ -7,12 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.2.0-alpha.2] - 2026-01-12
 
-### Fixed
-
-- **release**: Improve release notes and tag alias workflow
-
-## [0.2-alpha] - 2026-01-12
-
 ### Added
 
 - **release**: Add automated changelog and fix pre-release handling
@@ -35,13 +29,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **style**: Implement blank line rules between and inside blocks
 - **test**: Make TestToAbsPath cross-platform for Windows
 - **release**: Add RELEASE_NOTES.md to gitignore to prevent dirty state
+- **release**: Improve release notes and tag alias workflow
 
 ### Other
 
 - Add bump-my-version to mise and update bumpversion config
-- Bump version to 0.2.0-alpha.2
 
-### Ci
+### CI
 
 - Add coverpkg flag for accurate cross-package coverage
 
@@ -127,7 +121,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Exclude test files from complexity rules in revive
 - **vscode**: Add .gitignore for build artifacts
 
-[0.2.0-alpha.2]: https://github.com/santosr2/terratidy/compare/v0.2-alpha...v0.2.0-alpha.2
-[0.2-alpha]: https://github.com/santosr2/terratidy/compare/v0.2.0-alpha...v0.2-alpha
+[0.2.0-alpha.2]: https://github.com/santosr2/terratidy/compare/v0.2.0-alpha...v0.2.0-alpha.2
 [0.2.0-alpha]: https://github.com/santosr2/terratidy/compare/v0.1.0...v0.2.0-alpha
-

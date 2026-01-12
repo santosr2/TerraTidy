@@ -164,7 +164,7 @@ func FormatAndCleanBlankLines(content []byte) []byte {
 		}
 
 		// Remove trailing blank lines (lines immediately before closing brace)
-		for i := endLine - 1; i > startLine; i++ {
+		for i := endLine - 1; i > startLine; i-- {
 			trimmed := strings.TrimSpace(lines[i])
 			if len(trimmed) == 0 {
 				skipLines[i] = true
@@ -233,6 +233,24 @@ func CountBlankLinesBetween(lines []string, endLine, startLine int) int {
 	}
 
 	return blankCount
+}
+
+// HasCommentBetween checks if there's a comment line between two line numbers.
+// Line numbers are 1-indexed (HCL convention).
+func HasCommentBetween(lines []string, endLine, startLine int) bool {
+	for lineNum := endLine + 1; lineNum < startLine; lineNum++ {
+		if lineNum-1 >= len(lines) {
+			continue
+		}
+		line := lines[lineNum-1]
+		trimmed := strings.TrimSpace(line)
+
+		// Check if line is a comment
+		if strings.HasPrefix(trimmed, "#") || strings.HasPrefix(trimmed, "//") {
+			return true
+		}
+	}
+	return false
 }
 
 // BlockKey creates a unique key for a block based on type and labels.

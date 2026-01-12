@@ -7,7 +7,6 @@ import (
 
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/hclparse"
-	"github.com/santosr2/terratidy/internal/cache"
 	"github.com/santosr2/terratidy/pkg/sdk"
 )
 
@@ -80,56 +79,6 @@ func (e *Engine) Run(ctx context.Context, files []string) ([]sdk.Finding, error)
 
 // checkFile checks a single file against all enabled rules
 func (e *Engine) checkFile(parser *hclparse.Parser, path string) ([]sdk.Finding, error) {
-	var content []byte
-	var file *hcl.File
-	var diags hcl.Diagnostics
-
-	// Try to get from cache first
-	if entry, err := cache.Default().GetOrParse(path); err == nil && entry.File != nil {
-		content = entry.Content
-		file = entry.File
-		diags = entry.ParseErrs
-	} else {
-		// Fallback to direct read if cache fails
-		var readErr error
-		content, readErr = os.ReadFile(path)
-		if readErr != nil {
-			return nil, fmt.Errorf("reading file: %w", readErr)
-		}
-
-		// Try parsing as HCL first
-		file, diags = parser.ParseHCL(content, path)
-		if diags.HasErrors() {
-			// If that fails, try as JSON (for .tf.json files)
-			file, diags = parser.ParseJSON(content, path)
-		}
-	}
-
-	// Check for parse errors
-	if diags.HasErrors() {
-		return []sdk.Finding{{
-			Rule:     "style.parse-error",
-			Message:  fmt.Sprintf("Failed to parse file: %s", diags.Error()),
-			File:     path,
-			Severity: sdk.SeverityError,
-			Fixable:  false,
-		}}, nil
-	}
-
-	// Handle case where file is nil (shouldn't happen but be safe)
-	if file == nil {
-		return []sdk.Finding{{
-			Rule:     "style.parse-error",
-			Message:  "Failed to parse file: unknown error",
-			File:     path,
-			Severity: sdk.SeverityError,
-			Fixable:  false,
-		}}, nil
-	}
-
-	// Keep content reference to avoid unused variable error
-	_ = content
-
 	// Create context for rule execution
 	ruleCtx := &sdk.Context{
 		Config:  make(map[string]interface{}),
@@ -137,38 +86,89 @@ func (e *Engine) checkFile(parser *hclparse.Parser, path string) ([]sdk.Finding,
 		File:    path,
 	}
 
-	// Run all enabled rules
-	var findings []sdk.Finding
-	for _, rule := range e.rules {
-		ruleConfig := e.getRuleConfig(rule.Name())
-		if !ruleConfig.Enabled {
-			continue
-		}
+	var allFindings []sdk.Finding
+	maxPasses := 3 // Limit passes to prevent infinite loops
 
-		// Set rule config in context
-		ruleCtx.Config = ruleConfig.Options
-
-		// Check the rule
-		ruleFindings, err := rule.Check(ruleCtx, file)
+	for pass := 0; pass < maxPasses; pass++ {
+		// Always read fresh content for each pass
+		content, err := os.ReadFile(path)
 		if err != nil {
-			return nil, fmt.Errorf("rule %s: %w", rule.Name(), err)
+			return nil, fmt.Errorf("reading file: %w", err)
 		}
 
-		findings = append(findings, ruleFindings...)
-	}
-
-	// In fix mode, apply fixes
-	if e.config.Fix && len(findings) > 0 {
-		if err := e.applyFixes(ruleCtx, file, findings); err != nil {
-			return nil, fmt.Errorf("applying fixes: %w", err)
+		// Parse fresh for each pass
+		file, diags := parser.ParseHCL(content, path)
+		if diags.HasErrors() {
+			// Try as JSON for .tf.json files
+			file, diags = parser.ParseJSON(content, path)
 		}
+
+		if diags.HasErrors() {
+			return []sdk.Finding{{
+				Rule:     "style.parse-error",
+				Message:  fmt.Sprintf("Failed to parse file: %s", diags.Error()),
+				File:     path,
+				Severity: sdk.SeverityError,
+				Fixable:  false,
+			}}, nil
+		}
+
+		if file == nil {
+			return []sdk.Finding{{
+				Rule:     "style.parse-error",
+				Message:  "Failed to parse file: unknown error",
+				File:     path,
+				Severity: sdk.SeverityError,
+				Fixable:  false,
+			}}, nil
+		}
+
+		// Run all enabled rules
+		var findings []sdk.Finding
+		for _, rule := range e.rules {
+			ruleConfig := e.getRuleConfig(rule.Name())
+			if !ruleConfig.Enabled {
+				continue
+			}
+
+			ruleCtx.Config = ruleConfig.Options
+
+			ruleFindings, err := rule.Check(ruleCtx, file)
+			if err != nil {
+				return nil, fmt.Errorf("rule %s: %w", rule.Name(), err)
+			}
+
+			findings = append(findings, ruleFindings...)
+		}
+
+		// On first pass, collect all findings for reporting
+		if pass == 0 {
+			allFindings = findings
+		}
+
+		// In fix mode, apply fixes and potentially loop for another pass
+		if e.config.Fix && len(findings) > 0 {
+			fixedCount, err := e.applyFixes(ruleCtx, file, findings)
+			if err != nil {
+				return nil, fmt.Errorf("applying fixes: %w", err)
+			}
+
+			// If we applied fixes, continue to next pass to catch any new issues
+			if fixedCount > 0 {
+				continue
+			}
+		}
+
+		// No fixes applied or not in fix mode, we're done
+		break
 	}
 
-	return findings, nil
+	return allFindings, nil
 }
 
 // applyFixes applies auto-fixes to the file in one optimized pass.
-func (e *Engine) applyFixes(ctx *sdk.Context, _ *hcl.File, findings []sdk.Finding) error {
+// Returns the number of fixes applied.
+func (e *Engine) applyFixes(ctx *sdk.Context, _ *hcl.File, findings []sdk.Finding) (int, error) {
 	// Group findings by fixability
 	var fixableFindings []sdk.Finding
 	for _, f := range findings {
@@ -178,7 +178,7 @@ func (e *Engine) applyFixes(ctx *sdk.Context, _ *hcl.File, findings []sdk.Findin
 	}
 
 	if len(fixableFindings) == 0 {
-		return nil
+		return 0, nil
 	}
 
 	// Deduplicate findings by rule to avoid redundant fixes
@@ -194,21 +194,23 @@ func (e *Engine) applyFixes(ctx *sdk.Context, _ *hcl.File, findings []sdk.Findin
 
 	// Apply each unique fix sequentially
 	// Each FixFunc reads from disk, so we write intermediate results
+	fixedCount := 0
 	for _, finding := range uniqueFindings {
 		fixed, err := finding.FixFunc()
 		if err != nil {
-			return fmt.Errorf("fixing %s: %w", finding.Rule, err)
+			return fixedCount, fmt.Errorf("fixing %s: %w", finding.Rule, err)
 		}
 
 		// Write intermediate result so next FixFunc sees updated content
 		if fixed != nil {
 			if err := os.WriteFile(ctx.File, fixed, 0o644); err != nil {
-				return fmt.Errorf("writing intermediate fix: %w", err)
+				return fixedCount, fmt.Errorf("writing intermediate fix: %w", err)
 			}
+			fixedCount++
 		}
 	}
 
-	return nil
+	return fixedCount, nil
 }
 
 // getRuleConfig returns the configuration for a rule
@@ -242,10 +244,8 @@ func (e *Engine) getRuleConfig(ruleName string) RuleConfig {
 
 // registerRules registers all built-in style rules
 func (e *Engine) registerRules() {
-	// Block spacing and structure
+	// Block spacing between blocks
 	e.rules = append(e.rules, &BlankLineBetweenBlocksRule{})
-	e.rules = append(e.rules, &NoLeadingTrailingBlankLinesRule{})
-	e.rules = append(e.rules, &NoEmptyBlocksRule{})
 
 	// Naming conventions
 	e.rules = append(e.rules, &BlockLabelCaseRule{})
@@ -257,19 +257,23 @@ func (e *Engine) registerRules() {
 	e.rules = append(e.rules, &TerraformBlockFirstRule{})
 	e.rules = append(e.rules, &ProviderBlockOrderRule{})
 
-	// Attribute ordering within blocks
+	// Attribute ordering within blocks (runs first to reorder attributes)
 	e.rules = append(e.rules, &ForEachCountFirstRule{})
 	e.rules = append(e.rules, &SourceVersionGroupedRule{})
 	e.rules = append(e.rules, &TagsAtEndRule{})
 	e.rules = append(e.rules, &DependsOnOrderRule{})
 	e.rules = append(e.rules, &LifecycleAtEndRule{})
 
-	// Attribute group spacing (blank lines between groups)
-	e.rules = append(e.rules, &AttributeGroupSpacingRule{})
-
 	// Variable and output ordering
 	e.rules = append(e.rules, &VariableOrderRule{})
 	e.rules = append(e.rules, &OutputOrderRule{})
+
+	// Attribute group spacing (runs after ordering to add blank lines between groups)
+	e.rules = append(e.rules, &AttributeGroupSpacingRule{})
+
+	// Cleanup rules (run last to fix any blank line issues from reordering)
+	e.rules = append(e.rules, &NoLeadingTrailingBlankLinesRule{})
+	e.rules = append(e.rules, &NoEmptyBlocksRule{})
 
 	// File organization rules (disabled by default - enable via config)
 	e.rules = append(e.rules, &VariablesInFileRule{})

@@ -181,6 +181,17 @@ func (r *BlankLineBetweenBlocksRule) Check(ctx *sdk.Context, file *hcl.File) ([]
 		// Count actual blank lines (excluding comments) between blocks
 		blankLines := CountBlankLinesBetween(lines, endLine, startLine)
 
+		// Check if there's a comment between blocks
+		hasComment := HasCommentBetween(lines, endLine, startLine)
+
+		// Determine max allowed blank lines:
+		// - Without comment: exactly 1 blank line
+		// - With comment: allow up to 2 blank lines (1 before + 1 after comment)
+		maxBlankLines := 1
+		if hasComment {
+			maxBlankLines = 2
+		}
+
 		if blankLines < 1 {
 			// Capture values for closure
 			filePath := ctx.File
@@ -195,7 +206,7 @@ func (r *BlankLineBetweenBlocksRule) Check(ctx *sdk.Context, file *hcl.File) ([]
 					return r.fixFile(filePath)
 				},
 			})
-		} else if blankLines > 1 {
+		} else if blankLines > maxBlankLines {
 			// Capture values for closure
 			filePath := ctx.File
 			findings = append(findings, sdk.Finding{

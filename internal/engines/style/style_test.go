@@ -177,10 +177,25 @@ resource "aws_instance" "b" {
 			wantFinding: true,
 		},
 		{
-			name: "two blank lines with comment should report too many",
+			name: "two blank lines with comment is allowed",
 			content: `resource "aws_instance" "a" {
   ami = "ami-12345"
 }
+
+
+# This is a comment
+resource "aws_instance" "b" {
+  ami = "ami-67890"
+}
+`,
+			wantFinding: false, // 2 blank lines allowed when there's a comment (common section divider pattern)
+		},
+		{
+			name: "three blank lines with comment should report too many",
+			content: `resource "aws_instance" "a" {
+  ami = "ami-12345"
+}
+
 
 
 # This is a comment

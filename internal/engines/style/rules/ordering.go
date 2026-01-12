@@ -933,7 +933,8 @@ func (r *VariableOrderRule) Fix(ctx *sdk.Context, _ *hcl.File) ([]byte, error) {
 		}
 	}
 
-	return f.Bytes(), nil
+	// Clean up any leading/trailing blank lines that may have been introduced
+	return FormatAndCleanBlankLines(f.Bytes()), nil
 }
 
 // OutputOrderRule ensures output blocks follow standard ordering.
@@ -1105,7 +1106,8 @@ func (r *OutputOrderRule) Fix(ctx *sdk.Context, _ *hcl.File) ([]byte, error) {
 		}
 	}
 
-	return f.Bytes(), nil
+	// Clean up any leading/trailing blank lines that may have been introduced
+	return FormatAndCleanBlankLines(f.Bytes()), nil
 }
 
 // TerraformBlockFirstRule ensures terraform block is first in the file.
@@ -1248,23 +1250,46 @@ func (r *AttributeGroupSpacingRule) Name() string {
 
 // Description returns a human-readable description of the rule.
 func (r *AttributeGroupSpacingRule) Description() string {
-	return "Ensures blank lines between attribute groups (meta-args, source/version, main, depends_on, tags)"
+	return "Ensures blank lines between attribute groups (meta-args, source/version, one-line attrs, block attrs, depends_on, tags) and between block-valued attributes"
 }
 
 // attrGroup represents which group an attribute belongs to.
 type attrGroup int
 
 const (
-	groupMeta      attrGroup = iota // for_each, count, provider
-	groupSource                     // source, version (modules only)
-	groupMain                       // regular attributes
-	groupDependsOn                  // depends_on
-	groupTags                       // tags, labels, tags_all
+	groupMeta        attrGroup = iota // for_each, count, provider
+	groupSource                       // source, version (modules only)
+	groupMainOneLine                  // regular one-line attributes (key = value)
+	groupMainBlock                    // attributes with block/multi-line values
+	groupDependsOn                    // depends_on
+	groupTags                         // tags, labels, tags_all
 	groupUnknown
 )
 
 // getAttrGroup returns the group for an attribute name.
-func getAttrGroup(name string, blockType string) attrGroup {
+// isMultiLine indicates if the attribute value spans multiple lines.
+func getAttrGroup(name string, blockType string, isMultiLine bool) attrGroup {
+	// Handle variable block attributes
+	if blockType == "variable" {
+		// Variable blocks don't use the same grouping as resources
+		// Just separate one-line from multi-line attributes
+		if isMultiLine {
+			return groupMainBlock
+		}
+		return groupMainOneLine
+	}
+
+	// Handle output block attributes
+	if blockType == "output" {
+		// Output blocks don't use the same grouping as resources
+		// Just separate one-line from multi-line attributes
+		if isMultiLine {
+			return groupMainBlock
+		}
+		return groupMainOneLine
+	}
+
+	// Handle resource, module, and data blocks
 	switch name {
 	case "for_each", "count", "provider":
 		return groupMeta
@@ -1272,14 +1297,25 @@ func getAttrGroup(name string, blockType string) attrGroup {
 		if blockType == "module" {
 			return groupSource
 		}
-		return groupMain
+		if isMultiLine {
+			return groupMainBlock
+		}
+		return groupMainOneLine
 	case "depends_on":
 		return groupDependsOn
 	case "tags", "labels", "tags_all":
 		return groupTags
 	default:
-		return groupMain
+		if isMultiLine {
+			return groupMainBlock
+		}
+		return groupMainOneLine
 	}
+}
+
+// isAttrMultiLine checks if an attribute spans multiple lines.
+func isAttrMultiLine(attr *hclsyntax.Attribute) bool {
+	return attr.Range().End.Line > attr.Range().Start.Line
 }
 
 // Check examines blocks for missing blank lines between attribute groups.
@@ -1298,8 +1334,9 @@ func (r *AttributeGroupSpacingRule) Check(ctx *sdk.Context, file *hcl.File) ([]s
 	lines := SplitLines(content)
 
 	for _, block := range hclFile.Blocks {
-		// Only check resource, module, and data blocks
-		if block.Type != "resource" && block.Type != "module" && block.Type != "data" {
+		// Check resource, module, data, variable, and output blocks
+		if block.Type != "resource" && block.Type != "module" && block.Type != "data" &&
+			block.Type != "variable" && block.Type != "output" {
 			continue
 		}
 
@@ -1322,10 +1359,11 @@ func (r *AttributeGroupSpacingRule) checkBlock(ctx *sdk.Context, block *hclsynta
 	var attrs []attrInfo
 
 	for name, attr := range block.Body.Attributes {
+		isMultiLine := isAttrMultiLine(attr)
 		attrs = append(attrs, attrInfo{
 			name:  name,
 			line:  attr.Range().Start.Line,
-			group: getAttrGroup(name, block.Type),
+			group: getAttrGroup(name, block.Type, isMultiLine),
 		})
 	}
 
@@ -1340,15 +1378,18 @@ func (r *AttributeGroupSpacingRule) checkBlock(ctx *sdk.Context, block *hclsynta
 
 	// Check for missing blank lines between groups
 	filePath := ctx.File
-	blockType := block.Type
-	blockLabels := block.Labels
 
 	for i := 0; i < len(attrs)-1; i++ {
 		curr := attrs[i]
 		next := attrs[i+1]
 
-		// Skip if same group
-		if curr.group == next.group {
+		// Determine if we need a blank line between these attributes:
+		// 1. Different groups always need blank lines
+		// 2. Consecutive block-valued attributes (groupMainBlock) need blank lines between them
+		needsBlankLine := curr.group != next.group ||
+			(curr.group == groupMainBlock && next.group == groupMainBlock)
+
+		if !needsBlankLine {
 			continue
 		}
 
@@ -1365,9 +1406,15 @@ func (r *AttributeGroupSpacingRule) checkBlock(ctx *sdk.Context, block *hclsynta
 		}
 
 		if !hasBlankLine {
+			message := "Missing blank line between " + curr.name + " and " + next.name
+			if curr.group == next.group {
+				message += " (block-valued attributes should be separated)"
+			} else {
+				message += " (different attribute groups)"
+			}
 			findings = append(findings, sdk.Finding{
 				Rule:    r.Name(),
-				Message: "Missing blank line between " + curr.name + " and " + next.name + " (different attribute groups)",
+				Message: message,
 				File:    ctx.File,
 				Location: hcl.Range{
 					Filename: ctx.File,
@@ -1377,7 +1424,8 @@ func (r *AttributeGroupSpacingRule) checkBlock(ctx *sdk.Context, block *hclsynta
 				Severity: sdk.SeverityInfo,
 				Fixable:  true,
 				FixFunc: func() ([]byte, error) {
-					return r.fixBlock(filePath, blockType, blockLabels)
+					// Fix all blocks in one pass (deduplication means only first finding's FixFunc runs)
+					return r.fixAllBlocks(filePath)
 				},
 			})
 		}
@@ -1432,11 +1480,12 @@ func (r *AttributeGroupSpacingRule) fixBlock(filePath, blockType string, blockLa
 	var attrs []attrInfo
 
 	for name, attr := range targetBlock.Body.Attributes {
+		isMultiLine := isAttrMultiLine(attr)
 		attrs = append(attrs, attrInfo{
 			name:    name,
 			line:    attr.Range().Start.Line,
 			endLine: attr.Range().End.Line,
-			group:   getAttrGroup(name, blockType),
+			group:   getAttrGroup(name, blockType, isMultiLine),
 		})
 	}
 
@@ -1456,8 +1505,13 @@ func (r *AttributeGroupSpacingRule) fixBlock(filePath, blockType string, blockLa
 		curr := attrs[i]
 		next := attrs[i+1]
 
-		// Skip if same group
-		if curr.group == next.group {
+		// Determine if we need a blank line between these attributes:
+		// 1. Different groups always need blank lines
+		// 2. Consecutive block-valued attributes (groupMainBlock) need blank lines between them
+		needsBlankLine := curr.group != next.group ||
+			(curr.group == groupMainBlock && next.group == groupMainBlock)
+
+		if !needsBlankLine {
 			continue
 		}
 
@@ -1497,6 +1551,46 @@ func (r *AttributeGroupSpacingRule) fixBlock(filePath, blockType string, blockLa
 	return []byte(strings.Join(result, "\n") + "\n"), nil
 }
 
+// fixAllBlocks fixes attribute group spacing in all blocks in the file.
+func (r *AttributeGroupSpacingRule) fixAllBlocks(filePath string) ([]byte, error) {
+	content, err := os.ReadFile(filePath)
+	if err != nil {
+		return nil, err
+	}
+
+	// Parse to find all blocks
+	syntaxFile, diags := hclsyntax.ParseConfig(content, filePath, hcl.InitialPos)
+	if diags.HasErrors() {
+		return content, nil
+	}
+
+	syntaxBody, ok := syntaxFile.Body.(*hclsyntax.Body)
+	if !ok {
+		return content, nil
+	}
+
+	// Process each block that needs spacing
+	for _, block := range syntaxBody.Blocks {
+		if block.Type != "resource" && block.Type != "module" && block.Type != "data" &&
+			block.Type != "variable" && block.Type != "output" {
+			continue
+		}
+
+		// Fix this block
+		content, err = r.fixBlock(filePath, block.Type, block.Labels)
+		if err != nil {
+			return nil, err
+		}
+
+		// Write intermediate result so next fixBlock sees updated line numbers
+		if err := os.WriteFile(filePath, content, 0o644); err != nil {
+			return nil, err
+		}
+	}
+
+	return content, nil
+}
+
 // Fix adds blank lines between attribute groups.
 func (r *AttributeGroupSpacingRule) Fix(ctx *sdk.Context, file *hcl.File) ([]byte, error) {
 	content, err := os.ReadFile(ctx.File)
@@ -1511,7 +1605,8 @@ func (r *AttributeGroupSpacingRule) Fix(ctx *sdk.Context, file *hcl.File) ([]byt
 
 	// Process each block
 	for _, block := range hclFile.Blocks {
-		if block.Type != "resource" && block.Type != "module" && block.Type != "data" {
+		if block.Type != "resource" && block.Type != "module" && block.Type != "data" &&
+			block.Type != "variable" && block.Type != "output" {
 			continue
 		}
 

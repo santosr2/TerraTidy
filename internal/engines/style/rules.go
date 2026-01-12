@@ -12,9 +12,9 @@ import (
 // Type aliases for backwards compatibility
 type (
 	// Spacing rules
-	BlankLineBetweenBlocksRule   = rules.BlankLineBetweenBlocksRule
-	NoBlankLinesInsideBlocksRule = rules.NoBlankLinesInsideBlocksRule
-	NoEmptyBlocksRule            = rules.NoEmptyBlocksRule
+	BlankLineBetweenBlocksRule      = rules.BlankLineBetweenBlocksRule
+	NoLeadingTrailingBlankLinesRule = rules.NoLeadingTrailingBlankLinesRule
+	NoEmptyBlocksRule               = rules.NoEmptyBlocksRule
 
 	// Naming rules
 	BlockLabelCaseRule = rules.BlockLabelCaseRule

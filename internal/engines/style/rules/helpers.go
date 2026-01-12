@@ -118,42 +118,67 @@ func ReorderBlockAttrs(body *hclwrite.Body, orderedNames, firstAttrs, lastAttrs 
 	}
 }
 
-// FormatAndCleanBlankLines applies hclwrite.Format and removes extra blank lines inside blocks.
+// FormatAndCleanBlankLines applies hclwrite.Format and removes leading/trailing blank lines inside blocks.
+// It preserves internal blank lines for readability.
 func FormatAndCleanBlankLines(content []byte) []byte {
 	// First apply hclwrite.Format
 	formatted := hclwrite.Format(content)
 
-	// Remove all blank lines inside blocks
+	// Only remove leading/trailing blank lines inside blocks, preserve internal ones
 	lines := SplitLines(formatted)
 	var result []byte
-	insideBlock := 0
 
-	for _, line := range lines {
-		trimmed := strings.TrimSpace(line)
-		isBlank := len(trimmed) == 0
+	// First pass: identify block boundaries
+	blockStarts := make([]int, 0)
+	blockEnds := make(map[int]int) // maps start line to end line
+
+	for i, line := range lines {
 		hasOpenBrace := strings.Contains(line, "{")
 		hasCloseBrace := strings.Contains(line, "}")
 
-		// Track block depth (check before updating depth)
-		// For closing braces, we're still "inside" when we see the brace
-		if hasCloseBrace && !hasOpenBrace {
-			insideBlock--
+		if hasOpenBrace && !hasCloseBrace {
+			blockStarts = append(blockStarts, i)
+		} else if hasCloseBrace && !hasOpenBrace {
+			if len(blockStarts) > 0 {
+				start := blockStarts[len(blockStarts)-1]
+				blockStarts = blockStarts[:len(blockStarts)-1]
+				blockEnds[start] = i
+			}
+		}
+		// Single line blocks like `tags = {}` have no internal lines to process
+	}
+
+	// Second pass: remove only leading/trailing blank lines inside blocks
+	// Mark lines to skip
+	skipLines := make(map[int]bool)
+
+	for startLine, endLine := range blockEnds {
+		// Remove leading blank lines (lines immediately after opening brace)
+		for i := startLine + 1; i < endLine; i++ {
+			trimmed := strings.TrimSpace(lines[i])
+			if len(trimmed) == 0 {
+				skipLines[i] = true
+			} else {
+				break
+			}
 		}
 
-		// Skip all blank lines inside blocks
-		if insideBlock > 0 && isBlank {
-			// Opening brace line updates depth after this check
-			if hasOpenBrace {
-				insideBlock++
+		// Remove trailing blank lines (lines immediately before closing brace)
+		for i := endLine - 1; i > startLine; i++ {
+			trimmed := strings.TrimSpace(lines[i])
+			if len(trimmed) == 0 {
+				skipLines[i] = true
+			} else {
+				break
 			}
+		}
+	}
+
+	// Build result
+	for i, line := range lines {
+		if skipLines[i] {
 			continue
 		}
-
-		// Track block depth for opening braces
-		if hasOpenBrace {
-			insideBlock++
-		}
-
 		result = append(result, line...)
 		result = append(result, '\n')
 	}

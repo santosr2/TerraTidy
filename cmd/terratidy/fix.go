@@ -81,6 +81,18 @@ func runAllFixes(files []string) ([]sdk.Finding, int, error) {
 	allFindings = append(allFindings, styleFindings...)
 	totalFixed += styleFixed
 
+	// Re-run fmt after style fixes to restore proper HCL formatting
+	// (style fixes may disrupt equal sign alignment)
+	if styleFixed > 0 {
+		fmt.Println("3. Re-formatting files...")
+		fmtEngine := fmtengine.New(&fmtengine.Config{Check: false})
+		if _, err := fmtEngine.Run(ctx, files); err != nil {
+			return nil, 0, fmt.Errorf("re-formatting failed: %w", err)
+		}
+		fmt.Println("   Done")
+		fmt.Println()
+	}
+
 	return allFindings, totalFixed, nil
 }
 

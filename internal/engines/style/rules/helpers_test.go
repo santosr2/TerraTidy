@@ -118,7 +118,7 @@ func TestFormatAndCleanBlankLines(t *testing.T) {
 		expected string
 	}{
 		{
-			name: "removes blank lines inside block",
+			name: "preserves internal blank lines inside block",
 			input: `resource "test" "example" {
   ami = "ami-123"
 
@@ -127,6 +127,37 @@ func TestFormatAndCleanBlankLines(t *testing.T) {
 `,
 			expected: `resource "test" "example" {
   ami = "ami-123"
+
+  name = "test"
+}
+`,
+		},
+		{
+			name: "removes leading blank lines inside block",
+			input: `resource "test" "example" {
+
+  ami = "ami-123"
+  name = "test"
+}
+`,
+			// hclwrite.Format aligns the equal signs
+			expected: `resource "test" "example" {
+  ami  = "ami-123"
+  name = "test"
+}
+`,
+		},
+		{
+			name: "removes trailing blank lines inside block",
+			input: `resource "test" "example" {
+  ami = "ami-123"
+  name = "test"
+
+}
+`,
+			// hclwrite.Format aligns the equal signs
+			expected: `resource "test" "example" {
+  ami  = "ami-123"
   name = "test"
 }
 `,

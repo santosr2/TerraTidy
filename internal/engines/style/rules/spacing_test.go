@@ -12,11 +12,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestNoBlankLinesInsideBlocksRule(t *testing.T) {
-	rule := &NoBlankLinesInsideBlocksRule{}
+func TestNoLeadingTrailingBlankLinesRule(t *testing.T) {
+	rule := &NoLeadingTrailingBlankLinesRule{}
 
 	t.Run("Name", func(t *testing.T) {
-		assert.Equal(t, "style.no-blank-lines-inside-blocks", rule.Name())
+		assert.Equal(t, "style.no-leading-trailing-blank-lines", rule.Name())
 	})
 
 	t.Run("Description", func(t *testing.T) {
@@ -29,7 +29,7 @@ func TestNoBlankLinesInsideBlocksRule(t *testing.T) {
 		wantFindings int
 	}{
 		{
-			name: "no blank lines inside block",
+			name: "no leading/trailing blank lines inside block",
 			content: `resource "aws_instance" "example" {
   ami           = "ami-123"
   instance_type = "t2.micro"
@@ -37,35 +37,40 @@ func TestNoBlankLinesInsideBlocksRule(t *testing.T) {
 			wantFindings: 0,
 		},
 		{
-			name: "blank line inside block",
+			name: "internal blank line is allowed",
 			content: `resource "aws_instance" "example" {
   ami = "ami-123"
 
   instance_type = "t2.micro"
 }`,
-			wantFindings: 1,
+			wantFindings: 0, // Internal blank lines are now allowed
 		},
 		{
-			name: "multiple blank lines inside block",
+			name: "leading blank line inside block",
 			content: `resource "aws_instance" "example" {
-  ami = "ami-123"
 
-
+  ami           = "ami-123"
   instance_type = "t2.micro"
 }`,
-			wantFindings: 2,
+			wantFindings: 1, // Leading blank line after opening brace
 		},
 		{
-			name: "nested block with blank line",
+			name: "trailing blank line inside block",
 			content: `resource "aws_instance" "example" {
-  ami = "ami-123"
-  lifecycle {
-    prevent_destroy = true
+  ami           = "ami-123"
+  instance_type = "t2.micro"
 
-    ignore_changes = [tags]
-  }
 }`,
-			wantFindings: 2, // One for outer block (blank line within) and one for nested lifecycle block
+			wantFindings: 1, // Trailing blank line before closing brace
+		},
+		{
+			name: "both leading and trailing blank lines",
+			content: `resource "aws_instance" "example" {
+
+  ami = "ami-123"
+
+}`,
+			wantFindings: 2, // One leading, one trailing
 		},
 	}
 
@@ -93,11 +98,13 @@ func TestNoBlankLinesInsideBlocksRule(t *testing.T) {
 		})
 	}
 
-	t.Run("Fix removes blank lines", func(t *testing.T) {
+	t.Run("Fix removes leading/trailing blank lines but preserves internal", func(t *testing.T) {
 		content := `resource "aws_instance" "example" {
+
   ami = "ami-123"
 
   instance_type = "t2.micro"
+
 }
 `
 		tmpDir := t.TempDir()
@@ -108,7 +115,12 @@ func TestNoBlankLinesInsideBlocksRule(t *testing.T) {
 		result, err := rule.Fix(ctx, nil)
 		require.NoError(t, err)
 		assert.NotNil(t, result)
-		assert.NotContains(t, string(result), "\n\n  instance_type")
+		// Should remove leading blank line (after {)
+		assert.NotContains(t, string(result), "{\n\n  ami")
+		// Should remove trailing blank line (before })
+		assert.NotContains(t, string(result), "micro\"\n\n}")
+		// Internal blank line should be preserved
+		assert.Contains(t, string(result), "ami-123\"\n\n  instance_type")
 	})
 }
 

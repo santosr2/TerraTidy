@@ -127,6 +127,19 @@ Use --all to also apply style fixes (equivalent to running fmt + style --fix).`,
 
 			if styleFixed > 0 {
 				fmt.Printf("Fixed %d style issue(s)\n", styleFixed)
+
+				// Re-run formatter after style fixes to restore proper HCL formatting
+				// (style fixes may disrupt equal sign alignment)
+				fmt.Println()
+				fmt.Println("Re-formatting files...")
+				rerunEngine := fmtengine.New(&fmtengine.Config{
+					Check: false,
+					Diff:  false,
+				})
+				if _, err := rerunEngine.Run(context.Background(), files); err != nil {
+					return fmt.Errorf("re-formatting files: %w", err)
+				}
+				fmt.Println("Done")
 			} else {
 				fmt.Println("No style issues to fix")
 			}

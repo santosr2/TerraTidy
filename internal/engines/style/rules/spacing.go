@@ -9,21 +9,22 @@ import (
 	"github.com/santosr2/terratidy/pkg/sdk"
 )
 
-// NoBlankLinesInsideBlocksRule ensures no blank lines inside blocks.
-type NoBlankLinesInsideBlocksRule struct{}
+// NoLeadingTrailingBlankLinesRule ensures no leading/trailing blank lines inside blocks.
+// Internal blank lines are allowed for readability.
+type NoLeadingTrailingBlankLinesRule struct{}
 
 // Name returns the rule identifier.
-func (r *NoBlankLinesInsideBlocksRule) Name() string {
-	return "style.no-blank-lines-inside-blocks"
+func (r *NoLeadingTrailingBlankLinesRule) Name() string {
+	return "style.no-leading-trailing-blank-lines"
 }
 
 // Description returns a human-readable description of the rule.
-func (r *NoBlankLinesInsideBlocksRule) Description() string {
-	return "Ensures there are no blank lines inside blocks"
+func (r *NoLeadingTrailingBlankLinesRule) Description() string {
+	return "Ensures there are no leading or trailing blank lines inside blocks"
 }
 
-// Check examines the file for blank lines inside blocks.
-func (r *NoBlankLinesInsideBlocksRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Finding, error) {
+// Check examines the file for leading/trailing blank lines inside blocks.
+func (r *NoLeadingTrailingBlankLinesRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Finding, error) {
 	var findings []sdk.Finding
 
 	hclFile, ok := file.Body.(*hclsyntax.Body)
@@ -37,7 +38,7 @@ func (r *NoBlankLinesInsideBlocksRule) Check(ctx *sdk.Context, file *hcl.File) (
 	}
 	lines := SplitLines(content)
 
-	// Check each block for internal blank lines
+	// Check each block for leading/trailing blank lines
 	for _, block := range hclFile.Blocks {
 		blockFindings := r.checkBlock(ctx, block, lines)
 		findings = append(findings, blockFindings...)
@@ -46,19 +47,20 @@ func (r *NoBlankLinesInsideBlocksRule) Check(ctx *sdk.Context, file *hcl.File) (
 	return findings, nil
 }
 
-func (r *NoBlankLinesInsideBlocksRule) checkBlock(ctx *sdk.Context, block *hclsyntax.Block, lines []string) []sdk.Finding {
+func (r *NoLeadingTrailingBlankLinesRule) checkBlock(ctx *sdk.Context, block *hclsyntax.Block, lines []string) []sdk.Finding {
 	var findings []sdk.Finding
 
 	startLine := block.Range().Start.Line
 	endLine := block.Range().End.Line
 
-	// Skip if block is a single line
+	// Skip if block is a single line or too small
 	if endLine <= startLine+1 {
 		return findings
 	}
 
-	// Check lines inside the block (excluding start/end lines)
 	filePath := ctx.File
+
+	// Check for leading blank lines (lines immediately after opening brace)
 	for lineNum := startLine + 1; lineNum < endLine; lineNum++ {
 		if lineNum-1 >= len(lines) {
 			continue
@@ -69,7 +71,7 @@ func (r *NoBlankLinesInsideBlocksRule) checkBlock(ctx *sdk.Context, block *hclsy
 		if len(trimmed) == 0 {
 			findings = append(findings, sdk.Finding{
 				Rule:    r.Name(),
-				Message: "Blank line inside block",
+				Message: "Leading blank line inside block",
 				File:    ctx.File,
 				Location: hcl.Range{
 					Filename: ctx.File,
@@ -82,6 +84,37 @@ func (r *NoBlankLinesInsideBlocksRule) checkBlock(ctx *sdk.Context, block *hclsy
 					return r.fixFile(filePath)
 				},
 			})
+		} else {
+			break // Stop at first non-blank line
+		}
+	}
+
+	// Check for trailing blank lines (lines immediately before closing brace)
+	for lineNum := endLine - 1; lineNum > startLine; lineNum-- {
+		if lineNum-1 >= len(lines) {
+			continue
+		}
+		line := lines[lineNum-1]
+		trimmed := TrimLeftWhitespace(line)
+
+		if len(trimmed) == 0 {
+			findings = append(findings, sdk.Finding{
+				Rule:    r.Name(),
+				Message: "Trailing blank line inside block",
+				File:    ctx.File,
+				Location: hcl.Range{
+					Filename: ctx.File,
+					Start:    hcl.Pos{Line: lineNum, Column: 1},
+					End:      hcl.Pos{Line: lineNum, Column: 1},
+				},
+				Severity: sdk.SeverityInfo,
+				Fixable:  true,
+				FixFunc: func() ([]byte, error) {
+					return r.fixFile(filePath)
+				},
+			})
+		} else {
+			break // Stop at first non-blank line
 		}
 	}
 
@@ -94,8 +127,8 @@ func (r *NoBlankLinesInsideBlocksRule) checkBlock(ctx *sdk.Context, block *hclsy
 	return findings
 }
 
-// fixFile removes blank lines inside blocks.
-func (r *NoBlankLinesInsideBlocksRule) fixFile(filePath string) ([]byte, error) {
+// fixFile removes leading/trailing blank lines inside blocks.
+func (r *NoLeadingTrailingBlankLinesRule) fixFile(filePath string) ([]byte, error) {
 	content, err := os.ReadFile(filePath)
 	if err != nil {
 		return nil, err
@@ -103,8 +136,8 @@ func (r *NoBlankLinesInsideBlocksRule) fixFile(filePath string) ([]byte, error) 
 	return FormatAndCleanBlankLines(content), nil
 }
 
-// Fix removes blank lines inside blocks.
-func (r *NoBlankLinesInsideBlocksRule) Fix(ctx *sdk.Context, _ *hcl.File) ([]byte, error) {
+// Fix removes leading/trailing blank lines inside blocks.
+func (r *NoLeadingTrailingBlankLinesRule) Fix(ctx *sdk.Context, _ *hcl.File) ([]byte, error) {
 	return r.fixFile(ctx.File)
 }
 

@@ -46,7 +46,12 @@ sudo mv terratidy /usr/local/bin/
 ## Docker
 
 ```bash
+# latest always points to the most recent release (including pre-releases)
 docker pull ghcr.io/santosr2/terratidy:latest
+
+# Or use a specific version
+docker pull ghcr.io/santosr2/terratidy:v0.2.0-alpha.2
+
 docker run --rm -v $(pwd):/workspace ghcr.io/santosr2/terratidy check
 ```
 

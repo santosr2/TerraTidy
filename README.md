@@ -48,6 +48,7 @@ Download the latest release for your platform from [GitHub Releases](https://git
 ### Docker
 
 ```bash
+# latest always points to the most recent release (including pre-releases)
 docker pull ghcr.io/santosr2/terratidy:latest
 docker run --rm -v $(pwd):/app ghcr.io/santosr2/terratidy check
 ```

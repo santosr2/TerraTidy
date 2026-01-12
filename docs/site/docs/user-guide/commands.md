@@ -331,7 +331,7 @@ terratidy version
 **Output:**
 
 ```text
-TerraTidy version 0.2.0-alpha
+TerraTidy version 0.2.0-alpha.2
   Commit:      abc1234
   Build date:  2025-12-22
   Go version:  go1.25.0

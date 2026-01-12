@@ -90,7 +90,7 @@ Machine-readable format for automation:
 
 ```json
 {
-  "version": "0.2.0-alpha",
+  "version": "0.2.0-alpha.2",
   "timestamp": "2024-01-15T10:30:00Z",
   "summary": {
     "total": 3,
@@ -133,7 +133,7 @@ Static Analysis Results Interchange Format for GitHub integration:
       "tool": {
         "driver": {
           "name": "TerraTidy",
-          "version": "0.2.0-alpha",
+          "version": "0.2.0-alpha.2",
           "rules": [...]
         }
       },

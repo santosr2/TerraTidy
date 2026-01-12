@@ -62,6 +62,9 @@ test_fixtures/
 .terratidy/
 tmp/
 
+# Release artifacts (generated during CI)
+RELEASE_NOTES.md
+
 # Benchmark results
 benchmarks/
 

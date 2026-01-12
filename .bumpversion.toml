@@ -41,8 +41,16 @@ filename = "docs/site/docs/user-guide/commands.md"
 search = "TerraTidy version {current_version}"
 replace = "TerraTidy version {new_version}"
 
-# Documentation - output formats
+# Documentation - output formats (updates all occurrences in file)
 [[tool.bumpversion.files]]
 filename = "docs/site/docs/user-guide/output-formats.md"
 search = "\"version\": \"{current_version}\""
 replace = "\"version\": \"{new_version}\""
+glob_exclude = []
+regex = false
+
+# README - pre-commit hook version
+[[tool.bumpversion.files]]
+filename = "README.md"
+search = "rev: v{current_version}"
+replace = "rev: v{new_version}"

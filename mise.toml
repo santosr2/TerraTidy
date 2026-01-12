@@ -10,6 +10,7 @@ python = "3.13"
 uv = "latest"
 bun = "latest"
 "cargo:git-cliff" = "latest"  # Changelog generator
+"pipx:bump-my-version" = "latest"
 
 [tasks.setup]
 description = "Setup development environment"

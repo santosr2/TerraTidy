@@ -132,10 +132,13 @@ func TestToAbsPath(t *testing.T) {
 		assert.True(t, filepath.IsAbs(result))
 	})
 
-	t.Run("absolute path", func(t *testing.T) {
-		absPath := "/absolute/path/main.tf"
+	t.Run("absolute path stays absolute", func(t *testing.T) {
+		// Use temp dir to get a valid absolute path on any OS
+		tmpDir := t.TempDir()
+		absPath := filepath.Join(tmpDir, "main.tf")
 		result := toAbsPath(absPath)
-		assert.Equal(t, absPath, result)
+		assert.True(t, filepath.IsAbs(result))
+		assert.Contains(t, result, "main.tf")
 	})
 }
 

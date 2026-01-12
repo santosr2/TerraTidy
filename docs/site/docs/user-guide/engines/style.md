@@ -13,12 +13,25 @@ to maintain a uniform codebase.
 # Run style checks
 terratidy style
 
-# Show fixable issues
+# Fix style issues
 terratidy style --fix
 
 # Check specific directory
 terratidy style ./modules/
 ```
+
+## style --fix vs fmt vs fmt --all
+
+The style engine focuses on semantic organization rather than whitespace formatting:
+
+| Command                 | HCL Formatting | Style Fixes | Use Case                                    |
+|-------------------------|----------------|-------------|---------------------------------------------|
+| `terratidy fmt`         | ✓              |             | Standard formatting (whitespace, alignment) |
+| `terratidy style --fix` |                | ✓           | Style fixes only (naming, block ordering)   |
+| `terratidy fmt --all`   | ✓              | ✓           | Complete formatting and style fixes         |
+
+Use `style --fix` when you only want to fix style issues without reformatting whitespace.
+Use `fmt --all` or `terratidy fix` when you want both HCL formatting and style fixes applied together.
 
 ## Configuration
 

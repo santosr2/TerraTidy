@@ -21,7 +21,25 @@ terratidy fmt --diff
 
 # Format only changed files
 terratidy fmt --changed
+
+# Format and apply style fixes
+terratidy fmt --all
 ```
+
+## fmt vs style --fix vs fmt --all
+
+TerraTidy provides different commands for different formatting needs:
+
+| Command                 | HCL Formatting | Style Fixes | Use Case                                    |
+|-------------------------|----------------|-------------|---------------------------------------------|
+| `terratidy fmt`         | ✓              |             | Standard formatting (whitespace, alignment) |
+| `terratidy style --fix` |                | ✓           | Style fixes only (naming, block ordering)   |
+| `terratidy fmt --all`   | ✓              | ✓           | Complete formatting and style fixes         |
+| `terratidy fix`         | ✓              | ✓           | Same as `fmt --all` (alias)                 |
+
+- **`fmt`**: Applies HCL formatting rules (indentation, alignment, spacing). This is equivalent to `terraform fmt`.
+- **`style --fix`**: Applies TerraTidy style rules (naming conventions, block ordering, file organization) without HCL formatting.
+- **`fmt --all`**: Combines both - first formats files, then applies style fixes. Use this when you want complete code cleanup.
 
 ## Configuration
 

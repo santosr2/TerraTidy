@@ -67,11 +67,11 @@ terratidy fmt [paths...] [flags]
 
 **Flags:**
 
-| Flag      | Description                             |
-| --------- | --------------------------------------- |
-| `--check` | Check formatting without modifying      |
-| `--diff`  | Show diff of changes                    |
-| `--fix`   | Auto-fix formatting issues (default)    |
+| Flag      | Description                                              |
+| --------- | -------------------------------------------------------- |
+| `--check` | Check formatting without modifying                       |
+| `--diff`  | Show diff of changes                                     |
+| `--all`   | Also apply style fixes (equivalent to fmt + style --fix) |
 
 **Examples:**
 
@@ -81,7 +81,18 @@ terratidy fmt
 
 # Check formatting only
 terratidy fmt --check
+
+# Format and apply style fixes
+terratidy fmt --all
 ```
+
+**Comparison with style --fix:**
+
+| Command                 | HCL Formatting | Style Fixes |
+|-------------------------|----------------|-------------|
+| `terratidy fmt`         | ✓              |             |
+| `terratidy style --fix` |                | ✓           |
+| `terratidy fmt --all`   | ✓              | ✓           |
 
 ## terratidy style
 

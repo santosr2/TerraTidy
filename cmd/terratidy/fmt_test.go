@@ -28,6 +28,12 @@ func TestFmtCmd(t *testing.T) {
 		assert.NotNil(t, flag)
 		assert.Equal(t, "false", flag.DefValue)
 	})
+
+	t.Run("has all flag", func(t *testing.T) {
+		flag := fmtCmd.Flags().Lookup("all")
+		assert.NotNil(t, flag)
+		assert.Equal(t, "false", flag.DefValue)
+	})
 }
 
 func TestFmtCmdExecution(t *testing.T) {

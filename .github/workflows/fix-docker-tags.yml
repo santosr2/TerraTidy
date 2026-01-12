@@ -1,0 +1,71 @@
+name: Fix Docker Tags (One-time)
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to create Docker aliases for (e.g., v0.2.0-alpha.2)'
+        required: true
+        default: 'v0.2.0-alpha.2'
+
+permissions:
+  packages: write
+
+jobs:
+  update-docker-tags:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update Docker alias tags
+        run: |
+          TAG_NAME="${{ github.event.inputs.tag }}"
+          echo "Processing tag: $TAG_NAME"
+
+          # Extract version from tag (e.g., v0.1.0 or v0.1.0-alpha.1)
+          FULL_VERSION=${TAG_NAME#v}
+
+          # Split version and pre-release identifier
+          BASE_VERSION=$(echo "$FULL_VERSION" | cut -d- -f1)
+          PRERELEASE=$(echo "$FULL_VERSION" | grep -oP '(?<=-)[a-z]+' || echo "")
+
+          MAJOR=$(echo "$BASE_VERSION" | cut -d. -f1)
+          MINOR=$(echo "$BASE_VERSION" | cut -d. -f2)
+
+          IMAGE="ghcr.io/santosr2/terratidy"
+          SOURCE_TAG="${IMAGE}:${TAG_NAME}"
+
+          if [[ -n "$PRERELEASE" ]]; then
+            echo "Pre-release detected: $PRERELEASE"
+
+            docker pull "$SOURCE_TAG"
+
+            docker tag "$SOURCE_TAG" "${IMAGE}:v${MAJOR}-${PRERELEASE}"
+            docker push "${IMAGE}:v${MAJOR}-${PRERELEASE}"
+            echo "Updated Docker tag: v${MAJOR}-${PRERELEASE}"
+
+            docker tag "$SOURCE_TAG" "${IMAGE}:v${MAJOR}.${MINOR}-${PRERELEASE}"
+            docker push "${IMAGE}:v${MAJOR}.${MINOR}-${PRERELEASE}"
+            echo "Updated Docker tag: v${MAJOR}.${MINOR}-${PRERELEASE}"
+          else
+            echo "Stable release detected"
+
+            docker pull "$SOURCE_TAG"
+
+            docker tag "$SOURCE_TAG" "${IMAGE}:v${MAJOR}"
+            docker push "${IMAGE}:v${MAJOR}"
+            echo "Updated Docker tag: v${MAJOR}"
+
+            docker tag "$SOURCE_TAG" "${IMAGE}:v${MAJOR}.${MINOR}"
+            docker push "${IMAGE}:v${MAJOR}.${MINOR}"
+            echo "Updated Docker tag: v${MAJOR}.${MINOR}"
+
+            docker tag "$SOURCE_TAG" "${IMAGE}:latest"
+            docker push "${IMAGE}:latest"
+            echo "Updated Docker tag: latest"
+          fi

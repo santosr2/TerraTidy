@@ -264,6 +264,9 @@ func (e *Engine) registerRules() {
 	e.rules = append(e.rules, &DependsOnOrderRule{})
 	e.rules = append(e.rules, &LifecycleAtEndRule{})
 
+	// Attribute group spacing (blank lines between groups)
+	e.rules = append(e.rules, &AttributeGroupSpacingRule{})
+
 	// Variable and output ordering
 	e.rules = append(e.rules, &VariableOrderRule{})
 	e.rules = append(e.rules, &OutputOrderRule{})

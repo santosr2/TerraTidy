@@ -721,6 +721,181 @@ func TestIsDependsOnRelevantBlock(t *testing.T) {
 	}
 }
 
+func TestAttributeGroupSpacingRule(t *testing.T) {
+	rule := &AttributeGroupSpacingRule{}
+
+	t.Run("Name", func(t *testing.T) {
+		assert.Equal(t, "style.attribute-group-spacing", rule.Name())
+	})
+
+	t.Run("Description", func(t *testing.T) {
+		assert.NotEmpty(t, rule.Description())
+	})
+
+	tests := []struct {
+		name         string
+		content      string
+		wantFindings int
+	}{
+		{
+			name: "properly spaced groups",
+			content: `resource "aws_instance" "example" {
+  for_each = var.instances
+
+  ami           = "ami-123"
+  instance_type = "t2.micro"
+
+  tags = {
+    Name = "test"
+  }
+}`,
+			wantFindings: 0,
+		},
+		{
+			name: "missing blank line after for_each",
+			content: `resource "aws_instance" "example" {
+  for_each      = var.instances
+  ami           = "ami-123"
+  instance_type = "t2.micro"
+}`,
+			wantFindings: 1,
+		},
+		{
+			name: "missing blank line before tags",
+			content: `resource "aws_instance" "example" {
+  ami           = "ami-123"
+  instance_type = "t2.micro"
+  tags = {
+    Name = "test"
+  }
+}`,
+			wantFindings: 1,
+		},
+		{
+			name: "module with source/version needs spacing",
+			content: `module "example" {
+  source  = "./module"
+  version = "1.0.0"
+  name    = "test"
+}`,
+			wantFindings: 1,
+		},
+		{
+			name: "module properly spaced",
+			content: `module "example" {
+  source  = "./module"
+  version = "1.0.0"
+
+  name = "test"
+}`,
+			wantFindings: 0,
+		},
+		{
+			name: "missing blank line before depends_on",
+			content: `resource "aws_instance" "example" {
+  ami           = "ami-123"
+  instance_type = "t2.micro"
+  depends_on    = [aws_vpc.main]
+}`,
+			wantFindings: 1,
+		},
+		{
+			name: "no attributes - no findings",
+			content: `resource "aws_instance" "example" {
+}`,
+			wantFindings: 0,
+		},
+		{
+			name: "single attribute - no findings",
+			content: `resource "aws_instance" "example" {
+  ami = "ami-123"
+}`,
+			wantFindings: 0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tmpDir := t.TempDir()
+			tmpFile := filepath.Join(tmpDir, "test.tf")
+			err := os.WriteFile(tmpFile, []byte(tt.content), 0o644)
+			require.NoError(t, err)
+
+			file, diags := hclsyntax.ParseConfig([]byte(tt.content), tmpFile, hcl.InitialPos)
+			require.False(t, diags.HasErrors())
+
+			hclFile := &hcl.File{Body: file.Body}
+			ctx := &sdk.Context{File: tmpFile}
+
+			findings, err := rule.Check(ctx, hclFile)
+			require.NoError(t, err)
+			assert.Len(t, findings, tt.wantFindings, "unexpected number of findings")
+		})
+	}
+}
+
+func TestAttributeGroupSpacingRule_Fix(t *testing.T) {
+	rule := &AttributeGroupSpacingRule{}
+
+	t.Run("adds blank line after for_each", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		tmpFile := filepath.Join(tmpDir, "test.tf")
+
+		content := `resource "aws_instance" "example" {
+  for_each      = var.instances
+  ami           = "ami-123"
+  instance_type = "t2.micro"
+}
+`
+		err := os.WriteFile(tmpFile, []byte(content), 0o644)
+		require.NoError(t, err)
+
+		file, diags := hclsyntax.ParseConfig([]byte(content), tmpFile, hcl.InitialPos)
+		require.False(t, diags.HasErrors())
+
+		hclFile := &hcl.File{Body: file.Body}
+		ctx := &sdk.Context{File: tmpFile}
+
+		result, err := rule.Fix(ctx, hclFile)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+
+		// Check that blank line was added after for_each
+		resultStr := string(result)
+		assert.Contains(t, resultStr, "for_each      = var.instances\n\n  ami")
+	})
+
+	t.Run("adds blank line before tags", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		tmpFile := filepath.Join(tmpDir, "test.tf")
+
+		content := `resource "aws_instance" "example" {
+  ami           = "ami-123"
+  instance_type = "t2.micro"
+  tags = {
+    Name = "test"
+  }
+}
+`
+		err := os.WriteFile(tmpFile, []byte(content), 0o644)
+		require.NoError(t, err)
+
+		file, diags := hclsyntax.ParseConfig([]byte(content), tmpFile, hcl.InitialPos)
+		require.False(t, diags.HasErrors())
+
+		hclFile := &hcl.File{Body: file.Body}
+		ctx := &sdk.Context{File: tmpFile}
+
+		result, err := rule.Fix(ctx, hclFile)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+
+		// Check that blank line was added before tags
+		resultStr := string(result)
+		assert.Contains(t, resultStr, "instance_type = \"t2.micro\"\n\n  tags")
+	})
+}
+
 // Helper function to find index of substring
 func indexOf(s, substr string) int {
 	for i := 0; i <= len(s)-len(substr); i++ {

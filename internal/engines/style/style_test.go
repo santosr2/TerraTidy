@@ -722,9 +722,9 @@ func TestEngine_GetAllRules(t *testing.T) {
 	engine := New(nil)
 	rules := engine.GetAllRules()
 
-	// Verify we have all 19 rules registered
-	// 12 original + 3 naming rules (variable, output, local) + 3 file organization rules + 1 no-blank-lines-inside-blocks
-	assert.Len(t, rules, 19, "should have 19 rules registered")
+	// Verify we have all 20 rules registered
+	// 12 original + 3 naming rules (variable, output, local) + 3 file organization rules + 1 no-leading-trailing-blank-lines + 1 attribute-group-spacing
+	assert.Len(t, rules, 20, "should have 20 rules registered")
 
 	// Verify each rule has required methods
 	for _, rule := range rules {

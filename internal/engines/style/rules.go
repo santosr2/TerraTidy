@@ -23,15 +23,16 @@ type (
 	LocalNamingRule    = rules.LocalNamingRule
 
 	// Ordering rules
-	ForEachCountFirstRule    = rules.ForEachCountFirstRule
-	LifecycleAtEndRule       = rules.LifecycleAtEndRule
-	TagsAtEndRule            = rules.TagsAtEndRule
-	DependsOnOrderRule       = rules.DependsOnOrderRule
-	SourceVersionGroupedRule = rules.SourceVersionGroupedRule
-	VariableOrderRule        = rules.VariableOrderRule
-	OutputOrderRule          = rules.OutputOrderRule
-	TerraformBlockFirstRule  = rules.TerraformBlockFirstRule
-	ProviderBlockOrderRule   = rules.ProviderBlockOrderRule
+	ForEachCountFirstRule     = rules.ForEachCountFirstRule
+	LifecycleAtEndRule        = rules.LifecycleAtEndRule
+	TagsAtEndRule             = rules.TagsAtEndRule
+	DependsOnOrderRule        = rules.DependsOnOrderRule
+	SourceVersionGroupedRule  = rules.SourceVersionGroupedRule
+	VariableOrderRule         = rules.VariableOrderRule
+	OutputOrderRule           = rules.OutputOrderRule
+	TerraformBlockFirstRule   = rules.TerraformBlockFirstRule
+	ProviderBlockOrderRule    = rules.ProviderBlockOrderRule
+	AttributeGroupSpacingRule = rules.AttributeGroupSpacingRule
 
 	// File organization rules
 	VariablesInFileRule = rules.VariablesInFileRule

@@ -2,6 +2,7 @@ package rules
 
 import (
 	"os"
+	"strings"
 
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/hclsyntax"
@@ -1234,4 +1235,297 @@ func (r *ProviderBlockOrderRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.
 // Fix is a no-op for this rule as provider block reordering requires manual review.
 func (r *ProviderBlockOrderRule) Fix(_ *sdk.Context, _ *hcl.File) ([]byte, error) {
 	return nil, nil
+}
+
+// AttributeGroupSpacingRule ensures blank lines between attribute groups in blocks.
+// Groups are: meta-args (for_each/count) | source/version | main attrs | depends_on | tags/lifecycle
+type AttributeGroupSpacingRule struct{}
+
+// Name returns the rule identifier.
+func (r *AttributeGroupSpacingRule) Name() string {
+	return "style.attribute-group-spacing"
+}
+
+// Description returns a human-readable description of the rule.
+func (r *AttributeGroupSpacingRule) Description() string {
+	return "Ensures blank lines between attribute groups (meta-args, source/version, main, depends_on, tags)"
+}
+
+// attrGroup represents which group an attribute belongs to.
+type attrGroup int
+
+const (
+	groupMeta      attrGroup = iota // for_each, count, provider
+	groupSource                     // source, version (modules only)
+	groupMain                       // regular attributes
+	groupDependsOn                  // depends_on
+	groupTags                       // tags, labels, tags_all
+	groupUnknown
+)
+
+// getAttrGroup returns the group for an attribute name.
+func getAttrGroup(name string, blockType string) attrGroup {
+	switch name {
+	case "for_each", "count", "provider":
+		return groupMeta
+	case "source", "version":
+		if blockType == "module" {
+			return groupSource
+		}
+		return groupMain
+	case "depends_on":
+		return groupDependsOn
+	case "tags", "labels", "tags_all":
+		return groupTags
+	default:
+		return groupMain
+	}
+}
+
+// Check examines blocks for missing blank lines between attribute groups.
+func (r *AttributeGroupSpacingRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Finding, error) {
+	var findings []sdk.Finding
+
+	hclFile, ok := file.Body.(*hclsyntax.Body)
+	if !ok {
+		return findings, nil
+	}
+
+	content, err := os.ReadFile(ctx.File)
+	if err != nil {
+		return nil, err
+	}
+	lines := SplitLines(content)
+
+	for _, block := range hclFile.Blocks {
+		// Only check resource, module, and data blocks
+		if block.Type != "resource" && block.Type != "module" && block.Type != "data" {
+			continue
+		}
+
+		blockFindings := r.checkBlock(ctx, block, lines)
+		findings = append(findings, blockFindings...)
+	}
+
+	return findings, nil
+}
+
+func (r *AttributeGroupSpacingRule) checkBlock(ctx *sdk.Context, block *hclsyntax.Block, lines []string) []sdk.Finding {
+	var findings []sdk.Finding
+
+	// Get attributes sorted by line number
+	type attrInfo struct {
+		name  string
+		line  int
+		group attrGroup
+	}
+	var attrs []attrInfo
+
+	for name, attr := range block.Body.Attributes {
+		attrs = append(attrs, attrInfo{
+			name:  name,
+			line:  attr.Range().Start.Line,
+			group: getAttrGroup(name, block.Type),
+		})
+	}
+
+	// Sort by line number
+	for i := 0; i < len(attrs)-1; i++ {
+		for j := i + 1; j < len(attrs); j++ {
+			if attrs[j].line < attrs[i].line {
+				attrs[i], attrs[j] = attrs[j], attrs[i]
+			}
+		}
+	}
+
+	// Check for missing blank lines between groups
+	filePath := ctx.File
+	blockType := block.Type
+	blockLabels := block.Labels
+
+	for i := 0; i < len(attrs)-1; i++ {
+		curr := attrs[i]
+		next := attrs[i+1]
+
+		// Skip if same group
+		if curr.group == next.group {
+			continue
+		}
+
+		// Check if there's a blank line between them
+		hasBlankLine := false
+		for lineNum := curr.line + 1; lineNum < next.line; lineNum++ {
+			if lineNum-1 < len(lines) {
+				trimmed := TrimLeftWhitespace(lines[lineNum-1])
+				if len(trimmed) == 0 {
+					hasBlankLine = true
+					break
+				}
+			}
+		}
+
+		if !hasBlankLine {
+			findings = append(findings, sdk.Finding{
+				Rule:    r.Name(),
+				Message: "Missing blank line between " + curr.name + " and " + next.name + " (different attribute groups)",
+				File:    ctx.File,
+				Location: hcl.Range{
+					Filename: ctx.File,
+					Start:    hcl.Pos{Line: next.line, Column: 1},
+					End:      hcl.Pos{Line: next.line, Column: 1},
+				},
+				Severity: sdk.SeverityInfo,
+				Fixable:  true,
+				FixFunc: func() ([]byte, error) {
+					return r.fixBlock(filePath, blockType, blockLabels)
+				},
+			})
+		}
+	}
+
+	return findings
+}
+
+// fixBlock adds blank lines between attribute groups in a block.
+func (r *AttributeGroupSpacingRule) fixBlock(filePath, blockType string, blockLabels []string) ([]byte, error) {
+	content, err := os.ReadFile(filePath)
+	if err != nil {
+		return nil, err
+	}
+
+	lines := SplitLines(content)
+
+	// Parse to find the block and its attributes
+	syntaxFile, diags := hclsyntax.ParseConfig(content, filePath, hcl.InitialPos)
+	if diags.HasErrors() {
+		return nil, diags
+	}
+
+	syntaxBody, ok := syntaxFile.Body.(*hclsyntax.Body)
+	if !ok {
+		return content, nil
+	}
+
+	// Find the target block
+	var targetBlock *hclsyntax.Block
+	for _, block := range syntaxBody.Blocks {
+		if block.Type != blockType {
+			continue
+		}
+		if MatchBlockLabels(block.Labels, blockLabels) {
+			targetBlock = block
+			break
+		}
+	}
+
+	if targetBlock == nil {
+		return content, nil
+	}
+
+	// Get attributes sorted by line number
+	type attrInfo struct {
+		name    string
+		line    int
+		endLine int
+		group   attrGroup
+	}
+	var attrs []attrInfo
+
+	for name, attr := range targetBlock.Body.Attributes {
+		attrs = append(attrs, attrInfo{
+			name:    name,
+			line:    attr.Range().Start.Line,
+			endLine: attr.Range().End.Line,
+			group:   getAttrGroup(name, blockType),
+		})
+	}
+
+	// Sort by line number
+	for i := 0; i < len(attrs)-1; i++ {
+		for j := i + 1; j < len(attrs); j++ {
+			if attrs[j].line < attrs[i].line {
+				attrs[i], attrs[j] = attrs[j], attrs[i]
+			}
+		}
+	}
+
+	// Find lines where we need to insert blank lines (after the attribute, before next)
+	insertAfterLines := make(map[int]bool)
+
+	for i := 0; i < len(attrs)-1; i++ {
+		curr := attrs[i]
+		next := attrs[i+1]
+
+		// Skip if same group
+		if curr.group == next.group {
+			continue
+		}
+
+		// Check if there's already a blank line between them
+		hasBlankLine := false
+		for lineNum := curr.endLine + 1; lineNum < next.line; lineNum++ {
+			if lineNum-1 < len(lines) {
+				trimmed := TrimLeftWhitespace(lines[lineNum-1])
+				if len(trimmed) == 0 {
+					hasBlankLine = true
+					break
+				}
+			}
+		}
+
+		if !hasBlankLine {
+			// Insert blank line after the current attribute's end line
+			insertAfterLines[curr.endLine] = true
+		}
+	}
+
+	if len(insertAfterLines) == 0 {
+		return content, nil
+	}
+
+	// Build result with inserted blank lines
+	var result []string
+	for i, line := range lines {
+		lineNum := i + 1 // 1-indexed
+		result = append(result, line)
+
+		if insertAfterLines[lineNum] {
+			result = append(result, "")
+		}
+	}
+
+	return []byte(strings.Join(result, "\n") + "\n"), nil
+}
+
+// Fix adds blank lines between attribute groups.
+func (r *AttributeGroupSpacingRule) Fix(ctx *sdk.Context, file *hcl.File) ([]byte, error) {
+	content, err := os.ReadFile(ctx.File)
+	if err != nil {
+		return nil, err
+	}
+
+	hclFile, ok := file.Body.(*hclsyntax.Body)
+	if !ok {
+		return content, nil
+	}
+
+	// Process each block
+	for _, block := range hclFile.Blocks {
+		if block.Type != "resource" && block.Type != "module" && block.Type != "data" {
+			continue
+		}
+
+		// Fix this block
+		content, err = r.fixBlock(ctx.File, block.Type, block.Labels)
+		if err != nil {
+			return nil, err
+		}
+
+		// Write intermediate result for next iteration
+		if err := os.WriteFile(ctx.File, content, 0o644); err != nil {
+			return nil, err
+		}
+	}
+
+	return content, nil
 }

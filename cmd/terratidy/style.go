@@ -77,18 +77,23 @@ Use --fix to automatically fix fixable style issues.`,
 			return fmt.Errorf("checking style: %w", err)
 		}
 
-		// Use structured output if requested
-		if useStructuredOutput {
-			return outputStyleResults(findings)
-		}
+		// Output results using formatter
+		return outputStyleResults(findings, styleCheck)
+	},
+}
 
-		// Display results in text format
-		if len(findings) == 0 {
-			fmt.Println("No style issues found")
-			return nil
-		}
+func outputStyleResults(findings []sdk.Finding, checkMode bool) error {
+	formatter, err := output.GetFormatterWithColor(format, true, version, color)
+	if err != nil {
+		return fmt.Errorf("getting formatter: %w", err)
+	}
 
-		// Count by severity
+	if err := formatter.Format(findings, os.Stdout); err != nil {
+		return fmt.Errorf("formatting output: %w", err)
+	}
+
+	// For text format, add summary
+	if format == "" || format == "text" {
 		var errors, warnings, info int
 		for _, finding := range findings {
 			switch finding.Severity {
@@ -101,56 +106,28 @@ Use --fix to automatically fix fixable style issues.`,
 			}
 		}
 
-		// Display findings
-		for _, finding := range findings {
-			icon := "i"
-			switch finding.Severity {
-			case sdk.SeverityError:
-				icon = "!"
-			case sdk.SeverityWarning:
-				icon = "!"
-			}
-
-			location := finding.File
-			if finding.Location.Start.Line > 0 {
-				location = fmt.Sprintf("%s:%d", finding.File, finding.Location.Start.Line)
-			}
-			fmt.Printf("  [%s] %s: %s (%s)\n", icon, location, finding.Message, finding.Rule)
+		if len(findings) > 0 {
+			fmt.Println()
+			fmt.Println("---")
+			fmt.Printf("Style check summary: %d error(s), %d warning(s), %d info\n", errors, warnings, info)
 		}
-
-		// Summary
-		fmt.Println()
-		fmt.Println("---")
-		fmt.Printf("Style check summary: %d error(s), %d warning(s), %d info\n", errors, warnings, info)
 
 		if errors > 0 {
 			os.Exit(1)
 		}
 
-		if styleCheck && len(findings) > 0 {
+		if checkMode && len(findings) > 0 {
 			return fmt.Errorf("found %d style issue(s)", len(findings))
 		}
-
-		return nil
-	},
-}
-
-func outputStyleResults(findings []sdk.Finding) error {
-	formatter, err := output.GetFormatterWithColor(format, true, version, color)
-	if err != nil {
-		return fmt.Errorf("getting formatter: %w", err)
-	}
-
-	if err := formatter.Format(findings, os.Stdout); err != nil {
-		return fmt.Errorf("formatting output: %w", err)
-	}
-
-	// Exit with error code if there are errors
-	for _, finding := range findings {
-		if finding.Severity == sdk.SeverityError {
-			os.Exit(1)
+	} else {
+		// Exit with error code if there are errors (for structured output)
+		for _, finding := range findings {
+			if finding.Severity == sdk.SeverityError {
+				os.Exit(1)
+			}
 		}
 	}
+
 	return nil
 }
 

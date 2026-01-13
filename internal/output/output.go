@@ -31,42 +31,71 @@ type Formatter interface {
 // TextFormatter outputs findings in human-readable text format
 type TextFormatter struct {
 	Verbose bool
+	Color   bool
 }
 
 // Format implements the Formatter interface for text output
 func (f *TextFormatter) Format(findings []sdk.Finding, w io.Writer) error {
 	if len(findings) == 0 {
-		_, _ = fmt.Fprintln(w, "✓ No issues found")
+		if f.Color {
+			_, _ = fmt.Fprintf(w, "%s✓ No issues found%s\n", colorCyan, colorReset)
+		} else {
+			_, _ = fmt.Fprintln(w, "✓ No issues found")
+		}
 		return nil
 	}
 
 	for _, finding := range findings {
 		icon := "ℹ"
+		iconColor := colorCyan
 		switch finding.Severity {
 		case sdk.SeverityError:
 			icon = "✗"
+			iconColor = colorRed
 		case sdk.SeverityWarning:
 			icon = "⚠"
+			iconColor = colorYellow
 		case sdk.SeverityInfo:
 			icon = "ℹ"
+			iconColor = colorCyan
 		}
 
-		if f.Verbose {
-			_, _ = fmt.Fprintf(w, "%s %s:%d:%d: %s (%s)\n",
-				icon,
-				finding.File,
-				finding.Location.Start.Line,
-				finding.Location.Start.Column,
-				finding.Message,
-				finding.Rule,
-			)
+		if f.Color {
+			if f.Verbose {
+				_, _ = fmt.Fprintf(w, "%s%s%s %s:%d:%d: %s %s(%s)%s\n",
+					iconColor, icon, colorReset,
+					finding.File,
+					finding.Location.Start.Line,
+					finding.Location.Start.Column,
+					finding.Message,
+					colorGray, finding.Rule, colorReset,
+				)
+			} else {
+				_, _ = fmt.Fprintf(w, "%s%s%s %s: %s %s(%s)%s\n",
+					iconColor, icon, colorReset,
+					finding.File,
+					finding.Message,
+					colorGray, finding.Rule, colorReset,
+				)
+			}
 		} else {
-			_, _ = fmt.Fprintf(w, "%s %s: %s (%s)\n",
-				icon,
-				finding.File,
-				finding.Message,
-				finding.Rule,
-			)
+			if f.Verbose {
+				_, _ = fmt.Fprintf(w, "%s %s:%d:%d: %s (%s)\n",
+					icon,
+					finding.File,
+					finding.Location.Start.Line,
+					finding.Location.Start.Column,
+					finding.Message,
+					finding.Rule,
+				)
+			} else {
+				_, _ = fmt.Fprintf(w, "%s %s: %s (%s)\n",
+					icon,
+					finding.File,
+					finding.Message,
+					finding.Rule,
+				)
+			}
 		}
 	}
 
@@ -170,7 +199,7 @@ func GetFormatter(format string, verbose bool, version string) (Formatter, error
 func GetFormatterWithColor(format string, verbose bool, version string, color bool) (Formatter, error) {
 	switch format {
 	case "text", "":
-		return &TextFormatter{Verbose: verbose}, nil
+		return &TextFormatter{Verbose: verbose, Color: color}, nil
 	case "json":
 		return &JSONFormatter{Pretty: true}, nil
 	case "json-compact":

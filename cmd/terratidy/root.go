@@ -35,7 +35,7 @@ func init() {
 		&severityThreshold, "severity-threshold", "",
 		"minimum severity level to fail (info|warning|error)",
 	)
-	rootCmd.PersistentFlags().BoolVar(&color, "color", true, "enable colored output (default true)")
+	rootCmd.PersistentFlags().BoolVar(&color, "color", true, "enable colored output")
 }
 
 // Execute runs the root command

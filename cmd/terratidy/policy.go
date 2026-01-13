@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/santosr2/terratidy/internal/engines/policy"
+	"github.com/santosr2/terratidy/internal/output"
 	"github.com/santosr2/terratidy/pkg/sdk"
 	"github.com/spf13/cobra"
 )
@@ -90,55 +91,54 @@ Use --changed to only check files that have been modified in git.`,
 			return fmt.Errorf("policy check failed: %w", err)
 		}
 
-		// Display results
-		if len(findings) == 0 {
-			fmt.Println("All policy checks passed!")
-			return nil
-		}
+		// Output results using formatter
+		return outputPolicyResults(findings)
+	},
+}
 
-		// Group by severity
-		errors := 0
-		warnings := 0
-		info := 0
+func outputPolicyResults(findings []sdk.Finding) error {
+	formatter, err := output.GetFormatterWithColor(format, true, version, color)
+	if err != nil {
+		return fmt.Errorf("getting formatter: %w", err)
+	}
 
+	if err := formatter.Format(findings, os.Stdout); err != nil {
+		return fmt.Errorf("formatting output: %w", err)
+	}
+
+	// For text format, add summary
+	if format == "" || format == "text" {
+		var errors, warnings, info int
 		for _, finding := range findings {
-			icon := ""
 			switch finding.Severity {
 			case sdk.SeverityError:
-				icon = "!"
 				errors++
 			case sdk.SeverityWarning:
-				icon = "!"
 				warnings++
 			case sdk.SeverityInfo:
-				icon = "i"
 				info++
 			}
-
-			// Print finding
-			fmt.Printf("  [%s] %s\n", icon, finding.Rule)
-			fmt.Printf("      %s\n", finding.Message)
-			if finding.File != "" {
-				fmt.Printf("      File: %s", finding.File)
-				if finding.Location.Start.Line > 0 {
-					fmt.Printf(":%d", finding.Location.Start.Line)
-				}
-				fmt.Println()
-			}
-			fmt.Println()
 		}
 
-		// Summary
-		fmt.Println("---")
-		fmt.Printf("Policy check summary: %d error(s), %d warning(s), %d info\n",
-			errors, warnings, info)
+		if len(findings) > 0 {
+			fmt.Println()
+			fmt.Println("---")
+			fmt.Printf("Policy check summary: %d error(s), %d warning(s), %d info\n", errors, warnings, info)
+		}
 
 		if errors > 0 {
 			os.Exit(1)
 		}
+	} else {
+		// Exit with error code if there are errors (for structured output)
+		for _, finding := range findings {
+			if finding.Severity == sdk.SeverityError {
+				os.Exit(1)
+			}
+		}
+	}
 
-		return nil
-	},
+	return nil
 }
 
 func init() {

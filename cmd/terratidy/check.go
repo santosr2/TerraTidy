@@ -252,25 +252,23 @@ func runPolicyCheck(ctx context.Context, files []string, step int, quiet bool) (
 	return findings, nil
 }
 
-func outputCheckResults(allFindings []sdk.Finding, useStructuredOutput bool) error {
-	if useStructuredOutput {
-		return outputStructuredResults(allFindings)
-	}
-	return printCheckSummary(allFindings)
-}
-
-func outputStructuredResults(findings []sdk.Finding) error {
+func outputCheckResults(allFindings []sdk.Finding, _ bool) error {
 	formatter, err := output.GetFormatterWithColor(format, true, version, color)
 	if err != nil {
 		return fmt.Errorf("getting formatter: %w", err)
 	}
 
-	if err := formatter.Format(findings, os.Stdout); err != nil {
+	if err := formatter.Format(allFindings, os.Stdout); err != nil {
 		return fmt.Errorf("formatting output: %w", err)
 	}
 
-	// Exit with error code if there are errors
-	for _, finding := range findings {
+	// For text format, add summary
+	if format == "" || format == "text" {
+		return printCheckSummary(allFindings)
+	}
+
+	// Exit with error code if there are errors (for structured output)
+	for _, finding := range allFindings {
 		if finding.Severity == sdk.SeverityError {
 			os.Exit(1)
 		}

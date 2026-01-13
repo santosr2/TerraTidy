@@ -85,60 +85,8 @@ Use --changed to only lint files that have been modified in git.`,
 			return fmt.Errorf("running linter: %w", err)
 		}
 
-		// Use structured output if requested
-		if useStructuredOutput {
-			return outputLintResults(findings)
-		}
-
-		// Display results in text format
-		if len(findings) == 0 {
-			fmt.Println("No linting issues found")
-			return nil
-		}
-
-		// Group findings by severity
-		var errors, warnings, info int
-		for _, finding := range findings {
-			switch finding.Severity {
-			case sdk.SeverityError:
-				errors++
-			case sdk.SeverityWarning:
-				warnings++
-			case sdk.SeverityInfo:
-				info++
-			}
-		}
-
-		// Display findings
-		for _, finding := range findings {
-			icon := "i"
-			switch finding.Severity {
-			case sdk.SeverityError:
-				icon = "!"
-			case sdk.SeverityWarning:
-				icon = "!"
-			}
-
-			fmt.Printf("  [%s] %s:%d:%d - %s (%s)\n",
-				icon,
-				finding.File,
-				finding.Location.Start.Line,
-				finding.Location.Start.Column,
-				finding.Message,
-				finding.Rule,
-			)
-		}
-
-		// Display summary
-		fmt.Println()
-		fmt.Println("---")
-		fmt.Printf("Lint summary: %d error(s), %d warning(s), %d info\n", errors, warnings, info)
-
-		if errors > 0 {
-			os.Exit(1)
-		}
-
-		return nil
+		// Output results using formatter
+		return outputLintResults(findings)
 	},
 }
 
@@ -152,12 +100,38 @@ func outputLintResults(findings []sdk.Finding) error {
 		return fmt.Errorf("formatting output: %w", err)
 	}
 
-	// Exit with error code if there are errors
-	for _, finding := range findings {
-		if finding.Severity == sdk.SeverityError {
+	// For text format, add summary
+	if format == "" || format == "text" {
+		var errors, warnings, info int
+		for _, finding := range findings {
+			switch finding.Severity {
+			case sdk.SeverityError:
+				errors++
+			case sdk.SeverityWarning:
+				warnings++
+			case sdk.SeverityInfo:
+				info++
+			}
+		}
+
+		if len(findings) > 0 {
+			fmt.Println()
+			fmt.Println("---")
+			fmt.Printf("Lint summary: %d error(s), %d warning(s), %d info\n", errors, warnings, info)
+		}
+
+		if errors > 0 {
 			os.Exit(1)
 		}
+	} else {
+		// Exit with error code if there are errors (for structured output)
+		for _, finding := range findings {
+			if finding.Severity == sdk.SeverityError {
+				os.Exit(1)
+			}
+		}
 	}
+
 	return nil
 }
 

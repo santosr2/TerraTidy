@@ -1,0 +1,74 @@
+# Codecov configuration for TerraTidy
+# https://docs.codecov.com/docs/codecovyml-reference
+
+coverage:
+  precision: 2
+  round: down
+  range: "60...100"
+
+  status:
+    project:
+      default:
+        target: auto
+        threshold: 2%
+        if_ci_failed: error
+    patch:
+      default:
+        target: 80%
+        threshold: 5%
+        if_ci_failed: error
+
+parsers:
+  gcov:
+    branch_detection:
+      conditional: yes
+      loop: yes
+      method: no
+      macro: no
+
+comment:
+  layout: "reach,diff,flags,files"
+  behavior: default
+  require_changes: true
+  require_base: false
+  require_head: true
+
+flags:
+  unittests:
+    paths:
+      - "**/*_test.go"
+    carryforward: true
+
+ignore:
+  - "**/*_test.go"
+  - "**/testdata/**"
+  - "cmd/terratidy/main.go"
+  - "internal/benchmark/**"
+
+component_management:
+  default_rules:
+    statuses:
+      - type: project
+        target: auto
+        threshold: 2%
+  individual_components:
+    - component_id: engines
+      name: Engines
+      paths:
+        - internal/engines/**
+    - component_id: cli
+      name: CLI
+      paths:
+        - cmd/terratidy/**
+    - component_id: config
+      name: Configuration
+      paths:
+        - internal/config/**
+    - component_id: output
+      name: Output
+      paths:
+        - internal/output/**
+    - component_id: sdk
+      name: SDK
+      paths:
+        - pkg/sdk/**

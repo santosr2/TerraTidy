@@ -39,6 +39,12 @@ Use --fix to automatically fix fixable style issues.`,
   # Check specific paths
   terratidy style ./modules ./environments`,
 	RunE: func(_ *cobra.Command, args []string) error {
+		// Load configuration
+		cfg, err := loadConfig()
+		if err != nil {
+			return err
+		}
+
 		// Get target files (respecting --changed flag)
 		files, err := getTargetFiles(args, changed)
 		if err != nil {
@@ -54,11 +60,8 @@ Use --fix to automatically fix fixable style issues.`,
 			return nil
 		}
 
-		// Create style engine
-		engine := style.New(&style.Config{
-			Fix:   styleFix,
-			Rules: make(map[string]style.RuleConfig),
-		})
+		// Create style engine with config
+		engine := style.New(buildStyleConfig(cfg, styleFix))
 
 		// For structured output formats, skip the progress messages
 		useStructuredOutput := format != "" && format != "text"
@@ -76,6 +79,10 @@ Use --fix to automatically fix fixable style issues.`,
 		if err != nil {
 			return fmt.Errorf("checking style: %w", err)
 		}
+
+		// Apply severity threshold filtering
+		threshold := getEffectiveSeverityThreshold(cfg)
+		findings = filterFindingsBySeverity(findings, threshold)
 
 		// Output results using formatter
 		return outputStyleResults(findings, styleCheck)

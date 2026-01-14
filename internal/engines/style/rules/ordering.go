@@ -784,27 +784,30 @@ func (r *VariableOrderRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Findi
 		return findings, nil
 	}
 
+	// Get attribute order from config (defaults to varAttrOrder)
+	attrOrder := GetAttributeOrderFromConfig(ctx.Config, varAttrOrder)
+
 	for _, block := range hclFile.Blocks {
 		if block.Type != "variable" {
 			continue
 		}
-		blockFindings := r.checkVariableBlock(ctx, block)
+		blockFindings := r.checkVariableBlock(ctx, block, attrOrder)
 		findings = append(findings, blockFindings...)
 	}
 
 	return findings, nil
 }
 
-func (r *VariableOrderRule) checkVariableBlock(ctx *sdk.Context, block *hclsyntax.Block) []sdk.Finding {
-	attrs := r.collectVariableAttrs(block.Body)
+func (r *VariableOrderRule) checkVariableBlock(ctx *sdk.Context, block *hclsyntax.Block, attrOrder map[string]int) []sdk.Finding {
+	attrs := r.collectVariableAttrs(block.Body, attrOrder)
 	return r.findOrderViolations(ctx, block, attrs)
 }
 
-func (r *VariableOrderRule) collectVariableAttrs(body *hclsyntax.Body) []varAttrPos {
+func (r *VariableOrderRule) collectVariableAttrs(body *hclsyntax.Body, attrOrder map[string]int) []varAttrPos {
 	var attrs []varAttrPos
 
 	for name, attr := range body.Attributes {
-		if order, ok := varAttrOrder[name]; ok {
+		if order, ok := attrOrder[name]; ok {
 			attrs = append(attrs, varAttrPos{
 				name:  name,
 				line:  attr.Range().Start.Line,
@@ -813,12 +816,18 @@ func (r *VariableOrderRule) collectVariableAttrs(body *hclsyntax.Body) []varAttr
 		}
 	}
 
+	// Handle validation block - use order from config or default to after all attributes
+	validationOrder := len(attrOrder) + 1
+	if order, ok := attrOrder["validation"]; ok {
+		validationOrder = order
+	}
+
 	for _, nested := range body.Blocks {
 		if nested.Type == "validation" {
 			attrs = append(attrs, varAttrPos{
 				name:  "validation",
 				line:  nested.Range().Start.Line,
-				order: 6,
+				order: validationOrder,
 			})
 		}
 	}
@@ -967,27 +976,30 @@ func (r *OutputOrderRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Finding
 		return findings, nil
 	}
 
+	// Get attribute order from config (defaults to outputAttrOrder)
+	attrOrder := GetAttributeOrderFromConfig(ctx.Config, outputAttrOrder)
+
 	for _, block := range hclFile.Blocks {
 		if block.Type != "output" {
 			continue
 		}
-		blockFindings := r.checkOutputBlock(ctx, block)
+		blockFindings := r.checkOutputBlock(ctx, block, attrOrder)
 		findings = append(findings, blockFindings...)
 	}
 
 	return findings, nil
 }
 
-func (r *OutputOrderRule) checkOutputBlock(ctx *sdk.Context, block *hclsyntax.Block) []sdk.Finding {
-	attrs := r.collectOutputAttrs(block.Body)
+func (r *OutputOrderRule) checkOutputBlock(ctx *sdk.Context, block *hclsyntax.Block, attrOrder map[string]int) []sdk.Finding {
+	attrs := r.collectOutputAttrs(block.Body, attrOrder)
 	return r.findOutputOrderViolations(ctx, block, attrs)
 }
 
-func (r *OutputOrderRule) collectOutputAttrs(body *hclsyntax.Body) []varAttrPos {
+func (r *OutputOrderRule) collectOutputAttrs(body *hclsyntax.Body, attrOrder map[string]int) []varAttrPos {
 	var attrs []varAttrPos
 
 	for name, attr := range body.Attributes {
-		if order, ok := outputAttrOrder[name]; ok {
+		if order, ok := attrOrder[name]; ok {
 			attrs = append(attrs, varAttrPos{
 				name:  name,
 				line:  attr.Range().Start.Line,

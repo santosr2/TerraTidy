@@ -38,6 +38,12 @@ Use --all to also apply style fixes (equivalent to running fmt + style --fix).`,
   # Format and apply style fixes
   terratidy fmt --all`,
 	RunE: func(_ *cobra.Command, args []string) error {
+		// Load configuration
+		cfg, err := loadConfig()
+		if err != nil {
+			return err
+		}
+
 		// Get target files (respecting --changed flag)
 		files, err := getTargetFiles(args, changed)
 		if err != nil {
@@ -108,10 +114,8 @@ Use --all to also apply style fixes (equivalent to running fmt + style --fix).`,
 			fmt.Println("Applying style fixes...")
 			fmt.Println()
 
-			styleEngine := style.New(&style.Config{
-				Fix:   true,
-				Rules: make(map[string]style.RuleConfig),
-			})
+			// Use config-based style engine
+			styleEngine := style.New(buildStyleConfig(cfg, true))
 
 			styleFindings, err := styleEngine.Run(context.Background(), files)
 			if err != nil {

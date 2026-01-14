@@ -307,3 +307,146 @@ func TestLocalNamingRule(t *testing.T) {
 		assert.Nil(t, result)
 	})
 }
+
+// TestNamingRulesWithConfig tests naming rules with different naming conventions from config.
+func TestNamingRulesWithConfig(t *testing.T) {
+	t.Run("VariableNamingRule with camelCase config", func(t *testing.T) {
+		rule := &VariableNamingRule{}
+		content := `variable "myVariable" {
+  type = string
+}`
+		file, diags := hclsyntax.ParseConfig([]byte(content), "test.tf", hcl.InitialPos)
+		require.False(t, diags.HasErrors())
+
+		hclFile := &hcl.File{Body: file.Body}
+		ctx := &sdk.Context{
+			File: "test.tf",
+			Config: map[string]interface{}{
+				"options": map[string]interface{}{
+					"case": "camelCase",
+				},
+			},
+		}
+
+		findings, err := rule.Check(ctx, hclFile)
+		require.NoError(t, err)
+		assert.Len(t, findings, 0, "camelCase should be valid with camelCase config")
+	})
+
+	t.Run("VariableNamingRule snake_case invalid with camelCase config", func(t *testing.T) {
+		rule := &VariableNamingRule{}
+		content := `variable "my_variable" {
+  type = string
+}`
+		file, diags := hclsyntax.ParseConfig([]byte(content), "test.tf", hcl.InitialPos)
+		require.False(t, diags.HasErrors())
+
+		hclFile := &hcl.File{Body: file.Body}
+		ctx := &sdk.Context{
+			File: "test.tf",
+			Config: map[string]interface{}{
+				"options": map[string]interface{}{
+					"case": "camelCase",
+				},
+			},
+		}
+
+		findings, err := rule.Check(ctx, hclFile)
+		require.NoError(t, err)
+		assert.Len(t, findings, 1, "snake_case should be invalid with camelCase config")
+	})
+
+	t.Run("LocalNamingRule with kebab-case config", func(t *testing.T) {
+		rule := &LocalNamingRule{}
+		content := `locals {
+  my-local = "value"
+}`
+		file, diags := hclsyntax.ParseConfig([]byte(content), "test.tf", hcl.InitialPos)
+		require.False(t, diags.HasErrors())
+
+		hclFile := &hcl.File{Body: file.Body}
+		ctx := &sdk.Context{
+			File: "test.tf",
+			Config: map[string]interface{}{
+				"options": map[string]interface{}{
+					"case": "kebab-case",
+				},
+			},
+		}
+
+		findings, err := rule.Check(ctx, hclFile)
+		require.NoError(t, err)
+		assert.Len(t, findings, 0, "kebab-case should be valid with kebab-case config")
+	})
+
+	t.Run("OutputNamingRule with PascalCase config", func(t *testing.T) {
+		rule := &OutputNamingRule{}
+		content := `output "MyOutput" {
+  value = "test"
+}`
+		file, diags := hclsyntax.ParseConfig([]byte(content), "test.tf", hcl.InitialPos)
+		require.False(t, diags.HasErrors())
+
+		hclFile := &hcl.File{Body: file.Body}
+		ctx := &sdk.Context{
+			File: "test.tf",
+			Config: map[string]interface{}{
+				"options": map[string]interface{}{
+					"case": "PascalCase",
+				},
+			},
+		}
+
+		findings, err := rule.Check(ctx, hclFile)
+		require.NoError(t, err)
+		assert.Len(t, findings, 0, "PascalCase should be valid with PascalCase config")
+	})
+
+	t.Run("BlockLabelCaseRule with custom pattern config", func(t *testing.T) {
+		rule := &BlockLabelCaseRule{}
+		content := `resource "aws_instance" "prefix_server" {
+  ami = "ami-123"
+}`
+		file, diags := hclsyntax.ParseConfig([]byte(content), "test.tf", hcl.InitialPos)
+		require.False(t, diags.HasErrors())
+
+		hclFile := &hcl.File{Body: file.Body}
+		ctx := &sdk.Context{
+			File: "test.tf",
+			Config: map[string]interface{}{
+				"options": map[string]interface{}{
+					"case":    "custom",
+					"pattern": "^prefix_",
+				},
+			},
+		}
+
+		findings, err := rule.Check(ctx, hclFile)
+		require.NoError(t, err)
+		assert.Len(t, findings, 0, "prefix_server should match custom pattern ^prefix_")
+	})
+
+	t.Run("BlockLabelCaseRule custom pattern invalid", func(t *testing.T) {
+		rule := &BlockLabelCaseRule{}
+		content := `resource "aws_instance" "server" {
+  ami = "ami-123"
+}`
+		file, diags := hclsyntax.ParseConfig([]byte(content), "test.tf", hcl.InitialPos)
+		require.False(t, diags.HasErrors())
+
+		hclFile := &hcl.File{Body: file.Body}
+		ctx := &sdk.Context{
+			File: "test.tf",
+			Config: map[string]interface{}{
+				"options": map[string]interface{}{
+					"case":    "custom",
+					"pattern": "^prefix_",
+				},
+			},
+		}
+
+		findings, err := rule.Check(ctx, hclFile)
+		require.NoError(t, err)
+		assert.Len(t, findings, 1, "server should not match custom pattern ^prefix_")
+	})
+}

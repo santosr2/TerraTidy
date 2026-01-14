@@ -47,6 +47,12 @@ Use --changed to only check files that have been modified in git.`,
   # Show input JSON for debugging policies
   terratidy policy --show-input`,
 	RunE: func(_ *cobra.Command, args []string) error {
+		// Load configuration
+		cfg, err := loadConfig()
+		if err != nil {
+			return err
+		}
+
 		// Get target files (respecting --changed flag)
 		files, err := getTargetFiles(args, changed)
 		if err != nil {
@@ -62,11 +68,19 @@ Use --changed to only check files that have been modified in git.`,
 			return nil
 		}
 
+		// Build policy config from terratidy config, then apply CLI overrides
+		policyCfg := buildPolicyConfig(cfg)
+
+		// CLI flags override config file settings
+		if len(policyDirs) > 0 {
+			policyCfg.PolicyDirs = policyDirs
+		}
+		if len(policyFiles) > 0 {
+			policyCfg.PolicyFiles = policyFiles
+		}
+
 		// Create policy engine
-		engine := policy.New(&policy.Config{
-			PolicyDirs:  policyDirs,
-			PolicyFiles: policyFiles,
-		})
+		engine := policy.New(policyCfg)
 
 		// Show input JSON if requested
 		if policyShowJSON {
@@ -90,6 +104,10 @@ Use --changed to only check files that have been modified in git.`,
 		if err != nil {
 			return fmt.Errorf("policy check failed: %w", err)
 		}
+
+		// Apply severity threshold filtering
+		threshold := getEffectiveSeverityThreshold(cfg)
+		findings = filterFindingsBySeverity(findings, threshold)
 
 		// Output results using formatter
 		return outputPolicyResults(findings)

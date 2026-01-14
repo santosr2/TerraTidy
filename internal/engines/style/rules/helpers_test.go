@@ -379,6 +379,305 @@ func TestIsSnakeCase(t *testing.T) {
 	}
 }
 
+func TestIsCamelCase(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected bool
+	}{
+		{"valid camelCase", "myVariable", true},
+		{"single word lowercase", "variable", true},
+		{"with numbers", "var123Test", true},
+		{"snake_case", "my_variable", false},
+		{"PascalCase", "MyVariable", false},
+		{"with hyphens", "my-variable", false},
+		{"starts with number", "123var", false},
+		{"starts with uppercase", "MyVariable", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := IsCamelCase(tt.input)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestIsKebabCase(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected bool
+	}{
+		{"valid kebab-case", "my-variable", true},
+		{"single word", "variable", true},
+		{"with numbers", "var-123", true},
+		{"snake_case", "my_variable", false},
+		{"camelCase", "myVariable", false},
+		{"PascalCase", "MyVariable", false},
+		{"starts with number", "123-var", false},
+		{"uppercase", "MY-VARIABLE", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := IsKebabCase(tt.input)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestIsPascalCase(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected bool
+	}{
+		{"valid PascalCase", "MyVariable", true},
+		{"single uppercase word", "Variable", true},
+		{"with numbers", "Var123Test", true},
+		{"snake_case", "my_variable", false},
+		{"camelCase", "myVariable", false},
+		{"with hyphens", "My-Variable", false},
+		{"starts with number", "123Variable", false},
+		{"all lowercase", "myvariable", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := IsPascalCase(tt.input)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestMatchesCustomPattern(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		pattern  string
+		expected bool
+	}{
+		{"matches simple pattern", "test123", "^test[0-9]+$", true},
+		{"doesn't match pattern", "test", "^test[0-9]+$", false},
+		{"empty pattern returns true", "anything", "", true},
+		{"invalid regex returns false", "test", "[invalid", false},
+		{"prefix pattern", "prefix_name", "^prefix_", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := MatchesCustomPattern(tt.input, tt.pattern)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestValidateNaming(t *testing.T) {
+	tests := []struct {
+		name          string
+		input         string
+		convention    NamingCase
+		customPattern string
+		expectValid   bool
+		expectCase    string
+	}{
+		{"snake_case valid", "my_var", SnakeCase, "", true, "snake_case"},
+		{"snake_case invalid", "myVar", SnakeCase, "", false, "snake_case"},
+		{"camelCase valid", "myVar", CamelCase, "", true, "camelCase"},
+		{"camelCase invalid", "my_var", CamelCase, "", false, "camelCase"},
+		{"kebab-case valid", "my-var", KebabCase, "", true, "kebab-case"},
+		{"kebab-case invalid", "my_var", KebabCase, "", false, "kebab-case"},
+		{"PascalCase valid", "MyVar", PascalCase, "", true, "PascalCase"},
+		{"PascalCase invalid", "myVar", PascalCase, "", false, "PascalCase"},
+		{"custom pattern valid", "prefix_name", CustomCase, "^prefix_", true, "custom pattern"},
+		{"custom pattern invalid", "name", CustomCase, "^prefix_", false, "custom pattern"},
+		{"custom empty pattern", "anything", CustomCase, "", true, "custom"},
+		{"default to snake_case", "my_var", "", "", true, "snake_case"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			valid, caseName := ValidateNaming(tt.input, tt.convention, tt.customPattern)
+			assert.Equal(t, tt.expectValid, valid)
+			assert.Equal(t, tt.expectCase, caseName)
+		})
+	}
+}
+
+func TestGetNamingConventionFromConfig(t *testing.T) {
+	tests := []struct {
+		name             string
+		config           map[string]interface{}
+		expectConvention NamingCase
+		expectPattern    string
+	}{
+		{
+			name:             "nil config returns snake_case",
+			config:           nil,
+			expectConvention: SnakeCase,
+			expectPattern:    "",
+		},
+		{
+			name:             "empty config returns snake_case",
+			config:           map[string]interface{}{},
+			expectConvention: SnakeCase,
+			expectPattern:    "",
+		},
+		{
+			name: "snake_case from config",
+			config: map[string]interface{}{
+				"options": map[string]interface{}{
+					"case": "snake_case",
+				},
+			},
+			expectConvention: SnakeCase,
+			expectPattern:    "",
+		},
+		{
+			name: "camelCase from config",
+			config: map[string]interface{}{
+				"options": map[string]interface{}{
+					"case": "camelCase",
+				},
+			},
+			expectConvention: CamelCase,
+			expectPattern:    "",
+		},
+		{
+			name: "kebab-case from config",
+			config: map[string]interface{}{
+				"options": map[string]interface{}{
+					"case": "kebab-case",
+				},
+			},
+			expectConvention: KebabCase,
+			expectPattern:    "",
+		},
+		{
+			name: "PascalCase from config",
+			config: map[string]interface{}{
+				"options": map[string]interface{}{
+					"case": "PascalCase",
+				},
+			},
+			expectConvention: PascalCase,
+			expectPattern:    "",
+		},
+		{
+			name: "custom with pattern",
+			config: map[string]interface{}{
+				"options": map[string]interface{}{
+					"case":    "custom",
+					"pattern": "^prefix_",
+				},
+			},
+			expectConvention: CustomCase,
+			expectPattern:    "^prefix_",
+		},
+		{
+			name: "unknown case defaults to snake_case",
+			config: map[string]interface{}{
+				"options": map[string]interface{}{
+					"case": "UNKNOWN",
+				},
+			},
+			expectConvention: SnakeCase,
+			expectPattern:    "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			convention, pattern := GetNamingConventionFromConfig(tt.config)
+			assert.Equal(t, tt.expectConvention, convention)
+			assert.Equal(t, tt.expectPattern, pattern)
+		})
+	}
+}
+
+func TestGetAttributeOrderFromConfig(t *testing.T) {
+	defaultOrder := map[string]int{
+		"description": 1,
+		"type":        2,
+		"default":     3,
+	}
+
+	tests := []struct {
+		name          string
+		config        map[string]interface{}
+		expectedOrder map[string]int
+	}{
+		{
+			name:          "nil config returns default",
+			config:        nil,
+			expectedOrder: defaultOrder,
+		},
+		{
+			name:          "empty config returns default",
+			config:        map[string]interface{}{},
+			expectedOrder: defaultOrder,
+		},
+		{
+			name: "custom order from config",
+			config: map[string]interface{}{
+				"options": map[string]interface{}{
+					"order": []interface{}{"type", "description", "default"},
+				},
+			},
+			expectedOrder: map[string]int{
+				"type":        1,
+				"description": 2,
+				"default":     3,
+			},
+		},
+		{
+			name: "custom order with additional attributes",
+			config: map[string]interface{}{
+				"options": map[string]interface{}{
+					"order": []interface{}{"description", "value", "sensitive", "depends_on"},
+				},
+			},
+			expectedOrder: map[string]int{
+				"description": 1,
+				"value":       2,
+				"sensitive":   3,
+				"depends_on":  4,
+			},
+		},
+		{
+			name: "missing options returns default",
+			config: map[string]interface{}{
+				"other": "value",
+			},
+			expectedOrder: defaultOrder,
+		},
+		{
+			name: "wrong options type returns default",
+			config: map[string]interface{}{
+				"options": "not a map",
+			},
+			expectedOrder: defaultOrder,
+		},
+		{
+			name: "wrong order type returns default",
+			config: map[string]interface{}{
+				"options": map[string]interface{}{
+					"order": "not a list",
+				},
+			},
+			expectedOrder: defaultOrder,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := GetAttributeOrderFromConfig(tt.config, defaultOrder)
+			assert.Equal(t, tt.expectedOrder, result)
+		})
+	}
+}
+
 func TestMatchBlockLabels(t *testing.T) {
 	tests := []struct {
 		name     string

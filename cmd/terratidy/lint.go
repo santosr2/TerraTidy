@@ -38,6 +38,12 @@ Use --changed to only lint files that have been modified in git.`,
   # Enable specific rules
   terratidy lint --rule terraform_required_version`,
 	RunE: func(_ *cobra.Command, args []string) error {
+		// Load configuration
+		cfg, err := loadConfig()
+		if err != nil {
+			return err
+		}
+
 		// Get target files (respecting --changed flag)
 		files, err := getTargetFiles(args, changed)
 		if err != nil {
@@ -53,21 +59,30 @@ Use --changed to only lint files that have been modified in git.`,
 			return nil
 		}
 
-		// Create rule config
-		ruleConfig := make(map[string]lint.RuleConfig)
-		for _, rule := range lintRules {
-			ruleConfig[rule] = lint.RuleConfig{
-				Enabled:  true,
-				Severity: "warning",
+		// Build lint config from terratidy config, then apply CLI overrides
+		lintCfg := buildLintConfig(cfg)
+
+		// CLI flags override config file settings
+		if lintConfigFile != ".tflint.hcl" {
+			lintCfg.ConfigFile = lintConfigFile
+		}
+		if len(lintPlugins) > 0 {
+			lintCfg.Plugins = lintPlugins
+		}
+
+		// Create rule config from CLI flags
+		if len(lintRules) > 0 {
+			lintCfg.Rules = make(map[string]lint.RuleConfig)
+			for _, rule := range lintRules {
+				lintCfg.Rules[rule] = lint.RuleConfig{
+					Enabled:  true,
+					Severity: "warning",
+				}
 			}
 		}
 
 		// Create lint engine
-		engine := lint.New(&lint.Config{
-			ConfigFile: lintConfigFile,
-			Plugins:    lintPlugins,
-			Rules:      ruleConfig,
-		})
+		engine := lint.New(lintCfg)
 
 		// For structured output formats, skip the progress messages
 		useStructuredOutput := format != "" && format != "text"
@@ -84,6 +99,10 @@ Use --changed to only lint files that have been modified in git.`,
 		if err != nil {
 			return fmt.Errorf("running linter: %w", err)
 		}
+
+		// Apply severity threshold filtering
+		threshold := getEffectiveSeverityThreshold(cfg)
+		findings = filterFindingsBySeverity(findings, threshold)
 
 		// Output results using formatter
 		return outputLintResults(findings)

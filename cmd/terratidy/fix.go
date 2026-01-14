@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/santosr2/terratidy/internal/config"
 	fmtengine "github.com/santosr2/terratidy/internal/engines/format"
 	"github.com/santosr2/terratidy/internal/engines/style"
 	"github.com/santosr2/terratidy/pkg/sdk"
@@ -33,6 +34,12 @@ func init() {
 }
 
 func runFix(_ *cobra.Command, args []string) error {
+	// Load configuration
+	cfg, err := loadConfig()
+	if err != nil {
+		return err
+	}
+
 	files, err := getTargetFiles(args, changed)
 	if err != nil {
 		return fmt.Errorf("finding files: %w", err)
@@ -45,7 +52,7 @@ func runFix(_ *cobra.Command, args []string) error {
 
 	printFixHeader(len(files))
 
-	allFindings, totalFixed, err := runAllFixes(files)
+	allFindings, totalFixed, err := runAllFixesWithConfig(cfg, files)
 	if err != nil {
 		return err
 	}
@@ -62,7 +69,7 @@ func printFixHeader(fileCount int) {
 	fmt.Printf("Fixing %s%s...\n\n", formatFileCount(fileCount), modeMsg)
 }
 
-func runAllFixes(files []string) ([]sdk.Finding, int, error) {
+func runAllFixesWithConfig(cfg *config.Config, files []string) ([]sdk.Finding, int, error) {
 	ctx := context.Background()
 	var allFindings []sdk.Finding
 	totalFixed := 0
@@ -74,7 +81,7 @@ func runAllFixes(files []string) ([]sdk.Finding, int, error) {
 	allFindings = append(allFindings, fmtFindings...)
 	totalFixed += formatted
 
-	styleFindings, styleFixed, err := runStyleFix(ctx, files)
+	styleFindings, styleFixed, err := runStyleFixWithConfig(cfg, ctx, files)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -119,12 +126,10 @@ func countFormattedFiles(findings []sdk.Finding) int {
 	return count
 }
 
-func runStyleFix(ctx context.Context, files []string) ([]sdk.Finding, int, error) {
+func runStyleFixWithConfig(cfg *config.Config, ctx context.Context, files []string) ([]sdk.Finding, int, error) {
 	fmt.Println("2. Fixing style issues...")
-	styleEngine := style.New(&style.Config{
-		Fix:   true,
-		Rules: make(map[string]style.RuleConfig),
-	})
+	styleCfg := buildStyleConfig(cfg, true)
+	styleEngine := style.New(styleCfg)
 	findings, err := styleEngine.Run(ctx, files)
 	if err != nil {
 		return nil, 0, fmt.Errorf("style fixes failed: %w", err)

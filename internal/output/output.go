@@ -212,6 +212,10 @@ func GetFormatterWithColor(format string, verbose bool, version string, color bo
 		return &GitHubActionsFormatter{}, nil
 	case "table":
 		return &TableFormatter{Color: color, Verbose: verbose}, nil
+	case "junit", "junit-xml":
+		return &JUnitFormatter{Version: version}, nil
+	case "markdown", "md":
+		return &MarkdownFormatter{Version: version, Title: "TerraTidy Report"}, nil
 	default:
 		return nil, fmt.Errorf("unsupported output format: %s", format)
 	}

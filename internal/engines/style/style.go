@@ -219,11 +219,16 @@ func (e *Engine) getRuleConfig(ruleName string) RuleConfig {
 		return cfg
 	}
 
-	// File organization rules are disabled by default (opt-in)
+	// Rules that are disabled by default (opt-in)
 	disabledByDefault := map[string]bool{
+		// File organization rules
 		"style.variables-in-file": true,
 		"style.outputs-in-file":   true,
 		"style.providers-in-file": true,
+		// Documentation rules
+		"style.require-variable-description": true,
+		"style.require-output-description":   true,
+		"style.require-variable-type":        true,
 	}
 
 	if disabledByDefault[ruleName] {
@@ -279,6 +284,11 @@ func (e *Engine) registerRules() {
 	e.rules = append(e.rules, &VariablesInFileRule{})
 	e.rules = append(e.rules, &OutputsInFileRule{})
 	e.rules = append(e.rules, &ProvidersInFileRule{})
+
+	// Documentation rules (disabled by default - enable via config)
+	e.rules = append(e.rules, &RequireVariableDescriptionRule{})
+	e.rules = append(e.rules, &RequireOutputDescriptionRule{})
+	e.rules = append(e.rules, &RequireVariableTypeRule{})
 }
 
 // GetAllRules returns all registered rules for listing/documentation

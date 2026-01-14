@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/santosr2/terratidy/internal/config"
 	fmtengine "github.com/santosr2/terratidy/internal/engines/format"
 	"github.com/santosr2/terratidy/internal/engines/lint"
 	"github.com/santosr2/terratidy/internal/engines/policy"
@@ -58,6 +59,12 @@ func init() {
 }
 
 func runCheck(_ *cobra.Command, args []string) error {
+	// Load configuration
+	cfg, err := loadConfig()
+	if err != nil {
+		return err
+	}
+
 	files, err := getTargetFiles(args, changed)
 	if err != nil {
 		return fmt.Errorf("finding files: %w", err)
@@ -75,10 +82,14 @@ func runCheck(_ *cobra.Command, args []string) error {
 		printCheckHeader(len(files))
 	}
 
-	allFindings, err := runAllChecks(files, useStructuredOutput)
+	allFindings, err := runAllChecksWithConfig(cfg, files, useStructuredOutput)
 	if err != nil {
 		return err
 	}
+
+	// Apply severity threshold filtering
+	threshold := getEffectiveSeverityThreshold(cfg)
+	allFindings = filterFindingsBySeverity(allFindings, threshold)
 
 	return outputCheckResults(allFindings, useStructuredOutput)
 }
@@ -99,33 +110,37 @@ func printCheckHeader(fileCount int) {
 	fmt.Printf("Checking %s%s...\n\n", formatFileCount(fileCount), modeMsg)
 }
 
-func runAllChecks(files []string, quiet bool) ([]sdk.Finding, error) {
+func runAllChecksWithConfig(cfg *config.Config, files []string, quiet bool) ([]sdk.Finding, error) {
 	ctx := context.Background()
 
-	if checkParallel {
-		return runAllChecksParallel(ctx, files, quiet)
+	// Determine if parallel execution should be used
+	useParallel := getEffectiveParallel(cfg, checkParallel)
+
+	if useParallel {
+		return runAllChecksParallelWithConfig(ctx, cfg, files, quiet)
 	}
-	return runAllChecksSequential(ctx, files, quiet)
+	return runAllChecksSequentialWithConfig(ctx, cfg, files, quiet)
 }
 
-func runAllChecksParallel(ctx context.Context, files []string, quiet bool) ([]sdk.Finding, error) {
+func runAllChecksParallelWithConfig(ctx context.Context, cfg *config.Config, files []string, quiet bool) ([]sdk.Finding, error) {
 	if !quiet {
 		fmt.Println("Running checks in parallel mode...")
 	}
 
 	r := runner.New().SetParallel(true)
 
-	if !checkSkipFmt {
+	// Check if engines are enabled (CLI skip flags override config)
+	if !checkSkipFmt && isEngineEnabled(cfg, "fmt") {
 		r.AddEngine(fmtengine.New(&fmtengine.Config{Check: true}))
 	}
-	if !checkSkipStyle {
-		r.AddEngine(style.New(&style.Config{Fix: false, Rules: make(map[string]style.RuleConfig)}))
+	if !checkSkipStyle && isEngineEnabled(cfg, "style") {
+		r.AddEngine(style.New(buildStyleConfig(cfg, false)))
 	}
-	if !checkSkipLint {
-		r.AddEngine(lint.New(&lint.Config{ConfigFile: ".tflint.hcl"}))
+	if !checkSkipLint && isEngineEnabled(cfg, "lint") {
+		r.AddEngine(lint.New(buildLintConfig(cfg)))
 	}
-	if !checkSkipPolicy {
-		r.AddEngine(policy.New(&policy.Config{}))
+	if !checkSkipPolicy && isEngineEnabled(cfg, "policy") {
+		r.AddEngine(policy.New(buildPolicyConfig(cfg)))
 	}
 
 	results := r.RunWithResults(ctx, files)
@@ -147,39 +162,53 @@ func runAllChecksParallel(ctx context.Context, files []string, quiet bool) ([]sd
 	return allFindings, nil
 }
 
-func runAllChecksSequential(ctx context.Context, files []string, quiet bool) ([]sdk.Finding, error) {
+func runAllChecksSequentialWithConfig(ctx context.Context, cfg *config.Config, files []string, quiet bool) ([]sdk.Finding, error) {
 	var allFindings []sdk.Finding
 	step := 1
+	failFast := shouldFailFast(cfg)
 
-	if !checkSkipFmt {
-		findings, err := runFmtCheck(ctx, files, step, quiet)
+	if !checkSkipFmt && isEngineEnabled(cfg, "fmt") {
+		findings, err := runFmtCheckWithConfig(ctx, cfg, files, step, quiet)
 		if err != nil {
 			return nil, err
 		}
 		allFindings = append(allFindings, findings...)
 		step++
+
+		// Fail fast if enabled and there are errors
+		if failFast && hasErrors(findings) {
+			return allFindings, nil
+		}
 	}
 
-	if !checkSkipStyle {
-		findings, err := runStyleCheck(ctx, files, step, quiet)
+	if !checkSkipStyle && isEngineEnabled(cfg, "style") {
+		findings, err := runStyleCheckWithConfig(ctx, cfg, files, step, quiet)
 		if err != nil {
 			return nil, err
 		}
 		allFindings = append(allFindings, findings...)
 		step++
+
+		if failFast && hasErrors(findings) {
+			return allFindings, nil
+		}
 	}
 
-	if !checkSkipLint {
-		findings, err := runLintCheck(ctx, files, step, quiet)
+	if !checkSkipLint && isEngineEnabled(cfg, "lint") {
+		findings, err := runLintCheckWithConfig(ctx, cfg, files, step, quiet)
 		if err != nil {
 			return nil, err
 		}
 		allFindings = append(allFindings, findings...)
 		step++
+
+		if failFast && hasErrors(findings) {
+			return allFindings, nil
+		}
 	}
 
-	if !checkSkipPolicy {
-		findings, err := runPolicyCheck(ctx, files, step, quiet)
+	if !checkSkipPolicy && isEngineEnabled(cfg, "policy") {
+		findings, err := runPolicyCheckWithConfig(ctx, cfg, files, step, quiet)
 		if err != nil {
 			return nil, err
 		}
@@ -189,7 +218,17 @@ func runAllChecksSequential(ctx context.Context, files []string, quiet bool) ([]
 	return allFindings, nil
 }
 
-func runFmtCheck(ctx context.Context, files []string, step int, quiet bool) ([]sdk.Finding, error) {
+// hasErrors returns true if any finding has error severity.
+func hasErrors(findings []sdk.Finding) bool {
+	for _, f := range findings {
+		if f.Severity == sdk.SeverityError {
+			return true
+		}
+	}
+	return false
+}
+
+func runFmtCheckWithConfig(ctx context.Context, _ *config.Config, files []string, step int, quiet bool) ([]sdk.Finding, error) {
 	if !quiet {
 		fmt.Printf("%d. Checking formatting...\n", step)
 	}
@@ -204,14 +243,11 @@ func runFmtCheck(ctx context.Context, files []string, step int, quiet bool) ([]s
 	return findings, nil
 }
 
-func runStyleCheck(ctx context.Context, files []string, step int, quiet bool) ([]sdk.Finding, error) {
+func runStyleCheckWithConfig(ctx context.Context, cfg *config.Config, files []string, step int, quiet bool) ([]sdk.Finding, error) {
 	if !quiet {
 		fmt.Printf("%d. Checking style...\n", step)
 	}
-	styleEngine := style.New(&style.Config{
-		Fix:   false,
-		Rules: make(map[string]style.RuleConfig),
-	})
+	styleEngine := style.New(buildStyleConfig(cfg, false))
 	findings, err := styleEngine.Run(ctx, files)
 	if err != nil {
 		return nil, fmt.Errorf("style check failed: %w", err)
@@ -222,11 +258,11 @@ func runStyleCheck(ctx context.Context, files []string, step int, quiet bool) ([
 	return findings, nil
 }
 
-func runLintCheck(ctx context.Context, files []string, step int, quiet bool) ([]sdk.Finding, error) {
+func runLintCheckWithConfig(ctx context.Context, cfg *config.Config, files []string, step int, quiet bool) ([]sdk.Finding, error) {
 	if !quiet {
 		fmt.Printf("%d. Running linter...\n", step)
 	}
-	lintEngine := lint.New(&lint.Config{ConfigFile: ".tflint.hcl"})
+	lintEngine := lint.New(buildLintConfig(cfg))
 	findings, err := lintEngine.Run(ctx, files)
 	if err != nil {
 		return nil, fmt.Errorf("lint check failed: %w", err)
@@ -237,11 +273,11 @@ func runLintCheck(ctx context.Context, files []string, step int, quiet bool) ([]
 	return findings, nil
 }
 
-func runPolicyCheck(ctx context.Context, files []string, step int, quiet bool) ([]sdk.Finding, error) {
+func runPolicyCheckWithConfig(ctx context.Context, cfg *config.Config, files []string, step int, quiet bool) ([]sdk.Finding, error) {
 	if !quiet {
 		fmt.Printf("%d. Running policy checks...\n", step)
 	}
-	policyEngine := policy.New(&policy.Config{})
+	policyEngine := policy.New(buildPolicyConfig(cfg))
 	findings, err := policyEngine.Run(ctx, files)
 	if err != nil {
 		return nil, fmt.Errorf("policy check failed: %w", err)
@@ -250,6 +286,121 @@ func runPolicyCheck(ctx context.Context, files []string, step int, quiet bool) (
 		fmt.Printf("   Found %d issue(s)\n\n", len(findings))
 	}
 	return findings, nil
+}
+
+// buildStyleConfig creates a style.Config from the terratidy config.
+func buildStyleConfig(cfg *config.Config, fix bool) *style.Config {
+	styleCfg := &style.Config{
+		Fix:   fix,
+		Rules: make(map[string]style.RuleConfig),
+	}
+
+	if cfg == nil {
+		return styleCfg
+	}
+
+	// Get style-specific config from engines section
+	engineCfg := getEngineConfig(cfg, "style")
+	if engineCfg == nil {
+		return styleCfg
+	}
+
+	// Extract rules config if present
+	if rulesRaw, ok := engineCfg["rules"]; ok {
+		if rulesMap, ok := rulesRaw.(map[string]interface{}); ok {
+			for ruleName, ruleCfgRaw := range rulesMap {
+				if ruleCfgMap, ok := ruleCfgRaw.(map[string]interface{}); ok {
+					rc := style.RuleConfig{}
+					if enabled, ok := ruleCfgMap["enabled"].(bool); ok {
+						rc.Enabled = enabled
+					}
+					if severity, ok := ruleCfgMap["severity"].(string); ok {
+						rc.Severity = severity
+					}
+					if options, ok := ruleCfgMap["options"].(map[string]interface{}); ok {
+						rc.Options = options
+					}
+					styleCfg.Rules[ruleName] = rc
+				}
+			}
+		}
+	}
+
+	// Also merge override rules
+	for ruleName, ruleCfg := range cfg.Overrides.Rules {
+		rc := style.RuleConfig{
+			Enabled:  ruleCfg.Enabled,
+			Severity: ruleCfg.Severity,
+		}
+		if ruleCfg.Config != nil {
+			rc.Options = ruleCfg.Config
+		}
+		styleCfg.Rules[ruleName] = rc
+	}
+
+	return styleCfg
+}
+
+// buildLintConfig creates a lint.Config from the terratidy config.
+func buildLintConfig(cfg *config.Config) *lint.Config {
+	lintCfg := &lint.Config{
+		ConfigFile: ".tflint.hcl",
+	}
+
+	if cfg == nil {
+		return lintCfg
+	}
+
+	engineCfg := getEngineConfig(cfg, "lint")
+	if engineCfg == nil {
+		return lintCfg
+	}
+
+	// Extract lint-specific settings
+	if configFile, ok := engineCfg["config_file"].(string); ok {
+		lintCfg.ConfigFile = configFile
+	}
+	if plugins, ok := engineCfg["plugins"].([]interface{}); ok {
+		for _, p := range plugins {
+			if ps, ok := p.(string); ok {
+				lintCfg.Plugins = append(lintCfg.Plugins, ps)
+			}
+		}
+	}
+
+	return lintCfg
+}
+
+// buildPolicyConfig creates a policy.Config from the terratidy config.
+func buildPolicyConfig(cfg *config.Config) *policy.Config {
+	policyCfg := &policy.Config{}
+
+	if cfg == nil {
+		return policyCfg
+	}
+
+	engineCfg := getEngineConfig(cfg, "policy")
+	if engineCfg == nil {
+		return policyCfg
+	}
+
+	// Extract policy-specific settings
+	if dirs, ok := engineCfg["policy_dirs"].([]interface{}); ok {
+		for _, d := range dirs {
+			if ds, ok := d.(string); ok {
+				policyCfg.PolicyDirs = append(policyCfg.PolicyDirs, ds)
+			}
+		}
+	}
+	if files, ok := engineCfg["policy_files"].([]interface{}); ok {
+		for _, f := range files {
+			if fs, ok := f.(string); ok {
+				policyCfg.PolicyFiles = append(policyCfg.PolicyFiles, fs)
+			}
+		}
+	}
+
+	return policyCfg
 }
 
 func outputCheckResults(allFindings []sdk.Finding, _ bool) error {

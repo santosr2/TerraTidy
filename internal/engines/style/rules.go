@@ -38,4 +38,9 @@ type (
 	VariablesInFileRule = rules.VariablesInFileRule
 	OutputsInFileRule   = rules.OutputsInFileRule
 	ProvidersInFileRule = rules.ProvidersInFileRule
+
+	// Documentation rules
+	RequireVariableDescriptionRule = rules.RequireVariableDescriptionRule
+	RequireOutputDescriptionRule   = rules.RequireOutputDescriptionRule
+	RequireVariableTypeRule        = rules.RequireVariableTypeRule
 )

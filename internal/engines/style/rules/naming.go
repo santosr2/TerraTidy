@@ -28,6 +28,9 @@ func (r *BlockLabelCaseRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Find
 		return findings, nil
 	}
 
+	// Get naming convention from config (defaults to snake_case)
+	convention, customPattern := GetNamingConventionFromConfig(ctx.Config)
+
 	for _, block := range hclFile.Blocks {
 		blockType := block.Type
 
@@ -53,16 +56,19 @@ func (r *BlockLabelCaseRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Find
 			continue
 		}
 
-		// Validate snake_case for resources and data sources
-		if (blockType == "resource" || blockType == "data") && !IsSnakeCase(name) {
-			findings = append(findings, sdk.Finding{
-				Rule:     r.Name(),
-				Message:  "Block label should be snake_case: " + name,
-				File:     ctx.File,
-				Location: block.Range(),
-				Severity: sdk.SeverityWarning,
-				Fixable:  false,
-			})
+		// Validate naming convention for resources and data sources
+		if blockType == "resource" || blockType == "data" {
+			valid, caseName := ValidateNaming(name, convention, customPattern)
+			if !valid {
+				findings = append(findings, sdk.Finding{
+					Rule:     r.Name(),
+					Message:  "Block label should be " + caseName + ": " + name,
+					File:     ctx.File,
+					Location: block.Range(),
+					Severity: sdk.SeverityWarning,
+					Fixable:  false,
+				})
+			}
 		}
 	}
 
@@ -96,6 +102,9 @@ func (r *VariableNamingRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Find
 		return findings, nil
 	}
 
+	// Get naming convention from config (defaults to snake_case)
+	convention, customPattern := GetNamingConventionFromConfig(ctx.Config)
+
 	for _, block := range hclFile.Blocks {
 		if block.Type != "variable" {
 			continue
@@ -106,10 +115,11 @@ func (r *VariableNamingRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Find
 		}
 
 		name := block.Labels[0]
-		if !IsSnakeCase(name) {
+		valid, caseName := ValidateNaming(name, convention, customPattern)
+		if !valid {
 			findings = append(findings, sdk.Finding{
 				Rule:     r.Name(),
-				Message:  "Variable name should be snake_case: " + name,
+				Message:  "Variable name should be " + caseName + ": " + name,
 				File:     ctx.File,
 				Location: block.Range(),
 				Severity: sdk.SeverityWarning,
@@ -148,6 +158,9 @@ func (r *OutputNamingRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Findin
 		return findings, nil
 	}
 
+	// Get naming convention from config (defaults to snake_case)
+	convention, customPattern := GetNamingConventionFromConfig(ctx.Config)
+
 	for _, block := range hclFile.Blocks {
 		if block.Type != "output" {
 			continue
@@ -158,10 +171,11 @@ func (r *OutputNamingRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Findin
 		}
 
 		name := block.Labels[0]
-		if !IsSnakeCase(name) {
+		valid, caseName := ValidateNaming(name, convention, customPattern)
+		if !valid {
 			findings = append(findings, sdk.Finding{
 				Rule:     r.Name(),
-				Message:  "Output name should be snake_case: " + name,
+				Message:  "Output name should be " + caseName + ": " + name,
 				File:     ctx.File,
 				Location: block.Range(),
 				Severity: sdk.SeverityWarning,
@@ -200,6 +214,9 @@ func (r *LocalNamingRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Finding
 		return findings, nil
 	}
 
+	// Get naming convention from config (defaults to snake_case)
+	convention, customPattern := GetNamingConventionFromConfig(ctx.Config)
+
 	for _, block := range hclFile.Blocks {
 		if block.Type != "locals" {
 			continue
@@ -207,10 +224,11 @@ func (r *LocalNamingRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Finding
 
 		// Check each attribute in the locals block
 		for name, attr := range block.Body.Attributes {
-			if !IsSnakeCase(name) {
+			valid, caseName := ValidateNaming(name, convention, customPattern)
+			if !valid {
 				findings = append(findings, sdk.Finding{
 					Rule:     r.Name(),
-					Message:  "Local value name should be snake_case: " + name,
+					Message:  "Local value name should be " + caseName + ": " + name,
 					File:     ctx.File,
 					Location: attr.Range(),
 					Severity: sdk.SeverityWarning,

@@ -7,7 +7,9 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/santosr2/terratidy/internal/config"
 	"github.com/santosr2/terratidy/internal/vcs"
+	"github.com/santosr2/terratidy/pkg/sdk"
 )
 
 // getTargetFiles returns the list of files to process based on the provided paths
@@ -186,4 +188,140 @@ func formatFileCount(count int) string {
 		return "1 file"
 	}
 	return fmt.Sprintf("%d files", count)
+}
+
+// loadConfig loads the configuration from the config file and applies the profile if specified.
+// It uses the global cfgFile and profile variables from root.go.
+// Returns the default config if no config file is found.
+func loadConfig() (*config.Config, error) {
+	cfg, err := config.Load(cfgFile)
+	if err != nil {
+		return nil, fmt.Errorf("loading config: %w", err)
+	}
+
+	// Apply profile if specified
+	if profile != "" {
+		if err := cfg.ApplyProfile(profile); err != nil {
+			return nil, fmt.Errorf("applying profile %q: %w", profile, err)
+		}
+	}
+
+	return cfg, nil
+}
+
+// severityLevel maps severity strings to numeric levels for comparison.
+var severityLevel = map[string]int{
+	"info":    0,
+	"warning": 1,
+	"error":   2,
+}
+
+// getSeverityLevel returns the numeric level for a severity.
+func getSeverityLevel(s sdk.Severity) int {
+	switch s {
+	case sdk.SeverityInfo:
+		return 0
+	case sdk.SeverityWarning:
+		return 1
+	case sdk.SeverityError:
+		return 2
+	default:
+		return 0
+	}
+}
+
+// filterFindingsBySeverity filters findings based on the severity threshold.
+// Only findings with severity >= threshold are returned.
+// If threshold is empty, all findings are returned.
+func filterFindingsBySeverity(findings []sdk.Finding, threshold string) []sdk.Finding {
+	if threshold == "" {
+		return findings
+	}
+
+	thresholdLevel, ok := severityLevel[threshold]
+	if !ok {
+		// Invalid threshold, return all findings
+		return findings
+	}
+
+	var filtered []sdk.Finding
+	for _, f := range findings {
+		if getSeverityLevel(f.Severity) >= thresholdLevel {
+			filtered = append(filtered, f)
+		}
+	}
+	return filtered
+}
+
+// getEffectiveSeverityThreshold returns the severity threshold to use.
+// CLI flag takes precedence over config file setting.
+func getEffectiveSeverityThreshold(cfg *config.Config) string {
+	if severityThreshold != "" {
+		return severityThreshold
+	}
+	if cfg != nil {
+		return cfg.SeverityThreshold
+	}
+	return ""
+}
+
+// getEffectiveParallel returns whether parallel execution should be used.
+// CLI flag takes precedence over config file setting.
+func getEffectiveParallel(cfg *config.Config, cliParallel bool) bool {
+	if cliParallel {
+		return true
+	}
+	if cfg != nil {
+		return cfg.Parallel
+	}
+	return false
+}
+
+// shouldFailFast returns whether fail-fast mode is enabled from config.
+func shouldFailFast(cfg *config.Config) bool {
+	if cfg != nil {
+		return cfg.FailFast
+	}
+	return false
+}
+
+// isEngineEnabled checks if an engine is enabled in the config.
+// Returns true by default if config is nil or engine is not explicitly disabled.
+func isEngineEnabled(cfg *config.Config, engine string) bool {
+	if cfg == nil {
+		return true
+	}
+
+	switch engine {
+	case "fmt":
+		return cfg.Engines.Fmt.Enabled
+	case "style":
+		return cfg.Engines.Style.Enabled
+	case "lint":
+		return cfg.Engines.Lint.Enabled
+	case "policy":
+		return cfg.Engines.Policy.Enabled
+	default:
+		return true
+	}
+}
+
+// getEngineConfig returns the engine-specific config map.
+func getEngineConfig(cfg *config.Config, engine string) map[string]interface{} {
+	if cfg == nil {
+		return nil
+	}
+
+	switch engine {
+	case "fmt":
+		return cfg.Engines.Fmt.Config
+	case "style":
+		return cfg.Engines.Style.Config
+	case "lint":
+		return cfg.Engines.Lint.Config
+	case "policy":
+		return cfg.Engines.Policy.Config
+	default:
+		return nil
+	}
 }

@@ -11,8 +11,29 @@ import (
 	"github.com/hashicorp/hcl/v2/hclwrite"
 )
 
-// snakeCaseRegex matches valid snake_case identifiers.
-var snakeCaseRegex = regexp.MustCompile(`^[a-z][a-z0-9_]*$`)
+// Case convention regexes for naming validation.
+var (
+	// snakeCaseRegex matches valid snake_case identifiers.
+	snakeCaseRegex = regexp.MustCompile(`^[a-z][a-z0-9_]*$`)
+	// camelCaseRegex matches valid camelCase identifiers.
+	camelCaseRegex = regexp.MustCompile(`^[a-z][a-zA-Z0-9]*$`)
+	// kebabCaseRegex matches valid kebab-case identifiers.
+	kebabCaseRegex = regexp.MustCompile(`^[a-z][a-z0-9-]*$`)
+	// pascalCaseRegex matches valid PascalCase identifiers.
+	pascalCaseRegex = regexp.MustCompile(`^[A-Z][a-zA-Z0-9]*$`)
+)
+
+// NamingCase represents supported naming conventions.
+type NamingCase string
+
+// Supported naming convention constants.
+const (
+	SnakeCase  NamingCase = "snake_case"
+	CamelCase  NamingCase = "camelCase"
+	KebabCase  NamingCase = "kebab-case"
+	PascalCase NamingCase = "PascalCase"
+	CustomCase NamingCase = "custom"
+)
 
 // GetOrderedAttrNames returns attribute names from hclsyntax sorted by line number.
 func GetOrderedAttrNames(syntaxBody *hclsyntax.Body) []string {
@@ -283,6 +304,122 @@ func FindNestedBlock(blocks hclsyntax.Blocks, blockType string) *hclsyntax.Block
 // IsSnakeCase checks if a string is valid snake_case.
 func IsSnakeCase(s string) bool {
 	return snakeCaseRegex.MatchString(s)
+}
+
+// IsCamelCase checks if a string is valid camelCase.
+func IsCamelCase(s string) bool {
+	return camelCaseRegex.MatchString(s)
+}
+
+// IsKebabCase checks if a string is valid kebab-case.
+func IsKebabCase(s string) bool {
+	return kebabCaseRegex.MatchString(s)
+}
+
+// IsPascalCase checks if a string is valid PascalCase.
+func IsPascalCase(s string) bool {
+	return pascalCaseRegex.MatchString(s)
+}
+
+// MatchesCustomPattern checks if a string matches a custom regex pattern.
+func MatchesCustomPattern(s, pattern string) bool {
+	if pattern == "" {
+		return true
+	}
+	re, err := regexp.Compile(pattern)
+	if err != nil {
+		return false
+	}
+	return re.MatchString(s)
+}
+
+// ValidateNaming checks if a name matches the specified naming convention.
+// Returns (isValid, caseName) where caseName is the human-readable convention name.
+func ValidateNaming(name string, convention NamingCase, customPattern string) (bool, string) {
+	switch convention {
+	case CamelCase:
+		return IsCamelCase(name), "camelCase"
+	case KebabCase:
+		return IsKebabCase(name), "kebab-case"
+	case PascalCase:
+		return IsPascalCase(name), "PascalCase"
+	case CustomCase:
+		if customPattern == "" {
+			return true, "custom"
+		}
+		return MatchesCustomPattern(name, customPattern), "custom pattern"
+	default:
+		// Default to snake_case
+		return IsSnakeCase(name), "snake_case"
+	}
+}
+
+// GetNamingConventionFromConfig extracts naming convention settings from rule config.
+// Returns (convention, customPattern).
+func GetNamingConventionFromConfig(config map[string]interface{}) (NamingCase, string) {
+	if config == nil {
+		return SnakeCase, ""
+	}
+
+	options, ok := config["options"].(map[string]interface{})
+	if !ok {
+		return SnakeCase, ""
+	}
+
+	convention := SnakeCase
+	if caseStr, ok := options["case"].(string); ok {
+		switch caseStr {
+		case "camelCase":
+			convention = CamelCase
+		case "kebab-case":
+			convention = KebabCase
+		case "PascalCase":
+			convention = PascalCase
+		case "custom":
+			convention = CustomCase
+		default:
+			convention = SnakeCase
+		}
+	}
+
+	customPattern := ""
+	if pattern, ok := options["pattern"].(string); ok {
+		customPattern = pattern
+	}
+
+	return convention, customPattern
+}
+
+// GetAttributeOrderFromConfig extracts attribute ordering configuration from rule config.
+// Returns a map of attribute name to position, and the default order if not configured.
+func GetAttributeOrderFromConfig(config map[string]interface{}, defaultOrder map[string]int) map[string]int {
+	if config == nil {
+		return defaultOrder
+	}
+
+	options, ok := config["options"].(map[string]interface{})
+	if !ok {
+		return defaultOrder
+	}
+
+	orderList, ok := options["order"].([]interface{})
+	if !ok {
+		return defaultOrder
+	}
+
+	// Build order map from the list
+	customOrder := make(map[string]int)
+	for i, item := range orderList {
+		if name, ok := item.(string); ok {
+			customOrder[name] = i + 1
+		}
+	}
+
+	if len(customOrder) == 0 {
+		return defaultOrder
+	}
+
+	return customOrder
 }
 
 // MatchBlockLabels checks if block labels match expected labels.

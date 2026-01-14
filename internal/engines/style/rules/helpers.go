@@ -482,3 +482,98 @@ func ParseBothFormats(content []byte, filePath string) (*hclsyntax.Body, *hclwri
 
 	return syntaxBody, writeFile, nil
 }
+
+// ReorderTopLevelBlocks reorders top-level blocks in a file according to best practices:
+// 1. terraform blocks first
+// 2. provider blocks second
+// 3. variable blocks
+// 4. locals blocks
+// 5. data blocks
+// 6. resource blocks
+// 7. module blocks
+// 8. output blocks
+func ReorderTopLevelBlocks(writeFile *hclwrite.File) []byte {
+	blocks := writeFile.Body().Blocks()
+	if len(blocks) == 0 {
+		return writeFile.Bytes()
+	}
+
+	// Categorize blocks by type
+	var terraformBlocks []*hclwrite.Block
+	var providerBlocks []*hclwrite.Block
+	var variableBlocks []*hclwrite.Block
+	var localsBlocks []*hclwrite.Block
+	var dataBlocks []*hclwrite.Block
+	var resourceBlocks []*hclwrite.Block
+	var moduleBlocks []*hclwrite.Block
+	var outputBlocks []*hclwrite.Block
+	var otherBlocks []*hclwrite.Block
+
+	for _, block := range blocks {
+		switch block.Type() {
+		case "terraform":
+			terraformBlocks = append(terraformBlocks, block)
+		case "provider":
+			providerBlocks = append(providerBlocks, block)
+		case "variable":
+			variableBlocks = append(variableBlocks, block)
+		case "locals":
+			localsBlocks = append(localsBlocks, block)
+		case "data":
+			dataBlocks = append(dataBlocks, block)
+		case "resource":
+			resourceBlocks = append(resourceBlocks, block)
+		case "module":
+			moduleBlocks = append(moduleBlocks, block)
+		case "output":
+			outputBlocks = append(outputBlocks, block)
+		default:
+			otherBlocks = append(otherBlocks, block)
+		}
+	}
+
+	// Clear all blocks from the body
+	for _, block := range blocks {
+		writeFile.Body().RemoveBlock(block)
+	}
+
+	// Re-add blocks in the desired order
+	addBlocksWithSpacing(writeFile.Body(), terraformBlocks)
+	addBlocksWithSpacing(writeFile.Body(), providerBlocks)
+	addBlocksWithSpacing(writeFile.Body(), variableBlocks)
+	addBlocksWithSpacing(writeFile.Body(), localsBlocks)
+	addBlocksWithSpacing(writeFile.Body(), dataBlocks)
+	addBlocksWithSpacing(writeFile.Body(), resourceBlocks)
+	addBlocksWithSpacing(writeFile.Body(), moduleBlocks)
+	addBlocksWithSpacing(writeFile.Body(), outputBlocks)
+	addBlocksWithSpacing(writeFile.Body(), otherBlocks)
+
+	return FormatAndCleanBlankLines(writeFile.Bytes())
+}
+
+// addBlocksWithSpacing adds blocks to a body, preserving their content.
+func addBlocksWithSpacing(body *hclwrite.Body, blocks []*hclwrite.Block) {
+	for _, block := range blocks {
+		newBlock := body.AppendNewBlock(block.Type(), block.Labels())
+		// Copy attributes
+		for name, attr := range block.Body().Attributes() {
+			newBlock.Body().SetAttributeRaw(name, attr.Expr().BuildTokens(nil))
+		}
+		// Copy nested blocks
+		for _, nested := range block.Body().Blocks() {
+			copyNestedBlock(newBlock.Body(), nested)
+		}
+		body.AppendNewline()
+	}
+}
+
+// copyNestedBlock recursively copies a nested block to a new body.
+func copyNestedBlock(body *hclwrite.Body, block *hclwrite.Block) {
+	newBlock := body.AppendNewBlock(block.Type(), block.Labels())
+	for name, attr := range block.Body().Attributes() {
+		newBlock.Body().SetAttributeRaw(name, attr.Expr().BuildTokens(nil))
+	}
+	for _, nested := range block.Body().Blocks() {
+		copyNestedBlock(newBlock.Body(), nested)
+	}
+}

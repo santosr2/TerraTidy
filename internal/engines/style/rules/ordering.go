@@ -1357,22 +1357,44 @@ func (r *TerraformBlockFirstRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk
 	}
 
 	if terraformBlock != nil && terraformBlock != firstBlock {
+		filePath := ctx.File
 		findings = append(findings, sdk.Finding{
 			Rule:     r.Name(),
 			Message:  "terraform block should be the first block in the file",
 			File:     ctx.File,
 			Location: terraformBlock.Range(),
 			Severity: sdk.SeverityWarning,
-			Fixable:  false,
+			Fixable:  true,
+			FixFunc: func() ([]byte, error) {
+				return r.fixFile(filePath)
+			},
 		})
 	}
 
 	return findings, nil
 }
 
-// Fix is a no-op for this rule as block reordering requires manual review.
-func (r *TerraformBlockFirstRule) Fix(_ *sdk.Context, _ *hcl.File) ([]byte, error) {
-	return nil, nil
+// fixFile moves the terraform block to the beginning of the file.
+func (r *TerraformBlockFirstRule) fixFile(filePath string) ([]byte, error) {
+	content, err := os.ReadFile(filePath)
+	if err != nil {
+		return nil, err
+	}
+
+	writeFile, diags := hclwrite.ParseConfig(content, filePath, hcl.InitialPos)
+	if diags.HasErrors() {
+		return nil, diags
+	}
+
+	return ReorderTopLevelBlocks(writeFile), nil
+}
+
+// Fix moves terraform block to the first position.
+func (r *TerraformBlockFirstRule) Fix(ctx *sdk.Context, _ *hcl.File) ([]byte, error) {
+	if ctx == nil {
+		return nil, nil
+	}
+	return r.fixFile(ctx.File)
 }
 
 // ProviderBlockOrderRule ensures provider blocks come after terraform block.
@@ -1411,6 +1433,11 @@ func (r *ProviderBlockOrderRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.
 		}
 	}
 
+	filePath := ctx.File
+	fixFunc := func() ([]byte, error) {
+		return r.fixFile(filePath)
+	}
+
 	for _, block := range hclFile.Blocks {
 		if block.Type == "provider" {
 			providerLine := block.Range().Start.Line
@@ -1423,7 +1450,8 @@ func (r *ProviderBlockOrderRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.
 					File:     ctx.File,
 					Location: block.Range(),
 					Severity: sdk.SeverityWarning,
-					Fixable:  false,
+					Fixable:  true,
+					FixFunc:  fixFunc,
 				})
 			}
 
@@ -1435,7 +1463,8 @@ func (r *ProviderBlockOrderRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.
 					File:     ctx.File,
 					Location: block.Range(),
 					Severity: sdk.SeverityWarning,
-					Fixable:  false,
+					Fixable:  true,
+					FixFunc:  fixFunc,
 				})
 			}
 		}
@@ -1444,9 +1473,27 @@ func (r *ProviderBlockOrderRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.
 	return findings, nil
 }
 
-// Fix is a no-op for this rule as provider block reordering requires manual review.
-func (r *ProviderBlockOrderRule) Fix(_ *sdk.Context, _ *hcl.File) ([]byte, error) {
-	return nil, nil
+// fixFile reorders provider blocks to come after terraform and before resources.
+func (r *ProviderBlockOrderRule) fixFile(filePath string) ([]byte, error) {
+	content, err := os.ReadFile(filePath)
+	if err != nil {
+		return nil, err
+	}
+
+	writeFile, diags := hclwrite.ParseConfig(content, filePath, hcl.InitialPos)
+	if diags.HasErrors() {
+		return nil, diags
+	}
+
+	return ReorderTopLevelBlocks(writeFile), nil
+}
+
+// Fix reorders provider blocks to proper position.
+func (r *ProviderBlockOrderRule) Fix(ctx *sdk.Context, _ *hcl.File) ([]byte, error) {
+	if ctx == nil {
+		return nil, nil
+	}
+	return r.fixFile(ctx.File)
 }
 
 // AttributeGroupSpacingRule ensures blank lines between attribute groups in blocks.

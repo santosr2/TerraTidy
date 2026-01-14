@@ -13,6 +13,8 @@ TerraTidy supports multiple output formats for different use cases.
 | `sarif`        | `--format sarif`        | SARIF 2.1.0 format             | GitHub Code Scanning      |
 | `html`         | `--format html`         | Visual HTML report             | Reports, sharing          |
 | `github`       | `--format github`       | GitHub Actions workflow cmds   | GitHub Actions inline     |
+| `junit`        | `--format junit`        | JUnit XML format               | CI/CD (Jenkins, GitLab)   |
+| `markdown`     | `--format markdown`     | Markdown summary               | PR comments, summaries    |
 
 ## Usage
 
@@ -173,6 +175,122 @@ Output:
 ```
 
 These annotations appear directly in the GitHub PR "Files changed" view.
+
+## JUnit XML Format
+
+Standard test result format for CI/CD integration:
+
+```bash
+terratidy check --format junit > results.xml
+```
+
+Output:
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites name="TerraTidy" tests="3" failures="2" errors="0" time="0.5">
+  <testsuite name="style" tests="2" failures="1" errors="0" time="0.3">
+    <testcase name="style.block-label-case" classname="main.tf" time="0.1">
+      <failure message="Resource name should use snake_case" type="error">
+        File: main.tf
+        Line: 15
+        Column: 3
+      </failure>
+    </testcase>
+    <testcase name="style.variable-naming" classname="variables.tf" time="0.1"/>
+  </testsuite>
+  <testsuite name="lint" tests="1" failures="1" errors="0" time="0.2">
+    <testcase name="lint.terraform-documented-variables" classname="variables.tf" time="0.1">
+      <failure message="Variable should have a description" type="warning">
+        File: variables.tf
+        Line: 8
+        Column: 1
+      </failure>
+    </testcase>
+  </testsuite>
+</testsuites>
+```
+
+### Jenkins Integration
+
+```groovy
+pipeline {
+    stages {
+        stage('TerraTidy') {
+            steps {
+                sh 'terratidy check --format junit > terratidy-results.xml'
+            }
+            post {
+                always {
+                    junit 'terratidy-results.xml'
+                }
+            }
+        }
+    }
+}
+```
+
+### GitLab CI Integration
+
+```yaml
+terratidy:
+  script:
+    - terratidy check --format junit > terratidy-results.xml
+  artifacts:
+    reports:
+      junit: terratidy-results.xml
+```
+
+## Markdown Format
+
+Human-readable markdown summary, ideal for PR comments:
+
+```bash
+terratidy check --format markdown > summary.md
+```
+
+Output:
+
+```markdown
+# TerraTidy Report
+
+**Summary:** 3 issues found (1 error, 1 warning, 1 info)
+
+## Errors (1)
+
+| File | Line | Rule | Message |
+|------|------|------|---------|
+| main.tf | 15 | style.block-label-case | Resource name should use snake_case |
+
+## Warnings (1)
+
+| File | Line | Rule | Message |
+|------|------|------|---------|
+| main.tf | 23 | style.tags-at-end | Place tags attribute at end of resource |
+
+## Info (1)
+
+| File | Line | Rule | Message |
+|------|------|------|---------|
+| variables.tf | 8 | lint.terraform-documented-variables | Variable should have a description |
+```
+
+### GitHub Actions Summary
+
+```yaml
+- name: Run TerraTidy
+  run: |
+    terratidy check --format markdown > $GITHUB_STEP_SUMMARY
+```
+
+### PR Comment with GitHub CLI
+
+```yaml
+- name: Run TerraTidy
+  run: |
+    terratidy check --format markdown > terratidy-report.md
+    gh pr comment ${{ github.event.pull_request.number }} --body-file terratidy-report.md
+```
 
 ## HTML Format
 

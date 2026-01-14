@@ -75,19 +75,84 @@ terratidy check --profile strict
 ### Style Rules
 
 ```yaml
-style:
-  rules:
-    style.block_order_resource_module:
-      enabled: true
-      severity: error
-      config:
-        order:
-          - "count|for_each"
-          - "source|version"
-          - "arguments"
-          - "tags"
-          - "lifecycle"
-        blank_line_between_groups: true
+engines:
+  style:
+    enabled: true
+    rules:
+      # Spacing rules with options
+      blank-line-between-blocks:
+        enabled: true
+        severity: warning
+        options:
+          min_lines: 1  # Minimum blank lines between blocks
+          max_lines: 1  # Maximum blank lines between blocks
+
+      no-empty-blocks:
+        enabled: true
+        options:
+          allowed_blocks: ["lifecycle", "provisioner"]  # Additional allowed empty blocks
+          override_defaults: false  # Set true to ignore default allowed blocks
+
+      # Naming rules with case options
+      variable-naming:
+        enabled: true
+        options:
+          case: snake_case  # snake_case | camelCase | kebab-case | PascalCase | custom
+          pattern: "^[a-z][a-z0-9_]*$"  # Custom regex (only used when case: custom)
+
+      # Ordering rules with custom order
+      variable-order:
+        enabled: true
+        options:
+          order: ["description", "type", "default", "sensitive", "nullable"]
+
+      output-order:
+        enabled: true
+        options:
+          order: ["description", "value", "sensitive", "depends_on"]
+
+      # Advanced naming (disabled by default)
+      output-prefix:
+        enabled: true
+        options:
+          prefix: ""  # Required prefix for outputs
+          suffix: ""  # Required suffix for outputs
+
+      # File organization (disabled by default)
+      variables-in-file:
+        enabled: true
+      outputs-in-file:
+        enabled: true
+      providers-in-file:
+        enabled: true
+      scoped-file-organization:
+        enabled: true
+      terraform-files-structure:
+        enabled: true
+
+      # Documentation rules (disabled by default)
+      require-variable-description:
+        enabled: true
+      require-output-description:
+        enabled: true
+      require-variable-type:
+        enabled: true
+
+      # Block organization (disabled by default)
+      meta-arguments-order:
+        enabled: true
+      lifecycle-attribute-order:
+        enabled: true
+      nested-block-order:
+        enabled: true
+
+      # Comment/format rules (disabled by default)
+      comment-syntax:
+        enabled: true
+      no-trailing-whitespace:
+        enabled: true
+      no-consecutive-blank-lines:
+        enabled: true
 ```
 
 ### Custom Rules
@@ -103,6 +168,18 @@ custom_rules:
         - "Owner"
         - "CostCenter"
 ```
+
+### Naming Convention Cases
+
+TerraTidy supports multiple naming conventions for naming rules:
+
+| Case | Example | Description |
+|------|---------|-------------|
+| `snake_case` | `my_variable` | Lowercase with underscores (default) |
+| `camelCase` | `myVariable` | Lowercase first word, uppercase subsequent |
+| `kebab-case` | `my-variable` | Lowercase with hyphens |
+| `PascalCase` | `MyVariable` | Uppercase first letter of each word |
+| `custom` | (regex) | Custom pattern via `pattern` option |
 
 ## Configuration Precedence
 

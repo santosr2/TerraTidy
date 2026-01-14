@@ -252,13 +252,18 @@ func (r *LifecycleAtEndRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Find
 
 		// If lifecycle exists and is not at the end
 		if lifecycleBlock != nil && lifecycleBlock.Range().End.Line < lastLine {
+			filePath := ctx.File
+			blockLabels := block.Labels
 			findings = append(findings, sdk.Finding{
 				Rule:     r.Name(),
 				Message:  "lifecycle block should be at the end of the resource block",
 				File:     ctx.File,
 				Location: lifecycleBlock.Range(),
 				Severity: sdk.SeverityWarning,
-				Fixable:  false,
+				Fixable:  true,
+				FixFunc: func() ([]byte, error) {
+					return r.fixLifecyclePosition(filePath, blockLabels)
+				},
 			})
 		}
 	}
@@ -266,9 +271,109 @@ func (r *LifecycleAtEndRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Find
 	return findings, nil
 }
 
-// Fix is a no-op for this rule as lifecycle reordering requires manual review.
-func (r *LifecycleAtEndRule) Fix(_ *sdk.Context, _ *hcl.File) ([]byte, error) {
-	return nil, nil
+// fixLifecyclePosition moves lifecycle block to the end of the resource.
+func (r *LifecycleAtEndRule) fixLifecyclePosition(filePath string, blockLabels []string) ([]byte, error) {
+	content, err := os.ReadFile(filePath)
+	if err != nil {
+		return nil, err
+	}
+
+	writeFile, diags := hclwrite.ParseConfig(content, filePath, hcl.InitialPos)
+	if diags.HasErrors() {
+		return nil, diags
+	}
+
+	// Find the resource block
+	for _, block := range writeFile.Body().Blocks() {
+		if block.Type() != "resource" {
+			continue
+		}
+		if !MatchBlockLabels(block.Labels(), blockLabels) {
+			continue
+		}
+
+		// Find and remove lifecycle block
+		var lifecycleBlock *hclwrite.Block
+		for _, nested := range block.Body().Blocks() {
+			if nested.Type() == "lifecycle" {
+				lifecycleBlock = nested
+				break
+			}
+		}
+
+		if lifecycleBlock == nil {
+			continue
+		}
+
+		// Get lifecycle block tokens (preserving content)
+		lifecycleTokens := lifecycleBlock.BuildTokens(nil)
+
+		// Remove lifecycle block
+		block.Body().RemoveBlock(lifecycleBlock)
+
+		// Re-add lifecycle block at the end
+		block.Body().AppendUnstructuredTokens(lifecycleTokens)
+
+		break
+	}
+
+	return FormatAndCleanBlankLines(writeFile.Bytes()), nil
+}
+
+// Fix moves lifecycle blocks to the end of resource blocks.
+func (r *LifecycleAtEndRule) Fix(ctx *sdk.Context, file *hcl.File) ([]byte, error) {
+	if ctx == nil || file == nil {
+		return nil, nil
+	}
+
+	content, err := os.ReadFile(ctx.File)
+	if err != nil {
+		return nil, err
+	}
+
+	hclFile, ok := file.Body.(*hclsyntax.Body)
+	if !ok {
+		return nil, nil
+	}
+
+	// Process each resource block
+	for _, block := range hclFile.Blocks {
+		if block.Type != "resource" {
+			continue
+		}
+
+		// Check if this block has a lifecycle that needs moving
+		var lifecycleBlock *hclsyntax.Block
+		var lastLine int
+
+		for _, nested := range block.Body.Blocks {
+			if nested.Range().End.Line > lastLine {
+				lastLine = nested.Range().End.Line
+			}
+			if nested.Type == "lifecycle" {
+				lifecycleBlock = nested
+			}
+		}
+
+		for _, attr := range block.Body.Attributes {
+			if attr.Range().End.Line > lastLine {
+				lastLine = attr.Range().End.Line
+			}
+		}
+
+		if lifecycleBlock != nil && lifecycleBlock.Range().End.Line < lastLine {
+			content, err = r.fixLifecyclePosition(ctx.File, block.Labels)
+			if err != nil {
+				return nil, err
+			}
+			// Write intermediate result
+			if err := os.WriteFile(ctx.File, content, 0o644); err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	return content, nil
 }
 
 // TagsAtEndRule ensures tags/labels are at the end of resource blocks (before lifecycle).
@@ -506,6 +611,13 @@ func (r *DependsOnOrderRule) checkDependsOnBlock(ctx *sdk.Context, block *hclsyn
 		return findings
 	}
 
+	filePath := ctx.File
+	blockType := block.Type
+	blockLabels := block.Labels
+	fixFunc := func() ([]byte, error) {
+		return r.fixDependsOnOrder(filePath, blockType, blockLabels)
+	}
+
 	lifecycleBlock := FindNestedBlock(body.Blocks, "lifecycle")
 	dependsOnLine := dependsOnAttr.Range().Start.Line
 
@@ -516,7 +628,8 @@ func (r *DependsOnOrderRule) checkDependsOnBlock(ctx *sdk.Context, block *hclsyn
 			File:     ctx.File,
 			Location: dependsOnAttr.Range(),
 			Severity: sdk.SeverityWarning,
-			Fixable:  false,
+			Fixable:  true,
+			FixFunc:  fixFunc,
 		})
 	}
 
@@ -527,7 +640,8 @@ func (r *DependsOnOrderRule) checkDependsOnBlock(ctx *sdk.Context, block *hclsyn
 			File:     ctx.File,
 			Location: dependsOnAttr.Range(),
 			Severity: sdk.SeverityInfo,
-			Fixable:  false,
+			Fixable:  true,
+			FixFunc:  fixFunc,
 		})
 	}
 
@@ -544,9 +658,93 @@ func (r *DependsOnOrderRule) hasAttributesAfterDependsOn(attrs hclsyntax.Attribu
 	return false
 }
 
-// Fix is a no-op for this rule as depends_on reordering requires manual review.
-func (r *DependsOnOrderRule) Fix(_ *sdk.Context, _ *hcl.File) ([]byte, error) {
-	return nil, nil
+// fixDependsOnOrder moves depends_on to be near the end (before tags/lifecycle).
+func (r *DependsOnOrderRule) fixDependsOnOrder(filePath, blockType string, blockLabels []string) ([]byte, error) {
+	content, err := os.ReadFile(filePath)
+	if err != nil {
+		return nil, err
+	}
+
+	syntaxBody, writeFile, err := ParseBothFormats(content, filePath)
+	if err != nil {
+		return nil, err
+	}
+	if syntaxBody == nil {
+		return content, nil
+	}
+
+	// Find syntax body for this block
+	targetSyntaxBody := FindSyntaxBody(syntaxBody, blockType, blockLabels)
+	if targetSyntaxBody == nil {
+		return content, nil
+	}
+
+	// Find the matching block in hclwrite
+	targetBlock := FindWriteBlock(writeFile, blockType, blockLabels)
+	if targetBlock == nil {
+		return content, nil
+	}
+
+	orderedNames := GetOrderedAttrNames(targetSyntaxBody)
+	// depends_on should be near the end (before tags)
+	lastAttrs := []string{"depends_on", "tags", "labels", "tags_all"}
+	ReorderBlockAttrs(targetBlock.Body(), orderedNames, nil, lastAttrs)
+
+	return FormatAndCleanBlankLines(writeFile.Bytes()), nil
+}
+
+// Fix moves depends_on to be near the end of blocks.
+func (r *DependsOnOrderRule) Fix(ctx *sdk.Context, file *hcl.File) ([]byte, error) {
+	if ctx == nil || file == nil {
+		return nil, nil
+	}
+
+	content, err := os.ReadFile(ctx.File)
+	if err != nil {
+		return nil, err
+	}
+
+	syntaxFile, ok := file.Body.(*hclsyntax.Body)
+	if !ok {
+		return nil, nil
+	}
+
+	writeFile, diags := hclwrite.ParseConfig(content, ctx.File, hcl.InitialPos)
+	if diags.HasErrors() {
+		return nil, diags
+	}
+
+	// Build a map of block identifiers to their syntax bodies
+	syntaxBlocks := make(map[string]*hclsyntax.Body)
+	for _, block := range syntaxFile.Blocks {
+		if IsDependsOnRelevantBlock(block.Type) {
+			key := BlockKey(block.Type, block.Labels)
+			syntaxBlocks[key] = block.Body
+		}
+	}
+
+	for _, block := range writeFile.Body().Blocks() {
+		if !IsDependsOnRelevantBlock(block.Type()) {
+			continue
+		}
+
+		// Check if block has depends_on
+		if block.Body().GetAttribute("depends_on") == nil {
+			continue
+		}
+
+		key := BlockKey(block.Type(), block.Labels())
+		syntaxBody, ok := syntaxBlocks[key]
+		if !ok {
+			continue
+		}
+
+		orderedNames := GetOrderedAttrNames(syntaxBody)
+		lastAttrs := []string{"depends_on", "tags", "labels", "tags_all"}
+		ReorderBlockAttrs(block.Body(), orderedNames, nil, lastAttrs)
+	}
+
+	return FormatAndCleanBlankLines(writeFile.Bytes()), nil
 }
 
 // SourceVersionGroupedRule ensures source and version are grouped together in module blocks.

@@ -222,13 +222,29 @@ func (e *Engine) getRuleConfig(ruleName string) RuleConfig {
 	// Rules that are disabled by default (opt-in)
 	disabledByDefault := map[string]bool{
 		// File organization rules
-		"style.variables-in-file": true,
-		"style.outputs-in-file":   true,
-		"style.providers-in-file": true,
+		"style.variables-in-file":         true,
+		"style.outputs-in-file":           true,
+		"style.providers-in-file":         true,
+		"style.scoped-file-organization":  true,
+		"style.terraform-files-structure": true,
 		// Documentation rules
 		"style.require-variable-description": true,
 		"style.require-output-description":   true,
 		"style.require-variable-type":        true,
+		// Advanced naming rules (can be noisy)
+		"style.resource-name-matches-type": true,
+		"style.output-prefix":              true,
+		"style.module-name-convention":     true,
+		// Comment and format rules
+		"style.comment-syntax":             true,
+		"style.no-trailing-whitespace":     true,
+		"style.consistent-quotes":          true,
+		"style.no-consecutive-blank-lines": true,
+		// Block organization rules (informational)
+		"style.meta-arguments-order":       true,
+		"style.lifecycle-attribute-order":  true,
+		"style.nested-block-order":         true,
+		"style.one-line-attribute-spacing": true,
 	}
 
 	if disabledByDefault[ruleName] {
@@ -284,11 +300,30 @@ func (e *Engine) registerRules() {
 	e.rules = append(e.rules, &VariablesInFileRule{})
 	e.rules = append(e.rules, &OutputsInFileRule{})
 	e.rules = append(e.rules, &ProvidersInFileRule{})
+	e.rules = append(e.rules, &ScopedFileOrganizationRule{})
+	e.rules = append(e.rules, &TerraformFilesStructureRule{})
 
 	// Documentation rules (disabled by default - enable via config)
 	e.rules = append(e.rules, &RequireVariableDescriptionRule{})
 	e.rules = append(e.rules, &RequireOutputDescriptionRule{})
 	e.rules = append(e.rules, &RequireVariableTypeRule{})
+
+	// Advanced naming rules (disabled by default - enable via config)
+	e.rules = append(e.rules, &ResourceNameMatchesTypeRule{})
+	e.rules = append(e.rules, &OutputPrefixRule{})
+	e.rules = append(e.rules, &ModuleNameConventionRule{})
+
+	// Block organization rules (disabled by default - enable via config)
+	e.rules = append(e.rules, &MetaArgumentsOrderRule{})
+	e.rules = append(e.rules, &LifecycleAttributeOrderRule{})
+	e.rules = append(e.rules, &NestedBlockOrderRule{})
+	e.rules = append(e.rules, &OneLineAttributeSpacingRule{})
+
+	// Comment and format rules (disabled by default - enable via config)
+	e.rules = append(e.rules, &CommentSyntaxRule{})
+	e.rules = append(e.rules, &NoTrailingWhitespaceRule{})
+	e.rules = append(e.rules, &ConsistentQuotesRule{})
+	e.rules = append(e.rules, &NoConsecutiveBlankLinesRule{})
 }
 
 // GetAllRules returns all registered rules for listing/documentation

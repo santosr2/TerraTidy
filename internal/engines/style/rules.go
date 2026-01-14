@@ -22,6 +22,11 @@ type (
 	OutputNamingRule   = rules.OutputNamingRule
 	LocalNamingRule    = rules.LocalNamingRule
 
+	// Advanced naming rules
+	ResourceNameMatchesTypeRule = rules.ResourceNameMatchesTypeRule
+	OutputPrefixRule            = rules.OutputPrefixRule
+	ModuleNameConventionRule    = rules.ModuleNameConventionRule
+
 	// Ordering rules
 	ForEachCountFirstRule     = rules.ForEachCountFirstRule
 	LifecycleAtEndRule        = rules.LifecycleAtEndRule
@@ -34,13 +39,27 @@ type (
 	ProviderBlockOrderRule    = rules.ProviderBlockOrderRule
 	AttributeGroupSpacingRule = rules.AttributeGroupSpacingRule
 
+	// Block organization rules
+	MetaArgumentsOrderRule      = rules.MetaArgumentsOrderRule
+	LifecycleAttributeOrderRule = rules.LifecycleAttributeOrderRule
+	NestedBlockOrderRule        = rules.NestedBlockOrderRule
+	OneLineAttributeSpacingRule = rules.OneLineAttributeSpacingRule
+
 	// File organization rules
-	VariablesInFileRule = rules.VariablesInFileRule
-	OutputsInFileRule   = rules.OutputsInFileRule
-	ProvidersInFileRule = rules.ProvidersInFileRule
+	VariablesInFileRule         = rules.VariablesInFileRule
+	OutputsInFileRule           = rules.OutputsInFileRule
+	ProvidersInFileRule         = rules.ProvidersInFileRule
+	ScopedFileOrganizationRule  = rules.ScopedFileOrganizationRule
+	TerraformFilesStructureRule = rules.TerraformFilesStructureRule
 
 	// Documentation rules
 	RequireVariableDescriptionRule = rules.RequireVariableDescriptionRule
 	RequireOutputDescriptionRule   = rules.RequireOutputDescriptionRule
 	RequireVariableTypeRule        = rules.RequireVariableTypeRule
+
+	// Comment and format rules
+	CommentSyntaxRule           = rules.CommentSyntaxRule
+	NoTrailingWhitespaceRule    = rules.NoTrailingWhitespaceRule
+	ConsistentQuotesRule        = rules.ConsistentQuotesRule
+	NoConsecutiveBlankLinesRule = rules.NoConsecutiveBlankLinesRule
 )

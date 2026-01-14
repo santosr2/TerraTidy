@@ -737,9 +737,27 @@ func TestEngine_GetAllRules(t *testing.T) {
 	engine := New(nil)
 	rules := engine.GetAllRules()
 
-	// Verify we have all 23 rules registered
-	// 12 original + 3 naming rules (variable, output, local) + 3 file organization rules + 1 no-leading-trailing-blank-lines + 1 attribute-group-spacing + 3 documentation rules
-	assert.Len(t, rules, 23, "should have 23 rules registered")
+	// Verify we have all 36 rules registered
+	// 20 original (spacing, naming, ordering, file org, documentation)
+	// + 2 file organization (scoped-file-organization, terraform-files-structure)
+	// + 3 advanced naming (resource-name-matches-type, output-prefix, module-name-convention)
+	// + 4 block organization (meta-arguments-order, lifecycle-attribute-order, nested-block-order, one-line-attribute-spacing)
+	// + 4 comment/format (comment-syntax, no-trailing-whitespace, consistent-quotes, no-consecutive-blank-lines)
+	// = 33 total
+	// Wait, let me count again:
+	// 1. BlankLineBetweenBlocksRule
+	// 2-5. BlockLabelCaseRule, VariableNamingRule, OutputNamingRule, LocalNamingRule
+	// 6-7. TerraformBlockFirstRule, ProviderBlockOrderRule
+	// 8-12. ForEachCountFirstRule, SourceVersionGroupedRule, TagsAtEndRule, DependsOnOrderRule, LifecycleAtEndRule
+	// 13-14. VariableOrderRule, OutputOrderRule
+	// 15. AttributeGroupSpacingRule
+	// 16-17. NoLeadingTrailingBlankLinesRule, NoEmptyBlocksRule
+	// 18-22. VariablesInFileRule, OutputsInFileRule, ProvidersInFileRule, ScopedFileOrganizationRule, TerraformFilesStructureRule
+	// 23-25. RequireVariableDescriptionRule, RequireOutputDescriptionRule, RequireVariableTypeRule
+	// 26-28. ResourceNameMatchesTypeRule, OutputPrefixRule, ModuleNameConventionRule
+	// 29-32. MetaArgumentsOrderRule, LifecycleAttributeOrderRule, NestedBlockOrderRule, OneLineAttributeSpacingRule
+	// 33-36. CommentSyntaxRule, NoTrailingWhitespaceRule, ConsistentQuotesRule, NoConsecutiveBlankLinesRule
+	assert.Len(t, rules, 36, "should have 36 rules registered")
 
 	// Verify each rule has required methods
 	for _, rule := range rules {

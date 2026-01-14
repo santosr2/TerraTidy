@@ -154,6 +154,40 @@ func (r *BlankLineBetweenBlocksRule) Description() string {
 	return "Ensures there is exactly one blank line between top-level blocks"
 }
 
+// getBlankLineConfig extracts min_lines and max_lines from config.
+func (r *BlankLineBetweenBlocksRule) getBlankLineConfig(config map[string]interface{}) (minLines, maxLines int) {
+	minLines = 1 // Default: at least 1 blank line
+	maxLines = 1 // Default: at most 1 blank line
+
+	if config == nil {
+		return minLines, maxLines
+	}
+
+	options, ok := config["options"].(map[string]interface{})
+	if !ok {
+		return minLines, maxLines
+	}
+
+	if min, ok := options["min_lines"].(int); ok {
+		minLines = min
+	} else if min, ok := options["min_lines"].(float64); ok {
+		minLines = int(min)
+	}
+
+	if max, ok := options["max_lines"].(int); ok {
+		maxLines = max
+	} else if max, ok := options["max_lines"].(float64); ok {
+		maxLines = int(max)
+	}
+
+	// Ensure min <= max
+	if minLines > maxLines {
+		minLines = maxLines
+	}
+
+	return minLines, maxLines
+}
+
 // Check examines the file for blank line violations between blocks.
 func (r *BlankLineBetweenBlocksRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Finding, error) {
 	var findings []sdk.Finding
@@ -162,6 +196,9 @@ func (r *BlankLineBetweenBlocksRule) Check(ctx *sdk.Context, file *hcl.File) ([]
 	if !ok {
 		return findings, nil
 	}
+
+	// Get configuration
+	minLines, maxLines := r.getBlankLineConfig(ctx.Config)
 
 	// Read file content to check for comments and blank lines
 	content, err := os.ReadFile(ctx.File)
@@ -184,15 +221,13 @@ func (r *BlankLineBetweenBlocksRule) Check(ctx *sdk.Context, file *hcl.File) ([]
 		// Check if there's a comment between blocks
 		hasComment := HasCommentBetween(lines, endLine, startLine)
 
-		// Determine max allowed blank lines:
-		// - Without comment: exactly 1 blank line
-		// - With comment: allow up to 2 blank lines (1 before + 1 after comment)
-		maxBlankLines := 1
+		// Adjust max allowed blank lines when there's a comment
+		effectiveMax := maxLines
 		if hasComment {
-			maxBlankLines = 2
+			effectiveMax = maxLines + 1 // Allow 1 extra blank line for comments
 		}
 
-		if blankLines < 1 {
+		if blankLines < minLines {
 			// Capture values for closure
 			filePath := ctx.File
 			findings = append(findings, sdk.Finding{
@@ -206,7 +241,7 @@ func (r *BlankLineBetweenBlocksRule) Check(ctx *sdk.Context, file *hcl.File) ([]
 					return r.fixFile(filePath)
 				},
 			})
-		} else if blankLines > maxBlankLines {
+		} else if blankLines > effectiveMax {
 			// Capture values for closure
 			filePath := ctx.File
 			findings = append(findings, sdk.Finding{
@@ -336,6 +371,55 @@ func (r *NoEmptyBlocksRule) Description() string {
 	return "Ensures blocks are not empty (have at least one attribute or nested block)"
 }
 
+// defaultAllowedEmptyBlocks are block types that are allowed to be empty by default.
+var defaultAllowedEmptyBlocks = map[string]bool{
+	"terraform":          true,
+	"required_providers": true,
+}
+
+// getAllowedEmptyBlocks returns the set of block types allowed to be empty.
+func (r *NoEmptyBlocksRule) getAllowedEmptyBlocks(config map[string]interface{}) map[string]bool {
+	allowed := make(map[string]bool)
+
+	// Start with defaults
+	for k, v := range defaultAllowedEmptyBlocks {
+		allowed[k] = v
+	}
+
+	if config == nil {
+		return allowed
+	}
+
+	options, ok := config["options"].(map[string]interface{})
+	if !ok {
+		return allowed
+	}
+
+	// Get additional allowed blocks from config
+	if allowedList, ok := options["allowed_blocks"].([]interface{}); ok {
+		for _, item := range allowedList {
+			if blockType, ok := item.(string); ok {
+				allowed[blockType] = true
+			}
+		}
+	}
+
+	// Check if defaults should be overridden
+	if override, ok := options["override_defaults"].(bool); ok && override {
+		// Clear defaults, only use config-specified blocks
+		allowed = make(map[string]bool)
+		if allowedList, ok := options["allowed_blocks"].([]interface{}); ok {
+			for _, item := range allowedList {
+				if blockType, ok := item.(string); ok {
+					allowed[blockType] = true
+				}
+			}
+		}
+	}
+
+	return allowed
+}
+
 // Check examines the file for empty blocks.
 func (r *NoEmptyBlocksRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Finding, error) {
 	var findings []sdk.Finding
@@ -345,9 +429,12 @@ func (r *NoEmptyBlocksRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Findi
 		return findings, nil
 	}
 
+	// Get allowed empty blocks from config
+	allowedEmpty := r.getAllowedEmptyBlocks(ctx.Config)
+
 	for _, block := range hclFile.Blocks {
-		// Skip certain block types that are allowed to be empty
-		if block.Type == "terraform" || block.Type == "required_providers" {
+		// Skip allowed empty block types
+		if allowedEmpty[block.Type] {
 			continue
 		}
 

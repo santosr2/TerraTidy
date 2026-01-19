@@ -1107,10 +1107,10 @@ func (r *VariableOrderRule) Fix(ctx *sdk.Context, _ *hcl.File) ([]byte, error) {
 
 		body := block.Body()
 
-		// Collect all attributes with their expressions
+		// Collect all attributes with their expressions and trailing comments
 		attrExprs := make(map[string]hclwrite.Tokens)
 		for name, attr := range body.Attributes() {
-			attrExprs[name] = attr.Expr().BuildTokens(nil)
+			attrExprs[name] = getExprTokensWithTrailingComment(attr)
 		}
 
 		// Remove all known-order attributes
@@ -1283,10 +1283,10 @@ func (r *OutputOrderRule) Fix(ctx *sdk.Context, _ *hcl.File) ([]byte, error) {
 
 		body := block.Body()
 
-		// Collect all attributes with their expressions
+		// Collect all attributes with their expressions and trailing comments
 		attrExprs := make(map[string]hclwrite.Tokens)
 		for name, attr := range body.Attributes() {
-			attrExprs[name] = attr.Expr().BuildTokens(nil)
+			attrExprs[name] = getExprTokensWithTrailingComment(attr)
 		}
 
 		// Remove all known-order attributes

@@ -351,7 +351,7 @@ func (r *LifecycleAttributeOrderRule) fixLifecycleBlock(filePath string, parentL
 
 		attrExprs := make(map[string]hclwrite.Tokens)
 		for name, attr := range nested.Body().Attributes() {
-			attrExprs[name] = attr.Expr().BuildTokens(nil)
+			attrExprs[name] = getExprTokensWithTrailingComment(attr)
 		}
 
 		for _, name := range attrOrder {
@@ -410,7 +410,7 @@ func (r *LifecycleAttributeOrderRule) Fix(ctx *sdk.Context, _ *hcl.File) ([]byte
 
 			attrExprs := make(map[string]hclwrite.Tokens)
 			for name, attr := range nested.Body().Attributes() {
-				attrExprs[name] = attr.Expr().BuildTokens(nil)
+				attrExprs[name] = getExprTokensWithTrailingComment(attr)
 			}
 
 			for _, name := range attrOrder {

@@ -61,6 +61,43 @@ func GetOrderedAttrNames(syntaxBody *hclsyntax.Body) []string {
 	return result
 }
 
+// getExprTokensWithTrailingComment extracts expression tokens and any trailing inline comment.
+// This preserves comments like: description = "foo" # this comment
+func getExprTokensWithTrailingComment(attr *hclwrite.Attribute) hclwrite.Tokens {
+	// Get expression tokens (the value)
+	exprTokens := attr.Expr().BuildTokens(nil)
+
+	// Get full attribute tokens to find trailing comments
+	fullTokens := attr.BuildTokens(nil)
+
+	// The full tokens structure is: name = expr [comment] [newline]
+	// We need to find comment tokens after the expression
+	var trailingTokens hclwrite.Tokens
+	for i := len(fullTokens) - 1; i >= 0; i-- {
+		tok := fullTokens[i]
+		// Include comment tokens
+		if tok.Type.String() == "TokenComment" {
+			trailingTokens = append(hclwrite.Tokens{tok}, trailingTokens...)
+		} else if tok.Type.String() == "TokenNewline" {
+			// Skip newlines at the very end
+			continue
+		} else {
+			// Stop when we hit something that's not a comment or newline
+			break
+		}
+	}
+
+	// Append trailing tokens (comments) to expression tokens
+	if len(trailingTokens) > 0 {
+		result := make(hclwrite.Tokens, len(exprTokens)+len(trailingTokens))
+		copy(result, exprTokens)
+		copy(result[len(exprTokens):], trailingTokens)
+		return result
+	}
+
+	return exprTokens
+}
+
 // ReorderBlockAttrs reorders attributes in a block according to the specified order.
 // firstAttrs are placed at the start, lastAttrs at the end, others maintain relative order.
 // orderedNames should be the original order of attributes (from hclsyntax parsing).
@@ -79,10 +116,10 @@ func ReorderBlockAttrs(body *hclwrite.Body, orderedNames, firstAttrs, lastAttrs 
 		lastSet[name] = true
 	}
 
-	// Collect attribute info preserving expression tokens
+	// Collect attribute info preserving expression tokens AND trailing comments
 	attrTokens := make(map[string]hclwrite.Tokens)
 	for name, attr := range body.Attributes() {
-		attrTokens[name] = attr.Expr().BuildTokens(nil)
+		attrTokens[name] = getExprTokensWithTrailingComment(attr)
 	}
 
 	// Categorize attribute names
@@ -551,13 +588,13 @@ func ReorderTopLevelBlocks(writeFile *hclwrite.File) []byte {
 	return FormatAndCleanBlankLines(writeFile.Bytes())
 }
 
-// addBlocksWithSpacing adds blocks to a body, preserving their content.
+// addBlocksWithSpacing adds blocks to a body, preserving their content including inline comments.
 func addBlocksWithSpacing(body *hclwrite.Body, blocks []*hclwrite.Block) {
 	for _, block := range blocks {
 		newBlock := body.AppendNewBlock(block.Type(), block.Labels())
-		// Copy attributes
+		// Copy attributes with inline comments preserved
 		for name, attr := range block.Body().Attributes() {
-			newBlock.Body().SetAttributeRaw(name, attr.Expr().BuildTokens(nil))
+			newBlock.Body().SetAttributeRaw(name, getExprTokensWithTrailingComment(attr))
 		}
 		// Copy nested blocks
 		for _, nested := range block.Body().Blocks() {
@@ -567,11 +604,11 @@ func addBlocksWithSpacing(body *hclwrite.Body, blocks []*hclwrite.Block) {
 	}
 }
 
-// copyNestedBlock recursively copies a nested block to a new body.
+// copyNestedBlock recursively copies a nested block to a new body, preserving inline comments.
 func copyNestedBlock(body *hclwrite.Body, block *hclwrite.Block) {
 	newBlock := body.AppendNewBlock(block.Type(), block.Labels())
 	for name, attr := range block.Body().Attributes() {
-		newBlock.Body().SetAttributeRaw(name, attr.Expr().BuildTokens(nil))
+		newBlock.Body().SetAttributeRaw(name, getExprTokensWithTrailingComment(attr))
 	}
 	for _, nested := range block.Body().Blocks() {
 		copyNestedBlock(newBlock.Body(), nested)

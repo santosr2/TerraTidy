@@ -767,3 +767,136 @@ func TestParseBothFormats(t *testing.T) {
 		assert.Error(t, err)
 	})
 }
+
+func TestGetExprTokensWithTrailingComment(t *testing.T) {
+	tests := []struct {
+		name            string
+		content         string
+		attrName        string
+		expectComment   bool
+		commentContains string
+	}{
+		{
+			name: "attribute with inline comment",
+			content: `resource "test" "example" {
+  ami = "ami-123" # this is a comment
+}`,
+			attrName:        "ami",
+			expectComment:   true,
+			commentContains: "this is a comment",
+		},
+		{
+			name: "attribute without comment",
+			content: `resource "test" "example" {
+  ami = "ami-123"
+}`,
+			attrName:      "ami",
+			expectComment: false,
+		},
+		{
+			name: "attribute with // style comment",
+			content: `resource "test" "example" {
+  ami = "ami-123" // another comment style
+}`,
+			attrName:        "ami",
+			expectComment:   true,
+			commentContains: "another comment style",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			writeFile, diags := hclwrite.ParseConfig([]byte(tt.content), "test.tf", hcl.InitialPos)
+			require.False(t, diags.HasErrors())
+
+			for _, block := range writeFile.Body().Blocks() {
+				attr := block.Body().GetAttribute(tt.attrName)
+				require.NotNil(t, attr, "attribute %s not found", tt.attrName)
+
+				tokens := getExprTokensWithTrailingComment(attr)
+				assert.NotEmpty(t, tokens)
+
+				// Check if there's a comment token
+				hasComment := false
+				for _, tok := range tokens {
+					if tok.Type.String() == "TokenComment" {
+						hasComment = true
+						if tt.commentContains != "" {
+							assert.Contains(t, string(tok.Bytes), tt.commentContains)
+						}
+						break
+					}
+				}
+
+				assert.Equal(t, tt.expectComment, hasComment, "comment presence mismatch")
+			}
+		})
+	}
+}
+
+func TestReorderBlockAttrsPreservesComments(t *testing.T) {
+	tests := []struct {
+		name       string
+		content    string
+		firstAttrs []string
+		lastAttrs  []string
+		checkFirst string
+		checkLast  string
+		// Check that these comments are preserved in the output
+		expectComments []string
+	}{
+		{
+			name: "preserves inline comment when reordering",
+			content: `resource "test" "example" {
+  ami      = "ami-123"
+  for_each = var.instances # loop over instances
+  name     = "test"
+}`,
+			firstAttrs:     []string{"for_each", "count"},
+			lastAttrs:      nil,
+			checkFirst:     "for_each",
+			expectComments: []string{"loop over instances"},
+		},
+		{
+			name: "preserves multiple inline comments",
+			content: `resource "test" "example" {
+  tags = { Name = "test" } # resource tags
+  ami  = "ami-123" # the ami id
+  name = "test"
+}`,
+			firstAttrs:     nil,
+			lastAttrs:      []string{"tags", "labels"},
+			checkLast:      "tags",
+			expectComments: []string{"resource tags", "the ami id"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Parse with hclsyntax for ordering
+			syntaxFile, diags := hclsyntax.ParseConfig([]byte(tt.content), "test.tf", hcl.InitialPos)
+			require.False(t, diags.HasErrors())
+
+			// Parse with hclwrite for modification
+			writeFile, diags := hclwrite.ParseConfig([]byte(tt.content), "test.tf", hcl.InitialPos)
+			require.False(t, diags.HasErrors())
+
+			syntaxBody := syntaxFile.Body.(*hclsyntax.Body)
+			if len(syntaxBody.Blocks) > 0 {
+				orderedNames := GetOrderedAttrNames(syntaxBody.Blocks[0].Body)
+
+				writeBlock := writeFile.Body().Blocks()[0]
+				ReorderBlockAttrs(writeBlock.Body(), orderedNames, tt.firstAttrs, tt.lastAttrs)
+
+				// Get the result
+				result := string(writeFile.Bytes())
+				assert.NotEmpty(t, result)
+
+				// Check that all expected comments are preserved
+				for _, comment := range tt.expectComments {
+					assert.Contains(t, result, comment, "comment should be preserved: %s", comment)
+				}
+			}
+		})
+	}
+}

@@ -58,8 +58,6 @@ release:
     name: terratidy
   draft: false
   prerelease: auto
-  # Always mark as latest, including pre-releases (matches Docker tag behavior)
-  make_latest: true
   name_template: "{{.ProjectName}} {{.Version}}"
   header: |
     ## TerraTidy {{ .Version }}

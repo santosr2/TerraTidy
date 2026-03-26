@@ -130,14 +130,6 @@ engines:
       terraform-files-structure:
         enabled: true
 
-      # Documentation rules (disabled by default)
-      require-variable-description:
-        enabled: true
-      require-output-description:
-        enabled: true
-      require-variable-type:
-        enabled: true
-
       # Block organization (disabled by default)
       meta-arguments-order:
         enabled: true

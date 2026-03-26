@@ -52,11 +52,6 @@ type (
 	ScopedFileOrganizationRule  = rules.ScopedFileOrganizationRule
 	TerraformFilesStructureRule = rules.TerraformFilesStructureRule
 
-	// Documentation rules
-	RequireVariableDescriptionRule = rules.RequireVariableDescriptionRule
-	RequireOutputDescriptionRule   = rules.RequireOutputDescriptionRule
-	RequireVariableTypeRule        = rules.RequireVariableTypeRule
-
 	// Comment and format rules
 	CommentSyntaxRule           = rules.CommentSyntaxRule
 	NoTrailingWhitespaceRule    = rules.NoTrailingWhitespaceRule

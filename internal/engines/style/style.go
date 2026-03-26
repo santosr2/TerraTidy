@@ -227,10 +227,6 @@ func (e *Engine) getRuleConfig(ruleName string) RuleConfig {
 		"style.providers-in-file":         true,
 		"style.scoped-file-organization":  true,
 		"style.terraform-files-structure": true,
-		// Documentation rules
-		"style.require-variable-description": true,
-		"style.require-output-description":   true,
-		"style.require-variable-type":        true,
 		// Advanced naming rules (can be noisy)
 		"style.resource-name-matches-type": true,
 		"style.output-prefix":              true,
@@ -302,11 +298,6 @@ func (e *Engine) registerRules() {
 	e.rules = append(e.rules, &ProvidersInFileRule{})
 	e.rules = append(e.rules, &ScopedFileOrganizationRule{})
 	e.rules = append(e.rules, &TerraformFilesStructureRule{})
-
-	// Documentation rules (disabled by default - enable via config)
-	e.rules = append(e.rules, &RequireVariableDescriptionRule{})
-	e.rules = append(e.rules, &RequireOutputDescriptionRule{})
-	e.rules = append(e.rules, &RequireVariableTypeRule{})
 
 	// Advanced naming rules (disabled by default - enable via config)
 	e.rules = append(e.rules, &ResourceNameMatchesTypeRule{})

@@ -71,20 +71,9 @@ benchmarks/
 # Coverage reports
 coverage/
 
-# Keep AI assistant configs tracked
+# AI assistant configs (local, not tracked)
 *.bkp
-
-.agent-os
 .claude
-.cursor
 .vscode
-.cursor
-.github/copilot*
-.github/README.md
-tools
-.opencode
-AGENTS.md
-GETTING_STARTED*.md
-IMPLEMENTATION_STATUS.md
-MISSING*.md
-QUICKSTART.md
+
+# Tracked AI config: CLAUDE.md

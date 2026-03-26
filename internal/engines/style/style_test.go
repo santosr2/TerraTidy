@@ -737,14 +737,7 @@ func TestEngine_GetAllRules(t *testing.T) {
 	engine := New(nil)
 	rules := engine.GetAllRules()
 
-	// Verify we have all 36 rules registered
-	// 20 original (spacing, naming, ordering, file org, documentation)
-	// + 2 file organization (scoped-file-organization, terraform-files-structure)
-	// + 3 advanced naming (resource-name-matches-type, output-prefix, module-name-convention)
-	// + 4 block organization (meta-arguments-order, lifecycle-attribute-order, nested-block-order, one-line-attribute-spacing)
-	// + 4 comment/format (comment-syntax, no-trailing-whitespace, consistent-quotes, no-consecutive-blank-lines)
-	// = 33 total
-	// Wait, let me count again:
+	// Verify we have all 33 rules registered
 	// 1. BlankLineBetweenBlocksRule
 	// 2-5. BlockLabelCaseRule, VariableNamingRule, OutputNamingRule, LocalNamingRule
 	// 6-7. TerraformBlockFirstRule, ProviderBlockOrderRule
@@ -753,11 +746,10 @@ func TestEngine_GetAllRules(t *testing.T) {
 	// 15. AttributeGroupSpacingRule
 	// 16-17. NoLeadingTrailingBlankLinesRule, NoEmptyBlocksRule
 	// 18-22. VariablesInFileRule, OutputsInFileRule, ProvidersInFileRule, ScopedFileOrganizationRule, TerraformFilesStructureRule
-	// 23-25. RequireVariableDescriptionRule, RequireOutputDescriptionRule, RequireVariableTypeRule
-	// 26-28. ResourceNameMatchesTypeRule, OutputPrefixRule, ModuleNameConventionRule
-	// 29-32. MetaArgumentsOrderRule, LifecycleAttributeOrderRule, NestedBlockOrderRule, OneLineAttributeSpacingRule
-	// 33-36. CommentSyntaxRule, NoTrailingWhitespaceRule, ConsistentQuotesRule, NoConsecutiveBlankLinesRule
-	assert.Len(t, rules, 36, "should have 36 rules registered")
+	// 23-25. ResourceNameMatchesTypeRule, OutputPrefixRule, ModuleNameConventionRule
+	// 26-29. MetaArgumentsOrderRule, LifecycleAttributeOrderRule, NestedBlockOrderRule, OneLineAttributeSpacingRule
+	// 30-33. CommentSyntaxRule, NoTrailingWhitespaceRule, ConsistentQuotesRule, NoConsecutiveBlankLinesRule
+	assert.Len(t, rules, 33, "should have 33 rules registered")
 
 	// Verify each rule has required methods
 	for _, rule := range rules {

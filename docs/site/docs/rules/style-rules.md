@@ -722,90 +722,6 @@ module "my_vpc" { }
 module "web-server" { }
 ```
 
-## Documentation Rules
-
-These rules enforce documentation requirements. They are **disabled by default** and can be enabled via configuration.
-
-### require-variable-description
-
-Ensures all variables have a description.
-
-| Property | Value |
-|----------|-------|
-| Rule ID | `style.require-variable-description` |
-| Default Severity | Info |
-| Fixable | No |
-| Default | **Disabled** |
-
-**Example:**
-
-```hcl
-# Bad - missing description
-variable "instance_type" {
-  type    = string
-  default = "t2.micro"
-}
-
-# Good - has description
-variable "instance_type" {
-  description = "EC2 instance type to use for the web server"
-  type        = string
-  default     = "t2.micro"
-}
-```
-
-### require-output-description
-
-Ensures all outputs have a description.
-
-| Property | Value |
-|----------|-------|
-| Rule ID | `style.require-output-description` |
-| Default Severity | Info |
-| Fixable | No |
-| Default | **Disabled** |
-
-**Example:**
-
-```hcl
-# Bad - missing description
-output "instance_ip" {
-  value = aws_instance.web.public_ip
-}
-
-# Good - has description
-output "instance_ip" {
-  description = "The public IP address of the web server"
-  value       = aws_instance.web.public_ip
-}
-```
-
-### require-variable-type
-
-Ensures all variables have an explicit type constraint.
-
-| Property | Value |
-|----------|-------|
-| Rule ID | `style.require-variable-type` |
-| Default Severity | Info |
-| Fixable | No |
-| Default | **Disabled** |
-
-**Example:**
-
-```hcl
-# Bad - missing type
-variable "instance_type" {
-  default = "t2.micro"
-}
-
-# Good - has type
-variable "instance_type" {
-  type    = string
-  default = "t2.micro"
-}
-```
-
 ## Block Organization Rules
 
 These rules enforce consistent ordering within blocks. They are **disabled by default** and can be enabled via configuration.
@@ -1191,14 +1107,6 @@ engines:
 | `providers-in-file` | Info | No | Providers in providers.tf/versions.tf |
 | `scoped-file-organization` | Info | No | Resources in scoped files (network.tf, etc.) |
 | `terraform-files-structure` | Info | No | Standard file structure conventions |
-
-#### Documentation Rules
-
-| Rule | Severity | Fixable | Description |
-|------|----------|---------|-------------|
-| `require-variable-description` | Info | No | Variables must have descriptions |
-| `require-output-description` | Info | No | Outputs must have descriptions |
-| `require-variable-type` | Info | No | Variables must have explicit types |
 
 #### Advanced Naming Rules
 

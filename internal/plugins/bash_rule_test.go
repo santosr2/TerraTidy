@@ -104,6 +104,38 @@ func TestBashRule_Fix_ReturnsNil(t *testing.T) {
 	assert.Nil(t, result)
 }
 
+func TestBashRule_Check_ExitCode1WithOutput(t *testing.T) {
+	tmpDir := t.TempDir()
+	script := filepath.Join(tmpDir, "exit1.sh")
+	content := `#!/usr/bin/env bash
+echo '{"findings": [{"file": "test.tf", "line": 1, "message": "found issue", "severity": "error"}]}'
+exit 1
+`
+	require.NoError(t, os.WriteFile(script, []byte(content), 0o755))
+
+	rule := NewBashRule(script)
+	ctx := &sdk.Context{File: "test.tf"}
+	findings, err := rule.Check(ctx, &hcl.File{})
+	require.NoError(t, err)
+	assert.Len(t, findings, 1)
+	assert.Equal(t, "found issue", findings[0].Message)
+}
+
+func TestBashRule_Check_InvalidJSON(t *testing.T) {
+	tmpDir := t.TempDir()
+	script := filepath.Join(tmpDir, "badjson.sh")
+	content := `#!/usr/bin/env bash
+echo 'not valid json'
+`
+	require.NoError(t, os.WriteFile(script, []byte(content), 0o755))
+
+	rule := NewBashRule(script)
+	ctx := &sdk.Context{File: "test.tf"}
+	_, err := rule.Check(ctx, &hcl.File{})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "parsing output from bash rule")
+}
+
 func TestLoadBashRule(t *testing.T) {
 	tmpDir := t.TempDir()
 	script := filepath.Join(tmpDir, "test-rule.sh")
@@ -131,6 +163,17 @@ func TestLoadBashRule_FileNotFound(t *testing.T) {
 	_, err := loadBashRule("/nonexistent/rule.sh")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "reading bash rule")
+}
+
+func TestManager_LoadAll_WithNonExecutableBashRule(t *testing.T) {
+	tmpDir := t.TempDir()
+	script := filepath.Join(tmpDir, "bad.sh")
+	require.NoError(t, os.WriteFile(script, []byte("#!/bin/bash"), 0o644))
+
+	manager := NewManager([]string{tmpDir})
+	err := manager.LoadAll()
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "loading Bash rule")
 }
 
 func TestManager_LoadAll_WithBashRule(t *testing.T) {

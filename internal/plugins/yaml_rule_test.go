@@ -219,6 +219,52 @@ func TestParseSeverity(t *testing.T) {
 	}
 }
 
+func TestYAMLRule_Check_NonHclsyntaxBody(t *testing.T) {
+	rule := &YAMLRule{config: YAMLRuleConfig{
+		Name:    "test",
+		Enabled: true,
+	}}
+	// hcl.File with nil Body (not *hclsyntax.Body)
+	file := &hcl.File{Body: hcl.EmptyBody()}
+	ctx := &sdk.Context{File: "test.tf"}
+	findings, err := rule.Check(ctx, file)
+	assert.NoError(t, err)
+	assert.Nil(t, findings)
+}
+
+func TestYAMLRule_Check_NonResourceBlock(t *testing.T) {
+	rule := &YAMLRule{config: YAMLRuleConfig{
+		Name:    "test",
+		Enabled: true,
+		Patterns: YAMLPatterns{
+			RequiredAttributes: []string{"tags"},
+		},
+	}}
+	body := &hclsyntax.Body{
+		Blocks: []*hclsyntax.Block{
+			{Type: "variable", Labels: []string{"name"}},
+		},
+	}
+	file := &hcl.File{Body: body}
+	ctx := &sdk.Context{File: "test.tf"}
+	findings, err := rule.Check(ctx, file)
+	assert.NoError(t, err)
+	assert.Empty(t, findings)
+}
+
+func TestManager_LoadAll_WithInvalidYAMLRule(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// YAML file missing required 'name' field
+	content := "description: no name\nseverity: warning\n"
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "bad.yaml"), []byte(content), 0o644))
+
+	manager := NewManager([]string{tmpDir})
+	err := manager.LoadAll()
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "loading YAML rule")
+}
+
 func TestManager_LoadAll_WithYAMLRule(t *testing.T) {
 	tmpDir := t.TempDir()
 

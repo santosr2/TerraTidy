@@ -1,55 +1,31 @@
 [tools]
-go = "1.25"
+go = "1.26"
 pre-commit = "4"
 terraform = "latest"
 terragrunt = "latest"
 golangci-lint = "latest"
-node = "latest"  # For repomix and other Node-based tools
-python = "3.13"
-"go:github.com/steveyegge/beads/cmd/bd" = "latest"
 uv = "latest"
-bun = "latest"
+bun = "latest"  # VS Code extension development
 "cargo:git-cliff" = "latest"  # Changelog generator
 "pipx:bump-my-version" = "latest"
 
 [tasks.setup]
 description = "Setup development environment"
 run = """
-  echo "📦 Installing Go tools..."
+  echo "Installing Go tools..."
   go install golang.org/x/perf/cmd/benchstat@latest
-  go install github.com/air-verse/air@latest
   go install mvdan.cc/gofumpt@latest
   go install honnef.co/go/tools/cmd/staticcheck@latest
   go install github.com/mgechev/revive@latest
   go install golang.org/x/vuln/cmd/govulncheck@latest
-  # Note: gocov has compatibility issues with Go 1.25
-  # Using native Go coverage tools instead (go test -coverprofile + go tool cover -html)
-
-  echo "📦 Installing Node tools..."
-  npm install -g repomix
-
-  echo "📦 Installing Python tools (MCP servers)..."
-  pip3 install --user beads-mcp || echo "⚠️  Beads install failed (optional)"
 
   echo ""
-  echo "✅ Development environment ready!"
+  echo "Development environment ready!"
   echo ""
   echo "Available commands:"
-  echo "  make context       - Generate AI context"
-  echo "  make hot-reload    - Development with auto-rebuild"
   echo "  make check         - Run all quality checks"
   echo "  make vuln          - Check for vulnerabilities"
-  echo ""
-  echo "📖 Next steps:"
-  echo "  1. Configure MCP servers (see docs/MCP_SETUP.md)"
-  echo "  2. Generate context: make context"
-  echo "  3. Read docs/CURSOR_AI_SETUP.md"
 """
-
-# TODO: add `bd init`
-[tasks.context]
-description = "Generate AI context"
-run = "bash tools/scripts/generate-context.sh"
 
 [tasks.coverage]
 description = "Generate coverage report"

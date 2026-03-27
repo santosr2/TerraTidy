@@ -40,17 +40,20 @@ jobs:
     # Configuration profile to use
     profile: ''
 
-    # Output format: text, json, json-compact, sarif, html
+    # Output format: text, json, json-compact, sarif, html, table, github
     format: 'text'
+
+    # Run engines in parallel
+    parallel: 'false'
 
     # Working directory
     working-directory: '.'
 
-    # Comma-separated engines: fmt,style,lint,policy
-    engines: ''
-
-    # Auto-fix issues
-    fix: 'false'
+    # Skip individual engines
+    skip-fmt: 'false'
+    skip-style: 'false'
+    skip-lint: 'false'
+    skip-policy: 'false'
 
     # Fail on errors (default: true)
     fail-on-error: 'true'
@@ -126,34 +129,10 @@ jobs:
 - name: Check Formatting
   uses: santosr2/terratidy@v0
   with:
-    engines: fmt
+    skip-style: 'true'
+    skip-lint: 'true'
+    skip-policy: 'true'
     fail-on-error: 'true'
-```
-
-### Auto-fix in PR
-
-```yaml
-jobs:
-  autofix:
-    runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.head_ref }}
-
-      - name: Run TerraTidy Fix
-        uses: santosr2/terratidy@v0
-        with:
-          fix: 'true'
-
-      - name: Commit fixes
-        run: |
-          git config --global user.name 'github-actions[bot]'
-          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
-          git add -A
-          git diff --staged --quiet || git commit -m "style: auto-fix terraform formatting"
-          git push
 ```
 
 ### Complete Workflow

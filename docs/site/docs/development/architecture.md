@@ -10,7 +10,7 @@ Technical overview of TerraTidy's internal architecture.
 │  (cmd/terratidy - Cobra commands)                           │
 ├─────────────────────────────────────────────────────────────┤
 │                      Core Orchestrator                      │
-│  (internal/core - Engine coordination, parallel execution)  │
+│  (internal/runner - Engine coordination, parallel execution)│
 ├─────────────────────────────────────────────────────────────┤
 │                        Engine Layer                         │
 │       ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐       │
@@ -40,10 +40,10 @@ terratidy/
 │       ├── policy.go        # Policy command
 │       └── lsp.go           # LSP server command
 ├── internal/
-│   ├── core/                # Core orchestration
-│   │   ├── runner.go        # Engine runner
-│   │   ├── config.go        # Configuration loading
-│   │   └── output.go        # Output formatting
+│   ├── runner/              # Engine runner, parallel execution
+│   │   └── runner.go        # Engine interface, Runner struct
+│   ├── config/              # Configuration loading
+│   ├── output/              # Output formatting
 │   ├── engines/             # Engine implementations
 │   │   ├── fmt/             # Format engine
 │   │   ├── style/           # Style engine
@@ -53,9 +53,7 @@ terratidy/
 │   └── plugins/             # Plugin system
 ├── pkg/
 │   └── sdk/                 # Public SDK
-│       ├── engine.go        # Engine interface
-│       ├── finding.go       # Finding types
-│       └── context.go       # Rule context
+│       └── types.go         # Rule interface, Finding, Context types
 └── docs/                    # Documentation
 ```
 
@@ -63,15 +61,12 @@ terratidy/
 
 ### Engine Interface
 
-All engines implement the `Engine` interface:
+All engines implement the `Engine` interface defined in `internal/runner/runner.go`:
 
 ```go
 type Engine interface {
-    // Name returns the engine identifier
     Name() string
-
-    // Run executes the engine on the given files
-    Run(ctx context.Context, files []string) ([]Finding, error)
+    Run(ctx context.Context, files []string) ([]sdk.Finding, error)
 }
 ```
 
@@ -81,14 +76,13 @@ Findings represent issues detected by engines:
 
 ```go
 type Finding struct {
-    Rule     string      // Rule identifier
-    Message  string      // Human-readable message
-    File     string      // Source file path
-    Location hcl.Range   // Line/column information
-    Severity Severity    // Error, Warning, Info
-    Engine   string      // Originating engine
-    Fixable  bool        // Can be auto-fixed
-    Fix      *Fix        // Optional fix data
+    Rule     string                 `json:"rule"`
+    Message  string                 `json:"message"`
+    File     string                 `json:"file"`
+    Location hcl.Range              `json:"location"`
+    Severity Severity               `json:"severity"`
+    Fixable  bool                   `json:"fixable"`
+    FixFunc  func() ([]byte, error) `json:"-"`
 }
 ```
 
@@ -98,29 +92,15 @@ The runner coordinates engine execution:
 
 ```go
 type Runner struct {
-    config  *Config
-    engines []Engine
+    engines  []Engine
+    parallel bool
 }
 
-func (r *Runner) Run(ctx context.Context, files []string) (*Result, error) {
-    var allFindings []Finding
-
-    if r.config.Parallel {
-        // Run engines concurrently
-        findings := r.runParallel(ctx, files)
-        allFindings = append(allFindings, findings...)
-    } else {
-        // Run engines sequentially
-        for _, engine := range r.engines {
-            findings, err := engine.Run(ctx, files)
-            if err != nil {
-                return nil, err
-            }
-            allFindings = append(allFindings, findings...)
-        }
+func (r *Runner) Run(ctx context.Context, files []string) ([]sdk.Finding, error) {
+    if r.parallel {
+        return r.runParallel(ctx, files)
     }
-
-    return &Result{Findings: allFindings}, nil
+    return r.runSequential(ctx, files)
 }
 ```
 

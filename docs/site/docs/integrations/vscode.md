@@ -58,27 +58,15 @@ Click the lightbulb icon or press `Ctrl+.` / `Cmd+.` to see available fixes:
 - Reorder attributes
 - Add missing descriptions
 
-### Code Actions
-
-Right-click in the editor for:
-
-- Format Document
-- Fix All Issues
-- Run TerraTidy Check
-
 ## Commands
 
 Access via Command Palette (`Ctrl+Shift+P` / `Cmd+Shift+P`):
 
 | Command | Description |
 |---------|-------------|
-| `TerraTidy: Run All Checks` | Run all enabled checks |
-| `TerraTidy: Format Document` | Format current file |
-| `TerraTidy: Lint` | Run linting only |
-| `TerraTidy: Check Style` | Run style checks only |
-| `TerraTidy: Fix All Issues` | Auto-fix all fixable issues |
 | `TerraTidy: Initialize Configuration` | Create .terratidy.yaml |
 | `TerraTidy: Show Output` | Show output channel |
+| `TerraTidy: Restart Language Server` | Restart the LSP server |
 
 ## Settings
 
@@ -141,7 +129,7 @@ Customize in Keyboard Shortcuts (`Ctrl+K Ctrl+S`):
 ```json
 {
   "key": "ctrl+alt+t",
-  "command": "terratidy.check",
+  "command": "terratidy.restartServer",
   "when": "editorLangId == terraform"
 }
 ```

@@ -166,21 +166,9 @@ func (m *Manager) loadFromDirectory(dir string) error {
 			}
 			m.mu.Unlock()
 		case strings.HasSuffix(name, ".sh"):
-			rule, err := loadBashRule(path)
-			if err != nil {
-				return fmt.Errorf("loading Bash rule %s: %w", name, err)
+			if err := m.loadAndRegisterBashRule(path, name); err != nil {
+				return err
 			}
-			m.RegisterRule(rule)
-			m.mu.Lock()
-			m.plugins[rule.Name()] = &Plugin{
-				Metadata: PluginMetadata{
-					Name: rule.Name(),
-					Type: PluginTypeRule,
-					Path: path,
-				},
-				Instance: rule,
-			}
-			m.mu.Unlock()
 		}
 	}
 

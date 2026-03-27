@@ -13,6 +13,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/santosr2/terratidy/internal/buildinfo"
 	"github.com/santosr2/terratidy/internal/config"
 	"github.com/santosr2/terratidy/internal/engines/lint"
 	"github.com/santosr2/terratidy/internal/engines/style"
@@ -204,7 +205,7 @@ func (s *Server) handleInitialize(msg RequestMessage) error {
 		},
 		ServerInfo: &ServerInfo{
 			Name:    "terratidy-lsp",
-			Version: "0.2.0-alpha.2",
+			Version: buildinfo.GetVersion(),
 		},
 	}
 

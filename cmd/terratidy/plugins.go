@@ -201,18 +201,14 @@ func (r *ExampleRule) Description() string {
 	return "Example rule - replace with your implementation"
 }
 
-func (r *ExampleRule) Severity() sdk.Severity {
-	return sdk.SeverityWarning
-}
-
 func (r *ExampleRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Finding, error) {
 	// Implement your rule logic here
 	return nil, nil
 }
 
-func (r *ExampleRule) Fix(ctx *sdk.Context, file *hcl.File) error {
+func (r *ExampleRule) Fix(ctx *sdk.Context, file *hcl.File) ([]byte, error) {
 	// Implement fix logic if auto-fixable
-	return nil
+	return nil, nil
 }
 `, pluginName, pluginName, pluginName, pluginName)
 
@@ -225,9 +221,9 @@ func (r *ExampleRule) Fix(ctx *sdk.Context, file *hcl.File) error {
 		// Create go.mod
 		goModContent := fmt.Sprintf(`module %s
 
-go 1.25
+go 1.26.1
 
-require github.com/santosr2/terratidy v0.1.0
+require github.com/santosr2/terratidy v0.2.0-alpha.3
 `, pluginName)
 
 		goModPath := filepath.Join(dir, "go.mod")

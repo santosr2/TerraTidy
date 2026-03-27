@@ -29,12 +29,6 @@ filename = "vscode/package.json"
 search = "\"version\": \"{current_version}\""
 replace = "\"version\": \"{new_version}\""
 
-# LSP server version
-[[tool.bumpversion.files]]
-filename = "internal/lsp/server.go"
-search = "Version: \"{current_version}\""
-replace = "Version: \"{new_version}\""
-
 # Documentation - commands
 [[tool.bumpversion.files]]
 filename = "docs/site/docs/user-guide/commands.md"

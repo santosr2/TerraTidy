@@ -6,15 +6,15 @@ Complete reference for all TerraTidy commands.
 
 These flags are available for all commands:
 
-| Flag                   | Description                                                                       |
-| ---------------------- | --------------------------------------------------------------------------------- |
-| `--config`             | Path to configuration file (default: `.terratidy.yaml`)                           |
-| `--profile`            | Configuration profile to use                                                      |
-| `--format`             | Output format: `text`, `table`, `json`, `json-compact`, `sarif`, `html`, `github` |
-| `--paths`              | Paths to check (comma-separated)                                                  |
-| `--changed`            | Only check files changed in git                                                   |
-| `--color`              | Enable colored output (default: true)                                             |
-| `--severity-threshold` | Minimum severity: `info`, `warning`, `error`                                      |
+| Flag                   | Description                                                                                              |
+| ---------------------- | -------------------------------------------------------------------------------------------------------- |
+| `--config`             | Path to configuration file (default: `.terratidy.yaml`)                                                  |
+| `--profile`            | Configuration profile to use                                                                             |
+| `--format`             | Output format: `text`, `json`, `json-compact`, `sarif`, `html`, `github`, `table`, `junit`, `markdown`   |
+| `--paths`              | Paths to check (comma-separated)                                                                         |
+| `--changed`            | Only check files changed in git                                                                          |
+| `--color`              | Enable colored output (default: true)                                                                    |
+| `--severity-threshold` | Minimum severity: `info`, `warning`, `error`                                                             |
 
 ## terratidy check
 
@@ -104,9 +104,11 @@ terratidy style [paths...] [flags]
 
 **Flags:**
 
-| Flag    | Description           |
-| ------- | --------------------- |
-| `--fix` | Auto-fix style issues |
+| Flag      | Description                                 |
+| --------- | ------------------------------------------- |
+| `--fix`   | Auto-fix style issues                       |
+| `--check` | Check only, exit with error if issues found |
+| `--diff`  | Show diff of style changes                  |
 
 **Examples:**
 
@@ -116,6 +118,9 @@ terratidy style
 
 # Fix style issues
 terratidy style --fix
+
+# Check only (exit with error if issues found)
+terratidy style --check
 ```
 
 ## terratidy lint
@@ -154,9 +159,24 @@ terratidy policy [paths...] [flags]
 
 **Flags:**
 
-| Flag           | Description                          |
-| -------------- | ------------------------------------ |
-| `--policy-dir` | Directory containing .rego files     |
+| Flag            | Description                            |
+| --------------- | -------------------------------------- |
+| `--policy-dir`  | Directories containing .rego files     |
+| `--policy-file` | Individual Rego policy files           |
+| `--show-input`  | Show input JSON for debugging policies |
+
+**Examples:**
+
+```bash
+# Run policy checks
+terratidy policy
+
+# Run with custom policies
+terratidy policy --policy-dir ./policies
+
+# Show input JSON for debugging
+terratidy policy --show-input
+```
 
 ## terratidy fix
 
@@ -213,25 +233,57 @@ terratidy init --split
 Initialize a new custom rule.
 
 ```bash
-terratidy init-rule [name] [flags]
+terratidy init-rule [flags]
 ```
+
+**Flags:**
+
+| Flag       | Description                                        |
+| ---------- | -------------------------------------------------- |
+| `--name`   | Rule name (required)                               |
+| `--type`   | Rule type: `go`, `rego`, `yaml` (default: `rego`)  |
+| `--output` | Output directory (default: `.`)                    |
 
 **Examples:**
 
 ```bash
 # Create a new Go rule
-terratidy init-rule my-custom-rule --type go
+terratidy init-rule --name my-custom-rule --type go
 
-# Create a YAML rule
-terratidy init-rule my-rule --type yaml
+# Create a Rego policy
+terratidy init-rule --name require-encryption --type rego
+
+# Create a YAML rule in a specific directory
+terratidy init-rule --name my-rule --type yaml --output ./rules
 ```
 
 ## terratidy test-rule
 
-Test a specific rule.
+Test a specific rule against fixture files.
 
 ```bash
-terratidy test-rule [rule-name] [flags]
+terratidy test-rule [rule-path] [flags]
+```
+
+**Flags:**
+
+| Flag         | Description                                      |
+| ------------ | ------------------------------------------------ |
+| `--fixtures` | Fixtures directory (default: `test_fixtures/`)   |
+| `--expect`   | Expected findings file (YAML or JSON)            |
+| `-v`         | Verbose output                                   |
+
+**Examples:**
+
+```bash
+# Test a Rego policy
+terratidy test-rule ./policies/my-rule.rego
+
+# Test with specific fixtures
+terratidy test-rule ./policies/my-rule.rego --fixtures ./test_fixtures
+
+# Test with expected findings
+terratidy test-rule ./policies/my-rule.rego --expect ./expected.yaml
 ```
 
 ## terratidy rules
@@ -249,17 +301,36 @@ terratidy rules [command]
 | `list`  | List all available rules       |
 | `docs`  | Generate rule documentation    |
 
+**Flags (list):**
+
+| Flag       | Description                                     |
+| ---------- | ----------------------------------------------- |
+| `--engine` | Filter by engine: `style`, `lint`, `policy`     |
+| `-v`       | Show detailed descriptions                      |
+
+**Flags (docs):**
+
+| Flag       | Description                                     |
+| ---------- | ----------------------------------------------- |
+| `--engine` | Filter by engine: `style`, `lint`, `policy`     |
+
 **Examples:**
 
 ```bash
 # List all rules
 terratidy rules list
 
+# List rules for a specific engine
+terratidy rules list --engine style
+
 # List with verbose output
 terratidy rules list --verbose
 
 # Generate documentation
 terratidy rules docs
+
+# Generate docs for a specific engine
+terratidy rules docs --engine lint
 ```
 
 ## terratidy config
@@ -272,13 +343,19 @@ terratidy config [command]
 
 **Subcommands:**
 
-| Command        | Description                            |
-| -------------- | -------------------------------------- |
-| `show`         | Display current configuration          |
-| `validate`     | Validate configuration file            |
-| `split`        | Split configuration into modules       |
-| `merge`        | Merge split configurations             |
-| `init-profile` | Initialize a new configuration profile |
+| Command          | Description                            |
+| ---------------- | -------------------------------------- |
+| `show`           | Display current configuration          |
+| `validate`       | Validate configuration file            |
+| `split`          | Split configuration into modules       |
+| `merge`          | Merge split configurations             |
+| `init-profile`   | Initialize a new configuration profile |
+
+**Flags (`show`):**
+
+| Flag       | Description                                     |
+| ---------- | ----------------------------------------------- |
+| `--format` | Output format: `yaml`, `json` (default: `yaml`) |
 
 ## terratidy plugins
 
@@ -316,10 +393,10 @@ terratidy dev [flags]
 
 **Flags:**
 
-| Flag       | Description                            |
-| ---------- | -------------------------------------- |
-| `--watch`  | Directory to watch (default: policies/)|
-| `--target` | Target directory to check (default: .) |
+| Flag       | Description                                      |
+| ---------- | ------------------------------------------------ |
+| `--watch`  | Directory to watch (default: `policies/`)        |
+| `--target` | Target directory to check (default: `.`)         |
 
 **Examples:**
 
@@ -336,7 +413,27 @@ terratidy dev --watch ./policies --target ./modules
 Show version information.
 
 ```bash
+terratidy version [flags]
+```
+
+**Flags:**
+
+| Flag      | Description                |
+| --------- | -------------------------- |
+| `--short` | Print only version number  |
+| `--json`  | Output in JSON format      |
+
+**Examples:**
+
+```bash
+# Show full version info
 terratidy version
+
+# Show only version number
+terratidy version --short
+
+# Output as JSON
+terratidy version --json
 ```
 
 **Output:**

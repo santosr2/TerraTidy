@@ -226,12 +226,12 @@ Share profiles across your organization:
 # .terratidy.yaml in your module
 version: 1
 
-extends:
-  - https://example.com/terratidy/base-config.yaml
+imports:
+  - .terratidy/*.yaml
 
 profiles:
   team-a:
-    extends: ci
+    inherits: ci
     engines:
       policy:
         config:
@@ -239,12 +239,9 @@ profiles:
             - ./policies/team-a
 ```
 
-## Listing Available Profiles
+## Viewing Profile Configuration
 
 ```bash
-# List all profiles
-terratidy config profiles
-
-# Show profile details
+# Show resolved configuration for a profile
 terratidy config show --profile ci
 ```

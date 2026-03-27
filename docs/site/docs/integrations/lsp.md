@@ -7,10 +7,8 @@ TerraTidy provides an LSP server for integration with any editor that supports L
 The TerraTidy LSP server provides:
 
 - Real-time diagnostics
-- Code formatting
-- Quick fixes
-- Hover information
-- Code actions
+- Document formatting
+- Code actions (quick fixes)
 
 ## Starting the Server
 
@@ -166,18 +164,10 @@ Diagnostics are published on:
 ### Formatting
 
 - `textDocument/formatting` - Format entire document
-- `textDocument/rangeFormatting` - Format selection
 
 ### Code Actions
 
-- Quick fixes for style issues
-- Auto-fix for formatting problems
-- Suggestions for best practices
-
-### Hover
-
-- Rule documentation on hover
-- Configuration hints
+- Quick fixes for diagnostics with associated rule codes
 
 ## Configuration
 

@@ -6,7 +6,7 @@ Thank you for your interest in contributing to TerraTidy!
 
 ### Prerequisites
 
-- Go 1.21 or later
+- Go 1.25 or later
 - Make
 - Git
 
@@ -20,7 +20,7 @@ cd terratidy
 ### Install Dependencies
 
 ```bash
-make deps
+make setup
 ```
 
 ### Build
@@ -125,13 +125,13 @@ func TestMyFunction(t *testing.T) {
 ### Integration Tests
 
 ```bash
-make test-integration
+make integration
 ```
 
 ### Coverage
 
 ```bash
-make coverage
+make test-coverage
 ```
 
 ## Adding New Features
@@ -167,7 +167,9 @@ make coverage
 terratidy/
 ├── cmd/terratidy/      # CLI commands
 ├── internal/
-│   ├── core/           # Core logic
+│   ├── runner/         # Engine runner, parallel execution
+│   ├── config/         # Configuration loading
+│   ├── output/         # Output formatting
 │   ├── engines/        # Engine implementations
 │   ├── lsp/            # Language server
 │   └── plugins/        # Plugin system

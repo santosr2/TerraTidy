@@ -1,0 +1,11 @@
+name: require-description
+description: All resources must have a description attribute
+severity: warning
+enabled: true
+message: "Resource is missing a 'description' attribute"
+tags:
+  - documentation
+  - best-practice
+patterns:
+  required_attributes:
+    - description

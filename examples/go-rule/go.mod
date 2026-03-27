@@ -1,6 +1,6 @@
 module require-tags
 
-go 1.25.5
+go 1.26.1
 
 require (
 	github.com/hashicorp/hcl/v2 v2.23.0

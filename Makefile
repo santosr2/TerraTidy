@@ -106,10 +106,8 @@ clean-all: ## Clean all generated files and artifacts
 	@echo "Cleaning all generated files..."
 	@rm -rf bin/
 	@rm -rf dist/
-	@rm -rf context/
 	@rm -rf coverage/
 	@rm -rf benchmarks/
-	@rm -rf tmp/
 	@rm -rf test_fixtures/
 	@rm -f coverage.out coverage.html coverage.txt
 	@rm -f *.test
@@ -120,9 +118,7 @@ clean-all: ## Clean all generated files and artifacts
 uninstall-tools: ## Uninstall all development tools
 	@echo "⚠️  This will uninstall all TerraTidy development tools"
 	@echo "The following will be removed:"
-	@echo "  - Go tools (air, benchstat, gofumpt, staticcheck, etc.)"
-	@echo "  - Node tools (repomix)"
-	@echo "  - Python tools (beads-mcp)"
+	@echo "  - Go tools (benchstat, gofumpt, staticcheck, etc.)"
 	@echo ""
 	@read -p "Continue? [y/N] " -n 1 -r; \
 	echo; \
@@ -176,9 +172,6 @@ build-all: ## Build for all platforms
 	@echo "Binaries built in bin/"
 
 # Development tools
-context: ## Generate AI context for LLMs
-	@bash tools/scripts/generate-context.sh
-
 coverage-report: ## Generate detailed coverage report
 	@bash tools/scripts/coverage-report.sh
 
@@ -189,9 +182,3 @@ deps-graph: ## Generate dependency graph
 	@go mod graph | bash tools/scripts/mod-graph.sh > docs/dependencies.svg
 	@echo "Dependency graph saved to docs/dependencies.svg"
 
-hot-reload: ## Run with hot reload (requires air)
-	@if command -v air > /dev/null; then \
-		air -c tools/air.toml; \
-	else \
-		echo "air not found. Install with: go install github.com/cosmtrek/air@latest"; \
-	fi

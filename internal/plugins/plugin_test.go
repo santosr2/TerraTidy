@@ -357,18 +357,19 @@ func TestFormatterPluginInterface(_ *testing.T) {
 func TestManager_LoadAll_WithYAMLFile(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	// Create a YAML file (should be skipped, not a .so file)
-	yamlFile := filepath.Join(tmpDir, "config.yaml")
-	err := os.WriteFile(yamlFile, []byte("test: value"), 0o644)
+	// Create a valid YAML rule file
+	yamlFile := filepath.Join(tmpDir, "check.yaml")
+	content := "name: check-rule\ndescription: A check rule\nseverity: warning\nenabled: true\n"
+	err := os.WriteFile(yamlFile, []byte(content), 0o644)
 	require.NoError(t, err)
 
 	manager := NewManager([]string{tmpDir})
 	err = manager.LoadAll()
 	assert.NoError(t, err)
 
-	// No plugins should be loaded
+	// YAML rule should be loaded
 	plugins := manager.ListPlugins()
-	assert.Empty(t, plugins)
+	assert.Len(t, plugins, 1)
 }
 
 func TestManager_LoadAll_WithSubdirectories(t *testing.T) {

@@ -144,10 +144,30 @@ func (m *Manager) loadFromDirectory(dir string) error {
 		name := entry.Name()
 		path := filepath.Join(dir, name)
 
-		// Load .so files (Go plugins)
-		if strings.HasSuffix(name, ".so") {
+		switch {
+		case strings.HasSuffix(name, ".so"):
 			if err := m.loadGoPlugin(path); err != nil {
 				return fmt.Errorf("loading Go plugin %s: %w", name, err)
+			}
+		case strings.HasSuffix(name, ".yaml") || strings.HasSuffix(name, ".yml"):
+			rule, err := loadYAMLRule(path)
+			if err != nil {
+				return fmt.Errorf("loading YAML rule %s: %w", name, err)
+			}
+			m.RegisterRule(rule)
+			m.mu.Lock()
+			m.plugins[rule.Name()] = &Plugin{
+				Metadata: PluginMetadata{
+					Name: rule.Name(),
+					Type: PluginTypeRule,
+					Path: path,
+				},
+				Instance: rule,
+			}
+			m.mu.Unlock()
+		case strings.HasSuffix(name, ".sh"):
+			if err := m.loadAndRegisterBashRule(path, name); err != nil {
+				return err
 			}
 		}
 	}

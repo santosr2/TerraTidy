@@ -84,3 +84,51 @@ replace = "download/v{new_version}"
 filename = "examples/github-workflow.yaml"
 search = "download/v{current_version}"
 replace = "download/v{new_version}"
+
+# README - GitHub Action pin example
+[[tool.bumpversion.files]]
+filename = "README.md"
+search = "terratidy@v{current_version}"
+replace = "terratidy@v{new_version}"
+
+# Examples - pre-commit config
+[[tool.bumpversion.files]]
+filename = "examples/pre-commit-config.yaml"
+search = "rev: v{current_version}"
+replace = "rev: v{new_version}"
+
+# Examples - README pre-commit rev
+[[tool.bumpversion.files]]
+filename = "examples/README.md"
+search = "rev: v{current_version}"
+replace = "rev: v{new_version}"
+
+# Documentation - CI/CD integration Docker tags
+[[tool.bumpversion.files]]
+filename = "docs/site/docs/integrations/ci-cd.md"
+search = "terratidy:v{current_version}"
+replace = "terratidy:v{new_version}"
+
+# Documentation - Docker page image tags
+[[tool.bumpversion.files]]
+filename = "docs/site/docs/integrations/docker.md"
+search = "terratidy:v{current_version}"
+replace = "terratidy:v{new_version}"
+
+# Documentation - Upgrade guide pre-commit rev
+[[tool.bumpversion.files]]
+filename = "docs/site/docs/getting-started/upgrade.md"
+search = "rev: v{current_version}"
+replace = "rev: v{new_version}"
+
+# Documentation - Recipes pre-commit rev and Docker tags
+[[tool.bumpversion.files]]
+filename = "docs/site/docs/user-guide/recipes.md"
+search = "v{current_version}"
+replace = "v{new_version}"
+
+# Documentation - Security version pin
+[[tool.bumpversion.files]]
+filename = "docs/site/docs/user-guide/security.md"
+search = "version: 'v{current_version}'"
+replace = "version: 'v{new_version}'"

@@ -19,6 +19,10 @@ parallel: true
 Parallel mode runs all enabled engines (fmt, style, lint, policy) simultaneously using
 goroutines. This is most effective when multiple engines are enabled.
 
+**Default behavior:** The config default is `parallel: true`, but the `--parallel` CLI flag
+is additive (it enables parallel when your config has it disabled). If you haven't changed
+the default config, engines already run in parallel.
+
 **Note:** `fail_fast` only works in sequential mode. When using `--parallel`, all engines
 run to completion regardless of errors.
 

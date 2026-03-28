@@ -179,6 +179,14 @@ See [Configuration Guide](docs/site/docs/getting-started/configuration.md) for d
 
 ## Integrations
 
+| Method | When | Best For |
+| -------------- | -------------------- | --------------------------------- |
+| CLI | Manual runs | Local development, scripting |
+| Pre-commit | On git commit | Catching issues before push |
+| GitHub Actions | On PR/push | CI/CD quality gates |
+| LSP / VS Code | Real-time in editor | Instant feedback while coding |
+| Docker | Isolated environments | CI pipelines without Go installed |
+
 ### Pre-commit Hook
 
 Add to `.pre-commit-config.yaml`:
@@ -195,12 +203,14 @@ repos:
 
 ```yaml
 - name: Run TerraTidy
-  uses: santosr2/terratidy@v0
+  uses: santosr2/terratidy@v0  # Floating tag, tracks latest v0.x release
   with:
     format: sarif
     parallel: true
     github-token: ${{ secrets.GITHUB_TOKEN }}
 ```
+
+Pin to a specific release for reproducible builds: `santosr2/terratidy@v0.2.0-alpha.3`
 
 Available inputs: `version`, `config`, `profile`, `format`, `parallel`, `working-directory`,
 `skip-fmt`, `skip-style`, `skip-lint`, `skip-policy`, `fail-on-error`, `fail-on-warning`, `github-token`.

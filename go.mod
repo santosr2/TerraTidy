@@ -6,6 +6,7 @@ require (
 	github.com/fsnotify/fsnotify v1.9.0
 	github.com/hashicorp/hcl/v2 v2.24.0
 	github.com/open-policy-agent/opa v1.15.0
+	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2
 	github.com/spf13/cobra v1.10.2
 	github.com/stretchr/testify v1.11.1
 	golang.org/x/text v0.35.0
@@ -33,7 +34,6 @@ require (
 	github.com/lestrrat-go/jwx/v3 v3.0.13 // indirect
 	github.com/lestrrat-go/option/v2 v2.0.0 // indirect
 	github.com/mitchellh/go-wordwrap v1.0.1 // indirect
-	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/rcrowley/go-metrics v0.0.0-20250401214520-65e299d6c5c9 // indirect
 	github.com/segmentio/asm v1.2.1 // indirect
 	github.com/sirupsen/logrus v1.9.4 // indirect

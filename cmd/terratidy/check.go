@@ -289,9 +289,10 @@ func runPolicyCheckWithConfig(ctx context.Context, cfg *config.Config, files []s
 }
 
 // buildStyleConfig creates a style.Config from the terratidy config.
-func buildStyleConfig(cfg *config.Config, fix bool) *style.Config {
+func buildStyleConfig(cfg *config.Config, fix bool, diff ...bool) *style.Config {
 	styleCfg := &style.Config{
 		Fix:   fix,
+		Diff:  len(diff) > 0 && diff[0],
 		Rules: make(map[string]style.RuleConfig),
 	}
 

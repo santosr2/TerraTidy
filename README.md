@@ -27,7 +27,7 @@ TerraTidy is a single-binary quality platform for Terraform and Terragrunt that 
 
 - ✅ **Single Binary** - No external dependencies, all tools vendored
 - ⚡ **10-100x Faster** - Library-first architecture, no subprocess overhead
-- 🔌 **Extensible** - Custom rules in Go, YAML, or Bash
+- 🔌 **Extensible** - Custom rules in Go, Rego, YAML, or Bash
 - 📦 **Modular Config** - Split large configs into organized files
 - 🎯 **Great DX** - Interactive setup, hot-reload dev mode, helpful errors
 - 🔧 **Auto-fix** - Automatically fix formatting and style issues

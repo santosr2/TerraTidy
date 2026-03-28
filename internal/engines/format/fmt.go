@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/hashicorp/hcl/v2/hclwrite"
+	"github.com/pmezard/go-difflib/difflib"
 	"github.com/santosr2/terratidy/internal/cache"
 	"github.com/santosr2/terratidy/pkg/sdk"
 )
@@ -92,11 +93,31 @@ func (e *Engine) formatFile(path string) (*sdk.Finding, error) {
 		return nil, nil // Already formatted
 	}
 
-	// In check mode, return a finding
+	// Generate unified diff if requested
+	var diffText string
+	if e.config.Diff {
+		diff := difflib.UnifiedDiff{
+			A:        difflib.SplitLines(string(content)),
+			B:        difflib.SplitLines(string(formatted)),
+			FromFile: path,
+			ToFile:   path,
+			Context:  3,
+		}
+		diffText, err = difflib.GetUnifiedDiffString(diff)
+		if err != nil {
+			return nil, fmt.Errorf("generating diff: %w", err)
+		}
+	}
+
+	// In check mode, return a finding without writing
 	if e.config.Check {
+		message := "File needs formatting"
+		if diffText != "" {
+			message = diffText
+		}
 		return &sdk.Finding{
 			Rule:     "fmt.needs-formatting",
-			Message:  "File needs formatting",
+			Message:  message,
 			File:     path,
 			Severity: sdk.SeverityError,
 			Fixable:  true,
@@ -111,9 +132,13 @@ func (e *Engine) formatFile(path string) (*sdk.Finding, error) {
 		return nil, fmt.Errorf("writing formatted file: %w", err)
 	}
 
+	message := "File formatted successfully"
+	if diffText != "" {
+		message = diffText
+	}
 	return &sdk.Finding{
 		Rule:     "fmt.formatted",
-		Message:  "File formatted successfully",
+		Message:  message,
 		File:     path,
 		Severity: sdk.SeverityInfo,
 		Fixable:  false,

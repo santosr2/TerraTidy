@@ -7,6 +7,7 @@ import (
 
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/hclparse"
+	"github.com/pmezard/go-difflib/difflib"
 	"github.com/santosr2/terratidy/pkg/sdk"
 )
 
@@ -19,6 +20,7 @@ type Engine struct {
 // Config holds the style engine configuration
 type Config struct {
 	Fix   bool // Auto-fix mode
+	Diff  bool // Show diff of changes
 	Rules map[string]RuleConfig
 }
 
@@ -84,6 +86,16 @@ func (e *Engine) checkFile(parser *hclparse.Parser, path string) ([]sdk.Finding,
 		Config:  make(map[string]interface{}),
 		WorkDir: ".",
 		File:    path,
+	}
+
+	// Capture original content before any fixes for diff generation
+	var originalContent []byte
+	if e.config.Diff && e.config.Fix {
+		var err error
+		originalContent, err = os.ReadFile(path)
+		if err != nil {
+			return nil, fmt.Errorf("reading file for diff: %w", err)
+		}
 	}
 
 	var allFindings []sdk.Finding
@@ -161,6 +173,37 @@ func (e *Engine) checkFile(parser *hclparse.Parser, path string) ([]sdk.Finding,
 
 		// No fixes applied or not in fix mode, we're done
 		break
+	}
+
+	// Generate diff if requested and fixes were applied
+	if e.config.Diff && e.config.Fix && originalContent != nil {
+		fixedContent, err := os.ReadFile(path)
+		if err != nil {
+			return nil, fmt.Errorf("reading fixed file for diff: %w", err)
+		}
+
+		if string(originalContent) != string(fixedContent) {
+			diff := difflib.UnifiedDiff{
+				A:        difflib.SplitLines(string(originalContent)),
+				B:        difflib.SplitLines(string(fixedContent)),
+				FromFile: path,
+				ToFile:   path,
+				Context:  3,
+			}
+			diffText, err := difflib.GetUnifiedDiffString(diff)
+			if err != nil {
+				return nil, fmt.Errorf("generating diff: %w", err)
+			}
+			if diffText != "" {
+				allFindings = append(allFindings, sdk.Finding{
+					Rule:     "style.diff",
+					Message:  diffText,
+					File:     path,
+					Severity: sdk.SeverityInfo,
+					Fixable:  false,
+				})
+			}
+		}
 	}
 
 	return allFindings, nil

@@ -12,43 +12,14 @@
 
 repos:
   # TerraTidy hooks
-  - repo: local
+  - repo: https://github.com/santosr2/terratidy
+    rev: v0.2.0-alpha.3
     hooks:
-      # Format check - ensures files are formatted
       - id: terratidy-fmt
-        name: TerraTidy Format Check
-        entry: terratidy fmt --check
-        language: system
-        files: \.(tf|hcl)$
-        pass_filenames: true
-        description: Check Terraform/Terragrunt formatting
-
-      # Style check - ensures style guidelines
       - id: terratidy-style
-        name: TerraTidy Style Check
-        entry: terratidy style --check
-        language: system
-        files: \.(tf|hcl)$
-        pass_filenames: true
-        description: Check Terraform/Terragrunt style
-
-      # Lint check - runs TFLint
       - id: terratidy-lint
-        name: TerraTidy Lint
-        entry: terratidy lint
-        language: system
-        files: \.(tf|hcl)$
-        pass_filenames: true
-        description: Run TFLint checks
-
-      # All checks - comprehensive check (choose this OR the individual ones above)
+      # Or use terratidy-check for all checks at once:
       # - id: terratidy-check
-      #   name: TerraTidy Check All
-      #   entry: terratidy check
-      #   language: system
-      #   files: \.(tf|hcl)$
-      #   pass_filenames: true
-      #   description: Run all TerraTidy checks
 
   # Optional: Standard Terraform hooks
   - repo: https://github.com/antonbabenko/pre-commit-terraform

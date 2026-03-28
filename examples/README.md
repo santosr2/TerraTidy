@@ -156,13 +156,10 @@ Want to check files before commit?
 ```yaml
 # .pre-commit-config.yaml
 repos:
-  - repo: local
+  - repo: https://github.com/santosr2/terratidy
+    rev: v0.2.0-alpha.3
     hooks:
-      - id: terratidy
-        name: TerraTidy
-        entry: terratidy check
-        language: system
-        files: \.(tf|hcl)$
+      - id: terratidy-check
 ```
 
 ### Scenario 4: Custom Rules

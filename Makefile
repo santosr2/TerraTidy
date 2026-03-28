@@ -132,7 +132,7 @@ uninstall-tools-force: ## Force uninstall tools without confirmation
 	@bash tools/scripts/uninstall.sh --force
 
 # Rule development helpers
-init-rule: ## Initialize a new rule (use: make init-rule NAME=my-rule TYPE=go|yaml|bash)
+init-rule: ## Initialize a new rule (use: make init-rule NAME=my-rule TYPE=go|rego|yaml)
 	@if [ -z "$(NAME)" ]; then \
 		echo "Error: NAME is required. Usage: make init-rule NAME=my-rule TYPE=go"; \
 		exit 1; \

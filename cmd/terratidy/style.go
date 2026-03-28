@@ -61,7 +61,7 @@ Use --fix to automatically fix fixable style issues.`,
 		}
 
 		// Create style engine with config
-		engine := style.New(buildStyleConfig(cfg, styleFix))
+		engine := style.New(buildStyleConfig(cfg, styleFix, styleDiff))
 
 		// For structured output formats, skip the progress messages
 		useStructuredOutput := format != "" && format != "text"

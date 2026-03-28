@@ -52,7 +52,7 @@ docker pull ghcr.io/santosr2/terratidy:latest
 # Or use a specific version
 docker pull ghcr.io/santosr2/terratidy:v0.2.0-alpha.3
 
-docker run --rm -v $(pwd):/workspace ghcr.io/santosr2/terratidy check
+docker run --rm -v $(pwd):/app ghcr.io/santosr2/terratidy check
 ```
 
 ## Verify Installation

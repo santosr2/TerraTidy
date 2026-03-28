@@ -6,7 +6,7 @@ version: 1
 # Global settings
 severity_threshold: warning  # Fail on warnings and above (info|warning|error)
 fail_fast: false            # Stop on first error
-parallel: true              # Run engines in parallel (future)
+parallel: true              # Run engines in parallel
 
 # Engine configuration
 engines:
@@ -42,14 +42,14 @@ engines:
       # Additional TFLint arguments
       args: []
 
-  # Policy engine - OPA/Conftest (future)
+  # Policy engine - OPA/Conftest
   policy:
     enabled: false
     config:
       policy_dir: policy
       args: []
 
-# Custom rules (future)
+# Custom rules
 custom_rules:
   # Example custom rule configuration
   # custom.my-rule:
@@ -58,7 +58,7 @@ custom_rules:
   #   config:
   #     option1: value1
 
-# Plugin configuration (future)
+# Plugin configuration
 plugins:
   enabled: false
   directories:

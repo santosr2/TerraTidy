@@ -33,7 +33,7 @@ plugins:
 
 ### Rule Interface
 
-Every rule (Go, YAML, or Bash) implements the `sdk.Rule` interface:
+Every rule (Go, Rego, YAML, or Bash) implements the `sdk.Rule` interface:
 
 ```go
 type Rule interface {

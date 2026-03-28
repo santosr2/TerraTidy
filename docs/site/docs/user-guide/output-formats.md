@@ -294,16 +294,23 @@ Output:
 
 ## HTML Format
 
-Visual HTML report with:
+Self-contained HTML report with embedded CSS, no external dependencies:
 
-- Summary statistics
-- Color-coded severity
-- File and line information
-- Rule descriptions
+- Summary cards: total issues, errors (red), warnings (yellow), info (cyan)
+- Findings grouped by file with severity icons
+- Fixable badge on auto-fixable findings
+- Responsive layout for sharing
 
 ```bash
 terratidy check --format html > report.html
+open report.html  # View in browser
 ```
+
+Useful for:
+
+- Sharing results with non-CLI users
+- Archiving quality reports
+- Email attachments
 
 ## Output to File
 

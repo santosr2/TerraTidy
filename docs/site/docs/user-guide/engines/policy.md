@@ -37,8 +37,8 @@ engines:
 ## Writing Policies
 
 Policies are written in Rego (v1 syntax) and evaluated against a JSON representation
-of your Terraform modules. TerraTidy uses OPA v1, which requires the `import rego.v1`
-statement and updated rule syntax.
+of your Terraform modules. TerraTidy uses **OPA v1.15.0** with Rego v1, which requires
+the `import rego.v1` statement and updated rule syntax.
 
 ### Basic Policy Structure
 
@@ -102,9 +102,22 @@ Each resource/block includes:
 
 - `type`: The resource type (e.g., "aws_instance")
 - `name`: The resource name
-- `_file`: Source file path
-- `_range`: Line/column information
-- All attributes as key-value pairs
+- `_block_type`: The HCL block type (resource, data, module, etc.)
+- `_file`: Source file path where the block is defined
+- `_range`: Location object with `start_line`, `end_line`, `start_column`, `end_column`
+- All attributes as key-value pairs (raw expression text)
+
+The `_range` field is useful for precise error reporting in custom policies:
+
+```rego
+msg := {
+    "msg": "Issue description",
+    "rule": "my-rule",
+    "severity": "error",
+    "file": resource._file,
+    "line": resource._range.start_line
+}
+```
 
 ## Built-in Policies
 

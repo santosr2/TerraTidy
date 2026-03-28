@@ -148,9 +148,12 @@ In settings:
 
 ### Text Document Synchronization
 
+The server uses **full sync mode** (TextDocumentSyncKind = 1), meaning the client sends
+the complete document content on every change. Save notifications include the document text.
+
 - `textDocument/didOpen`
-- `textDocument/didChange`
-- `textDocument/didSave`
+- `textDocument/didChange` (full content)
+- `textDocument/didSave` (with text)
 - `textDocument/didClose`
 
 ### Diagnostics

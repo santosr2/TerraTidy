@@ -26,6 +26,18 @@ type Context struct {
 }
 ```
 
+## Scaffolding
+
+Use `terratidy init-rule` to scaffold new rules:
+
+```bash
+terratidy init-rule --name my-rule --type go     # Go plugin with test file
+terratidy init-rule --name my-rule --type rego    # OPA/Rego policy with test
+terratidy init-rule --name my-rule --type yaml    # YAML rule config
+```
+
+Bash rules cannot be scaffolded via `init-rule`. Create them manually (the format is simple).
+
 ## Go Plugin Rules
 
 Create custom rules in Go using the plugin system. Requires Go 1.26.1 or later.

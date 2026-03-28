@@ -196,18 +196,64 @@ func MyFunction(input string) string {
 - Update `mkdocs.yml` navigation
 - Include examples
 
+## Pre-commit Setup
+
+Install pre-commit hooks for automatic checks on commit:
+
+```bash
+pip install pre-commit
+pre-commit install
+pre-commit install --hook-type commit-msg  # Conventional commit validation
+```
+
+The hooks run formatting, linting, and commit message validation automatically.
+
+## CI Pipeline
+
+The CI pipeline (`.github/workflows/test.yml`) runs on every PR:
+
+- **Build:** Compiles on ubuntu, macOS, and Windows
+- **Tests:** `go test -v -race -cover ./...` with coverage collection
+- **Linting:** golangci-lint and revive
+- **Coverage:** Uploaded to Codecov (ubuntu-only)
+
+All checks must pass before merging.
+
+## Commit Format
+
+Follow [Conventional Commits](https://www.conventionalcommits.org/):
+
+| Prefix       | Use For                    |
+| ------------ | -------------------------- |
+| `feat:`      | New features               |
+| `fix:`       | Bug fixes                  |
+| `docs:`      | Documentation changes      |
+| `test:`      | Test additions/changes     |
+| `chore:`     | Maintenance, dependencies  |
+| `refactor:`  | Code restructuring         |
+| `perf:`      | Performance improvements   |
+
+## PR Requirements
+
+- Clear description of what changed and why
+- Tests for new behavior
+- Updated documentation for user-facing changes
+- All CI checks passing
+- Conventional commit messages
+
 ## Release Process
 
-1. Update CHANGELOG.md
-2. Tag release: `git tag v1.2.3`
-3. Push tag: `git push origin v1.2.3`
-4. GoReleaser handles the rest
+1. Update CHANGELOG.md (or use git-cliff to generate)
+2. Bump version: `bump-my-version bump <part>` (major, minor, patch, pre_n)
+3. Tag release: `git tag v1.2.3`
+4. Push tag: `git push origin v1.2.3`
+5. GoReleaser builds binaries, Docker images, and Homebrew formula
+6. Release notes generated from CHANGELOG.md
 
 ## Getting Help
 
 - Open an issue for bugs
 - Use discussions for questions
-- Join our community chat
 
 ## Code of Conduct
 

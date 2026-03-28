@@ -1,0 +1,201 @@
+# Recipes
+
+Common configuration patterns for different workflows.
+
+## Monorepo Setup
+
+For repositories with multiple Terraform modules:
+
+```bash
+terratidy init --monorepo
+```
+
+This creates a config with a central `./policies` directory and two profiles:
+
+```yaml
+version: 1
+
+engines:
+  fmt: { enabled: true }
+  style: { enabled: true }
+  lint: { enabled: true }
+  policy:
+    enabled: true
+    config:
+      policy_dirs:
+        - ./policies
+
+profiles:
+  ci:
+    description: "Strict CI checks"
+    engines:
+      policy: { enabled: true }
+  development:
+    description: "Fast local checks"
+    engines:
+      lint: { enabled: false }
+      policy: { enabled: false }
+```
+
+Run checks per module:
+
+```bash
+terratidy check ./modules/networking
+terratidy check ./modules/compute --profile ci
+```
+
+## Multi-Environment Configs
+
+Use profiles and inheritance for different environments:
+
+```yaml
+profiles:
+  base:
+    engines:
+      fmt: { enabled: true }
+      style: { enabled: true }
+
+  staging:
+    inherits: base
+    engines:
+      lint: { enabled: true }
+
+  production:
+    inherits: base
+    engines:
+      lint: { enabled: true }
+      policy: { enabled: true }
+```
+
+```bash
+terratidy check --profile production ./environments/prod
+```
+
+## Shared Organizational Policies
+
+Distribute policies across teams using a shared repository:
+
+```yaml
+# .terratidy.yaml
+version: 1
+
+imports:
+  - ./org-policies/base.yaml      # Shared org rules
+  - ./.terratidy/local.yaml       # Team-specific overrides
+
+engines:
+  policy:
+    enabled: true
+    config:
+      policy_dirs:
+        - ./org-policies/rego
+        - ./local-policies
+```
+
+## Tag Compliance
+
+Enforce required tags on all resources:
+
+```rego
+# policies/required-tags.rego
+package terraform
+
+import rego.v1
+
+deny contains msg if {
+    required := {"Environment", "Team", "CostCenter"}
+    some resource in input.resources
+    provided := {tag | some tag, _ in resource.tags}
+    missing := required - provided
+    count(missing) > 0
+    msg := {
+        "msg": sprintf("%s %s missing tags: %v", [resource.type, resource.name, missing]),
+        "rule": "required-tags",
+        "severity": "error",
+        "file": resource._file
+    }
+}
+```
+
+## Naming Standards
+
+Enforce naming conventions with a YAML rule:
+
+```yaml
+# .terratidy/plugins/naming-standard.yaml
+name: org-naming-convention
+description: Resources must follow org naming standard
+severity: warning
+enabled: true
+patterns:
+  resource_types:
+    - aws_instance
+    - aws_s3_bucket
+    - aws_rds_cluster
+  required_attributes:
+    - tags
+```
+
+## Pre-commit + GitHub Actions Combo
+
+Use pre-commit for local checks and GitHub Actions for CI:
+
+```yaml
+# .pre-commit-config.yaml
+repos:
+  - repo: https://github.com/santosr2/terratidy
+    rev: v0.2.0-alpha.3
+    hooks:
+      - id: terratidy-fmt
+      - id: terratidy-style
+```
+
+```yaml
+# .github/workflows/terratidy.yml (full checks in CI)
+- uses: santosr2/terratidy@v0
+  with:
+    format: github
+```
+
+## Docker CI Pattern
+
+Run TerraTidy in Docker for isolated CI environments:
+
+```bash
+docker run --rm \
+  -v $(pwd):/app \
+  ghcr.io/santosr2/terratidy:v0.2.0-alpha.3 \
+  check --format json
+```
+
+In a CI pipeline:
+
+```yaml
+terratidy:
+  image: ghcr.io/santosr2/terratidy:v0.2.0-alpha.3
+  script:
+    - terratidy check --format junit > results.xml
+  artifacts:
+    reports:
+      junit: results.xml
+```
+
+## Split Configuration
+
+Break large configs into manageable files:
+
+```bash
+terratidy init --split
+```
+
+Creates:
+
+```text
+.terratidy.yaml           # Main config with imports
+.terratidy/fmt.yaml       # Format engine config
+.terratidy/style.yaml     # Style rules and options
+.terratidy/lint.yaml      # Lint engine config
+.terratidy/policy.yaml    # Policy engine config
+```
+
+Each team member can modify their engine's config without conflicts.

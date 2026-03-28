@@ -36,9 +36,9 @@ type bashFinding struct {
 
 // BashRule implements sdk.Rule by executing an external Bash script.
 type BashRule struct {
-	name   string
-	path   string
-	desc   string
+	name string
+	path string
+	desc string
 }
 
 // NewBashRule creates a BashRule from a script path.

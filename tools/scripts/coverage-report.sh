@@ -42,4 +42,3 @@ fi
 
 echo ""
 echo "✓ Coverage meets minimum requirement ($MIN_COVERAGE%)"
-

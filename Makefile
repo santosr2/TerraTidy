@@ -181,4 +181,3 @@ benchmark: ## Run benchmarks
 deps-graph: ## Generate dependency graph
 	@go mod graph | bash tools/scripts/mod-graph.sh > docs/dependencies.svg
 	@echo "Dependency graph saved to docs/dependencies.svg"
-

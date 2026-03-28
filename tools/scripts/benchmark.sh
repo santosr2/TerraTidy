@@ -21,7 +21,7 @@ go test -bench=. -benchmem -benchtime=5s -run=^$ ./... \
 if command -v benchstat &> /dev/null; then
     LATEST=$(ls -t "$BENCH_DIR"/benchmark-*.txt | head -1)
     PREVIOUS=$(ls -t "$BENCH_DIR"/benchmark-*.txt | head -2 | tail -1)
-    
+
     if [ "$LATEST" != "$PREVIOUS" ] && [ -f "$PREVIOUS" ]; then
         echo ""
         echo "Comparison with previous run:"
@@ -35,4 +35,3 @@ fi
 
 echo ""
 echo "✓ Benchmark results saved to: $BENCH_DIR"
-

@@ -85,7 +85,7 @@ resource "aws_instance" "web" {
 			// Create temp file for the rule to read
 			tmpDir := t.TempDir()
 			tmpFile := filepath.Join(tmpDir, "test.tf")
-			err := os.WriteFile(tmpFile, []byte(tt.content), 0644)
+			err := os.WriteFile(tmpFile, []byte(tt.content), 0o644)
 			require.NoError(t, err)
 
 			file, diags := hclsyntax.ParseConfig([]byte(tt.content), tmpFile, hcl.InitialPos)
@@ -107,7 +107,7 @@ resource "aws_instance" "web" {
 resource "aws_instance" "web" {
   ami = "ami-123"
 }`
-		err := os.WriteFile(tmpFile, []byte(content), 0644)
+		err := os.WriteFile(tmpFile, []byte(content), 0o644)
 		require.NoError(t, err)
 
 		file, diags := hclsyntax.ParseConfig([]byte(content), tmpFile, hcl.InitialPos)
@@ -167,7 +167,7 @@ func TestNoTrailingWhitespaceRule(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			tmpDir := t.TempDir()
 			tmpFile := filepath.Join(tmpDir, "test.tf")
-			err := os.WriteFile(tmpFile, []byte(tt.content), 0644)
+			err := os.WriteFile(tmpFile, []byte(tt.content), 0o644)
 			require.NoError(t, err)
 
 			file, diags := hclsyntax.ParseConfig([]byte(tt.content), tmpFile, hcl.InitialPos)
@@ -186,7 +186,7 @@ func TestNoTrailingWhitespaceRule(t *testing.T) {
 		tmpDir := t.TempDir()
 		tmpFile := filepath.Join(tmpDir, "test.tf")
 		content := "resource \"aws_instance\" \"web\" {  \n  ami = \"ami-123\"  \n}"
-		err := os.WriteFile(tmpFile, []byte(content), 0644)
+		err := os.WriteFile(tmpFile, []byte(content), 0o644)
 		require.NoError(t, err)
 
 		file, diags := hclsyntax.ParseConfig([]byte(content), tmpFile, hcl.InitialPos)
@@ -254,7 +254,7 @@ resource "aws_instance" "web" {
 		t.Run(tt.name, func(t *testing.T) {
 			tmpDir := t.TempDir()
 			tmpFile := filepath.Join(tmpDir, "test.tf")
-			err := os.WriteFile(tmpFile, []byte(tt.content), 0644)
+			err := os.WriteFile(tmpFile, []byte(tt.content), 0o644)
 			require.NoError(t, err)
 
 			file, diags := hclsyntax.ParseConfig([]byte(tt.content), tmpFile, hcl.InitialPos)
@@ -355,7 +355,7 @@ resource "aws_instance" "db" {
 		t.Run(tt.name, func(t *testing.T) {
 			tmpDir := t.TempDir()
 			tmpFile := filepath.Join(tmpDir, "test.tf")
-			err := os.WriteFile(tmpFile, []byte(tt.content), 0644)
+			err := os.WriteFile(tmpFile, []byte(tt.content), 0o644)
 			require.NoError(t, err)
 
 			file, diags := hclsyntax.ParseConfig([]byte(tt.content), tmpFile, hcl.InitialPos)
@@ -381,7 +381,7 @@ resource "aws_instance" "db" {
 resource "aws_instance" "api" {
   ami = "ami-456"
 }`
-		err := os.WriteFile(tmpFile, []byte(content), 0644)
+		err := os.WriteFile(tmpFile, []byte(content), 0o644)
 		require.NoError(t, err)
 
 		file, diags := hclsyntax.ParseConfig([]byte(content), tmpFile, hcl.InitialPos)

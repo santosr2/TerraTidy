@@ -17,7 +17,7 @@
   name: TerraTidy Format
   description: Format Terraform and Terragrunt files
   entry: terratidy fmt
-  language: golang
+  language: system
   minimum_pre_commit_version: '3.2.0'
   types: [terraform]
   types_or: [hcl]
@@ -27,7 +27,7 @@
   name: TerraTidy Format Check
   description: Check formatting without modifying files
   entry: terratidy fmt --check
-  language: golang
+  language: system
   minimum_pre_commit_version: '3.2.0'
   types: [terraform]
   types_or: [hcl]
@@ -37,7 +37,7 @@
   name: TerraTidy Style
   description: Check style issues
   entry: terratidy style
-  language: golang
+  language: system
   minimum_pre_commit_version: '3.2.0'
   types: [terraform]
   types_or: [hcl]
@@ -47,7 +47,7 @@
   name: TerraTidy Style Fix
   description: Check and fix style issues
   entry: terratidy style --fix
-  language: golang
+  language: system
   minimum_pre_commit_version: '3.2.0'
   types: [terraform]
   types_or: [hcl]
@@ -57,7 +57,7 @@
   name: TerraTidy Lint
   description: Run linting checks
   entry: terratidy lint
-  language: golang
+  language: system
   minimum_pre_commit_version: '3.2.0'
   types: [terraform]
   types_or: [hcl]
@@ -67,7 +67,7 @@
   name: TerraTidy Check All
   description: Run all quality checks (fmt, style, lint, policy)
   entry: terratidy check
-  language: golang
+  language: system
   minimum_pre_commit_version: '3.2.0'
   types: [terraform]
   types_or: [hcl]
@@ -77,7 +77,7 @@
   name: TerraTidy Fix All
   description: Auto-fix all fixable issues
   entry: terratidy fix
-  language: golang
+  language: system
   minimum_pre_commit_version: '3.2.0'
   types: [terraform]
   types_or: [hcl]
@@ -87,7 +87,7 @@
   name: TerraTidy Policy
   description: Run policy checks using OPA/Rego
   entry: terratidy policy
-  language: golang
+  language: system
   minimum_pre_commit_version: '3.2.0'
   types: [terraform]
   types_or: [hcl]

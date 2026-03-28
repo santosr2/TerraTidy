@@ -1070,6 +1070,14 @@ engines:
 
 ## Disabling Rules
 
+**Precedence** (highest to lowest):
+
+1. Inline comments (`# terratidy:ignore:rule-name`)
+2. File-level comments (`# terratidy:ignore-file:rule-name`)
+3. Override rules in config (`overrides.rules`)
+4. Profile engine settings
+5. Base config engine settings
+
 ### Inline
 
 ```hcl

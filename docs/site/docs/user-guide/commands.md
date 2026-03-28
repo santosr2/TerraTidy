@@ -373,6 +373,21 @@ terratidy test-rule [rule-path] [flags]
 | `--expect`   | Expected findings file (YAML or JSON)            |
 | `-v`         | Verbose output                                   |
 
+**Expected Findings Format:**
+
+The `--expect` file uses YAML or JSON with this schema:
+
+```yaml
+findings:
+  - rule: "policy-rule-name"        # Required; matched as suffix
+    severity: "error"               # Optional; must match exactly
+    message: "expected substring"   # Optional; substring match
+```
+
+Matching rules: `rule` is matched as a suffix (e.g., `"no-public-ssh"` matches
+`"policy.no-public-ssh"`). `severity` must match exactly if specified. `message` is
+a substring match if specified.
+
 **Examples:**
 
 ```bash

@@ -138,7 +138,7 @@ resource "aws_vpc" "main" {
 		t.Run(tt.name, func(t *testing.T) {
 			tmpDir := t.TempDir()
 			tmpFile := filepath.Join(tmpDir, tt.fileName)
-			err := os.WriteFile(tmpFile, []byte(tt.content), 0644)
+			err := os.WriteFile(tmpFile, []byte(tt.content), 0o644)
 			require.NoError(t, err)
 
 			file, diags := hclsyntax.ParseConfig([]byte(tt.content), tmpFile, hcl.InitialPos)
@@ -390,13 +390,13 @@ func TestTerraformFilesStructureRule(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			tmpDir := t.TempDir()
 			tmpFile := filepath.Join(tmpDir, tt.fileName)
-			err := os.WriteFile(tmpFile, []byte(tt.content), 0644)
+			err := os.WriteFile(tmpFile, []byte(tt.content), 0o644)
 			require.NoError(t, err)
 
 			// Create any additional setup files
 			for _, setupFile := range tt.setupFiles {
 				setupPath := filepath.Join(tmpDir, setupFile)
-				err := os.WriteFile(setupPath, []byte("# placeholder"), 0644)
+				err := os.WriteFile(setupPath, []byte("# placeholder"), 0o644)
 				require.NoError(t, err)
 			}
 
@@ -424,7 +424,7 @@ func TestTerraformFilesStructureRule_FileExists(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	existingFile := filepath.Join(tmpDir, "existing.tf")
-	err := os.WriteFile(existingFile, []byte("# test"), 0644)
+	err := os.WriteFile(existingFile, []byte("# test"), 0o644)
 	require.NoError(t, err)
 
 	nonExistingFile := filepath.Join(tmpDir, "nonexisting.tf")

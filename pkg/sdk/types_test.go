@@ -119,6 +119,7 @@ func (r *MockRule) Check(ctx *Context, file *hcl.File) ([]Finding, error) {
 	}
 	return nil, nil
 }
+
 func (r *MockRule) Fix(ctx *Context, file *hcl.File) ([]byte, error) {
 	if r.fixFunc != nil {
 		return r.fixFunc(ctx, file)

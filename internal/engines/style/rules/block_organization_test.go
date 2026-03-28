@@ -141,7 +141,7 @@ func TestMetaArgumentsOrderRule(t *testing.T) {
   ami           = "ami-123"
   instance_type = "t2.micro"
 }`
-		err := os.WriteFile(tmpFile, []byte(content), 0644)
+		err := os.WriteFile(tmpFile, []byte(content), 0o644)
 		require.NoError(t, err)
 
 		file, diags := hclsyntax.ParseConfig([]byte(content), tmpFile, hcl.InitialPos)
@@ -275,7 +275,7 @@ func TestLifecycleAttributeOrderRule(t *testing.T) {
     create_before_destroy = true
   }
 }`
-		err := os.WriteFile(tmpFile, []byte(content), 0644)
+		err := os.WriteFile(tmpFile, []byte(content), 0o644)
 		require.NoError(t, err)
 
 		file, diags := hclsyntax.ParseConfig([]byte(content), tmpFile, hcl.InitialPos)
@@ -495,7 +495,7 @@ func TestOneLineAttributeSpacingRule(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			tmpDir := t.TempDir()
 			tmpFile := filepath.Join(tmpDir, "test.tf")
-			err := os.WriteFile(tmpFile, []byte(tt.content), 0644)
+			err := os.WriteFile(tmpFile, []byte(tt.content), 0o644)
 			require.NoError(t, err)
 
 			file, diags := hclsyntax.ParseConfig([]byte(tt.content), tmpFile, hcl.InitialPos)

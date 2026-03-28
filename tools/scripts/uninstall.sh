@@ -50,7 +50,7 @@ fi
 remove_go_bin() {
     local bin_name="$1"
     local bin_path="$(go env GOPATH)/bin/$bin_name"
-    
+
     if [[ -f "$bin_path" ]]; then
         rm -f "$bin_path"
         echo -e "${GREEN}✓${NC} Removed: $bin_name"
@@ -132,4 +132,3 @@ echo "To remove mise-managed tools:"
 echo "  ${BLUE}mise uninstall go@1.25${NC}"
 echo "  ${BLUE}# etc.${NC}"
 echo ""
-

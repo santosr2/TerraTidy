@@ -111,6 +111,7 @@ func (r *MockRule) Description() string { return r.description }
 func (r *MockRule) Check(_ *sdk.Context, _ *hcl.File) ([]sdk.Finding, error) {
 	return nil, nil
 }
+
 func (r *MockRule) Fix(_ *sdk.Context, _ *hcl.File) ([]byte, error) {
 	return nil, nil
 }

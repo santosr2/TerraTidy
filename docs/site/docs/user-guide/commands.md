@@ -16,6 +16,54 @@ These flags are available for all commands:
 | `--color`              | Enable colored output (default: true)                                                                    |
 | `--severity-threshold` | Minimum severity: `info`, `warning`, `error`                                                             |
 
+## Exit Codes
+
+All commands use consistent exit codes:
+
+| Code | Meaning |
+|------|---------|
+| `0`  | Success, no errors found |
+| `1`  | Errors found (severity = error), or check mode violations |
+
+In `--check` mode (fmt, style), any findings cause exit code 1. In normal mode, only error-severity findings cause exit code 1.
+
+## VCS Integration (`--changed`)
+
+The `--changed` flag uses git to detect modified files:
+
+```bash
+# Only check files changed since the default branch
+terratidy check --changed
+
+# Works with any command
+terratidy fmt --changed
+terratidy style --changed
+```
+
+**How it works:**
+
+1. Detects the default branch (`main` or `master`) via `git symbolic-ref refs/remotes/origin/HEAD`
+2. Finds the merge-base between HEAD and the default branch
+3. Combines staged, unstaged, and untracked `.tf`/`.hcl`/`.tfvars` files
+4. Deduplicates and converts to absolute paths
+
+This means `--changed` catches all local modifications, whether staged, unstaged, or new files.
+
+## Inline Rule Ignoring
+
+Suppress specific rules on a per-line or per-file basis:
+
+```hcl
+# Ignore a single rule on the next block
+# terratidy:ignore:style.block-label-case
+resource "aws_instance" "MyServer" { }
+
+# Ignore all style rules for the file
+# terratidy:ignore-file:style.block-label-case
+```
+
+See [Style Rules - Disabling Rules](../rules/style-rules.md#disabling-rules) for configuration-based disabling.
+
 ## terratidy check
 
 Run all enabled checks. This is the recommended command for CI/CD.
@@ -34,6 +82,8 @@ terratidy check [paths...] [flags]
 | `--skip-style`  | Skip style checks               |
 | `--skip-lint`   | Skip linting checks             |
 | `--skip-policy` | Skip policy checks              |
+
+When `fail_fast` is enabled in config, the check stops after the first engine that reports errors.
 
 **Examples:**
 
@@ -73,6 +123,13 @@ terratidy fmt [paths...] [flags]
 | `--diff`  | Show diff of changes                                     |
 | `--all`   | Also apply style fixes (equivalent to fmt + style --fix) |
 
+**`--diff` behavior:**
+
+When `--diff` is set, each file that needs formatting includes a unified diff in its output showing the exact changes. Works with or without `--check`:
+
+- `--diff` alone: formats the file and shows the diff
+- `--check --diff`: shows the diff without modifying files
+
 **Examples:**
 
 ```bash
@@ -81,6 +138,9 @@ terratidy fmt
 
 # Check formatting only
 terratidy fmt --check
+
+# Show what would change
+terratidy fmt --check --diff
 
 # Format and apply style fixes
 terratidy fmt --all
@@ -110,6 +170,15 @@ terratidy style [paths...] [flags]
 | `--check` | Check only, exit with error if issues found |
 | `--diff`  | Show diff of style changes                  |
 
+**`--diff` behavior:**
+
+When `--diff` is combined with `--fix`, the engine captures the original file content before
+applying fixes, then generates a unified diff showing all changes made:
+
+```bash
+terratidy style --fix --diff
+```
+
 **Examples:**
 
 ```bash
@@ -118,6 +187,9 @@ terratidy style
 
 # Fix style issues
 terratidy style --fix
+
+# Preview fixes as unified diff
+terratidy style --fix --diff
 
 # Check only (exit with error if issues found)
 terratidy style --check
@@ -139,14 +211,23 @@ terratidy lint [paths...] [flags]
 | `--plugin`      | Plugins to enable (aws, google, azurerm)     |
 | `--rule`        | Specific rules to enable                     |
 
+**`--rule`** enables specific TFLint rules by name, overriding the `.tflint.hcl` config.
+Multiple `--rule` flags can be passed. Each enabled rule defaults to warning severity.
+
 **Examples:**
 
 ```bash
 # Run linting
 terratidy lint
 
-# Enable specific rule
-terratidy lint --rule terraform_required_version
+# Enable specific rules
+terratidy lint --rule terraform_required_version --rule terraform_required_providers
+
+# Use a specific TFLint config
+terratidy lint --config-file .tflint-strict.hcl
+
+# Enable AWS plugin
+terratidy lint --plugin aws
 ```
 
 ## terratidy policy
@@ -165,6 +246,9 @@ terratidy policy [paths...] [flags]
 | `--policy-file` | Individual Rego policy files           |
 | `--show-input`  | Show input JSON for debugging policies |
 
+**`--show-input`** outputs the JSON representation of the Terraform configuration that gets
+passed to OPA for evaluation. Useful for debugging why a policy rule does or doesn't match.
+
 **Examples:**
 
 ```bash
@@ -174,7 +258,7 @@ terratidy policy
 # Run with custom policies
 terratidy policy --policy-dir ./policies
 
-# Show input JSON for debugging
+# Debug: see what OPA receives as input
 terratidy policy --show-input
 ```
 
@@ -215,6 +299,19 @@ terratidy init [flags]
 | `--split`       | Create modular split configuration  |
 | `--monorepo`    | Set up for monorepo                 |
 
+**`--split`** creates a modular `.terratidy/` directory with separate config files per engine:
+
+```text
+.terratidy.yaml         # Main config with imports
+.terratidy/fmt.yaml
+.terratidy/style.yaml
+.terratidy/lint.yaml
+.terratidy/policy.yaml
+```
+
+**`--monorepo`** generates config tailored for monorepos with a central `./policies` directory
+and two profiles: `ci` (strict) and `development` (relaxed).
+
 **Examples:**
 
 ```bash
@@ -226,6 +323,9 @@ terratidy init --interactive
 
 # Create split configuration
 terratidy init --split
+
+# Monorepo configuration
+terratidy init --monorepo
 ```
 
 ## terratidy init-rule
@@ -314,6 +414,12 @@ terratidy rules [command]
 | ---------- | ----------------------------------------------- |
 | `--engine` | Filter by engine: `style`, `lint`, `policy`     |
 
+**`rules list`** shows a table of all registered rules with name, severity, and description.
+By default, descriptions are truncated; use `-v` for full text.
+
+**`rules docs`** generates markdown documentation for all rules, suitable for piping to a file
+or integrating into CI to verify rules are documented.
+
 **Examples:**
 
 ```bash
@@ -330,7 +436,10 @@ terratidy rules list --verbose
 terratidy rules docs
 
 # Generate docs for a specific engine
-terratidy rules docs --engine lint
+terratidy rules docs --engine style
+
+# Save generated docs to a file
+terratidy rules docs > rules-reference.md
 ```
 
 ## terratidy config
@@ -351,11 +460,46 @@ terratidy config [command]
 | `merge`          | Merge split configurations             |
 | `init-profile`   | Initialize a new configuration profile |
 
+**`config show`** displays the fully resolved configuration after all imports, profile merges,
+and overrides are applied.
+
+**`config validate`** checks for syntax errors, invalid values, and missing required fields.
+Warns if no engines are enabled.
+
+**`config split`** converts a single `.terratidy.yaml` into a modular `.terratidy/` directory
+with separate files per engine.
+
+**`config merge`** combines modular `.terratidy/*.yaml` files back into a single `.terratidy.yaml`.
+
+**`config init-profile`** creates a new named profile in the config. Usage: `terratidy config init-profile ci`
+
 **Flags (`show`):**
 
 | Flag       | Description                                     |
 | ---------- | ----------------------------------------------- |
 | `--format` | Output format: `yaml`, `json` (default: `yaml`) |
+
+**Examples:**
+
+```bash
+# Show resolved config
+terratidy config show
+
+# Show as JSON
+terratidy config show --format json
+
+# Validate configuration
+terratidy config validate
+
+# Split config into modules
+terratidy config split
+
+# Merge modules back
+terratidy config merge
+
+# Create a new profile
+terratidy config init-profile production
+```
 
 ## terratidy plugins
 
@@ -385,7 +529,8 @@ Used by IDE extensions for real-time diagnostics.
 
 ## terratidy dev
 
-Development mode with file watching.
+Development mode with file watching. Watches for changes to `.rego`, `.tf`, `.hcl`, and `.tfvars`
+files and re-runs checks automatically with a 500ms debounce delay.
 
 ```bash
 terratidy dev [flags]
@@ -397,6 +542,13 @@ terratidy dev [flags]
 | ---------- | ------------------------------------------------ |
 | `--watch`  | Directory to watch (default: `policies/`)        |
 | `--target` | Target directory to check (default: `.`)         |
+
+**Behavior:**
+
+- Watches the `--watch` directory recursively for file changes (write and create events)
+- Waits 500ms after the last change before re-running checks (debounce)
+- Displays findings with severity summary and timestamp
+- Continues until interrupted with Ctrl+C
 
 **Examples:**
 

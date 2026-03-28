@@ -1025,6 +1025,27 @@ resource "aws_instance" "web" {
 }
 ```
 
+## Multi-Pass Fixing
+
+When running with `--fix`, the style engine applies fixes in up to **3 passes**. Some rules interact with each other (e.g., reordering attributes may create new spacing issues), so the engine re-runs all rules after applying fixes to catch any new violations introduced by the first pass.
+
+```bash
+# Fix mode applies up to 3 passes automatically
+terratidy style --fix
+
+# Show what would change without modifying files
+terratidy style --fix --diff
+```
+
+Each pass:
+
+1. Parses the file fresh
+2. Runs all enabled rules
+3. Applies fixes from fixable findings
+4. If any fixes were applied, continues to the next pass
+
+The engine stops early if no fixes are applied in a pass, so most files only need 1-2 passes.
+
 ## Configuration
 
 ### TerraTidy Config

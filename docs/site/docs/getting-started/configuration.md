@@ -53,9 +53,24 @@ engines:
         - ./policies
 ```
 
+## Configuration Precedence
+
+Settings are resolved in this order (highest priority first):
+
+1. **CLI flags** (`--config`, `--profile`, `--severity-threshold`, etc.)
+2. **Environment variables** (`TERRATIDY_PROFILE`)
+3. **Config file** (`.terratidy.yaml`)
+4. **Defaults** (fmt/style/lint enabled, policy disabled, severity=warning)
+
 ## Environment Variables
 
-Configuration values can use environment variables:
+Configuration values can use environment variables with three syntaxes:
+
+| Syntax              | Behavior                                      |
+| ------------------- | --------------------------------------------- |
+| `${VAR}`            | Substitutes the value; empty string if unset  |
+| `${VAR:-default}`   | Uses `default` if `VAR` is unset              |
+| `${VAR:?error}`     | Required variable (empty string if unset)     |
 
 ```yaml
 engines:
@@ -66,6 +81,16 @@ engines:
 
       # With default value
       region: ${AWS_REGION:-us-east-1}
+
+      # Required variable
+      account_id: ${AWS_ACCOUNT_ID:?must be set}
+```
+
+Select a profile via environment variable:
+
+```bash
+export TERRATIDY_PROFILE=ci
+terratidy check  # Uses the "ci" profile
 ```
 
 ## Profiles
@@ -239,6 +264,72 @@ plugins:
   directories:
     - ~/.terratidy/plugins
 ```
+
+## Global Settings
+
+### fail_fast
+
+When enabled, stops processing after the first engine that reports error-severity findings.
+Only triggers on `error` severity, not warnings or info. Only applies to sequential execution
+(not `--parallel`).
+
+```yaml
+fail_fast: true  # Stop after first engine with errors
+```
+
+### Cache
+
+TerraTidy caches parsed HCL files to avoid redundant reads. The cache is managed automatically
+and rarely needs configuration.
+
+| Option     | Type     | Default | Description                          |
+| ---------- | -------- | ------- | ------------------------------------ |
+| `MaxAge`   | duration | 5m      | Maximum age of cache entries         |
+| `MaxSize`  | int      | 1000    | Maximum number of entries (LRU)      |
+| `Disabled` | bool     | false   | Disable caching entirely             |
+
+Cache is invalidated when a file's modification time changes.
+
+### Lint Engine
+
+The lint engine integrates with TFLint. Configure it under `engines.lint.config`:
+
+```yaml
+engines:
+  lint:
+    enabled: true
+    config:
+      config_file: .tflint.hcl    # Path to TFLint config (default: .tflint.hcl)
+      plugins:                     # TFLint plugins to enable
+        - aws
+        - terraform
+```
+
+If TFLint is not installed, the engine falls back to built-in lint rules.
+
+## File Discovery
+
+### Supported File Types
+
+TerraTidy processes files with these extensions:
+
+- `.tf` - Terraform configuration files
+- `.hcl` - HCL configuration files
+- `.tfvars` - Terraform variable files
+
+All three types are handled by all engines (fmt, style, lint, policy) and supported by
+the LSP, dev watch mode, and `--changed` flag.
+
+### Skipped Directories
+
+These directories are automatically skipped during file discovery:
+
+- `node_modules/` - npm dependencies
+- `vendor/` - Go dependencies
+- `.terraform/` - Terraform provider cache
+- `.terragrunt-cache/` - Terragrunt cache
+- `__pycache__/` - Python cache
+- Hidden directories (starting with `.`) except the current directory
 
 ## Command Line Overrides
 

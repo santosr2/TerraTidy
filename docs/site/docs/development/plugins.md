@@ -342,6 +342,53 @@ chmod +x .terratidy/plugins/no-hardcoded-account-id.sh
 
 **Note:** Bash rules are not supported on Windows.
 
+## Scaffolding Rules
+
+Use `terratidy init-rule` to scaffold new rules:
+
+```bash
+terratidy init-rule --name my-rule --type go     # Go plugin with test file
+terratidy init-rule --name my-rule --type rego    # OPA/Rego policy
+terratidy init-rule --name my-rule --type yaml    # YAML rule config
+```
+
+**Note:** Bash rules cannot be scaffolded via `init-rule`. Create them manually since
+the format is simple (executable script outputting JSON).
+
+## Plugin Management
+
+```bash
+# List all loaded plugins
+terratidy plugins list
+
+# Show details for a specific plugin
+terratidy plugins info require-tags
+
+# Create a new Go plugin project
+terratidy plugins init my-plugin
+```
+
+## Distribution
+
+Plugins are distributed as files. There is no built-in registry or package manager.
+
+**For teams/organizations:**
+
+1. Store plugins in a shared Git repository
+2. Copy plugin files to `~/.terratidy/plugins/` or a project-local directory
+3. Use your CI/CD pipeline to install plugins before running TerraTidy
+
+```bash
+# Example: install plugins from a shared repo
+git clone git@github.com:my-org/terratidy-plugins.git /tmp/plugins
+cp /tmp/plugins/*.yaml .terratidy/plugins/
+cp /tmp/plugins/*.sh .terratidy/plugins/
+chmod +x .terratidy/plugins/*.sh
+```
+
+Plugin metadata includes a `Version` field for tracking, but there is no automatic
+version resolution or update mechanism.
+
 ## Testing Plugins
 
 ### Testing Go Plugins

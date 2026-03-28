@@ -42,7 +42,7 @@ jobs:
       - name: Install TerraTidy
         run: |
           # Replace with actual release URL when available
-          # curl -L https://github.com/santosr2/terratidy/releases/download/v0.1.0/terratidy-linux-amd64 -o terratidy
+          # curl -L https://github.com/santosr2/terratidy/releases/download/v0.2.0-alpha.3/terratidy-linux-amd64 -o terratidy
           # For now, build from source
 
           # Install Go

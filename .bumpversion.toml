@@ -48,3 +48,39 @@ regex = false
 filename = "README.md"
 search = "rev: v{current_version}"
 replace = "rev: v{new_version}"
+
+# Pre-commit hooks comment example
+[[tool.bumpversion.files]]
+filename = ".pre-commit-hooks.yaml"
+search = "rev: v{current_version}"
+replace = "rev: v{new_version}"
+
+# GitHub Action - version example
+[[tool.bumpversion.files]]
+filename = "action.yml"
+search = "e.g., v{current_version}"
+replace = "e.g., v{new_version}"
+
+# Documentation - pre-commit integration (all occurrences)
+[[tool.bumpversion.files]]
+filename = "docs/site/docs/integrations/pre-commit.md"
+search = "rev: v{current_version}"
+replace = "rev: v{new_version}"
+
+# Documentation - Docker image tag
+[[tool.bumpversion.files]]
+filename = "docs/site/docs/getting-started/installation.md"
+search = "terratidy:v{current_version}"
+replace = "terratidy:v{new_version}"
+
+# Examples - download URL
+[[tool.bumpversion.files]]
+filename = "examples/README.md"
+search = "download/v{current_version}"
+replace = "download/v{new_version}"
+
+# Examples - GitHub workflow download URL
+[[tool.bumpversion.files]]
+filename = "examples/github-workflow.yaml"
+search = "download/v{current_version}"
+replace = "download/v{new_version}"

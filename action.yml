@@ -7,7 +7,7 @@ branding:
 
 inputs:
   version:
-    description: 'TerraTidy version to use (e.g., v0.1.0, latest)'
+    description: 'TerraTidy version to use (e.g., v0.2.0-alpha.3, latest)'
     required: false
     default: 'latest'
   config:
@@ -19,7 +19,7 @@ inputs:
     required: false
     default: ''
   format:
-    description: 'Output format (text, json, json-compact, sarif, html, github)'
+    description: 'Output format (text, table, json, json-compact, sarif, html, junit, markdown, github)'
     required: false
     default: 'text'
   parallel:

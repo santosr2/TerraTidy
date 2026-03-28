@@ -28,7 +28,7 @@ type Context struct {
 
 ## Go Plugin Rules
 
-Create custom rules in Go using the plugin system. Requires Go 1.25 or later.
+Create custom rules in Go using the plugin system. Requires Go 1.26.1 or later.
 
 ### Complete Example
 

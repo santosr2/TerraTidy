@@ -1,6 +1,6 @@
 # TerraTidy
 
-Single-binary Terraform/Terragrunt quality platform. Go 1.25, library-first, extensible plugin system.
+Single-binary Terraform/Terragrunt quality platform. Go 1.26.1, library-first, extensible plugin system.
 
 ## Architecture
 
@@ -115,7 +115,7 @@ custom_rules:
 ## Development
 
 ```bash
-mise install              # Install Go 1.25 + tools
+mise install              # Install Go 1.26.1 + tools
 make setup                # Install dependencies
 make build                # Build binary
 make test                 # Unit tests

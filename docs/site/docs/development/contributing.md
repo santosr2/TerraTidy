@@ -6,7 +6,7 @@ Thank you for your interest in contributing to TerraTidy!
 
 ### Prerequisites
 
-- Go 1.25 or later
+- Go 1.26.1 or later
 - Make
 - Git
 

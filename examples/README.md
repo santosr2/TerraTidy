@@ -261,7 +261,7 @@ terratidy check --severity-threshold error  # Only fail on errors
 ```yaml
 - name: Install TerraTidy
   run: |
-    curl -L https://github.com/santosr2/terratidy/releases/download/v0.1.0/terratidy-linux-amd64 -o terratidy
+    curl -L https://github.com/santosr2/terratidy/releases/download/v0.2.0-alpha.3/terratidy-linux-amd64 -o terratidy
     chmod +x terratidy
     sudo mv terratidy /usr/local/bin/
 ```

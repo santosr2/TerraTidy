@@ -134,15 +134,15 @@ terratidy fix
 
 ### Useful Flags
 
-| Flag                 | Description                                                  |
-| -------------------- | ------------------------------------------------------------ |
-| `--parallel` / `-p`  | Run engines in parallel (faster)                             |
-| `--changed`          | Only check files changed in git                              |
-| `--format`           | Output format: text, json, json-compact, sarif, html, github |
-| `--skip-fmt`         | Skip formatting checks                                       |
-| `--skip-style`       | Skip style checks                                            |
-| `--skip-lint`        | Skip linting checks                                          |
-| `--skip-policy`      | Skip policy checks                                           |
+| Flag                 | Description                                                                          |
+| -------------------- | ------------------------------------------------------------------------------------ |
+| `--parallel` / `-p`  | Run engines in parallel (faster)                                                     |
+| `--changed`          | Only check files changed in git                                                      |
+| `--format`           | Output format: text, table, json, json-compact, sarif, html, junit, markdown, github |
+| `--skip-fmt`         | Skip formatting checks                                                               |
+| `--skip-style`       | Skip style checks                                                                    |
+| `--skip-lint`        | Skip linting checks                                                                  |
+| `--skip-policy`      | Skip policy checks                                                                   |
 
 ## Configuration
 
@@ -175,7 +175,7 @@ imports:
 severity_threshold: warning
 ```
 
-See [Configuration Guide](docs/configuration.md) for details.
+See [Configuration Guide](docs/site/docs/getting-started/configuration.md) for details.
 
 ## Integrations
 
@@ -186,7 +186,7 @@ Add to `.pre-commit-config.yaml`:
 ```yaml
 repos:
   - repo: https://github.com/santosr2/terratidy
-    rev: v0.2.0-alpha.2  # or use a stable version when available
+    rev: v0.2.0-alpha.3  # or use a stable version when available
     hooks:
       - id: terratidy-check
 ```
@@ -246,10 +246,10 @@ See [Custom Rules Guide](docs/site/docs/rules/custom-rules.md) for details.
 
 ## Documentation
 
-- [Installation](docs/installation.md)
-- [Configuration](docs/configuration.md)
-- [Architecture](docs/architecture.md)
-- [Linting](docs/linting.md)
+- [Installation](docs/site/docs/getting-started/installation.md)
+- [Configuration](docs/site/docs/getting-started/configuration.md)
+- [Architecture](docs/site/docs/development/architecture.md)
+- [Linting](docs/site/docs/user-guide/engines/lint.md)
 - [Contributing](CONTRIBUTING.md)
 
 Full documentation is available at [docs/site/docs/](docs/site/docs/).
@@ -261,7 +261,7 @@ Full documentation is available at [docs/site/docs/](docs/site/docs/).
 ```bash
 git clone https://github.com/santosr2/terratidy
 cd terratidy
-mise install        # Install Go 1.25 and tools
+mise install        # Install Go 1.26.1 and tools
 mise run setup      # Install dev tools (repomix, air, etc.)
 make build          # Build binary
 ```
@@ -294,6 +294,6 @@ Built with:
 
 ## Support
 
-- 📝 [Documentation](docs/)
+- 📝 [Documentation](docs/site/docs/)
 - 🐛 [Issue Tracker](https://github.com/santosr2/terratidy/issues)
 - 💬 [Discussions](https://github.com/santosr2/terratidy/discussions)

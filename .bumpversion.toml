@@ -138,3 +138,9 @@ replace = "version: 'v{new_version}'"
 filename = "docs/site/docs/getting-started/verification.md"
 search = "download v{current_version}"
 replace = "download v{new_version}"
+
+# Bug report template version placeholder
+[[tool.bumpversion.files]]
+filename = ".github/ISSUE_TEMPLATE/bug_report.yml"
+search = "v{current_version}"
+replace = "v{new_version}"

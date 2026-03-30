@@ -5,10 +5,10 @@ Running TerraTidy in Docker containers.
 ## Docker Image
 
 ```bash
-# Latest version
+# Latest stable version
 docker pull ghcr.io/santosr2/terratidy:latest
 
-# Specific version
+# Pin to a specific version (recommended for CI)
 docker pull ghcr.io/santosr2/terratidy:v0.2.0-alpha.3
 ```
 

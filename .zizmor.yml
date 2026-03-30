@@ -1,0 +1,4 @@
+rules:
+  github-env:
+    ignore:
+      - action.yml

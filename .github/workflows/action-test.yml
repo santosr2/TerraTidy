@@ -38,6 +38,7 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           fetch-depth: 0  # Fetch all history for version info
+          persist-credentials: false
 
       - name: Create test Terraform files
         shell: bash
@@ -85,9 +86,13 @@ jobs:
       - name: Check JSON outputs
         shell: bash
         run: |
-          echo "Findings: ${{ steps.json-test.outputs.findings-count }}"
-          echo "Errors: ${{ steps.json-test.outputs.errors-count }}"
-          echo "Warnings: ${{ steps.json-test.outputs.warnings-count }}"
+          echo "Findings: ${STEPS_JSON_TEST_OUTPUTS_FINDINGS_COUNT}"
+          echo "Errors: ${STEPS_JSON_TEST_OUTPUTS_ERRORS_COUNT}"
+          echo "Warnings: ${STEPS_JSON_TEST_OUTPUTS_WARNINGS_COUNT}"
+        env:
+          STEPS_JSON_TEST_OUTPUTS_FINDINGS_COUNT: ${{ steps.json-test.outputs.findings-count }}
+          STEPS_JSON_TEST_OUTPUTS_ERRORS_COUNT: ${{ steps.json-test.outputs.errors-count }}
+          STEPS_JSON_TEST_OUTPUTS_WARNINGS_COUNT: ${{ steps.json-test.outputs.warnings-count }}
 
   test-sarif:
     runs-on: ubuntu-latest
@@ -100,6 +105,7 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           fetch-depth: 0  # Fetch all history for version info
+          persist-credentials: false
 
       - name: Create test Terraform files
         run: |

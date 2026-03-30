@@ -1,5 +1,5 @@
 # Final runtime image
-FROM alpine:3.21@sha256:c3f8e73fdb79deaebaa2037150150191b9dcbfba68b4a46d70103204c53f4709
+FROM alpine:3.23@sha256:25109184c71bdad752c8312a8623239686a9a2071e8825f20acb8f2198c3f659
 
 RUN apk --no-cache add ca-certificates \
     && addgroup -S terratidy \

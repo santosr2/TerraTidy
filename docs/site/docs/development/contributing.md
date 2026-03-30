@@ -196,14 +196,23 @@ The hooks run formatting, linting, and commit message validation automatically.
 
 ## CI Pipeline
 
-The CI pipeline (`.github/workflows/test.yml`) runs on every PR:
+The CI pipeline runs on every PR:
+
+**Test workflow** (`.github/workflows/test.yml`):
 
 - **Build:** Compiles on ubuntu, macOS, and Windows
 - **Tests:** `go test -v -race -cover ./...` with coverage collection
 - **Linting:** golangci-lint and revive
 - **Coverage:** Uploaded to Codecov (ubuntu-only)
 
-All checks must pass before merging.
+**Security workflow** (`.github/workflows/security.yml`):
+
+- **govulncheck:** Scans Go dependencies for known vulnerabilities
+- **dependency-review:** Reviews dependency changes in PRs for advisories
+- **gitleaks:** Scans for accidentally committed secrets
+- **go-licenses:** Verifies all dependencies use approved licenses
+
+All checks must pass before merging. See [Security](security.md) for details on the scanning pipeline.
 
 ## Commit Format
 

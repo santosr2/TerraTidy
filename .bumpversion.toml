@@ -132,3 +132,9 @@ replace = "v{new_version}"
 filename = "docs/site/docs/user-guide/security.md"
 search = "version: 'v{current_version}'"
 replace = "version: 'v{new_version}'"
+
+# Documentation - Verification guide release download
+[[tool.bumpversion.files]]
+filename = "docs/site/docs/getting-started/verification.md"
+search = "download v{current_version}"
+replace = "download v{new_version}"

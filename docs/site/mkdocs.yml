@@ -78,6 +78,7 @@ nav:
     - Quick Start: getting-started/quickstart.md
     - Configuration: getting-started/configuration.md
     - Upgrade Guide: getting-started/upgrade.md
+    - Verification: getting-started/verification.md
   - User Guide:
     - Commands: user-guide/commands.md
     - Engines:

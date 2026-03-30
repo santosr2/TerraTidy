@@ -80,7 +80,6 @@ runs:
       uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
       with:
         go-version: '1.26.1'
-        cache: false
 
     - name: Install TerraTidy
       shell: bash
@@ -122,113 +121,7 @@ runs:
         INPUT_FAIL_ON_ERROR: ${{ inputs.fail-on-error }}
         INPUT_FAIL_ON_WARNING: ${{ inputs.fail-on-warning }}
         INPUT_WORKING_DIRECTORY: ${{ inputs.working-directory }}
-      run: |
-        # Build command arguments
-        ARGS=""
-
-        # Config file
-        if [ -f "$INPUT_CONFIG" ]; then
-          ARGS="$ARGS --config $INPUT_CONFIG"
-        fi
-
-        # Profile
-        if [ -n "$INPUT_PROFILE" ]; then
-          ARGS="$ARGS --profile $INPUT_PROFILE"
-        fi
-
-        # Skip flags
-        if [ "$INPUT_SKIP_FMT" = "true" ]; then
-          ARGS="$ARGS --skip-fmt"
-        fi
-        if [ "$INPUT_SKIP_STYLE" = "true" ]; then
-          ARGS="$ARGS --skip-style"
-        fi
-        if [ "$INPUT_SKIP_LINT" = "true" ]; then
-          ARGS="$ARGS --skip-lint"
-        fi
-        if [ "$INPUT_SKIP_POLICY" = "true" ]; then
-          ARGS="$ARGS --skip-policy"
-        fi
-
-        # Parallel mode
-        if [ "$INPUT_PARALLEL" = "true" ]; then
-          ARGS="$ARGS --parallel"
-        fi
-
-        # Output format
-        FORMAT="$INPUT_FORMAT"
-        ARGS="$ARGS --format $FORMAT"
-
-        # SARIF output file
-        SARIF_FILE=""
-        SARIF_OUTPUT_PATH=""
-        if [ "$FORMAT" = "sarif" ]; then
-          # Local filename for terratidy to write to (relative to working directory)
-          SARIF_FILE="terratidy-results.sarif"
-          # Full path from repo root for the upload step
-          SARIF_OUTPUT_PATH="${INPUT_WORKING_DIRECTORY}/terratidy-results.sarif"
-          # Normalize path (remove leading ./ if present)
-          SARIF_OUTPUT_PATH="${SARIF_OUTPUT_PATH#./}"
-          echo "sarif-file=$SARIF_OUTPUT_PATH" >> $GITHUB_OUTPUT
-        fi
-
-        # Run TerraTidy and capture output
-        set +e
-        if [ "$FORMAT" = "sarif" ]; then
-          # Redirect only stdout to SARIF file, stderr to a temp file for display
-          terratidy check $ARGS > "$SARIF_FILE" 2>/tmp/terratidy-stderr.txt
-          EXIT_CODE=$?
-          # Display stderr (progress messages) to the log
-          cat /tmp/terratidy-stderr.txt || true
-          OUTPUT=$(cat "$SARIF_FILE")
-        elif [ "$FORMAT" = "json" ] || [ "$FORMAT" = "json-compact" ]; then
-          # For JSON formats, capture stdout separately from stderr
-          terratidy check $ARGS > /tmp/terratidy-output.json 2>/tmp/terratidy-stderr.txt
-          EXIT_CODE=$?
-          # Display stderr (progress messages) to the log
-          cat /tmp/terratidy-stderr.txt || true
-          OUTPUT=$(cat /tmp/terratidy-output.json)
-        else
-          OUTPUT=$(terratidy check $ARGS 2>&1)
-          EXIT_CODE=$?
-        fi
-        set -e
-
-        echo "$OUTPUT"
-
-        # Parse findings counts from JSON output
-        if [ "$FORMAT" = "json" ] || [ "$FORMAT" = "json-compact" ]; then
-          FINDINGS=$(echo "$OUTPUT" | jq -r '.summary.total // 0')
-          ERRORS=$(echo "$OUTPUT" | jq -r '.summary.errors // 0')
-          WARNINGS=$(echo "$OUTPUT" | jq -r '.summary.warnings // 0')
-        else
-          # For other formats, use exit code heuristics
-          FINDINGS=$EXIT_CODE
-          ERRORS=0
-          WARNINGS=0
-          if [ $EXIT_CODE -ne 0 ]; then
-            ERRORS=$EXIT_CODE
-          fi
-        fi
-
-        echo "findings-count=$FINDINGS" >> $GITHUB_OUTPUT
-        echo "errors-count=$ERRORS" >> $GITHUB_OUTPUT
-        echo "warnings-count=$WARNINGS" >> $GITHUB_OUTPUT
-
-        # Determine if we should fail
-        SHOULD_FAIL=false
-
-        if [ "$INPUT_FAIL_ON_ERROR" = "true" ] && [ "$ERRORS" -gt 0 ]; then
-          SHOULD_FAIL=true
-        fi
-
-        if [ "$INPUT_FAIL_ON_WARNING" = "true" ] && [ "$WARNINGS" -gt 0 ]; then
-          SHOULD_FAIL=true
-        fi
-
-        if [ "$SHOULD_FAIL" = "true" ]; then
-          exit 1
-        fi
+      run: $GITHUB_ACTION_PATH/tools/scripts/run-action.sh
 
     - name: Upload SARIF
       if: inputs.format == 'sarif' && inputs.github-token != ''

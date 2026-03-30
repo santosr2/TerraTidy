@@ -31,7 +31,7 @@ jobs:
   test:
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: ${{ github.event_name == 'pull_request' && fromJSON('["ubuntu-latest", "macos-latest", "windows-latest"]') || fromJSON('["ubuntu-latest"]') }}
         go-version: ['1.26.1']
 
     runs-on: ${{ matrix.os }}
@@ -109,3 +109,13 @@ jobs:
 
       - name: Verify binary
         run: go run ./cmd/terratidy version
+
+      - name: Reproducibility check
+        run: |
+          go build -trimpath -o /tmp/build1 ./cmd/terratidy
+          go build -trimpath -o /tmp/build2 ./cmd/terratidy
+          if ! diff /tmp/build1 /tmp/build2; then
+            echo "Build is not reproducible"
+            exit 1
+          fi
+          echo "Build is reproducible"

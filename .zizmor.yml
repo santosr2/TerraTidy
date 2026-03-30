@@ -1,0 +1,10 @@
+rules:
+  github-env:
+    ignore:
+      - action.yml
+  cache-poisoning:
+    ignore:
+      - release.yml
+  artipacked:
+    ignore:
+      - release.yml

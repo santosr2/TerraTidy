@@ -1,31 +1,20 @@
 [tools]
 go = "1.26"
 pre-commit = "4"
-terraform = "latest"
-terragrunt = "latest"
-golangci-lint = "latest"
-uv = "latest"
-bun = "latest"  # VS Code extension development
-"cargo:git-cliff" = "latest"  # Changelog generator
-"pipx:bump-my-version" = "latest"
-
-[tasks.setup]
-description = "Setup development environment"
-run = """
-  echo "Installing Go tools..."
-  go install golang.org/x/perf/cmd/benchstat@latest
-  go install mvdan.cc/gofumpt@latest
-  go install honnef.co/go/tools/cmd/staticcheck@latest
-  go install github.com/mgechev/revive@latest
-  go install golang.org/x/vuln/cmd/govulncheck@latest
-
-  echo ""
-  echo "Development environment ready!"
-  echo ""
-  echo "Available commands:"
-  echo "  make check         - Run all quality checks"
-  echo "  make vuln          - Check for vulnerabilities"
-"""
+terraform = "1"
+terragrunt = "0"
+golangci-lint = "2"
+uv = "0"
+bun = "1"  # VS Code extension development
+"cargo:git-cliff" = "2"  # Changelog generator
+"pipx:bump-my-version" = "1"
+"go:golang.org/x/perf/cmd/benchstat" = "latest"  # uses date-based versions, not semver
+"go:mvdan.cc/gofumpt" = "0"
+"go:honnef.co/go/tools/cmd/staticcheck" = "0"
+"go:github.com/mgechev/revive" = "1"
+"go:golang.org/x/vuln/cmd/govulncheck" = "1"
+"go:github.com/google/go-licenses" = "1"
+zizmor = "1"
 
 [tasks.coverage]
 description = "Generate coverage report"

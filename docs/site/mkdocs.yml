@@ -109,6 +109,7 @@ nav:
     - SDK Reference: development/sdk.md
     - Plugin System: development/plugins.md
     - Contributing: development/contributing.md
+    - Security: development/security.md
   - Changelog: changelog.md
 
 extra:

@@ -1027,7 +1027,9 @@ resource "aws_instance" "web" {
 
 ## Multi-Pass Fixing
 
-When running with `--fix`, the style engine applies fixes in up to **3 passes**. Some rules interact with each other (e.g., reordering attributes may create new spacing issues), so the engine re-runs all rules after applying fixes to catch any new violations introduced by the first pass.
+When running with `--fix`, the style engine applies fixes in up to **3 passes**.
+Some rules interact with each other (e.g., reordering attributes may create new spacing issues),
+so the engine re-runs all rules after applying fixes to catch any new violations introduced by the first pass.
 
 ```bash
 # Fix mode applies up to 3 passes automatically

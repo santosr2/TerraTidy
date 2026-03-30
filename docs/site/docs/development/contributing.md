@@ -248,6 +248,10 @@ Releases are fully automated. Pushing a version tag triggers the pipeline:
     - CHANGELOG.md is automatically updated and committed to main
     - Version alias tags (e.g., `v1`, `v1.2`) are created for stable releases
     - Docker alias tags are updated (`:latest` always points to the latest stable release)
+    - Checksums are signed with cosign and build provenance is attested
+    - SBOMs are generated for each release archive
+    - Post-release smoke tests verify the binary on ubuntu and macOS
+    - Homebrew formula is tested on macOS (stable releases only)
 
 ## Getting Help
 

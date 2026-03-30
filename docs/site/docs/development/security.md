@@ -32,9 +32,14 @@ If a new dependency uses a license not on this list, the check will fail. Open a
 
 After every release, Trivy scans the published Docker image for `CRITICAL` and `HIGH` severity vulnerabilities. Results are uploaded to the GitHub Security tab as SARIF.
 
-### Supply Chain (Planned)
+### Supply Chain Verification
 
-SLSA provenance, SBOM generation, and cosign signing are planned for a future release.
+Every release includes cosign signatures, SBOMs (via syft), and GitHub build provenance attestations.
+See [Verification](../getting-started/verification.md) for details.
+
+### OpenSSF Scorecard
+
+The project is evaluated weekly by [OpenSSF Scorecard](https://scorecard.dev/) for security best practices. Results are uploaded as SARIF to the GitHub Security tab.
 
 ## Local Security
 

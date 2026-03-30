@@ -61,6 +61,9 @@ docker run --rm -v $(pwd):/app ghcr.io/santosr2/terratidy check
 terratidy version
 ```
 
+Every release includes checksums, cosign signatures, SBOMs, and build provenance attestations.
+See [Verification](verification.md) for details on how to verify artifact integrity.
+
 ## Next Steps
 
 - [Quick Start](quickstart.md) - Run your first checks

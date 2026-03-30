@@ -1,20 +1,18 @@
 # Final runtime image
-FROM alpine:latest
+FROM alpine:3.21@sha256:c3f8e73fdb79deaebaa2037150150191b9dcbfba68b4a46d70103204c53f4709
 
-RUN apk --no-cache add ca-certificates
+RUN apk --no-cache add ca-certificates \
+    && addgroup -S terratidy \
+    && adduser -S terratidy -G terratidy
 
 WORKDIR /app
 
-# Copy pre-built binary (from goreleaser or local build)
-# Binary must be named 'terratidy' in the build context
 COPY terratidy /usr/local/bin/terratidy
-
-# Ensure binary is executable
 RUN chmod +x /usr/local/bin/terratidy
 
-# Create non-root user
-RUN addgroup -S terratidy && adduser -S terratidy -G terratidy
 USER terratidy
+
+HEALTHCHECK --interval=30s --timeout=3s CMD ["terratidy", "version"]
 
 ENTRYPOINT ["terratidy"]
 CMD ["--help"]

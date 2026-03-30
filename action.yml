@@ -77,15 +77,17 @@ runs:
   using: 'composite'
   steps:
     - name: Setup Go
-      uses: actions/setup-go@v5
+      uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
       with:
         go-version: '1.26.1'
         cache: false
 
     - name: Install TerraTidy
       shell: bash
+      env:
+        INPUT_VERSION: ${{ inputs.version }}
       run: |
-        if [ "${{ inputs.version }}" = "latest" ]; then
+        if [ "$INPUT_VERSION" = "latest" ]; then
           # Check if we're in a terratidy checkout (for action testing)
           if [ -f "go.mod" ] && grep -q "github.com/santosr2/terratidy" go.mod 2>/dev/null; then
             # Build from source for local testing
@@ -99,7 +101,7 @@ runs:
             go install github.com/santosr2/terratidy/cmd/terratidy@latest
           fi
         else
-          go install github.com/santosr2/terratidy/cmd/terratidy@${{ inputs.version }}
+          go install "github.com/santosr2/terratidy/cmd/terratidy@${INPUT_VERSION}"
         fi
         echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
 
@@ -109,41 +111,52 @@ runs:
       working-directory: ${{ inputs.working-directory }}
       env:
         GITHUB_TOKEN: ${{ inputs.github-token }}
+        INPUT_CONFIG: ${{ inputs.config }}
+        INPUT_PROFILE: ${{ inputs.profile }}
+        INPUT_FORMAT: ${{ inputs.format }}
+        INPUT_PARALLEL: ${{ inputs.parallel }}
+        INPUT_SKIP_FMT: ${{ inputs.skip-fmt }}
+        INPUT_SKIP_STYLE: ${{ inputs.skip-style }}
+        INPUT_SKIP_LINT: ${{ inputs.skip-lint }}
+        INPUT_SKIP_POLICY: ${{ inputs.skip-policy }}
+        INPUT_FAIL_ON_ERROR: ${{ inputs.fail-on-error }}
+        INPUT_FAIL_ON_WARNING: ${{ inputs.fail-on-warning }}
+        INPUT_WORKING_DIRECTORY: ${{ inputs.working-directory }}
       run: |
         # Build command arguments
         ARGS=""
 
         # Config file
-        if [ -f "${{ inputs.config }}" ]; then
-          ARGS="$ARGS --config ${{ inputs.config }}"
+        if [ -f "$INPUT_CONFIG" ]; then
+          ARGS="$ARGS --config $INPUT_CONFIG"
         fi
 
         # Profile
-        if [ -n "${{ inputs.profile }}" ]; then
-          ARGS="$ARGS --profile ${{ inputs.profile }}"
+        if [ -n "$INPUT_PROFILE" ]; then
+          ARGS="$ARGS --profile $INPUT_PROFILE"
         fi
 
         # Skip flags
-        if [ "${{ inputs.skip-fmt }}" = "true" ]; then
+        if [ "$INPUT_SKIP_FMT" = "true" ]; then
           ARGS="$ARGS --skip-fmt"
         fi
-        if [ "${{ inputs.skip-style }}" = "true" ]; then
+        if [ "$INPUT_SKIP_STYLE" = "true" ]; then
           ARGS="$ARGS --skip-style"
         fi
-        if [ "${{ inputs.skip-lint }}" = "true" ]; then
+        if [ "$INPUT_SKIP_LINT" = "true" ]; then
           ARGS="$ARGS --skip-lint"
         fi
-        if [ "${{ inputs.skip-policy }}" = "true" ]; then
+        if [ "$INPUT_SKIP_POLICY" = "true" ]; then
           ARGS="$ARGS --skip-policy"
         fi
 
         # Parallel mode
-        if [ "${{ inputs.parallel }}" = "true" ]; then
+        if [ "$INPUT_PARALLEL" = "true" ]; then
           ARGS="$ARGS --parallel"
         fi
 
         # Output format
-        FORMAT="${{ inputs.format }}"
+        FORMAT="$INPUT_FORMAT"
         ARGS="$ARGS --format $FORMAT"
 
         # SARIF output file
@@ -153,7 +166,7 @@ runs:
           # Local filename for terratidy to write to (relative to working directory)
           SARIF_FILE="terratidy-results.sarif"
           # Full path from repo root for the upload step
-          SARIF_OUTPUT_PATH="${{ inputs.working-directory }}/terratidy-results.sarif"
+          SARIF_OUTPUT_PATH="${INPUT_WORKING_DIRECTORY}/terratidy-results.sarif"
           # Normalize path (remove leading ./ if present)
           SARIF_OUTPUT_PATH="${SARIF_OUTPUT_PATH#./}"
           echo "sarif-file=$SARIF_OUTPUT_PATH" >> $GITHUB_OUTPUT
@@ -205,11 +218,11 @@ runs:
         # Determine if we should fail
         SHOULD_FAIL=false
 
-        if [ "${{ inputs.fail-on-error }}" = "true" ] && [ "$ERRORS" -gt 0 ]; then
+        if [ "$INPUT_FAIL_ON_ERROR" = "true" ] && [ "$ERRORS" -gt 0 ]; then
           SHOULD_FAIL=true
         fi
 
-        if [ "${{ inputs.fail-on-warning }}" = "true" ] && [ "$WARNINGS" -gt 0 ]; then
+        if [ "$INPUT_FAIL_ON_WARNING" = "true" ] && [ "$WARNINGS" -gt 0 ]; then
           SHOULD_FAIL=true
         fi
 
@@ -219,6 +232,6 @@ runs:
 
     - name: Upload SARIF
       if: inputs.format == 'sarif' && inputs.github-token != ''
-      uses: github/codeql-action/upload-sarif@v4
+      uses: github/codeql-action/upload-sarif@c10b8064de6f491fea524254123dbe5e09572f13 # v4.35.1
       with:
         sarif_file: ${{ steps.terratidy.outputs.sarif-file }}

@@ -211,8 +211,21 @@ The CI pipeline runs on every PR:
 - **dependency-review:** Reviews dependency changes in PRs for advisories
 - **gitleaks:** Scans for accidentally committed secrets
 - **go-licenses:** Verifies all dependencies use approved licenses
+- **zizmor:** Scans GitHub Actions workflows for security issues
+- **gorelease:** Checks `pkg/sdk` API compatibility on PRs (only when SDK files change)
+
+**Fuzz workflow** (`.github/workflows/fuzz.yml`):
+
+- Runs fuzz tests for config parsing, HCL formatting, and YAML rule loading
+- 30s on PRs, 5m weekly for deeper exploration
 
 All checks must pass before merging. See [Security](security.md) for details on the scanning pipeline.
+
+### API Stability
+
+The `pkg/sdk` package is the public API for rule authors. Changes to exported types and functions
+are checked by `gorelease` on every PR that modifies `pkg/sdk/**`. Breaking changes require a major
+version bump.
 
 ## Commit Format
 

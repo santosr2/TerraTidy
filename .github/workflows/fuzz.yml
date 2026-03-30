@@ -1,0 +1,62 @@
+name: Fuzz
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '**/*.go'
+      - 'go.mod'
+      - 'go.sum'
+      - '.github/workflows/fuzz.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - '**/*.go'
+      - 'go.mod'
+      - 'go.sum'
+      - '.github/workflows/fuzz.yml'
+  schedule:
+    - cron: '0 4 * * 1'  # Weekly on Monday at 4am UTC
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-fuzz-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  fuzz:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      matrix:
+        include:
+          - package: ./internal/config/
+            target: FuzzConfigParse
+          - package: ./internal/engines/format/
+            target: FuzzFormat
+          - package: ./internal/plugins/
+            target: FuzzYAMLRuleParse
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+        with:
+          go-version: '1.26.1'
+
+      - name: Run fuzz test
+        run: |
+          if [ "$IS_SCHEDULED" = "true" ]; then
+            FUZZTIME="5m"
+          else
+            FUZZTIME="30s"
+          fi
+          echo "Running ${{ matrix.target }} for $FUZZTIME"
+          go test -fuzz="${{ matrix.target }}" -fuzztime="$FUZZTIME" "${{ matrix.package }}"
+        env:
+          IS_SCHEDULED: ${{ github.event_name == 'schedule' }}

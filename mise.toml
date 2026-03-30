@@ -14,6 +14,7 @@ bun = "1"  # VS Code extension development
 "go:github.com/mgechev/revive" = "1"
 "go:golang.org/x/vuln/cmd/govulncheck" = "1"
 "go:github.com/google/go-licenses" = "1"
+"go:golang.org/x/exp/cmd/gorelease" = "latest"  # uses date-based versions, not semver
 zizmor = "1"
 
 [tasks.coverage]

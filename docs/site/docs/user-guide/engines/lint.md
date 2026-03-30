@@ -89,7 +89,7 @@ variables.tf:8:1: warning: terraform_unused_declarations - variable "unused_var"
 ## Fixing Issues
 
 The lint command is read-only and does not modify files. To auto-fix formatting
-and style issues, use [`terratidy fix`](../../../getting-started/quickstart.md)
+and style issues, use [`terratidy fix`](../../getting-started/quickstart.md)
 or `terratidy style --fix`.
 
 ## Disabling Rules

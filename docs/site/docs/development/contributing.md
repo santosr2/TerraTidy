@@ -2,6 +2,10 @@
 
 Thank you for your interest in contributing to TerraTidy!
 
+For the quick-start contributing guide, see [CONTRIBUTING.md](https://github.com/santosr2/terratidy/blob/main/CONTRIBUTING.md) at the repository root.
+
+This page provides the comprehensive development reference.
+
 ## Getting Started
 
 ### Prerequisites
@@ -177,24 +181,6 @@ terratidy/
 ├── docs/               # Documentation
 └── testdata/           # Test fixtures
 ```
-
-## Documentation
-
-### Code Comments
-
-```go
-// MyFunction does something important.
-// It handles edge cases by...
-func MyFunction(input string) string {
-    // Implementation
-}
-```
-
-### User Documentation
-
-- Add to `docs/site/docs/`
-- Update `mkdocs.yml` navigation
-- Include examples
 
 ## Pre-commit Setup
 

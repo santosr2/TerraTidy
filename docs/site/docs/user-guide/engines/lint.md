@@ -14,11 +14,14 @@ including provider-specific rules.
 # Run linting
 terratidy lint
 
-# With specific ruleset
-terratidy lint --ruleset aws
+# Use a custom TFLint config file
+terratidy lint --config-file .tflint.custom.hcl
 
-# Show all issues including info
-terratidy lint --severity info
+# Enable specific rules
+terratidy lint --rule terraform_required_version
+
+# Enable a provider plugin
+terratidy lint --plugin aws
 ```
 
 ## Configuration
@@ -28,43 +31,34 @@ engines:
   lint:
     enabled: true
     config:
-      tflint_config: .tflint.hcl  # Path to TFLint config
-      rulesets:
+      config_file: .tflint.hcl  # Path to TFLint config
+      plugins:
         - aws
         - google
 ```
 
 ## Rule Categories
 
-### Terraform Core Rules
+### Built-in Rules
 
-| Rule | Severity | Description |
-|------|----------|-------------|
-| `deprecated-syntax` | Warning | Detects deprecated Terraform syntax |
-| `unused-declarations` | Warning | Finds unused variables and locals |
-| `missing-required` | Error | Missing required attributes |
+TerraTidy includes 11 built-in Terraform lint rules covering versioning,
+documentation, naming, security, and more. A few examples:
 
-### AWS Rules
+| Rule | Description |
+|------|-------------|
+| `terraform-required-version` | Requires a `terraform.required_version` constraint |
+| `terraform-deprecated-syntax` | Detects deprecated Terraform syntax |
+| `terraform-unused-declarations` | Finds unused variables and locals |
+| `terraform-hardcoded-secrets` | Detects hardcoded secrets in configuration |
 
-| Rule | Severity | Description |
-|------|----------|-------------|
-| `aws-instance-type` | Warning | Invalid EC2 instance type |
-| `aws-region` | Error | Invalid AWS region |
-| `aws-security-group` | Warning | Overly permissive security groups |
+For the full list, see [Lint Rules](../../rules/lint-rules.md).
 
-### Google Cloud Rules
+### Provider-Specific Rules
 
-| Rule | Severity | Description |
-|------|----------|-------------|
-| `google-machine-type` | Warning | Invalid machine type |
-| `google-zone` | Error | Invalid zone |
-
-### Azure Rules
-
-| Rule | Severity | Description |
-|------|----------|-------------|
-| `azure-vm-size` | Warning | Invalid VM size |
-| `azure-location` | Error | Invalid location |
+Provider-specific rules (AWS, Google Cloud, Azure) are supplied by TFLint plugins,
+not built into TerraTidy. Enable them via your `.tflint.hcl` configuration or the
+`plugins` config key. See the [TFLint ruleset registry](https://github.com/terraform-linters/tflint/blob/master/docs/user-guide/plugins.md)
+for available provider rulesets.
 
 ## TFLint Integration
 
@@ -94,30 +88,26 @@ variables.tf:8:1: warning: terraform_unused_declarations - variable "unused_var"
 
 ## Fixing Issues
 
-Some lint issues can be auto-fixed:
-
-```bash
-# Auto-fix fixable issues
-terratidy lint --fix
-```
+The lint command is read-only and does not modify files. To auto-fix formatting
+and style issues, use [`terratidy fix`](../../../getting-started/quickstart.md)
+or `terratidy style --fix`.
 
 ## Disabling Rules
 
-Disable specific rules:
+Disable specific rules inline:
 
 ```hcl
-# terratidy:ignore:aws-instance-type
-resource "aws_instance" "example" {
-  instance_type = "custom.type"
+# terratidy:ignore:terraform-unused-declarations
+variable "legacy_var" {
+  type = string
 }
 ```
 
 Or globally in configuration:
 
 ```yaml
-engines:
-  lint:
-    rules:
-      aws-instance-type:
-        enabled: false
+overrides:
+  rules:
+    terraform-unused-declarations:
+      enabled: false
 ```

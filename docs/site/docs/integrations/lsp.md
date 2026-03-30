@@ -15,12 +15,6 @@ The TerraTidy LSP server provides:
 ```bash
 # Start LSP server
 terratidy lsp
-
-# With debug logging
-terratidy lsp --log-level debug
-
-# Log to file
-terratidy lsp --log-file /tmp/terratidy-lsp.log
 ```
 
 ## Editor Integration
@@ -209,12 +203,6 @@ The server responds to `workspace/configuration` requests:
 ```
 
 ## Troubleshooting
-
-### Enable Debug Logging
-
-```bash
-terratidy lsp --log-level debug --log-file /tmp/terratidy.log
-```
 
 ### Check Server Status
 

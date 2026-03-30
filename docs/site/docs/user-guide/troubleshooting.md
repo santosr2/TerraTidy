@@ -102,7 +102,7 @@ Check that TerraTidy is in your PATH and the configuration file is valid.
 - Ensure the file is saved (diagnostics trigger on save)
 - Check engine configuration in `.terratidy.yaml`
 - Verify severity threshold isn't filtering findings
-- Enable debug logging: `terratidy lsp --log-level debug --log-file /tmp/terratidy.log`
+- Test the LSP server manually: `echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' | terratidy lsp`
 
 ## Performance
 

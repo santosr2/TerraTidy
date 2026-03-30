@@ -40,8 +40,6 @@ profiles:
         enabled: true
       policy:
         enabled: true
-    severity_threshold: warning
-    fail_fast: true
 
   development:
     engines:
@@ -53,7 +51,6 @@ profiles:
         enabled: false
       policy:
         enabled: false
-    severity_threshold: error
 
   strict:
     engines:
@@ -61,15 +58,14 @@ profiles:
         enabled: true
       style:
         enabled: true
-        rules:
-          resource-naming:
-            enabled: true
-            severity: error
       lint:
         enabled: true
       policy:
         enabled: true
-    severity_threshold: info
+    overrides:
+      rules:
+        style.block-label-case:
+          severity: error
 ```
 
 ## Using Profiles
@@ -80,15 +76,14 @@ profiles:
 # Use a specific profile
 terratidy check --profile ci
 
-# Override profile settings
-terratidy check --profile ci --severity error
+# Override severity threshold
+terratidy check --profile ci --severity-threshold error
 ```
 
-### Environment Variable
+### CLI Flag
 
 ```bash
-export TERRATIDY_PROFILE=ci
-terratidy check
+terratidy check --profile ci
 ```
 
 ### VS Code
@@ -114,8 +109,6 @@ engines:
     enabled: true
   style:
     enabled: true
-    config:
-      naming_convention: snake_case
 
 profiles:
   # Inherits fmt and style from base, adds lint
@@ -124,13 +117,15 @@ profiles:
       lint:
         enabled: true
 
-  # Overrides style config from base
+  # Overrides rules from base
   strict:
     engines:
-      style:
-        config:
-          naming_convention: snake_case
-          enforce_ordering: true
+      lint:
+        enabled: true
+    overrides:
+      rules:
+        style.block-label-case:
+          severity: error
 ```
 
 ## Common Profile Patterns
@@ -151,7 +146,6 @@ profiles:
         enabled: false
       policy:
         enabled: false
-    severity_threshold: error
 ```
 
 ### CI Profile
@@ -170,8 +164,6 @@ profiles:
         enabled: true
       policy:
         enabled: true
-    severity_threshold: warning
-    fail_fast: false
 ```
 
 ### Pre-commit Profile
@@ -190,7 +182,6 @@ profiles:
         enabled: false
       policy:
         enabled: false
-    fail_fast: true
 ```
 
 ### Security Profile

@@ -67,6 +67,12 @@ make test-rule RULE=my-rule
 3. Add tests
 4. Update documentation
 
+## Learn More
+
+For the comprehensive development guide covering CI pipeline, release process, pre-commit setup,
+and detailed instructions for adding engines, rules, and output formats, see the
+[full contributing documentation](docs/site/docs/development/contributing.md).
+
 ## Questions?
 
 - Open an issue for bugs

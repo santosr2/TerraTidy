@@ -38,13 +38,17 @@ engines:
   style:
     enabled: true
     config:
-      # style-specific options
+      rules:
+        block-label-case:
+          enabled: true
+          severity: warning
 
   lint:
     enabled: true
     config:
-      use_tflint: false
-      tflint_config: .tflint.hcl
+      config_file: .tflint.hcl    # Path to TFLint config
+      plugins:                     # TFLint provider plugins
+        - aws
 
   policy:
     enabled: true
@@ -58,9 +62,8 @@ engines:
 Settings are resolved in this order (highest priority first):
 
 1. **CLI flags** (`--config`, `--profile`, `--severity-threshold`, etc.)
-2. **Environment variables** (`TERRATIDY_PROFILE`)
-3. **Config file** (`.terratidy.yaml`)
-4. **Defaults** (fmt/style/lint enabled, policy disabled, severity=warning)
+2. **Config file** (`.terratidy.yaml`)
+3. **Defaults** (fmt/style/lint enabled, policy disabled, severity=warning)
 
 ## Environment Variables
 
@@ -86,11 +89,10 @@ engines:
       account_id: ${AWS_ACCOUNT_ID:?must be set}
 ```
 
-Select a profile via environment variable:
+Select a profile via CLI flag:
 
 ```bash
-export TERRATIDY_PROFILE=ci
-terratidy check  # Uses the "ci" profile
+terratidy check --profile ci  # Uses the "ci" profile
 ```
 
 ## Profiles
@@ -223,12 +225,16 @@ engines:
   style:
     enabled: true
     config:
-      block_label_case: snake_case
+      rules:
+        block-label-case:
+          enabled: true
+          severity: warning
   lint:
     enabled: true
     config:
-      use_tflint: true
-      tflint_config: .tflint.hcl
+      config_file: .tflint.hcl
+      plugins:
+        - aws
   policy:
     enabled: true
     config:

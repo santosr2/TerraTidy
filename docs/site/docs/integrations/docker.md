@@ -47,7 +47,7 @@ Pass environment variables for config expansion:
 docker run --rm \
   -v $(pwd):/app \
   -e AWS_REGION=us-east-1 \
-  -e TERRATIDY_PROFILE=ci \
+  -e AWS_ACCOUNT_ID=123456789 \
   ghcr.io/santosr2/terratidy check
 ```
 

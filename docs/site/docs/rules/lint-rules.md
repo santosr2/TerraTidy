@@ -334,9 +334,9 @@ engines:
   lint:
     enabled: true
     config:
-      use_tflint: true
-      tflint_config: .tflint.hcl
-      fallback_builtin: true  # Use built-in rules if TFLint unavailable
+      config_file: .tflint.hcl  # Path to TFLint config
+      plugins:                    # TFLint provider plugins
+        - aws
 ```
 
 ### TFLint Rules

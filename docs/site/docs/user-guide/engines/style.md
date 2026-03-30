@@ -39,14 +39,17 @@ Use `fmt --all` or `terratidy fix` when you want both HCL formatting and style f
 engines:
   style:
     enabled: true
-    config:
-      naming_convention: snake_case  # snake_case, kebab-case, camelCase
-      attribute_order:
-        - count
-        - for_each
-        - provider
-        - depends_on
-        - lifecycle
+
+# Override individual style rules
+overrides:
+  rules:
+    style.block-label-case:
+      enabled: true
+      severity: warning
+    style.meta-arguments-order:
+      enabled: true
+    style.variable-naming:
+      enabled: true
 ```
 
 ## Rules
@@ -118,13 +121,11 @@ resource "aws_instance" "MyServer" {
 }
 ```
 
-Or in configuration:
+Or globally in configuration:
 
 ```yaml
-engines:
-  style:
-    enabled: true
-    rules:
-      resource-naming:
-        enabled: false
+overrides:
+  rules:
+    style.block-label-case:
+      enabled: false
 ```

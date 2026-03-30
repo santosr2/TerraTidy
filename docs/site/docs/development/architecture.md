@@ -198,26 +198,29 @@ func (e *PolicyEngine) Run(ctx context.Context, files []string) ([]Finding, erro
 ### Configuration Loading
 
 ```go
-func LoadConfig(path string) (*Config, error) {
-    // Try explicit path
-    if path != "" {
-        return loadFromFile(path)
+func Load(path string) (*Config, error) {
+    // Default to .terratidy.yaml
+    if path == "" {
+        path = ".terratidy.yaml"
     }
 
-    // Search for config file
-    searchPaths := []string{
-        ".terratidy.yaml",
-        ".terratidy.yml",
-        "terratidy.yaml",
+    // If file doesn't exist, return defaults
+    if _, err := os.Stat(path); os.IsNotExist(err) {
+        return DefaultConfig(), nil
     }
 
-    for _, p := range searchPaths {
-        if fileExists(p) {
-            return loadFromFile(p)
-        }
+    // Read, expand env vars, unmarshal YAML
+    data, err := os.ReadFile(path)
+    // ... expand ${VAR} and ${VAR:-default} syntax ...
+
+    // Load imports (glob patterns)
+    if len(cfg.Imports) > 0 {
+        cfg.loadImports(filepath.Dir(path))
     }
 
-    return DefaultConfig(), nil
+    // Validate and return
+    cfg.Validate()
+    return &cfg, nil
 }
 ```
 
@@ -243,7 +246,7 @@ func (c *Config) ResolveProfile(name string) *Config {
 
 ```go
 type Formatter interface {
-    Format(result *Result) ([]byte, error)
+    Format(findings []sdk.Finding, w io.Writer) error
 }
 ```
 
@@ -252,6 +255,11 @@ type Formatter interface {
 - `TextFormatter` - Human-readable colored output
 - `JSONFormatter` - Machine-readable JSON
 - `SARIFFormatter` - GitHub-compatible SARIF
+- `JUnitFormatter` - JUnit XML for CI systems
+- `MarkdownFormatter` - Markdown tables
+- `HTMLFormatter` - HTML report
+- `TableFormatter` - Tabular text output
+- `GitHubActionsFormatter` - GitHub Actions annotations
 - `HTMLFormatter` - Interactive HTML reports
 - `JUnitFormatter` - CI-compatible JUnit XML
 

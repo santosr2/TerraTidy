@@ -67,9 +67,10 @@ jobs:
 
       - name: Upload cosign artifacts
         run: |
-          gh release upload "${{ github.ref_name }}" dist/checksums.txt.sig dist/checksums.txt.pem --clobber
+          gh release upload "$TAG_NAME" dist/checksums.txt.sig dist/checksums.txt.pem --clobber
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_NAME: ${{ github.ref_name }}
 
       - name: Attest build provenance
         uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0

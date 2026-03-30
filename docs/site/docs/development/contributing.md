@@ -229,12 +229,16 @@ Follow [Conventional Commits](https://www.conventionalcommits.org/):
 
 ## Release Process
 
-1. Update CHANGELOG.md (or use git-cliff to generate)
-2. Bump version: `bump-my-version bump <part>` (major, minor, patch, pre_n)
-3. Tag release: `git tag v1.2.3`
-4. Push tag: `git push origin v1.2.3`
-5. GoReleaser builds binaries, Docker images, and Homebrew formula
-6. Release notes generated from CHANGELOG.md
+Releases are fully automated. Pushing a version tag triggers the pipeline:
+
+1. Bump version: `bump-my-version bump <part>` (major, minor, patch, pre_n)
+2. Push the tag: `git push origin v1.2.3`
+3. The release workflow handles everything else:
+    - GoReleaser cross-compiles binaries, builds Docker images, and updates the Homebrew formula
+    - git-cliff generates release notes from conventional commits
+    - CHANGELOG.md is automatically updated and committed to main
+    - Version alias tags (e.g., `v1`, `v1.2`) are created for stable releases
+    - Docker alias tags are updated (`:latest` always points to the latest stable release)
 
 ## Getting Help
 

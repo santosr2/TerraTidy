@@ -148,13 +148,12 @@ dockers:
       - "--label=org.opencontainers.image.revision={{.FullCommit}}"
       - "--label=org.opencontainers.image.version={{.Version}}"
 
-  # Docker images for pre-releases (tag-specific + latest)
-  # Note: latest always points to the most recent release including pre-releases
+  # Docker images for pre-releases (tag-specific only)
+  # Note: :latest always points to the most recent stable release
   - id: docker-prerelease
     skip_push: '{{ if .Prerelease }}false{{ else }}true{{ end }}'
     image_templates:
       - "ghcr.io/santosr2/terratidy:{{ .Tag }}"
-      - "ghcr.io/santosr2/terratidy:latest"
     dockerfile: Dockerfile
     build_flag_templates:
       - "--label=org.opencontainers.image.created={{.Date}}"

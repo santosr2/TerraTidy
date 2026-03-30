@@ -6,11 +6,14 @@
 
 <b>A comprehensive quality platform for Terraform and Terragrunt</b>
 
+[![Latest Release](https://img.shields.io/github/v/release/santosr2/terratidy)](https://github.com/santosr2/terratidy/releases/latest)
 [![Build Status](https://github.com/santosr2/terratidy/workflows/Test/badge.svg)](https://github.com/santosr2/terratidy/actions)
 [![codecov](https://codecov.io/gh/santosr2/terratidy/branch/main/graph/badge.svg)](https://codecov.io/gh/santosr2/terratidy)
 [![Go Report Card](https://goreportcard.com/badge/github.com/santosr2/terratidy)](https://goreportcard.com/report/github.com/santosr2/terratidy)
 [![Go Version](https://img.shields.io/github/go-mod/go-version/santosr2/terratidy)](go.mod)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit)](https://github.com/pre-commit/pre-commit)
+[![Conventional Commits](https://img.shields.io/badge/Conventional%20Commits-1.0.0-yellow.svg)](https://conventionalcommits.org)
 
 </div>
 
@@ -48,7 +51,7 @@ Download the latest release for your platform from [GitHub Releases](https://git
 ### Docker
 
 ```bash
-# latest always points to the most recent release (including pre-releases)
+# latest always points to the most recent stable release
 docker pull ghcr.io/santosr2/terratidy:latest
 docker run --rm -v $(pwd):/app ghcr.io/santosr2/terratidy check
 ```
@@ -113,24 +116,24 @@ terratidy fix
 
 ## Commands
 
-| Command | Description |
-|---------|-------------|
-| `terratidy check` | Run all checks (recommended for CI) |
-| `terratidy fix` | Auto-fix all fixable issues |
-| `terratidy fmt` | Format files |
-| `terratidy style` | Check/fix style issues |
-| `terratidy lint` | Run linting |
-| `terratidy policy` | Run policy checks |
-| `terratidy init` | Initialize configuration |
-| `terratidy dev` | Development mode with file watching |
-| `terratidy lsp` | Start the Language Server Protocol server |
-| `terratidy init-rule` | Initialize a new custom rule |
-| `terratidy test-rule` | Test a specific rule |
-| `terratidy plugins` | Plugin management commands |
-| `terratidy config` | Configuration management commands |
-| `terratidy rules list` | List available rules |
-| `terratidy rules docs` | Generate markdown documentation |
-| `terratidy version` | Show version info |
+| Command                | Description                               |
+|------------------------|-------------------------------------------|
+| `terratidy check`      | Run all checks (recommended for CI)       |
+| `terratidy fix`        | Auto-fix all fixable issues               |
+| `terratidy fmt`        | Format files                              |
+| `terratidy style`      | Check/fix style issues                    |
+| `terratidy lint`       | Run linting                               |
+| `terratidy policy`     | Run policy checks                         |
+| `terratidy init`       | Initialize configuration                  |
+| `terratidy dev`        | Development mode with file watching       |
+| `terratidy lsp`        | Start the Language Server Protocol server |
+| `terratidy init-rule`  | Initialize a new custom rule              |
+| `terratidy test-rule`  | Test a specific rule                      |
+| `terratidy plugins`    | Plugin management commands                |
+| `terratidy config`     | Configuration management commands         |
+| `terratidy rules list` | List available rules                      |
+| `terratidy rules docs` | Generate markdown documentation           |
+| `terratidy version`    | Show version info                         |
 
 ### Useful Flags
 

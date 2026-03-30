@@ -1,0 +1,80 @@
+name: Rule Request
+description: Request a new rule for TerraTidy
+title: "[Rule]: "
+labels: ["enhancement", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Suggest a new rule for one of TerraTidy's engines.
+
+  - type: dropdown
+    id: engine
+    attributes:
+      label: Engine
+      description: Which engine should this rule belong to?
+      options:
+        - fmt (formatting)
+        - style (style conventions)
+        - lint (correctness and best practices)
+        - policy (organizational policies)
+    validations:
+      required: true
+
+  - type: input
+    id: name
+    attributes:
+      label: Rule Name
+      description: Suggested name for the rule (e.g., `require-description`, `no-hardcoded-ami`).
+      placeholder: "require-tags"
+
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity
+      options:
+        - error
+        - warning
+        - info
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: What should this rule check for and why?
+    validations:
+      required: true
+
+  - type: textarea
+    id: bad-example
+    attributes:
+      label: Bad Example (should fail)
+      description: HCL code that should trigger this rule.
+      render: hcl
+    validations:
+      required: true
+
+  - type: textarea
+    id: good-example
+    attributes:
+      label: Good Example (should pass)
+      description: HCL code that should not trigger this rule.
+      render: hcl
+    validations:
+      required: true
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional Context
+      description: Any other context, links to Terraform docs, or references.
+
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: Checklist
+      options:
+        - label: I have searched existing issues to ensure this is not a duplicate
+          required: true

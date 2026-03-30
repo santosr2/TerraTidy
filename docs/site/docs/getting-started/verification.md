@@ -55,4 +55,4 @@ gh release download v0.2.0-alpha.3 --repo santosr2/terratidy -p '*.sbom.json'
 
 TerraTidy is monitored by [OpenSSF Scorecard](https://scorecard.dev/), which evaluates the project's security practices weekly. View the latest score:
 
-[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/santosr2/terratidy/badge)](https://scorecard.dev/viewer/?uri=github.com/santosr2/terratidy)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/santosr2/terratidy/badge)](https://scorecard.dev/viewer/?uri=github.com/santosr2/TerraTidy)

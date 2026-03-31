@@ -31,7 +31,7 @@ TerraTidy is a single-binary quality platform for Terraform and Terragrunt that 
 
 - **Single Binary** -- No external dependencies for core functionality
 - **Library-first Architecture** -- Uses Go libraries (hclwrite, OPA SDK) directly instead of shelling out
-- **Extensible** -- Custom rules in Go, Rego, YAML, or Bash
+- **Extensible** -- Custom rules in Go, YAML, or Bash
 - **Modular Config** -- Split large configs into organized files with glob imports
 - **Auto-fix** -- Automatically fix formatting and style issues
 - **Multiple Output Formats** -- Text, table, JSON, SARIF, HTML, JUnit, Markdown, GitHub Actions annotations
@@ -42,6 +42,7 @@ TerraTidy is a single-binary quality platform for Terraform and Terragrunt that 
 ### Homebrew (macOS/Linux)
 
 ```bash
+brew tap santosr2/tap https://github.com/santosr2/TerraTidy
 brew install santosr2/tap/terratidy
 ```
 
@@ -223,7 +224,7 @@ For larger projects, split configuration into organized files:
 version: 1
 
 imports:
-  - .terratidy/rules/**/*.yaml
+  - .terratidy/rules/*.yaml
   - .terratidy/profiles/default.yaml
 
 severity_threshold: warning
@@ -293,12 +294,17 @@ func (r *EnforceTaggingRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Find
 ### YAML Rule
 
 ```yaml
-rule: custom.naming_convention
-pattern:
-  block_type: resource
-  conditions:
-    - attribute: "name"
-      regex: "^[a-z][a-z0-9_]*$"
+name: require-description
+description: Resources must have a description attribute
+severity: warning
+enabled: true
+message: "Resource is missing a description attribute"
+patterns:
+  resource_types:
+    - aws_instance
+    - aws_s3_bucket
+  required_attributes:
+    - description
 ```
 
 ### Bash Script

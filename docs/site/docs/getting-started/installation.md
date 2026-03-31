@@ -13,6 +13,7 @@ go install github.com/santosr2/terratidy/cmd/terratidy@latest
 ## Homebrew (macOS/Linux)
 
 ```bash
+brew tap santosr2/tap https://github.com/santosr2/TerraTidy
 brew install santosr2/tap/terratidy
 ```
 

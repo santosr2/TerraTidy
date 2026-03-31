@@ -69,7 +69,7 @@ func TestStyleCmdExecution(t *testing.T) {
 
 		rootCmd.SetArgs([]string{"style", tmpDir})
 		err := rootCmd.Execute()
-		// May or may not have style issues, but shouldn't error
-		_ = err
+		// Style may find issues (returning ExitError), but must not fail unexpectedly
+		assert.NoError(t, err, "style on valid tf file should not error")
 	})
 }

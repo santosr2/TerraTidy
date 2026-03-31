@@ -3,253 +3,167 @@ package cache
 import (
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
+// fakeClock is a controllable clock for deterministic tests.
+type fakeClock struct {
+	mu  sync.Mutex
+	now time.Time
+}
+
+func newFakeClock(t time.Time) *fakeClock { return &fakeClock{now: t} }
+
+func (c *fakeClock) Now() time.Time {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.now
+}
+
+func (c *fakeClock) Advance(d time.Duration) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.now = c.now.Add(d)
+}
+
+// writeTempTF creates a .tf file in the given dir and returns its path.
+func writeTempTF(t *testing.T, dir, name, content string) string {
+	t.Helper()
+	p := filepath.Join(dir, name)
+	require.NoError(t, os.WriteFile(p, []byte(content), 0o644))
+	return p
+}
+
 func TestCacheGetSet(t *testing.T) {
-	cache := New(Options{MaxAge: time.Hour, MaxSize: 100})
+	c := New(Options{MaxAge: time.Hour, MaxSize: 100})
+	tmpFile := writeTempTF(t, t.TempDir(), "test.tf", `resource "aws_instance" "test" {}`)
 
-	// Create a temp file
-	tmpDir := t.TempDir()
-	tmpFile := filepath.Join(tmpDir, "test.tf")
-	content := []byte(`resource "aws_instance" "test" {}`)
-	if err := os.WriteFile(tmpFile, content, 0o644); err != nil {
-		t.Fatalf("failed to create temp file: %v", err)
-	}
+	entry, err := c.GetOrParse(tmpFile)
+	require.NoError(t, err)
+	assert.Contains(t, string(entry.Content), "aws_instance")
+	assert.NotNil(t, entry.File)
 
-	// Parse and cache
-	entry, err := cache.GetOrParse(tmpFile)
-	if err != nil {
-		t.Fatalf("failed to parse file: %v", err)
-	}
-
-	if string(entry.Content) != string(content) {
-		t.Errorf("content mismatch: got %s, want %s", entry.Content, content)
-	}
-
-	if entry.File == nil {
-		t.Error("expected parsed HCL file, got nil")
-	}
-
-	// Get from cache
-	cachedEntry, ok := cache.Get(tmpFile)
-	if !ok {
-		t.Fatal("expected entry to be cached")
-	}
-
-	if cachedEntry.Hash != entry.Hash {
-		t.Error("cached entry hash mismatch")
-	}
+	cached, ok := c.Get(tmpFile)
+	require.True(t, ok)
+	assert.Equal(t, entry.Hash, cached.Hash)
 }
 
 func TestCacheExpiry(t *testing.T) {
-	cache := New(Options{MaxAge: 10 * time.Millisecond, MaxSize: 100})
+	clk := newFakeClock(time.Now())
+	c := New(Options{MaxAge: 10 * time.Second, MaxSize: 100, Clock: clk})
+	tmpFile := writeTempTF(t, t.TempDir(), "test.tf", `variable "test" {}`)
 
-	tmpDir := t.TempDir()
-	tmpFile := filepath.Join(tmpDir, "test.tf")
-	content := []byte(`variable "test" {}`)
-	if err := os.WriteFile(tmpFile, content, 0o644); err != nil {
-		t.Fatalf("failed to create temp file: %v", err)
-	}
+	_, err := c.GetOrParse(tmpFile)
+	require.NoError(t, err)
 
-	// Parse and cache
-	_, err := cache.GetOrParse(tmpFile)
-	if err != nil {
-		t.Fatalf("failed to parse file: %v", err)
-	}
+	_, ok := c.Get(tmpFile)
+	require.True(t, ok, "entry should be cached")
 
-	// Should be cached
-	if _, ok := cache.Get(tmpFile); !ok {
-		t.Error("expected entry to be cached")
-	}
+	// Advance past expiry
+	clk.Advance(11 * time.Second)
 
-	// Wait for expiry
-	time.Sleep(20 * time.Millisecond)
-
-	// Should be expired
-	if _, ok := cache.Get(tmpFile); ok {
-		t.Error("expected entry to be expired")
-	}
+	_, ok = c.Get(tmpFile)
+	assert.False(t, ok, "entry should be expired")
 }
 
 func TestCacheFileModification(t *testing.T) {
-	cache := New(Options{MaxAge: time.Hour, MaxSize: 100})
+	c := New(Options{MaxAge: time.Hour, MaxSize: 100})
+	dir := t.TempDir()
+	tmpFile := writeTempTF(t, dir, "test.tf", `output "test" {}`)
 
-	tmpDir := t.TempDir()
-	tmpFile := filepath.Join(tmpDir, "test.tf")
-	content := []byte(`output "test" {}`)
-	if err := os.WriteFile(tmpFile, content, 0o644); err != nil {
-		t.Fatalf("failed to create temp file: %v", err)
-	}
+	_, err := c.GetOrParse(tmpFile)
+	require.NoError(t, err)
 
-	// Parse and cache
-	_, err := cache.GetOrParse(tmpFile)
-	if err != nil {
-		t.Fatalf("failed to parse file: %v", err)
-	}
-
-	// Modify the file (need to wait a bit for modtime to change)
-	time.Sleep(10 * time.Millisecond)
+	// Overwrite with different content and a newer mod time.
+	// Use os.Chtimes to guarantee the mod time differs from the cached one,
+	// regardless of filesystem timestamp resolution.
 	newContent := []byte(`output "modified" {}`)
-	if err := os.WriteFile(tmpFile, newContent, 0o644); err != nil {
-		t.Fatalf("failed to modify file: %v", err)
-	}
+	require.NoError(t, os.WriteFile(tmpFile, newContent, 0o644))
+	future := time.Now().Add(time.Hour)
+	require.NoError(t, os.Chtimes(tmpFile, future, future))
 
-	// Should detect modification and invalidate
-	if _, ok := cache.Get(tmpFile); ok {
-		t.Error("expected cache to be invalidated after file modification")
-	}
+	_, ok := c.Get(tmpFile)
+	assert.False(t, ok, "cache should be invalidated after file modification")
 }
 
 func TestCacheMaxSize(t *testing.T) {
-	cache := New(Options{MaxAge: time.Hour, MaxSize: 2})
+	c := New(Options{MaxAge: time.Hour, MaxSize: 2})
+	dir := t.TempDir()
 
-	tmpDir := t.TempDir()
-
-	// Create 3 files
-	for i := 0; i < 3; i++ {
-		tmpFile := filepath.Join(tmpDir, "test"+string(rune('0'+i))+".tf")
-		content := []byte(`variable "v` + string(rune('0'+i)) + `" {}`)
-		if err := os.WriteFile(tmpFile, content, 0o644); err != nil {
-			t.Fatalf("failed to create temp file: %v", err)
-		}
-
-		if _, err := cache.GetOrParse(tmpFile); err != nil {
-			t.Fatalf("failed to parse file: %v", err)
-		}
+	for i := range 3 {
+		f := writeTempTF(t, dir, "test"+string(rune('0'+i))+".tf", `variable "v`+string(rune('0'+i))+`" {}`)
+		_, err := c.GetOrParse(f)
+		require.NoError(t, err)
 	}
 
-	// Should only have 2 entries (oldest evicted)
-	if cache.Size() != 2 {
-		t.Errorf("expected 2 entries, got %d", cache.Size())
-	}
+	assert.Equal(t, 2, c.Size(), "oldest entry should be evicted")
 }
 
 func TestCacheDisabled(t *testing.T) {
-	cache := New(Options{Disabled: true})
+	c := New(Options{Disabled: true})
+	tmpFile := writeTempTF(t, t.TempDir(), "test.tf", `locals { test = true }`)
 
-	tmpDir := t.TempDir()
-	tmpFile := filepath.Join(tmpDir, "test.tf")
-	content := []byte(`locals { test = true }`)
-	if err := os.WriteFile(tmpFile, content, 0o644); err != nil {
-		t.Fatalf("failed to create temp file: %v", err)
-	}
+	_, err := c.GetOrParse(tmpFile)
+	require.NoError(t, err)
 
-	// Parse (should not cache)
-	_, err := cache.GetOrParse(tmpFile)
-	if err != nil {
-		t.Fatalf("failed to parse file: %v", err)
-	}
-
-	// Should not be cached
-	if _, ok := cache.Get(tmpFile); ok {
-		t.Error("expected entry to not be cached when disabled")
-	}
-
-	if cache.Size() != 0 {
-		t.Errorf("expected 0 entries when disabled, got %d", cache.Size())
-	}
+	_, ok := c.Get(tmpFile)
+	assert.False(t, ok, "entry should not be cached when disabled")
+	assert.Equal(t, 0, c.Size())
 }
 
 func TestCacheClear(t *testing.T) {
-	cache := New(Options{MaxAge: time.Hour, MaxSize: 100})
+	c := New(Options{MaxAge: time.Hour, MaxSize: 100})
+	tmpFile := writeTempTF(t, t.TempDir(), "test.tf", `data "test" "d" {}`)
 
-	tmpDir := t.TempDir()
-	tmpFile := filepath.Join(tmpDir, "test.tf")
-	content := []byte(`data "test" "d" {}`)
-	if err := os.WriteFile(tmpFile, content, 0o644); err != nil {
-		t.Fatalf("failed to create temp file: %v", err)
-	}
+	_, err := c.GetOrParse(tmpFile)
+	require.NoError(t, err)
+	assert.Equal(t, 1, c.Size())
 
-	_, err := cache.GetOrParse(tmpFile)
-	if err != nil {
-		t.Fatalf("failed to parse file: %v", err)
-	}
-
-	if cache.Size() != 1 {
-		t.Errorf("expected 1 entry, got %d", cache.Size())
-	}
-
-	cache.Clear()
-
-	if cache.Size() != 0 {
-		t.Errorf("expected 0 entries after clear, got %d", cache.Size())
-	}
+	c.Clear()
+	assert.Equal(t, 0, c.Size())
 }
 
 func TestCacheStats(t *testing.T) {
-	opts := Options{MaxAge: 5 * time.Minute, MaxSize: 50, Disabled: false}
-	cache := New(opts)
+	c := New(Options{MaxAge: 5 * time.Minute, MaxSize: 50})
+	stats := c.Stats()
 
-	stats := cache.Stats()
-
-	if stats.MaxSize != 50 {
-		t.Errorf("expected MaxSize 50, got %d", stats.MaxSize)
-	}
-	if stats.MaxAge != 5*time.Minute {
-		t.Errorf("expected MaxAge 5m, got %v", stats.MaxAge)
-	}
-	if stats.Disabled {
-		t.Error("expected Disabled to be false")
-	}
-	if stats.Entries != 0 {
-		t.Errorf("expected 0 entries, got %d", stats.Entries)
-	}
+	assert.Equal(t, 50, stats.MaxSize)
+	assert.Equal(t, 5*time.Minute, stats.MaxAge)
+	assert.False(t, stats.Disabled)
+	assert.Equal(t, 0, stats.Entries)
 }
 
 func TestCacheDelete(t *testing.T) {
-	cache := New(Options{MaxAge: time.Hour, MaxSize: 100})
+	c := New(Options{MaxAge: time.Hour, MaxSize: 100})
+	tmpFile := writeTempTF(t, t.TempDir(), "test.tf", `module "test" {}`)
 
-	tmpDir := t.TempDir()
-	tmpFile := filepath.Join(tmpDir, "test.tf")
-	content := []byte(`module "test" {}`)
-	if err := os.WriteFile(tmpFile, content, 0o644); err != nil {
-		t.Fatalf("failed to create temp file: %v", err)
-	}
+	_, err := c.GetOrParse(tmpFile)
+	require.NoError(t, err)
 
-	_, err := cache.GetOrParse(tmpFile)
-	if err != nil {
-		t.Fatalf("failed to parse file: %v", err)
-	}
+	c.Delete(tmpFile)
 
-	cache.Delete(tmpFile)
-
-	if _, ok := cache.Get(tmpFile); ok {
-		t.Error("expected entry to be deleted")
-	}
+	_, ok := c.Get(tmpFile)
+	assert.False(t, ok, "entry should be deleted")
 }
 
 func TestDefaultCache(t *testing.T) {
 	ResetDefault()
-	cache := Default()
-
-	if cache == nil {
-		t.Fatal("expected default cache to be non-nil")
-	}
-
-	stats := cache.Stats()
-	if stats.Disabled {
-		t.Error("expected default cache to be enabled")
-	}
+	c := Default()
+	require.NotNil(t, c)
+	assert.False(t, c.Stats().Disabled)
 }
 
 func TestHashContent(t *testing.T) {
-	content1 := []byte("hello")
-	content2 := []byte("hello")
-	content3 := []byte("world")
+	hash1 := hashContent([]byte("hello"))
+	hash2 := hashContent([]byte("hello"))
+	hash3 := hashContent([]byte("world"))
 
-	hash1 := hashContent(content1)
-	hash2 := hashContent(content2)
-	hash3 := hashContent(content3)
-
-	if hash1 != hash2 {
-		t.Error("same content should produce same hash")
-	}
-	if hash1 == hash3 {
-		t.Error("different content should produce different hash")
-	}
-	if len(hash1) != 64 { // SHA256 hex = 64 chars
-		t.Errorf("expected hash length 64, got %d", len(hash1))
-	}
+	assert.Equal(t, hash1, hash2, "same content should produce same hash")
+	assert.NotEqual(t, hash1, hash3, "different content should produce different hash")
+	assert.Len(t, hash1, 64, "SHA256 hex should be 64 chars")
 }

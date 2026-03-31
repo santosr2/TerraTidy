@@ -61,7 +61,7 @@ func TestLintCmdExecution(t *testing.T) {
 
 		rootCmd.SetArgs([]string{"lint", tmpDir})
 		err := rootCmd.Execute()
-		// May or may not have lint issues, shouldn't error
-		_ = err
+		// Lint may find issues (returning ExitError), but must not fail unexpectedly
+		assert.NoError(t, err, "lint on valid tf file should not error")
 	})
 }

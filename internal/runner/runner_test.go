@@ -3,20 +3,22 @@ package runner
 import (
 	"context"
 	"errors"
-	"sync/atomic"
+	"sync"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/santosr2/terratidy/pkg/sdk"
 )
 
 // mockEngine is a test engine implementation
 type mockEngine struct {
-	name      string
-	findings  []sdk.Finding
-	err       error
-	delay     time.Duration
-	callCount *int32
+	name     string
+	findings []sdk.Finding
+	err      error
+	runFunc  func(ctx context.Context, files []string) ([]sdk.Finding, error)
 }
 
 func (e *mockEngine) Name() string {
@@ -24,16 +26,8 @@ func (e *mockEngine) Name() string {
 }
 
 func (e *mockEngine) Run(ctx context.Context, files []string) ([]sdk.Finding, error) {
-	if e.callCount != nil {
-		atomic.AddInt32(e.callCount, 1)
-	}
-
-	if e.delay > 0 {
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		case <-time.After(e.delay):
-		}
+	if e.runFunc != nil {
+		return e.runFunc(ctx, files)
 	}
 
 	if e.err != nil {
@@ -47,191 +41,135 @@ func TestRunnerSequential(t *testing.T) {
 	ctx := context.Background()
 
 	engine1 := &mockEngine{
-		name: "engine1",
-		findings: []sdk.Finding{
-			{Rule: "rule1", Message: "msg1"},
-		},
+		name:     "engine1",
+		findings: []sdk.Finding{{Rule: "rule1", Message: "msg1"}},
 	}
 	engine2 := &mockEngine{
-		name: "engine2",
-		findings: []sdk.Finding{
-			{Rule: "rule2", Message: "msg2"},
-			{Rule: "rule3", Message: "msg3"},
-		},
+		name:     "engine2",
+		findings: []sdk.Finding{{Rule: "rule2", Message: "msg2"}, {Rule: "rule3", Message: "msg3"}},
 	}
 
-	runner := New().
-		AddEngine(engine1).
-		AddEngine(engine2)
+	runner := New().AddEngine(engine1).AddEngine(engine2)
 
 	findings, err := runner.Run(ctx, []string{"test.tf"})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if len(findings) != 3 {
-		t.Errorf("expected 3 findings, got %d", len(findings))
-	}
+	require.NoError(t, err)
+	assert.Len(t, findings, 3)
 }
 
 func TestRunnerParallel(t *testing.T) {
 	ctx := context.Background()
 
-	var count1, count2 int32
+	// Both engines block on a gate channel.
+	// If execution were sequential, started.Wait() would deadlock because
+	// the second engine can't start until the first finishes.
+	var started sync.WaitGroup
+	started.Add(2)
+	gate := make(chan struct{})
+
 	engine1 := &mockEngine{
-		name:      "engine1",
-		findings:  []sdk.Finding{{Rule: "rule1"}},
-		delay:     10 * time.Millisecond,
-		callCount: &count1,
+		name: "engine1",
+		runFunc: func(_ context.Context, _ []string) ([]sdk.Finding, error) {
+			started.Done()
+			<-gate
+			return []sdk.Finding{{Rule: "rule1"}}, nil
+		},
 	}
 	engine2 := &mockEngine{
-		name:      "engine2",
-		findings:  []sdk.Finding{{Rule: "rule2"}},
-		delay:     10 * time.Millisecond,
-		callCount: &count2,
+		name: "engine2",
+		runFunc: func(_ context.Context, _ []string) ([]sdk.Finding, error) {
+			started.Done()
+			<-gate
+			return []sdk.Finding{{Rule: "rule2"}}, nil
+		},
 	}
 
-	runner := New().
-		AddEngine(engine1).
-		AddEngine(engine2).
-		SetParallel(true)
+	runner := New().AddEngine(engine1).AddEngine(engine2).SetParallel(true)
 
-	start := time.Now()
-	findings, err := runner.Run(ctx, []string{"test.tf"})
-	duration := time.Since(start)
+	done := make(chan struct{})
+	var findings []sdk.Finding
+	var runErr error
 
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	go func() {
+		findings, runErr = runner.Run(ctx, []string{"test.tf"})
+		close(done)
+	}()
 
-	if len(findings) != 2 {
-		t.Errorf("expected 2 findings, got %d", len(findings))
-	}
+	// Both engines must have started (proves parallelism).
+	// If sequential, this would deadlock.
+	started.Wait()
+	close(gate)
 
-	// Parallel execution should be faster than sequential
-	// (20ms sequential vs ~10ms parallel)
-	if duration > 20*time.Millisecond {
-		t.Errorf("parallel execution took too long: %v", duration)
-	}
-
-	if atomic.LoadInt32(&count1) != 1 {
-		t.Error("engine1 should have been called once")
-	}
-	if atomic.LoadInt32(&count2) != 1 {
-		t.Error("engine2 should have been called once")
-	}
+	<-done
+	require.NoError(t, runErr)
+	assert.Len(t, findings, 2)
 }
 
 func TestRunnerWithError(t *testing.T) {
 	ctx := context.Background()
 	expectedErr := errors.New("engine error")
 
-	engine1 := &mockEngine{
-		name:     "engine1",
-		findings: []sdk.Finding{{Rule: "rule1"}},
-	}
-	engine2 := &mockEngine{
-		name: "engine2",
-		err:  expectedErr,
-	}
+	engine1 := &mockEngine{name: "engine1", findings: []sdk.Finding{{Rule: "rule1"}}}
+	engine2 := &mockEngine{name: "engine2", err: expectedErr}
 
-	runner := New().
-		AddEngine(engine1).
-		AddEngine(engine2)
+	runner := New().AddEngine(engine1).AddEngine(engine2)
 
 	_, err := runner.Run(ctx, []string{"test.tf"})
-	if err == nil {
-		t.Fatal("expected error, got nil")
-	}
-
-	if !errors.Is(err, expectedErr) {
-		t.Errorf("expected error %v, got %v", expectedErr, err)
-	}
+	require.Error(t, err)
+	assert.ErrorIs(t, err, expectedErr)
 }
 
 func TestRunnerWithResults(t *testing.T) {
 	ctx := context.Background()
 
-	engine1 := &mockEngine{
-		name:     "engine1",
-		findings: []sdk.Finding{{Rule: "rule1"}},
-	}
-	engine2 := &mockEngine{
-		name:     "engine2",
-		findings: []sdk.Finding{{Rule: "rule2"}},
-	}
+	engine1 := &mockEngine{name: "engine1", findings: []sdk.Finding{{Rule: "rule1"}}}
+	engine2 := &mockEngine{name: "engine2", findings: []sdk.Finding{{Rule: "rule2"}}}
 
-	runner := New().
-		AddEngine(engine1).
-		AddEngine(engine2)
+	runner := New().AddEngine(engine1).AddEngine(engine2)
 
 	results := runner.RunWithResults(ctx, []string{"test.tf"})
-
-	if len(results) != 2 {
-		t.Fatalf("expected 2 results, got %d", len(results))
-	}
-
-	// Check results are in order for sequential execution
-	if results[0].Engine != "engine1" {
-		t.Errorf("expected first result from engine1, got %s", results[0].Engine)
-	}
-	if results[1].Engine != "engine2" {
-		t.Errorf("expected second result from engine2, got %s", results[1].Engine)
-	}
+	require.Len(t, results, 2)
+	assert.Equal(t, "engine1", results[0].Engine)
+	assert.Equal(t, "engine2", results[1].Engine)
 }
 
 func TestRunnerContextCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	engine1 := &mockEngine{
-		name:  "engine1",
-		delay: 100 * time.Millisecond,
+		name: "engine1",
+		runFunc: func(ctx context.Context, _ []string) ([]sdk.Finding, error) {
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(100 * time.Millisecond):
+				return nil, nil
+			}
+		},
 	}
-	engine2 := &mockEngine{
-		name: "engine2",
-	}
+	engine2 := &mockEngine{name: "engine2"}
 
-	runner := New().
-		AddEngine(engine1).
-		AddEngine(engine2)
+	runner := New().AddEngine(engine1).AddEngine(engine2)
 
-	// Cancel immediately
 	cancel()
 
 	_, err := runner.Run(ctx, []string{"test.tf"})
-	if err == nil {
-		t.Fatal("expected context cancellation error")
-	}
-
-	if !errors.Is(err, context.Canceled) {
-		t.Errorf("expected context.Canceled, got %v", err)
-	}
+	require.Error(t, err)
+	assert.ErrorIs(t, err, context.Canceled)
 }
 
 func TestRunnerEngineCount(t *testing.T) {
 	runner := New()
-
-	if runner.EngineCount() != 0 {
-		t.Errorf("expected 0 engines, got %d", runner.EngineCount())
-	}
+	assert.Equal(t, 0, runner.EngineCount())
 
 	runner.AddEngine(&mockEngine{name: "e1"})
 	runner.AddEngine(&mockEngine{name: "e2"})
-
-	if runner.EngineCount() != 2 {
-		t.Errorf("expected 2 engines, got %d", runner.EngineCount())
-	}
+	assert.Equal(t, 2, runner.EngineCount())
 }
 
 func TestRunnerIsParallel(t *testing.T) {
 	runner := New()
-
-	if runner.IsParallel() {
-		t.Error("expected parallel to be false by default")
-	}
+	assert.False(t, runner.IsParallel())
 
 	runner.SetParallel(true)
-	if !runner.IsParallel() {
-		t.Error("expected parallel to be true after SetParallel(true)")
-	}
+	assert.True(t, runner.IsParallel())
 }

@@ -828,8 +828,7 @@ func TestEngine_MultipleFiles(t *testing.T) {
 	findings, err := engine.Run(context.Background(), []string{tmpFile1, tmpFile2})
 	require.NoError(t, err)
 
-	// Both files should be processed without error - findings may be empty
-	// The important thing is no error was returned
+	// Both files processed without error; findings may be empty for valid HCL
 	_ = findings
 }
 
@@ -884,8 +883,7 @@ resource "aws_instance" "example2" {
 	findings, err := engine.Run(context.Background(), []string{tmpFile})
 	require.NoError(t, err)
 
-	// Fix mode should still report findings
-	// The actual fixing happens via the applyFixes function
+	// Fix mode ran without error; findings may be empty if nothing to fix
 	_ = findings
 }
 
@@ -929,8 +927,8 @@ func TestEngine_InvalidHCL(t *testing.T) {
 	engine := New(nil)
 	findings, err := engine.Run(context.Background(), []string{tmpFile})
 
-	// May or may not return error depending on how parsing is handled
-	// The important thing is we don't panic
-	_ = err
-	_ = findings
+	// Invalid HCL should not panic; it may return an error or empty findings
+	if err == nil {
+		assert.NotNil(t, findings)
+	}
 }

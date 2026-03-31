@@ -226,17 +226,7 @@ func runDevCheck(targetFiles []string) error {
 	}
 
 	// Count by severity
-	var errors, warnings, info int
-	for _, f := range findings {
-		switch f.Severity {
-		case sdk.SeverityError:
-			errors++
-		case sdk.SeverityWarning:
-			warnings++
-		case sdk.SeverityInfo:
-			info++
-		}
-	}
+	errors, warnings, info := countBySeverity(findings)
 
 	// Display findings
 	for _, finding := range findings {

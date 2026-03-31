@@ -234,12 +234,12 @@ func (r *OutputPrefixRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Findin
 	return findings, nil
 }
 
-func (r *OutputPrefixRule) getPatternConfig(config map[string]interface{}) (prefix, suffix string) {
+func (r *OutputPrefixRule) getPatternConfig(config map[string]any) (prefix, suffix string) {
 	if config == nil {
 		return "", ""
 	}
 
-	options, ok := config["options"].(map[string]interface{})
+	options, ok := config["options"].(map[string]any)
 	if !ok {
 		return "", ""
 	}

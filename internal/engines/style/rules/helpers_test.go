@@ -508,7 +508,7 @@ func TestValidateNaming(t *testing.T) {
 func TestGetNamingConventionFromConfig(t *testing.T) {
 	tests := []struct {
 		name             string
-		config           map[string]interface{}
+		config           map[string]any
 		expectConvention NamingCase
 		expectPattern    string
 	}{
@@ -520,14 +520,14 @@ func TestGetNamingConventionFromConfig(t *testing.T) {
 		},
 		{
 			name:             "empty config returns snake_case",
-			config:           map[string]interface{}{},
+			config:           map[string]any{},
 			expectConvention: SnakeCase,
 			expectPattern:    "",
 		},
 		{
 			name: "snake_case from config",
-			config: map[string]interface{}{
-				"options": map[string]interface{}{
+			config: map[string]any{
+				"options": map[string]any{
 					"case": "snake_case",
 				},
 			},
@@ -536,8 +536,8 @@ func TestGetNamingConventionFromConfig(t *testing.T) {
 		},
 		{
 			name: "camelCase from config",
-			config: map[string]interface{}{
-				"options": map[string]interface{}{
+			config: map[string]any{
+				"options": map[string]any{
 					"case": "camelCase",
 				},
 			},
@@ -546,8 +546,8 @@ func TestGetNamingConventionFromConfig(t *testing.T) {
 		},
 		{
 			name: "kebab-case from config",
-			config: map[string]interface{}{
-				"options": map[string]interface{}{
+			config: map[string]any{
+				"options": map[string]any{
 					"case": "kebab-case",
 				},
 			},
@@ -556,8 +556,8 @@ func TestGetNamingConventionFromConfig(t *testing.T) {
 		},
 		{
 			name: "PascalCase from config",
-			config: map[string]interface{}{
-				"options": map[string]interface{}{
+			config: map[string]any{
+				"options": map[string]any{
 					"case": "PascalCase",
 				},
 			},
@@ -566,8 +566,8 @@ func TestGetNamingConventionFromConfig(t *testing.T) {
 		},
 		{
 			name: "custom with pattern",
-			config: map[string]interface{}{
-				"options": map[string]interface{}{
+			config: map[string]any{
+				"options": map[string]any{
 					"case":    "custom",
 					"pattern": "^prefix_",
 				},
@@ -577,8 +577,8 @@ func TestGetNamingConventionFromConfig(t *testing.T) {
 		},
 		{
 			name: "unknown case defaults to snake_case",
-			config: map[string]interface{}{
-				"options": map[string]interface{}{
+			config: map[string]any{
+				"options": map[string]any{
 					"case": "UNKNOWN",
 				},
 			},
@@ -605,7 +605,7 @@ func TestGetAttributeOrderFromConfig(t *testing.T) {
 
 	tests := []struct {
 		name          string
-		config        map[string]interface{}
+		config        map[string]any
 		expectedOrder map[string]int
 	}{
 		{
@@ -615,14 +615,14 @@ func TestGetAttributeOrderFromConfig(t *testing.T) {
 		},
 		{
 			name:          "empty config returns default",
-			config:        map[string]interface{}{},
+			config:        map[string]any{},
 			expectedOrder: defaultOrder,
 		},
 		{
 			name: "custom order from config",
-			config: map[string]interface{}{
-				"options": map[string]interface{}{
-					"order": []interface{}{"type", "description", "default"},
+			config: map[string]any{
+				"options": map[string]any{
+					"order": []any{"type", "description", "default"},
 				},
 			},
 			expectedOrder: map[string]int{
@@ -633,9 +633,9 @@ func TestGetAttributeOrderFromConfig(t *testing.T) {
 		},
 		{
 			name: "custom order with additional attributes",
-			config: map[string]interface{}{
-				"options": map[string]interface{}{
-					"order": []interface{}{"description", "value", "sensitive", "depends_on"},
+			config: map[string]any{
+				"options": map[string]any{
+					"order": []any{"description", "value", "sensitive", "depends_on"},
 				},
 			},
 			expectedOrder: map[string]int{
@@ -647,22 +647,22 @@ func TestGetAttributeOrderFromConfig(t *testing.T) {
 		},
 		{
 			name: "missing options returns default",
-			config: map[string]interface{}{
+			config: map[string]any{
 				"other": "value",
 			},
 			expectedOrder: defaultOrder,
 		},
 		{
 			name: "wrong options type returns default",
-			config: map[string]interface{}{
+			config: map[string]any{
 				"options": "not a map",
 			},
 			expectedOrder: defaultOrder,
 		},
 		{
 			name: "wrong order type returns default",
-			config: map[string]interface{}{
-				"options": map[string]interface{}{
+			config: map[string]any{
+				"options": map[string]any{
 					"order": "not a list",
 				},
 			},

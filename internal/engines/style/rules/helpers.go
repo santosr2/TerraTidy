@@ -393,12 +393,12 @@ func ValidateNaming(name string, convention NamingCase, customPattern string) (b
 
 // GetNamingConventionFromConfig extracts naming convention settings from rule config.
 // Returns (convention, customPattern).
-func GetNamingConventionFromConfig(config map[string]interface{}) (NamingCase, string) {
+func GetNamingConventionFromConfig(config map[string]any) (NamingCase, string) {
 	if config == nil {
 		return SnakeCase, ""
 	}
 
-	options, ok := config["options"].(map[string]interface{})
+	options, ok := config["options"].(map[string]any)
 	if !ok {
 		return SnakeCase, ""
 	}
@@ -429,17 +429,17 @@ func GetNamingConventionFromConfig(config map[string]interface{}) (NamingCase, s
 
 // GetAttributeOrderFromConfig extracts attribute ordering configuration from rule config.
 // Returns a map of attribute name to position, and the default order if not configured.
-func GetAttributeOrderFromConfig(config map[string]interface{}, defaultOrder map[string]int) map[string]int {
+func GetAttributeOrderFromConfig(config map[string]any, defaultOrder map[string]int) map[string]int {
 	if config == nil {
 		return defaultOrder
 	}
 
-	options, ok := config["options"].(map[string]interface{})
+	options, ok := config["options"].(map[string]any)
 	if !ok {
 		return defaultOrder
 	}
 
-	orderList, ok := options["order"].([]interface{})
+	orderList, ok := options["order"].([]any)
 	if !ok {
 		return defaultOrder
 	}

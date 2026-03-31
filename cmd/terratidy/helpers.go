@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/santosr2/terratidy/internal/config"
+	"github.com/santosr2/terratidy/internal/output"
 	"github.com/santosr2/terratidy/internal/vcs"
 	"github.com/santosr2/terratidy/pkg/sdk"
 )
@@ -189,6 +190,69 @@ func formatFileCount(count int) string {
 	return fmt.Sprintf("%d files", count)
 }
 
+// countBySeverity counts findings by severity level.
+func countBySeverity(findings []sdk.Finding) (errors, warnings, info int) {
+	for _, finding := range findings {
+		switch finding.Severity {
+		case sdk.SeverityError:
+			errors++
+		case sdk.SeverityWarning:
+			warnings++
+		case sdk.SeverityInfo:
+			info++
+		}
+	}
+	return
+}
+
+// printNoFilesMessage prints the appropriate "no files found" message
+// based on whether the --changed flag was used.
+func printNoFilesMessage() {
+	if changed {
+		fmt.Println("No changed HCL files found")
+	} else {
+		fmt.Println("No HCL files found")
+	}
+}
+
+// outputResults formats and prints findings, then returns an ExitError if
+// there are errors. This is the shared implementation used by lint, style,
+// and policy commands.
+func outputResults(findings []sdk.Finding, label string) error {
+	formatter, err := output.GetFormatterWithColor(format, true, version, color)
+	if err != nil {
+		return fmt.Errorf("getting formatter: %w", err)
+	}
+
+	if err := formatter.Format(findings, os.Stdout); err != nil {
+		return fmt.Errorf("formatting output: %w", err)
+	}
+
+	// For text format, add summary
+	if format == "" || format == "text" {
+		errors, warnings, info := countBySeverity(findings)
+
+		if len(findings) > 0 {
+			fmt.Println()
+			fmt.Println("---")
+			fmt.Printf("%s: %d error(s), %d warning(s), %d info\n", label, errors, warnings, info)
+		}
+
+		if errors > 0 {
+			return &sdk.ExitError{Code: 1}
+		}
+	} else {
+		// Return exit error if there are errors (for structured output)
+		for _, finding := range findings {
+			if finding.Severity == sdk.SeverityError {
+				return &sdk.ExitError{Code: 1}
+			}
+		}
+	}
+
+	return nil
+}
+
 // loadConfig loads the configuration from the config file and applies the profile if specified.
 // It uses the global cfgFile and profile variables from root.go.
 // Returns the default config if no config file is found.
@@ -206,13 +270,6 @@ func loadConfig() (*config.Config, error) {
 	}
 
 	return cfg, nil
-}
-
-// severityLevel maps severity strings to numeric levels for comparison.
-var severityLevel = map[string]int{
-	"info":    0,
-	"warning": 1,
-	"error":   2,
 }
 
 // getSeverityLevel returns the numeric level for a severity.
@@ -237,11 +294,7 @@ func filterFindingsBySeverity(findings []sdk.Finding, threshold string) []sdk.Fi
 		return findings
 	}
 
-	thresholdLevel, ok := severityLevel[threshold]
-	if !ok {
-		// Invalid threshold, return all findings
-		return findings
-	}
+	thresholdLevel := getSeverityLevel(sdk.Severity(threshold))
 
 	var filtered []sdk.Finding
 	for _, f := range findings {
@@ -306,7 +359,7 @@ func isEngineEnabled(cfg *config.Config, engine string) bool {
 }
 
 // getEngineConfig returns the engine-specific config map.
-func getEngineConfig(cfg *config.Config, engine string) map[string]interface{} {
+func getEngineConfig(cfg *config.Config, engine string) map[string]any {
 	if cfg == nil {
 		return nil
 	}

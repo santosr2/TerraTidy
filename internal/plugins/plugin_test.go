@@ -190,7 +190,7 @@ type MockFormatter struct {
 }
 
 func (f *MockFormatter) Name() string { return f.name }
-func (f *MockFormatter) Format(_ []sdk.Finding, _ interface{}) error {
+func (f *MockFormatter) Format(_ []sdk.Finding, _ any) error {
 	return nil
 }
 

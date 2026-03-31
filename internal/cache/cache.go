@@ -120,20 +120,6 @@ func (c *FileCache) GetOrParse(path string) (*Entry, error) {
 	return entry, nil
 }
 
-// GetContent retrieves just the file content (cached or fresh)
-func (c *FileCache) GetContent(path string) ([]byte, error) {
-	if entry, ok := c.Get(path); ok {
-		return entry.Content, nil
-	}
-
-	content, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-
-	return content, nil
-}
-
 // Set stores an entry in the cache
 func (c *FileCache) Set(path string, entry *Entry) {
 	if c.disabled {

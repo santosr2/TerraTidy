@@ -3,10 +3,8 @@ package main
 import (
 	"context"
 	"fmt"
-	"os"
 
 	"github.com/santosr2/terratidy/internal/engines/policy"
-	"github.com/santosr2/terratidy/internal/output"
 	"github.com/santosr2/terratidy/pkg/sdk"
 	"github.com/spf13/cobra"
 )
@@ -60,11 +58,7 @@ Use --changed to only check files that have been modified in git.`,
 		}
 
 		if len(files) == 0 {
-			if changed {
-				fmt.Println("No changed HCL files found")
-			} else {
-				fmt.Println("No HCL files found")
-			}
+			printNoFilesMessage()
 			return nil
 		}
 
@@ -115,48 +109,7 @@ Use --changed to only check files that have been modified in git.`,
 }
 
 func outputPolicyResults(findings []sdk.Finding) error {
-	formatter, err := output.GetFormatterWithColor(format, true, version, color)
-	if err != nil {
-		return fmt.Errorf("getting formatter: %w", err)
-	}
-
-	if err := formatter.Format(findings, os.Stdout); err != nil {
-		return fmt.Errorf("formatting output: %w", err)
-	}
-
-	// For text format, add summary
-	if format == "" || format == "text" {
-		var errors, warnings, info int
-		for _, finding := range findings {
-			switch finding.Severity {
-			case sdk.SeverityError:
-				errors++
-			case sdk.SeverityWarning:
-				warnings++
-			case sdk.SeverityInfo:
-				info++
-			}
-		}
-
-		if len(findings) > 0 {
-			fmt.Println()
-			fmt.Println("---")
-			fmt.Printf("Policy check summary: %d error(s), %d warning(s), %d info\n", errors, warnings, info)
-		}
-
-		if errors > 0 {
-			return &sdk.ExitError{Code: 1}
-		}
-	} else {
-		// Return exit error if there are errors (for structured output)
-		for _, finding := range findings {
-			if finding.Severity == sdk.SeverityError {
-				return &sdk.ExitError{Code: 1}
-			}
-		}
-	}
-
-	return nil
+	return outputResults(findings, "Policy check summary")
 }
 
 func init() {

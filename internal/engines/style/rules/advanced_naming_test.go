@@ -186,7 +186,7 @@ func TestOutputPrefixRule(t *testing.T) {
 	tests := []struct {
 		name         string
 		content      string
-		config       map[string]interface{}
+		config       map[string]any
 		wantFindings int
 	}{
 		{
@@ -202,8 +202,8 @@ func TestOutputPrefixRule(t *testing.T) {
 			content: `output "vpc_id" {
   value = module.vpc.id
 }`,
-			config: map[string]interface{}{
-				"options": map[string]interface{}{
+			config: map[string]any{
+				"options": map[string]any{
 					"prefix": "vpc_",
 				},
 			},
@@ -214,8 +214,8 @@ func TestOutputPrefixRule(t *testing.T) {
 			content: `output "id" {
   value = module.vpc.id
 }`,
-			config: map[string]interface{}{
-				"options": map[string]interface{}{
+			config: map[string]any{
+				"options": map[string]any{
 					"prefix": "vpc_",
 				},
 			},
@@ -226,8 +226,8 @@ func TestOutputPrefixRule(t *testing.T) {
 			content: `output "instance_id" {
   value = aws_instance.web.id
 }`,
-			config: map[string]interface{}{
-				"options": map[string]interface{}{
+			config: map[string]any{
+				"options": map[string]any{
 					"suffix": "_id",
 				},
 			},
@@ -238,8 +238,8 @@ func TestOutputPrefixRule(t *testing.T) {
 			content: `output "instance" {
   value = aws_instance.web.id
 }`,
-			config: map[string]interface{}{
-				"options": map[string]interface{}{
+			config: map[string]any{
+				"options": map[string]any{
 					"suffix": "_id",
 				},
 			},
@@ -250,8 +250,8 @@ func TestOutputPrefixRule(t *testing.T) {
 			content: `output "out_instance_id" {
   value = aws_instance.web.id
 }`,
-			config: map[string]interface{}{
-				"options": map[string]interface{}{
+			config: map[string]any{
+				"options": map[string]any{
 					"prefix": "out_",
 					"suffix": "_id",
 				},
@@ -263,8 +263,8 @@ func TestOutputPrefixRule(t *testing.T) {
 			content: `output "instance" {
   value = aws_instance.web.id
 }`,
-			config: map[string]interface{}{
-				"options": map[string]interface{}{
+			config: map[string]any{
+				"options": map[string]any{
 					"prefix": "out_",
 					"suffix": "_id",
 				},
@@ -276,8 +276,8 @@ func TestOutputPrefixRule(t *testing.T) {
 			content: `variable "no_prefix" {
   type = string
 }`,
-			config: map[string]interface{}{
-				"options": map[string]interface{}{
+			config: map[string]any{
+				"options": map[string]any{
 					"prefix": "out_",
 				},
 			},
@@ -323,7 +323,7 @@ func TestModuleNameConventionRule(t *testing.T) {
 	tests := []struct {
 		name         string
 		content      string
-		config       map[string]interface{}
+		config       map[string]any
 		wantFindings int
 	}{
 		{
@@ -371,8 +371,8 @@ func TestModuleNameConventionRule(t *testing.T) {
 			content: `module "myVpc" {
   source = "./modules/vpc"
 }`,
-			config: map[string]interface{}{
-				"options": map[string]interface{}{
+			config: map[string]any{
+				"options": map[string]any{
 					"case": "camelCase",
 				},
 			},

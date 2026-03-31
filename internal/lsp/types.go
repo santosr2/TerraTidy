@@ -14,22 +14,22 @@ type RequestMessage struct {
 type ResponseMessage struct {
 	JSONRPC string          `json:"jsonrpc"`
 	ID      json.RawMessage `json:"id,omitempty"`
-	Result  interface{}     `json:"result,omitempty"`
+	Result  any             `json:"result,omitempty"`
 	Error   *ResponseError  `json:"error,omitempty"`
 }
 
 // NotificationMessage represents an LSP notification message
 type NotificationMessage struct {
-	JSONRPC string      `json:"jsonrpc"`
-	Method  string      `json:"method"`
-	Params  interface{} `json:"params,omitempty"`
+	JSONRPC string `json:"jsonrpc"`
+	Method  string `json:"method"`
+	Params  any    `json:"params,omitempty"`
 }
 
 // ResponseError represents an LSP error
 type ResponseError struct {
-	Code    int         `json:"code"`
-	Message string      `json:"message"`
-	Data    interface{} `json:"data,omitempty"`
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+	Data    any    `json:"data,omitempty"`
 }
 
 // InitializeParams represents the parameters for the initialize request
@@ -38,7 +38,7 @@ type InitializeParams struct {
 	RootPath              string             `json:"rootPath,omitempty"`
 	RootURI               string             `json:"rootUri,omitempty"`
 	Capabilities          ClientCapabilities `json:"capabilities"`
-	InitializationOptions interface{}        `json:"initializationOptions,omitempty"`
+	InitializationOptions any                `json:"initializationOptions,omitempty"`
 }
 
 // ClientCapabilities represents client capabilities
@@ -218,7 +218,7 @@ type Diagnostic struct {
 	Message            string              `json:"message"`
 	Tags               []int               `json:"tags,omitempty"`
 	RelatedInformation []DiagnosticRelated `json:"relatedInformation,omitempty"`
-	Data               interface{}         `json:"data,omitempty"`
+	Data               any                 `json:"data,omitempty"`
 }
 
 // CodeDescription represents a code description
@@ -260,7 +260,7 @@ type CodeAction struct {
 	IsPreferred bool           `json:"isPreferred,omitempty"`
 	Edit        *WorkspaceEdit `json:"edit,omitempty"`
 	Command     *Command       `json:"command,omitempty"`
-	Data        interface{}    `json:"data,omitempty"`
+	Data        any            `json:"data,omitempty"`
 }
 
 // WorkspaceEdit represents a workspace edit
@@ -270,7 +270,7 @@ type WorkspaceEdit struct {
 
 // Command represents a command
 type Command struct {
-	Title     string        `json:"title"`
-	Command   string        `json:"command"`
-	Arguments []interface{} `json:"arguments,omitempty"`
+	Title     string `json:"title"`
+	Command   string `json:"command"`
+	Arguments []any  `json:"arguments,omitempty"`
 }

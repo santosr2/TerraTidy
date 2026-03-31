@@ -8,6 +8,7 @@ import (
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/hclparse"
 	"github.com/pmezard/go-difflib/difflib"
+	"github.com/santosr2/terratidy/internal/engines/style/rules"
 	"github.com/santosr2/terratidy/pkg/sdk"
 )
 
@@ -28,7 +29,7 @@ type Config struct {
 type RuleConfig struct {
 	Enabled  bool
 	Severity string
-	Options  map[string]interface{}
+	Options  map[string]any
 }
 
 // New creates a new style engine
@@ -83,7 +84,7 @@ func (e *Engine) Run(ctx context.Context, files []string) ([]sdk.Finding, error)
 func (e *Engine) checkFile(parser *hclparse.Parser, path string) ([]sdk.Finding, error) {
 	// Create context for rule execution
 	ruleCtx := &sdk.Context{
-		Config:  make(map[string]interface{}),
+		Config:  make(map[string]any),
 		WorkDir: ".",
 		File:    path,
 	}
@@ -290,7 +291,7 @@ func (e *Engine) getRuleConfig(ruleName string) RuleConfig {
 		return RuleConfig{
 			Enabled:  false,
 			Severity: "info",
-			Options:  make(map[string]interface{}),
+			Options:  make(map[string]any),
 		}
 	}
 
@@ -298,66 +299,66 @@ func (e *Engine) getRuleConfig(ruleName string) RuleConfig {
 	return RuleConfig{
 		Enabled:  true,
 		Severity: "warning",
-		Options:  make(map[string]interface{}),
+		Options:  make(map[string]any),
 	}
 }
 
 // registerRules registers all built-in style rules
 func (e *Engine) registerRules() {
 	// Block spacing between blocks
-	e.rules = append(e.rules, &BlankLineBetweenBlocksRule{})
+	e.rules = append(e.rules, &rules.BlankLineBetweenBlocksRule{})
 
 	// Naming conventions
-	e.rules = append(e.rules, &BlockLabelCaseRule{})
-	e.rules = append(e.rules, &VariableNamingRule{})
-	e.rules = append(e.rules, &OutputNamingRule{})
-	e.rules = append(e.rules, &LocalNamingRule{})
+	e.rules = append(e.rules, &rules.BlockLabelCaseRule{})
+	e.rules = append(e.rules, &rules.VariableNamingRule{})
+	e.rules = append(e.rules, &rules.OutputNamingRule{})
+	e.rules = append(e.rules, &rules.LocalNamingRule{})
 
 	// Block ordering
-	e.rules = append(e.rules, &TerraformBlockFirstRule{})
-	e.rules = append(e.rules, &ProviderBlockOrderRule{})
+	e.rules = append(e.rules, &rules.TerraformBlockFirstRule{})
+	e.rules = append(e.rules, &rules.ProviderBlockOrderRule{})
 
 	// Attribute ordering within blocks (runs first to reorder attributes)
-	e.rules = append(e.rules, &ForEachCountFirstRule{})
-	e.rules = append(e.rules, &SourceVersionGroupedRule{})
-	e.rules = append(e.rules, &TagsAtEndRule{})
-	e.rules = append(e.rules, &DependsOnOrderRule{})
-	e.rules = append(e.rules, &LifecycleAtEndRule{})
+	e.rules = append(e.rules, &rules.ForEachCountFirstRule{})
+	e.rules = append(e.rules, &rules.SourceVersionGroupedRule{})
+	e.rules = append(e.rules, &rules.TagsAtEndRule{})
+	e.rules = append(e.rules, &rules.DependsOnOrderRule{})
+	e.rules = append(e.rules, &rules.LifecycleAtEndRule{})
 
 	// Variable and output ordering
-	e.rules = append(e.rules, &VariableOrderRule{})
-	e.rules = append(e.rules, &OutputOrderRule{})
+	e.rules = append(e.rules, &rules.VariableOrderRule{})
+	e.rules = append(e.rules, &rules.OutputOrderRule{})
 
 	// Attribute group spacing (runs after ordering to add blank lines between groups)
-	e.rules = append(e.rules, &AttributeGroupSpacingRule{})
+	e.rules = append(e.rules, &rules.AttributeGroupSpacingRule{})
 
 	// Cleanup rules (run last to fix any blank line issues from reordering)
-	e.rules = append(e.rules, &NoLeadingTrailingBlankLinesRule{})
-	e.rules = append(e.rules, &NoEmptyBlocksRule{})
+	e.rules = append(e.rules, &rules.NoLeadingTrailingBlankLinesRule{})
+	e.rules = append(e.rules, &rules.NoEmptyBlocksRule{})
 
 	// File organization rules (disabled by default - enable via config)
-	e.rules = append(e.rules, &VariablesInFileRule{})
-	e.rules = append(e.rules, &OutputsInFileRule{})
-	e.rules = append(e.rules, &ProvidersInFileRule{})
-	e.rules = append(e.rules, &ScopedFileOrganizationRule{})
-	e.rules = append(e.rules, &TerraformFilesStructureRule{})
+	e.rules = append(e.rules, &rules.VariablesInFileRule{})
+	e.rules = append(e.rules, &rules.OutputsInFileRule{})
+	e.rules = append(e.rules, &rules.ProvidersInFileRule{})
+	e.rules = append(e.rules, &rules.ScopedFileOrganizationRule{})
+	e.rules = append(e.rules, &rules.TerraformFilesStructureRule{})
 
 	// Advanced naming rules (disabled by default - enable via config)
-	e.rules = append(e.rules, &ResourceNameMatchesTypeRule{})
-	e.rules = append(e.rules, &OutputPrefixRule{})
-	e.rules = append(e.rules, &ModuleNameConventionRule{})
+	e.rules = append(e.rules, &rules.ResourceNameMatchesTypeRule{})
+	e.rules = append(e.rules, &rules.OutputPrefixRule{})
+	e.rules = append(e.rules, &rules.ModuleNameConventionRule{})
 
 	// Block organization rules (disabled by default - enable via config)
-	e.rules = append(e.rules, &MetaArgumentsOrderRule{})
-	e.rules = append(e.rules, &LifecycleAttributeOrderRule{})
-	e.rules = append(e.rules, &NestedBlockOrderRule{})
-	e.rules = append(e.rules, &OneLineAttributeSpacingRule{})
+	e.rules = append(e.rules, &rules.MetaArgumentsOrderRule{})
+	e.rules = append(e.rules, &rules.LifecycleAttributeOrderRule{})
+	e.rules = append(e.rules, &rules.NestedBlockOrderRule{})
+	e.rules = append(e.rules, &rules.OneLineAttributeSpacingRule{})
 
 	// Comment and format rules (disabled by default - enable via config)
-	e.rules = append(e.rules, &CommentSyntaxRule{})
-	e.rules = append(e.rules, &NoTrailingWhitespaceRule{})
-	e.rules = append(e.rules, &ConsistentQuotesRule{})
-	e.rules = append(e.rules, &NoConsecutiveBlankLinesRule{})
+	e.rules = append(e.rules, &rules.CommentSyntaxRule{})
+	e.rules = append(e.rules, &rules.NoTrailingWhitespaceRule{})
+	e.rules = append(e.rules, &rules.ConsistentQuotesRule{})
+	e.rules = append(e.rules, &rules.NoConsecutiveBlankLinesRule{})
 }
 
 // GetAllRules returns all registered rules for listing/documentation

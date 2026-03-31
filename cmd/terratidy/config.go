@@ -264,7 +264,7 @@ func writeEngineConfigs(cfg *config.Config, configDir string) error {
 	engines := []struct {
 		name    string
 		enabled bool
-		config  interface{}
+		config  any
 	}{
 		{"fmt", cfg.Engines.Fmt.Enabled, cfg.Engines.Fmt},
 		{"style", cfg.Engines.Style.Enabled, cfg.Engines.Style},
@@ -283,9 +283,9 @@ func writeEngineConfigs(cfg *config.Config, configDir string) error {
 	return nil
 }
 
-func writeEngineConfig(configDir, name string, engineCfg interface{}) error {
-	cfgMap := map[string]interface{}{
-		"engines": map[string]interface{}{
+func writeEngineConfig(configDir, name string, engineCfg any) error {
+	cfgMap := map[string]any{
+		"engines": map[string]any{
 			name: engineCfg,
 		},
 	}
@@ -409,7 +409,7 @@ func runConfigInitProfile(_ *cobra.Command, args []string) error {
 }
 
 // writeYAMLFile writes data to a YAML file.
-func writeYAMLFile(path string, data interface{}) error {
+func writeYAMLFile(path string, data any) error {
 	output, err := yaml.Marshal(data)
 	if err != nil {
 		return fmt.Errorf("marshaling %s: %w", path, err)

@@ -7,7 +7,6 @@ import (
 	_ "embed"
 	"encoding/json"
 	"runtime/debug"
-	"strings"
 )
 
 // Build information set via ldflags at build time
@@ -82,22 +81,7 @@ func init() {
 	}
 }
 
-// GetVersion returns the version string
+// GetVersion returns the version string.
 func GetVersion() string {
 	return Version
-}
-
-// GetCommit returns the commit hash
-func GetCommit() string {
-	return Commit
-}
-
-// GetDate returns the build date
-func GetDate() string {
-	return Date
-}
-
-// Short returns a short version string
-func Short() string {
-	return strings.TrimPrefix(Version, "v")
 }

@@ -409,15 +409,9 @@ func (e *Engine) violationToFinding(violation any, dir string) sdk.Finding {
 }
 
 // groupFilesByDirectory groups files by their parent directory
+// groupFilesByDirectory delegates to sdk.GroupFilesByDirectory.
 func (e *Engine) groupFilesByDirectory(files []string) map[string][]string {
-	dirFiles := make(map[string][]string)
-
-	for _, file := range files {
-		dir := filepath.Dir(file)
-		dirFiles[dir] = append(dirFiles[dir], file)
-	}
-
-	return dirFiles
+	return sdk.GroupFilesByDirectory(files)
 }
 
 // parseSeverity converts string severity to sdk.Severity (defaults to error).

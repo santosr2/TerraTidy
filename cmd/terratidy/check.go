@@ -94,14 +94,6 @@ func runCheck(_ *cobra.Command, args []string) error {
 	return outputCheckResults(allFindings, useStructuredOutput)
 }
 
-func printNoFilesMessage() {
-	if changed {
-		fmt.Println("No changed HCL files found")
-	} else {
-		fmt.Println("No HCL files found")
-	}
-}
-
 func printCheckHeader(fileCount int) {
 	modeMsg := ""
 	if changed {
@@ -308,9 +300,9 @@ func buildStyleConfig(cfg *config.Config, fix bool, diff ...bool) *style.Config 
 
 	// Extract rules config if present
 	if rulesRaw, ok := engineCfg["rules"]; ok {
-		if rulesMap, ok := rulesRaw.(map[string]interface{}); ok {
+		if rulesMap, ok := rulesRaw.(map[string]any); ok {
 			for ruleName, ruleCfgRaw := range rulesMap {
-				if ruleCfgMap, ok := ruleCfgRaw.(map[string]interface{}); ok {
+				if ruleCfgMap, ok := ruleCfgRaw.(map[string]any); ok {
 					rc := style.RuleConfig{}
 					if enabled, ok := ruleCfgMap["enabled"].(bool); ok {
 						rc.Enabled = enabled
@@ -318,7 +310,7 @@ func buildStyleConfig(cfg *config.Config, fix bool, diff ...bool) *style.Config 
 					if severity, ok := ruleCfgMap["severity"].(string); ok {
 						rc.Severity = severity
 					}
-					if options, ok := ruleCfgMap["options"].(map[string]interface{}); ok {
+					if options, ok := ruleCfgMap["options"].(map[string]any); ok {
 						rc.Options = options
 					}
 					styleCfg.Rules[ruleName] = rc
@@ -361,7 +353,7 @@ func buildLintConfig(cfg *config.Config) *lint.Config {
 	if configFile, ok := engineCfg["config_file"].(string); ok {
 		lintCfg.ConfigFile = configFile
 	}
-	if plugins, ok := engineCfg["plugins"].([]interface{}); ok {
+	if plugins, ok := engineCfg["plugins"].([]any); ok {
 		for _, p := range plugins {
 			if ps, ok := p.(string); ok {
 				lintCfg.Plugins = append(lintCfg.Plugins, ps)
@@ -386,14 +378,14 @@ func buildPolicyConfig(cfg *config.Config) *policy.Config {
 	}
 
 	// Extract policy-specific settings
-	if dirs, ok := engineCfg["policy_dirs"].([]interface{}); ok {
+	if dirs, ok := engineCfg["policy_dirs"].([]any); ok {
 		for _, d := range dirs {
 			if ds, ok := d.(string); ok {
 				policyCfg.PolicyDirs = append(policyCfg.PolicyDirs, ds)
 			}
 		}
 	}
-	if files, ok := engineCfg["policy_files"].([]interface{}); ok {
+	if files, ok := engineCfg["policy_files"].([]any); ok {
 		for _, f := range files {
 			if fs, ok := f.(string); ok {
 				policyCfg.PolicyFiles = append(policyCfg.PolicyFiles, fs)
@@ -445,20 +437,6 @@ func printCheckSummary(allFindings []sdk.Finding) error {
 		return &sdk.ExitError{Code: 1}
 	}
 	return nil
-}
-
-func countBySeverity(findings []sdk.Finding) (errors, warnings, info int) {
-	for _, finding := range findings {
-		switch finding.Severity {
-		case sdk.SeverityError:
-			errors++
-		case sdk.SeverityWarning:
-			warnings++
-		case sdk.SeverityInfo:
-			info++
-		}
-	}
-	return
 }
 
 func printSeverityCounts(errors, warnings, info int) {

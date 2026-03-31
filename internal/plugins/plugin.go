@@ -51,7 +51,7 @@ type PluginMetadata struct {
 // Plugin represents a loaded plugin
 type Plugin struct {
 	Metadata PluginMetadata
-	Instance interface{}
+	Instance any
 }
 
 // RulePlugin defines the interface for rule plugins
@@ -73,7 +73,7 @@ type FormatterPlugin interface {
 	// Name returns the formatter name
 	Name() string
 	// Format formats the findings and writes to the writer
-	Format(findings []sdk.Finding, w interface{}) error
+	Format(findings []sdk.Finding, w any) error
 }
 
 // Manager manages plugin loading and registration

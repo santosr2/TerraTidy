@@ -14,7 +14,7 @@
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit)](https://github.com/pre-commit/pre-commit)
 [![Conventional Commits](https://img.shields.io/badge/Conventional%20Commits-1.0.0-yellow.svg)](https://conventionalcommits.org)
-[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/santosr2/terratidy/badge)](https://scorecard.dev/viewer/?uri=github.com/santosr2/terratidy)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/santosr2/terratidy/badge)](https://scorecard.dev/viewer/?uri=github.com/santosr2/TerraTidy)
 
 </div>
 

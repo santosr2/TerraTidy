@@ -41,7 +41,7 @@ Runtime context passed to every rule invocation:
 type Context struct {
     // Config holds rule-specific configuration from .terratidy.yaml.
     // Keys and values correspond to the "options" map under a rule's config.
-    Config map[string]interface{}
+    Config map[string]any
 
     // Logger for diagnostic output (not user-facing findings).
     Logger *log.Logger

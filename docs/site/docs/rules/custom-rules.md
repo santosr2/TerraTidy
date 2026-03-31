@@ -19,7 +19,7 @@ The `sdk.Context` provides runtime information:
 
 ```go
 type Context struct {
-    Config  map[string]interface{}
+    Config  map[string]any
     Logger  *log.Logger
     WorkDir string
     File    string

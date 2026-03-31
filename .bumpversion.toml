@@ -85,6 +85,12 @@ filename = "examples/github-workflow.yaml"
 search = "download/v{current_version}"
 replace = "download/v{new_version}"
 
+# README - Docker image tag
+[[tool.bumpversion.files]]
+filename = "README.md"
+search = "terratidy:v{current_version}"
+replace = "terratidy:v{new_version}"
+
 # README - GitHub Action pin example
 [[tool.bumpversion.files]]
 filename = "README.md"

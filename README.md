@@ -22,20 +22,20 @@
 
 TerraTidy is a single-binary quality platform for Terraform and Terragrunt that provides:
 
-- **Formatting** - Format `.tf` and `.hcl` files using the HCL formatter
-- **Style Checking** - Custom style rules for layout, ordering, and conventions
-- **Linting** - TFLint integration for best practices and errors
-- **Policy Enforcement** - OPA policy checks for compliance
+- **Formatting** -- Format `.tf` and `.hcl` files using the HCL formatter
+- **Style Checking** -- Custom style rules for layout, ordering, and conventions
+- **Linting** -- TFLint integration for best practices and errors
+- **Policy Enforcement** -- OPA policy checks for compliance
 
 ### Key Features
 
-- ✅ **Single Binary** - No external dependencies, all tools vendored
-- ⚡ **10-100x Faster** - Library-first architecture, no subprocess overhead
-- 🔌 **Extensible** - Custom rules in Go, Rego, YAML, or Bash
-- 📦 **Modular Config** - Split large configs into organized files
-- 🎯 **Great DX** - Interactive setup, hot-reload dev mode, helpful errors
-- 🔧 **Auto-fix** - Automatically fix formatting and style issues
-- 🌐 **Multi-platform** - Linux, macOS, Windows (amd64 & arm64)
+- **Single Binary** -- No external dependencies for core functionality
+- **Library-first Architecture** -- Uses Go libraries (hclwrite, OPA SDK) directly instead of shelling out
+- **Extensible** -- Custom rules in Go, Rego, YAML, or Bash
+- **Modular Config** -- Split large configs into organized files with glob imports
+- **Auto-fix** -- Automatically fix formatting and style issues
+- **Multiple Output Formats** -- Text, table, JSON, SARIF, HTML, JUnit, Markdown, GitHub Actions annotations
+- **Multi-platform** -- Linux, macOS, Windows (amd64 and arm64)
 
 ## Installation
 
@@ -52,10 +52,9 @@ Download the latest release for your platform from [GitHub Releases](https://git
 ### Docker
 
 ```bash
-# latest always points to the most recent stable release
 docker pull ghcr.io/santosr2/terratidy:latest
 
-# Pin to a specific version in CI (recommended)
+# Pin to a specific version in CI
 docker pull ghcr.io/santosr2/terratidy:v0.2.0-alpha.3
 
 docker run --rm -v $(pwd):/app ghcr.io/santosr2/terratidy check
@@ -84,13 +83,13 @@ This creates a `.terratidy.yaml` configuration file with recommended settings.
 terratidy check
 ```
 
-Example output:
+Example output (sequential mode, the default):
 
 ```text
 Checking 3 files...
 
 1. Checking formatting...
-   Found 0 issue(s)
+   Found 1 issue(s)
 
 2. Checking style...
    Found 2 issue(s)
@@ -101,9 +100,41 @@ Checking 3 files...
 4. Running policy checks...
    Found 0 issue(s)
 
+✗ modules/networking/main.tf:0:0: File needs formatting (fmt.needs-formatting)
+⚠ modules/networking/main.tf:12:1: Missing blank line between blocks (style.blank-line-between-blocks)
+⚠ modules/networking/variables.tf:5:1: Missing blank line between blocks (style.blank-line-between-blocks)
+⚠ modules/networking/main.tf:8:1: resource name 'public-subnet' should use snake_case (lint.terraform-naming-convention)
 ---
-Summary: 3 total issue(s)
+Summary: 4 total issue(s)
 
+  Errors:   1
+  Warnings: 3
+
+Run individual commands for details:
+  terratidy fmt --check
+  terratidy style
+  terratidy lint
+  terratidy policy
+```
+
+With `--parallel` (`-p`), the output is more compact:
+
+```text
+Checking 3 files...
+
+Running checks in parallel mode...
+  fmt: 1 issue(s)
+  style: 2 issue(s)
+  lint: 1 issue(s)
+
+✗ modules/networking/main.tf:0:0: File needs formatting (fmt.needs-formatting)
+⚠ modules/networking/main.tf:12:1: Missing blank line between blocks (style.blank-line-between-blocks)
+⚠ modules/networking/variables.tf:5:1: Missing blank line between blocks (style.blank-line-between-blocks)
+⚠ modules/networking/main.tf:8:1: resource name 'public-subnet' should use snake_case (lint.terraform-naming-convention)
+---
+Summary: 4 total issue(s)
+
+  Errors:   1
   Warnings: 3
 
 Run individual commands for details:
@@ -140,17 +171,31 @@ terratidy fix
 | `terratidy rules docs` | Generate markdown documentation           |
 | `terratidy version`    | Show version info                         |
 
-### Useful Flags
+### Global Flags
 
-| Flag                 | Description                                                                          |
-| -------------------- | ------------------------------------------------------------------------------------ |
-| `--parallel` / `-p`  | Run engines in parallel (faster)                                                     |
-| `--changed`          | Only check files changed in git                                                      |
-| `--format`           | Output format: text, table, json, json-compact, sarif, html, junit, markdown, github |
-| `--skip-fmt`         | Skip formatting checks                                                               |
-| `--skip-style`       | Skip style checks                                                                    |
-| `--skip-lint`        | Skip linting checks                                                                  |
-| `--skip-policy`      | Skip policy checks                                                                   |
+These flags apply to all commands:
+
+| Flag                       | Description                                                                          |
+| -------------------------- | ------------------------------------------------------------------------------------ |
+| `--config`                 | Path to config file (default: `.terratidy.yaml`)                                     |
+| `--profile`                | Configuration profile to use                                                         |
+| `--format`                 | Output format: text, table, json, json-compact, sarif, html, junit, markdown, github |
+| `--changed`                | Only check files changed in git                                                      |
+| `--paths`                  | Specific paths to check                                                              |
+| `--severity-threshold`     | Minimum severity to fail: info, warning, error                                       |
+| `--color`                  | Enable colored output (default: true)                                                |
+
+### Check Command Flags
+
+These flags are specific to `terratidy check`:
+
+| Flag                 | Description                  |
+| -------------------- | ---------------------------- |
+| `--parallel` / `-p`  | Run engines in parallel      |
+| `--skip-fmt`         | Skip formatting checks       |
+| `--skip-style`       | Skip style checks            |
+| `--skip-lint`        | Skip linting checks          |
+| `--skip-policy`      | Skip policy checks           |
 
 ## Configuration
 
@@ -169,13 +214,14 @@ engines:
 severity_threshold: warning
 ```
 
-### Modular Configuration (for large projects)
+### Modular Configuration
+
+For larger projects, split configuration into organized files:
 
 ```yaml
 # .terratidy.yaml
 version: 1
 
-# Import rules from organized files
 imports:
   - .terratidy/rules/**/*.yaml
   - .terratidy/profiles/default.yaml
@@ -183,17 +229,17 @@ imports:
 severity_threshold: warning
 ```
 
-See [Configuration Guide](docs/site/docs/getting-started/configuration.md) for details.
+See the [Configuration Guide](docs/site/docs/getting-started/configuration.md) for details.
 
 ## Integrations
 
-| Method | When | Best For |
+| Method         | When                 | Best For                          |
 | -------------- | -------------------- | --------------------------------- |
-| CLI | Manual runs | Local development, scripting |
-| Pre-commit | On git commit | Catching issues before push |
-| GitHub Actions | On PR/push | CI/CD quality gates |
-| LSP / VS Code | Real-time in editor | Instant feedback while coding |
-| Docker | Isolated environments | CI pipelines without Go installed |
+| CLI            | Manual runs          | Local development, scripting      |
+| Pre-commit     | On git commit        | Catching issues before push       |
+| GitHub Actions | On PR/push           | CI/CD quality gates               |
+| LSP / VS Code  | Real-time in editor  | Instant feedback while coding     |
+| Docker         | Isolated environments| CI pipelines without Go installed |
 
 ### Pre-commit Hook
 
@@ -202,16 +248,18 @@ Add to `.pre-commit-config.yaml`:
 ```yaml
 repos:
   - repo: https://github.com/santosr2/terratidy
-    rev: v0.2.0-alpha.3  # or use a stable version when available
+    rev: v0.2.0-alpha.3
     hooks:
       - id: terratidy-check
 ```
+
+Available hook IDs: `terratidy-fmt`, `terratidy-fmt-check`, `terratidy-style`, `terratidy-style-fix`, `terratidy-lint`, `terratidy-check`, `terratidy-fix`, `terratidy-policy`.
 
 ### GitHub Action
 
 ```yaml
 - name: Run TerraTidy
-  uses: santosr2/terratidy@v0  # Floating tag, tracks latest v0.x release
+  uses: santosr2/terratidy@v0
   with:
     format: sarif
     parallel: true
@@ -223,16 +271,16 @@ Pin to a specific release for reproducible builds: `santosr2/terratidy@v0.2.0-al
 Available inputs: `version`, `config`, `profile`, `format`, `parallel`, `working-directory`,
 `skip-fmt`, `skip-style`, `skip-lint`, `skip-policy`, `fail-on-error`, `fail-on-warning`, `github-token`.
 
-### VSCode Extension
+### VS Code Extension
 
-The TerraTidy VSCode extension provides real-time diagnostics via LSP.
+The TerraTidy VS Code extension provides real-time diagnostics via LSP.
 See [vscode/README.md](vscode/README.md) for installation instructions.
 
 ## Custom Rules
 
 Create custom rules in three formats:
 
-### Go Plugin (most powerful)
+### Go Plugin
 
 ```go
 package custom
@@ -242,7 +290,7 @@ func (r *EnforceTaggingRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Find
 }
 ```
 
-### YAML Rule (simple, declarative)
+### YAML Rule
 
 ```yaml
 rule: custom.naming_convention
@@ -253,14 +301,14 @@ pattern:
       regex: "^[a-z][a-z0-9_]*$"
 ```
 
-### Bash Script (quick prototypes)
+### Bash Script
 
 ```bash
 #!/usr/bin/env bash
 # Output JSON findings to stdout
 ```
 
-See [Custom Rules Guide](docs/site/docs/rules/custom-rules.md) for details.
+See the [Custom Rules Guide](docs/site/docs/rules/custom-rules.md) for details.
 
 ## Documentation
 
@@ -280,7 +328,7 @@ Full documentation is available at [docs/site/docs/](docs/site/docs/).
 git clone https://github.com/santosr2/terratidy
 cd terratidy
 mise install        # Install Go 1.26.1 and tools
-mise run setup      # Install dev tools (repomix, air, etc.)
+make setup          # Download and tidy Go modules
 make build          # Build binary
 ```
 
@@ -290,16 +338,16 @@ make build          # Build binary
 make test           # Unit tests
 make integration    # Integration tests
 make lint           # Run linters
-make check          # All checks
+make check          # All quality checks (fmt, vet, lint, test)
 ```
 
 ## Contributing
 
-Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for details.
+Contributions are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) for details.
 
 ## License
 
-MIT License - see [LICENSE](LICENSE) for details.
+MIT License -- see [LICENSE](LICENSE) for details.
 
 ## Acknowledgments
 
@@ -312,6 +360,6 @@ Built with:
 
 ## Support
 
-- 📝 [Documentation](docs/site/docs/)
-- 🐛 [Issue Tracker](https://github.com/santosr2/terratidy/issues)
-- 💬 [Discussions](https://github.com/santosr2/terratidy/discussions)
+- [Documentation](docs/site/docs/)
+- [Issue Tracker](https://github.com/santosr2/terratidy/issues)
+- [Discussions](https://github.com/santosr2/terratidy/discussions)

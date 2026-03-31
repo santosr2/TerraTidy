@@ -3,10 +3,8 @@ package main
 import (
 	"context"
 	"fmt"
-	"os"
 
 	"github.com/santosr2/terratidy/internal/engines/style"
-	"github.com/santosr2/terratidy/internal/output"
 	"github.com/santosr2/terratidy/pkg/sdk"
 	"github.com/spf13/cobra"
 )
@@ -52,11 +50,7 @@ Use --fix to automatically fix fixable style issues.`,
 		}
 
 		if len(files) == 0 {
-			if changed {
-				fmt.Println("No changed HCL files found")
-			} else {
-				fmt.Println("No HCL files found")
-			}
+			printNoFilesMessage()
 			return nil
 		}
 
@@ -90,49 +84,12 @@ Use --fix to automatically fix fixable style issues.`,
 }
 
 func outputStyleResults(findings []sdk.Finding, checkMode bool) error {
-	formatter, err := output.GetFormatterWithColor(format, true, version, color)
-	if err != nil {
-		return fmt.Errorf("getting formatter: %w", err)
+	if err := outputResults(findings, "Style check summary"); err != nil {
+		return err
 	}
 
-	if err := formatter.Format(findings, os.Stdout); err != nil {
-		return fmt.Errorf("formatting output: %w", err)
-	}
-
-	// For text format, add summary
-	if format == "" || format == "text" {
-		var errors, warnings, info int
-		for _, finding := range findings {
-			switch finding.Severity {
-			case sdk.SeverityError:
-				errors++
-			case sdk.SeverityWarning:
-				warnings++
-			case sdk.SeverityInfo:
-				info++
-			}
-		}
-
-		if len(findings) > 0 {
-			fmt.Println()
-			fmt.Println("---")
-			fmt.Printf("Style check summary: %d error(s), %d warning(s), %d info\n", errors, warnings, info)
-		}
-
-		if errors > 0 {
-			return &sdk.ExitError{Code: 1}
-		}
-
-		if checkMode && len(findings) > 0 {
-			return fmt.Errorf("found %d style issue(s)", len(findings))
-		}
-	} else {
-		// Return exit error if there are errors (for structured output)
-		for _, finding := range findings {
-			if finding.Severity == sdk.SeverityError {
-				return &sdk.ExitError{Code: 1}
-			}
-		}
+	if checkMode && len(findings) > 0 {
+		return fmt.Errorf("found %d style issue(s)", len(findings))
 	}
 
 	return nil

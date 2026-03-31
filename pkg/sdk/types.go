@@ -67,7 +67,7 @@ type Finding struct {
 // and any rule-specific configuration from .terratidy.yaml.
 type Context struct {
 	// Config holds rule-specific options from the "options" map in .terratidy.yaml.
-	Config map[string]interface{}
+	Config map[string]any
 	// Logger for diagnostic output (not user-facing findings).
 	Logger *log.Logger
 	// WorkDir is the directory TerraTidy was invoked from.

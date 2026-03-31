@@ -48,8 +48,8 @@ type Engines struct {
 
 // EngineConfig represents configuration for a single engine
 type EngineConfig struct {
-	Enabled bool                   `yaml:"enabled"`
-	Config  map[string]interface{} `yaml:"config,omitempty"`
+	Enabled bool           `yaml:"enabled"`
+	Config  map[string]any `yaml:"config,omitempty"`
 }
 
 // Profile represents a configuration profile
@@ -69,9 +69,9 @@ type OverridesConfig struct {
 
 // RuleConfig represents configuration for a single rule
 type RuleConfig struct {
-	Enabled  bool                   `yaml:"enabled"`
-	Severity string                 `yaml:"severity,omitempty"`
-	Config   map[string]interface{} `yaml:"config,omitempty"`
+	Enabled  bool           `yaml:"enabled"`
+	Severity string         `yaml:"severity,omitempty"`
+	Config   map[string]any `yaml:"config,omitempty"`
 }
 
 // PluginsConfig represents plugin settings

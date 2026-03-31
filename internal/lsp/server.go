@@ -109,7 +109,7 @@ func (s *Server) readMessage() (json.RawMessage, error) {
 }
 
 // writeMessage writes an LSP message to stdout
-func (s *Server) writeMessage(msg interface{}) error {
+func (s *Server) writeMessage(msg any) error {
 	content, err := json.Marshal(msg)
 	if err != nil {
 		return fmt.Errorf("marshaling message: %w", err)
@@ -439,7 +439,7 @@ func (s *Server) publishDiagnostics(uri string) error {
 }
 
 // sendResult sends a successful response
-func (s *Server) sendResult(id json.RawMessage, result interface{}) error {
+func (s *Server) sendResult(id json.RawMessage, result any) error {
 	return s.writeMessage(ResponseMessage{
 		JSONRPC: "2.0",
 		ID:      id,

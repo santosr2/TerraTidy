@@ -155,7 +155,7 @@ func (r *BlankLineBetweenBlocksRule) Description() string {
 }
 
 // getBlankLineConfig extracts min_lines and max_lines from config.
-func (r *BlankLineBetweenBlocksRule) getBlankLineConfig(config map[string]interface{}) (minLines, maxLines int) {
+func (r *BlankLineBetweenBlocksRule) getBlankLineConfig(config map[string]any) (minLines, maxLines int) {
 	minLines = 1 // Default: at least 1 blank line
 	maxLines = 1 // Default: at most 1 blank line
 
@@ -163,7 +163,7 @@ func (r *BlankLineBetweenBlocksRule) getBlankLineConfig(config map[string]interf
 		return minLines, maxLines
 	}
 
-	options, ok := config["options"].(map[string]interface{})
+	options, ok := config["options"].(map[string]any)
 	if !ok {
 		return minLines, maxLines
 	}
@@ -378,7 +378,7 @@ var defaultAllowedEmptyBlocks = map[string]bool{
 }
 
 // getAllowedEmptyBlocks returns the set of block types allowed to be empty.
-func (r *NoEmptyBlocksRule) getAllowedEmptyBlocks(config map[string]interface{}) map[string]bool {
+func (r *NoEmptyBlocksRule) getAllowedEmptyBlocks(config map[string]any) map[string]bool {
 	allowed := make(map[string]bool)
 
 	// Start with defaults
@@ -390,13 +390,13 @@ func (r *NoEmptyBlocksRule) getAllowedEmptyBlocks(config map[string]interface{})
 		return allowed
 	}
 
-	options, ok := config["options"].(map[string]interface{})
+	options, ok := config["options"].(map[string]any)
 	if !ok {
 		return allowed
 	}
 
 	// Get additional allowed blocks from config
-	if allowedList, ok := options["allowed_blocks"].([]interface{}); ok {
+	if allowedList, ok := options["allowed_blocks"].([]any); ok {
 		for _, item := range allowedList {
 			if blockType, ok := item.(string); ok {
 				allowed[blockType] = true
@@ -408,7 +408,7 @@ func (r *NoEmptyBlocksRule) getAllowedEmptyBlocks(config map[string]interface{})
 	if override, ok := options["override_defaults"].(bool); ok && override {
 		// Clear defaults, only use config-specified blocks
 		allowed = make(map[string]bool)
-		if allowedList, ok := options["allowed_blocks"].([]interface{}); ok {
+		if allowedList, ok := options["allowed_blocks"].([]any); ok {
 			for _, item := range allowedList {
 				if blockType, ok := item.(string); ok {
 					allowed[blockType] = true

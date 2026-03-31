@@ -30,21 +30,21 @@ type Engine struct {
 
 // Config holds the linting engine configuration
 type Config struct {
-	ConfigFile      string                 // Path to configuration file
-	Plugins         []string               // List of plugins to enable
-	Rules           map[string]RuleConfig  // Rule-specific configuration
-	Options         map[string]interface{} // Additional options
-	UseTFLint       bool                   // Enable TFLint integration
-	TFLintPath      string                 // Custom path to TFLint binary
-	TFLintConfig    string                 // Path to TFLint config file
-	FallbackBuiltin bool                   // Use built-in rules if TFLint unavailable
+	ConfigFile      string                // Path to configuration file
+	Plugins         []string              // List of plugins to enable
+	Rules           map[string]RuleConfig // Rule-specific configuration
+	Options         map[string]any        // Additional options
+	UseTFLint       bool                  // Enable TFLint integration
+	TFLintPath      string                // Custom path to TFLint binary
+	TFLintConfig    string                // Path to TFLint config file
+	FallbackBuiltin bool                  // Use built-in rules if TFLint unavailable
 }
 
 // RuleConfig holds configuration for a single rule
 type RuleConfig struct {
 	Enabled  bool
 	Severity string
-	Options  map[string]interface{}
+	Options  map[string]any
 }
 
 // Rule defines the interface for lint rules
@@ -237,7 +237,7 @@ func (e *Engine) getRuleConfig(ruleName string) RuleConfig {
 	return RuleConfig{
 		Enabled:  true,
 		Severity: "warning",
-		Options:  make(map[string]interface{}),
+		Options:  make(map[string]any),
 	}
 }
 
@@ -263,16 +263,9 @@ func (e *Engine) GetAllRules() []Rule {
 	return e.rules
 }
 
-// groupFilesByDirectory groups files by their parent directory
+// groupFilesByDirectory delegates to sdk.GroupFilesByDirectory.
 func (e *Engine) groupFilesByDirectory(files []string) map[string][]string {
-	dirFiles := make(map[string][]string)
-
-	for _, file := range files {
-		dir := filepath.Dir(file)
-		dirFiles[dir] = append(dirFiles[dir], file)
-	}
-
-	return dirFiles
+	return sdk.GroupFilesByDirectory(files)
 }
 
 // parseSeverity converts string severity to sdk.Severity (defaults to warning).
@@ -1075,7 +1068,7 @@ func (e *Engine) RunTFLint(ctx context.Context, dir string) ([]sdk.Finding, erro
 	if len(output) == 0 {
 		// If no stdout, check if it's a real error
 		if err != nil && stderr.Len() > 0 {
-			return nil, fmt.Errorf("tflint failed: %s", stderr.String())
+			return nil, fmt.Errorf("running tflint: %s", stderr.String())
 		}
 		return findings, nil
 	}

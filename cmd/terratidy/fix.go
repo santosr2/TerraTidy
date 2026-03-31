@@ -108,7 +108,7 @@ func runFmtFix(ctx context.Context, files []string) ([]sdk.Finding, int, error) 
 	fmtEngine := fmtengine.New(&fmtengine.Config{Check: false})
 	findings, err := fmtEngine.Run(ctx, files)
 	if err != nil {
-		return nil, 0, fmt.Errorf("formatting failed: %w", err)
+		return nil, 0, fmt.Errorf("formatting files: %w", err)
 	}
 
 	formatted := countFormattedFiles(findings)

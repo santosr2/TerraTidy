@@ -51,11 +51,7 @@ Use --all to also apply style fixes (equivalent to running fmt + style --fix).`,
 		}
 
 		if len(files) == 0 {
-			if changed {
-				fmt.Println("No changed HCL files found")
-			} else {
-				fmt.Println("No HCL files found")
-			}
+			printNoFilesMessage()
 			return nil
 		}
 

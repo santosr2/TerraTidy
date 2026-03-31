@@ -72,7 +72,7 @@ func TestFinding(t *testing.T) {
 func TestContext(t *testing.T) {
 	t.Run("basic context", func(t *testing.T) {
 		ctx := &Context{
-			Config:  map[string]interface{}{"key": "value"},
+			Config:  map[string]any{"key": "value"},
 			WorkDir: "/tmp/test",
 			File:    "main.tf",
 		}

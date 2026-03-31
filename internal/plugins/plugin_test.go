@@ -2,6 +2,7 @@ package plugins
 
 import (
 	"context"
+	"io"
 	"os"
 	"path/filepath"
 	"testing"
@@ -190,7 +191,7 @@ type MockFormatter struct {
 }
 
 func (f *MockFormatter) Name() string { return f.name }
-func (f *MockFormatter) Format(_ []sdk.Finding, _ any) error {
+func (f *MockFormatter) Format(_ []sdk.Finding, _ io.Writer) error {
 	return nil
 }
 

@@ -120,11 +120,9 @@ func TestGit_InRealRepo(t *testing.T) {
 	}
 
 	t.Run("GetChangedFiles", func(_ *testing.T) {
-		// This test just verifies the method doesn't error
-		// The actual files returned depend on repo state
-		_, err := git.GetChangedFiles("")
-		// May error if no default branch found, that's OK
-		_ = err
+		// Result depends on repo state; we just verify it doesn't panic.
+		// May error if no default branch found, that's acceptable.
+		_, _ = git.GetChangedFiles("")
 	})
 
 	t.Run("GetStagedFiles", func(t *testing.T) {

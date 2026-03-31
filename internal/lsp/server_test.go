@@ -568,7 +568,7 @@ resource "aws_instance" "example2" {
 	assert.Contains(t, output, "textDocument/publishDiagnostics")
 }
 
-func TestServer_HandleMessage_BeforeInitialize(_ *testing.T) {
+func TestServer_HandleMessage_BeforeInitialize(t *testing.T) {
 	out := &bytes.Buffer{}
 	server := NewServer(strings.NewReader(""), out)
 
@@ -580,7 +580,7 @@ func TestServer_HandleMessage_BeforeInitialize(_ *testing.T) {
 	}`
 
 	err := server.handleMessage(json.RawMessage(msgJSON))
-	// Should handle gracefully (may return error or nil)
-	// The important thing is it doesn't panic
-	_ = err
+	// Before initialize, the server should handle messages gracefully.
+	// An error is acceptable (not initialized), but it must not panic.
+	assert.NoError(t, err, "handleMessage before initialize should not error")
 }

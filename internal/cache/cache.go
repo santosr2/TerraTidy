@@ -24,6 +24,15 @@ type Entry struct {
 	ParseErrs hcl.Diagnostics
 }
 
+// Clock abstracts time for testing. Defaults to the real clock.
+type Clock interface {
+	Now() time.Time
+}
+
+type realClock struct{}
+
+func (realClock) Now() time.Time { return time.Now() }
+
 // FileCache provides thread-safe caching of file contents and parsed HCL
 type FileCache struct {
 	mu       sync.RWMutex
@@ -31,6 +40,7 @@ type FileCache struct {
 	maxAge   time.Duration
 	maxSize  int
 	disabled bool
+	clock    Clock
 }
 
 // Options configures the cache behavior
@@ -38,6 +48,7 @@ type Options struct {
 	MaxAge   time.Duration // Maximum age of cache entries (0 = no expiry)
 	MaxSize  int           // Maximum number of entries (0 = unlimited)
 	Disabled bool          // Disable caching entirely
+	Clock    Clock         // Time source (defaults to real clock, override for tests)
 }
 
 // DefaultOptions returns sensible default cache options
@@ -51,11 +62,16 @@ func DefaultOptions() Options {
 
 // New creates a new FileCache with the given options
 func New(opts Options) *FileCache {
+	clk := opts.Clock
+	if clk == nil {
+		clk = realClock{}
+	}
 	return &FileCache{
 		entries:  make(map[string]*Entry),
 		maxAge:   opts.MaxAge,
 		maxSize:  opts.MaxSize,
 		disabled: opts.Disabled,
+		clock:    clk,
 	}
 }
 
@@ -79,7 +95,7 @@ func (c *FileCache) Get(path string) (*Entry, bool) {
 	}
 
 	// Check if entry has expired
-	if c.maxAge > 0 && time.Since(entry.CachedAt) > c.maxAge {
+	if c.maxAge > 0 && c.clock.Now().Sub(entry.CachedAt) > c.maxAge {
 		c.Delete(path)
 		return nil, false
 	}
@@ -199,7 +215,7 @@ func (c *FileCache) parseFile(path string) (*Entry, error) {
 		File:      file,
 		ModTime:   info.ModTime(),
 		Hash:      hashContent(content),
-		CachedAt:  time.Now(),
+		CachedAt:  c.clock.Now(),
 		ParseErrs: diags,
 	}
 

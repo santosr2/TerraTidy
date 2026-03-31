@@ -9,6 +9,8 @@ import (
 
 	"github.com/hashicorp/hcl/v2"
 	"github.com/santosr2/terratidy/pkg/sdk"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestTextFormatter(t *testing.T) {
@@ -73,12 +75,8 @@ func TestTextFormatter(t *testing.T) {
 			formatter := &TextFormatter{Verbose: tt.verbose}
 			var buf bytes.Buffer
 			err := formatter.Format(tt.findings, &buf)
-			if err != nil {
-				t.Fatalf("Format() error = %v", err)
-			}
-			if got := buf.String(); got != tt.want {
-				t.Errorf("Format() output mismatch:\ngot:  %q\nwant: %q", got, tt.want)
-			}
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, buf.String())
 		})
 	}
 }
@@ -146,27 +144,14 @@ func TestJSONFormatter(t *testing.T) {
 			formatter := &JSONFormatter{Pretty: tt.pretty}
 			var buf bytes.Buffer
 			err := formatter.Format(tt.findings, &buf)
-			if err != nil {
-				t.Fatalf("Format() error = %v", err)
-			}
+			require.NoError(t, err)
 
-			// Verify it's valid JSON
 			var output JSONOutput
-			if err := json.Unmarshal(buf.Bytes(), &output); err != nil {
-				t.Fatalf("invalid JSON output: %v", err)
-			}
+			require.NoError(t, json.Unmarshal(buf.Bytes(), &output), "invalid JSON output")
 
-			// Verify summary
-			if output.Summary.Total != len(tt.findings) {
-				t.Errorf("Summary.Total = %d, want %d", output.Summary.Total, len(tt.findings))
-			}
+			assert.Equal(t, len(tt.findings), output.Summary.Total)
+			assert.Len(t, output.Findings, len(tt.findings))
 
-			// Verify findings count
-			if len(output.Findings) != len(tt.findings) {
-				t.Errorf("len(Findings) = %d, want %d", len(output.Findings), len(tt.findings))
-			}
-
-			// Verify severity counts
 			expectedErrors := 0
 			expectedWarnings := 0
 			expectedInfo := 0
@@ -181,15 +166,9 @@ func TestJSONFormatter(t *testing.T) {
 				}
 			}
 
-			if output.Summary.Errors != expectedErrors {
-				t.Errorf("Summary.Errors = %d, want %d", output.Summary.Errors, expectedErrors)
-			}
-			if output.Summary.Warnings != expectedWarnings {
-				t.Errorf("Summary.Warnings = %d, want %d", output.Summary.Warnings, expectedWarnings)
-			}
-			if output.Summary.Info != expectedInfo {
-				t.Errorf("Summary.Info = %d, want %d", output.Summary.Info, expectedInfo)
-			}
+			assert.Equal(t, expectedErrors, output.Summary.Errors)
+			assert.Equal(t, expectedWarnings, output.Summary.Warnings)
+			assert.Equal(t, expectedInfo, output.Summary.Info)
 		})
 	}
 }
@@ -269,16 +248,13 @@ func TestGetFormatter(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			formatter, err := GetFormatter(tt.format, tt.verbose, "1.0.0")
-			if (err != nil) != tt.wantErr {
-				t.Errorf("GetFormatter() error = %v, wantErr %v", err, tt.wantErr)
+			if tt.wantErr {
+				require.Error(t, err)
 				return
 			}
-			if !tt.wantErr {
-				typeName := fmt.Sprintf("%T", formatter)
-				if !strings.Contains(typeName, tt.wantType) {
-					t.Errorf("GetFormatter() type = %s, want %s", typeName, tt.wantType)
-				}
-			}
+			require.NoError(t, err)
+			typeName := fmt.Sprintf("%T", formatter)
+			assert.Contains(t, typeName, tt.wantType)
 		})
 	}
 }
@@ -346,42 +322,28 @@ func TestSARIFFormatter(t *testing.T) {
 			formatter := &SARIFFormatter{Version: tt.version}
 			var buf bytes.Buffer
 			err := formatter.Format(tt.findings, &buf)
-			if err != nil {
-				t.Fatalf("Format() error = %v", err)
-			}
+			require.NoError(t, err)
 
 			// Verify it's valid JSON
 			var sarif SARIF
-			if err := json.Unmarshal(buf.Bytes(), &sarif); err != nil {
-				t.Fatalf("invalid SARIF JSON: %v", err)
-			}
+			require.NoError(t, json.Unmarshal(buf.Bytes(), &sarif), "invalid SARIF JSON")
 
 			// Verify schema
-			if sarif.Schema != "https://json.schemastore.org/sarif-2.1.0.json" {
-				t.Errorf("Schema = %s, want SARIF 2.1.0 schema", sarif.Schema)
-			}
+			assert.Equal(t, "https://json.schemastore.org/sarif-2.1.0.json", sarif.Schema)
 
 			// Verify version
-			if sarif.Version != "2.1.0" {
-				t.Errorf("Version = %s, want 2.1.0", sarif.Version)
-			}
+			assert.Equal(t, "2.1.0", sarif.Version)
 
 			// Verify runs
-			if len(sarif.Runs) != 1 {
-				t.Fatalf("len(Runs) = %d, want 1", len(sarif.Runs))
-			}
+			require.Len(t, sarif.Runs, 1)
 
 			run := sarif.Runs[0]
 
 			// Verify tool
-			if run.Tool.Driver.Name != "TerraTidy" {
-				t.Errorf("Tool name = %s, want TerraTidy", run.Tool.Driver.Name)
-			}
+			assert.Equal(t, "TerraTidy", run.Tool.Driver.Name)
 
 			// Verify results count
-			if len(run.Results) != len(tt.findings) {
-				t.Errorf("len(Results) = %d, want %d", len(run.Results), len(tt.findings))
-			}
+			assert.Len(t, run.Results, len(tt.findings))
 		})
 	}
 }
@@ -477,60 +439,38 @@ func TestHTMLFormatter(t *testing.T) {
 			formatter := &HTMLFormatter{Title: "TerraTidy Report", Version: tt.version}
 			var buf bytes.Buffer
 			err := formatter.Format(tt.findings, &buf)
-			if err != nil {
-				t.Fatalf("Format() error = %v", err)
-			}
+			require.NoError(t, err)
 
 			output := buf.String()
 
 			// Verify it's HTML
-			if !strings.Contains(output, "<!DOCTYPE html>") {
-				t.Error("Output should start with DOCTYPE")
-			}
-			if !strings.Contains(output, "<html") {
-				t.Error("Output should contain <html> tag")
-			}
-			if !strings.Contains(output, "</html>") {
-				t.Error("Output should contain closing </html> tag")
-			}
+			assert.Contains(t, output, "<!DOCTYPE html>", "Output should start with DOCTYPE")
+			assert.Contains(t, output, "<html", "Output should contain <html> tag")
+			assert.Contains(t, output, "</html>", "Output should contain closing </html> tag")
 
 			// Verify title
-			if !strings.Contains(output, "<title>TerraTidy Report</title>") {
-				t.Error("Output should contain title")
-			}
+			assert.Contains(t, output, "<title>TerraTidy Report</title>", "Output should contain title")
 
 			// Verify version in footer
-			if !strings.Contains(output, tt.version) {
-				t.Errorf("Output should contain version %s", tt.version)
-			}
+			assert.Contains(t, output, tt.version, "Output should contain version %s", tt.version)
 
 			// Verify summary cards
-			if !strings.Contains(output, "Total Issues") {
-				t.Error("Output should contain summary cards")
-			}
+			assert.Contains(t, output, "Total Issues", "Output should contain summary cards")
 
 			if len(tt.findings) == 0 {
 				// Verify no issues message
-				if !strings.Contains(output, "All checks passed") {
-					t.Error("Output should show 'All checks passed' for no findings")
-				}
+				assert.Contains(t, output, "All checks passed", "Output should show 'All checks passed' for no findings")
 			} else {
 				// Verify findings are present
 				for _, f := range tt.findings {
-					if !strings.Contains(output, escapeHTML(f.Rule)) {
-						t.Errorf("Output should contain rule %s", f.Rule)
-					}
+					assert.Contains(t, output, escapeHTML(f.Rule), "Output should contain rule %s", f.Rule)
 				}
 			}
 
 			// Verify XSS protection for special characters test
 			if tt.name == "special characters in message" {
-				if strings.Contains(output, "<script>") {
-					t.Error("Output should escape HTML special characters")
-				}
-				if !strings.Contains(output, "&lt;script&gt;") {
-					t.Error("Output should contain escaped script tag")
-				}
+				assert.NotContains(t, output, "<script>", "Output should escape HTML special characters")
+				assert.Contains(t, output, "&lt;script&gt;", "Output should contain escaped script tag")
 			}
 
 			// Verify fixable badge appears for fixable findings
@@ -541,8 +481,8 @@ func TestHTMLFormatter(t *testing.T) {
 					break
 				}
 			}
-			if hasFixable && !strings.Contains(output, "Fixable") {
-				t.Error("Output should contain Fixable badge for fixable findings")
+			if hasFixable {
+				assert.Contains(t, output, "Fixable", "Output should contain Fixable badge for fixable findings")
 			}
 		})
 	}
@@ -564,9 +504,7 @@ func TestEscapeHTML(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.input, func(t *testing.T) {
 			result := escapeHTML(tt.input)
-			if result != tt.expected {
-				t.Errorf("escapeHTML(%q) = %q, want %q", tt.input, result, tt.expected)
-			}
+			assert.Equal(t, tt.expected, result)
 		})
 	}
 }
@@ -730,30 +668,21 @@ func TestGitHubActionsFormatter(t *testing.T) {
 			formatter := &GitHubActionsFormatter{}
 			var buf bytes.Buffer
 			err := formatter.Format(tt.findings, &buf)
-			if err != nil {
-				t.Fatalf("Format() error = %v", err)
-			}
+			require.NoError(t, err)
 
 			output := buf.String()
 			lines := strings.Split(strings.TrimSuffix(output, "\n"), "\n")
 
 			// Handle empty output case
 			if len(tt.want) == 0 {
-				if output != "" {
-					t.Errorf("expected empty output, got: %q", output)
-				}
+				assert.Empty(t, output)
 				return
 			}
 
-			if len(lines) != len(tt.want) {
-				t.Errorf("got %d lines, want %d lines\ngot: %v\nwant: %v", len(lines), len(tt.want), lines, tt.want)
-				return
-			}
+			require.Len(t, lines, len(tt.want), "got: %v\nwant: %v", lines, tt.want)
 
 			for i, want := range tt.want {
-				if lines[i] != want {
-					t.Errorf("line %d mismatch:\ngot:  %q\nwant: %q", i, lines[i], want)
-				}
+				assert.Equal(t, want, lines[i], "line %d", i)
 			}
 		})
 	}
@@ -774,9 +703,7 @@ func TestEscapeGitHubMessage(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.input, func(t *testing.T) {
 			result := escapeGitHubMessage(tt.input)
-			if result != tt.expected {
-				t.Errorf("escapeGitHubMessage(%q) = %q, want %q", tt.input, result, tt.expected)
-			}
+			assert.Equal(t, tt.expected, result)
 		})
 	}
 }
@@ -874,32 +801,20 @@ func TestTableFormatter(t *testing.T) {
 			formatter := &TableFormatter{Color: tt.color, Verbose: tt.verbose}
 			var buf bytes.Buffer
 			err := formatter.Format(tt.findings, &buf)
-			if err != nil {
-				t.Fatalf("Format() error = %v", err)
-			}
+			require.NoError(t, err)
 
 			output := buf.String()
 
 			if len(tt.findings) == 0 {
-				if !strings.Contains(output, "No issues found") {
-					t.Error("Output should show 'No issues found' for empty findings")
-				}
+				assert.Contains(t, output, "No issues found", "Output should show 'No issues found' for empty findings")
 			} else {
 				// Verify header is present
-				if !strings.Contains(output, "SEVERITY") {
-					t.Error("Output should contain SEVERITY header")
-				}
-				if !strings.Contains(output, "LOCATION") {
-					t.Error("Output should contain LOCATION header")
-				}
-				if !strings.Contains(output, "MESSAGE") {
-					t.Error("Output should contain MESSAGE header")
-				}
+				assert.Contains(t, output, "SEVERITY", "Output should contain SEVERITY header")
+				assert.Contains(t, output, "LOCATION", "Output should contain LOCATION header")
+				assert.Contains(t, output, "MESSAGE", "Output should contain MESSAGE header")
 
 				// Verify summary
-				if !strings.Contains(output, "Summary") {
-					t.Error("Output should contain Summary")
-				}
+				assert.Contains(t, output, "Summary", "Output should contain Summary")
 			}
 		})
 	}
@@ -908,29 +823,17 @@ func TestTableFormatter(t *testing.T) {
 func TestGetFormatterWithColor(t *testing.T) {
 	t.Run("table format with color enabled", func(t *testing.T) {
 		f, err := GetFormatterWithColor("table", true, "1.0.0", true)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
+		require.NoError(t, err)
 		table, ok := f.(*TableFormatter)
-		if !ok {
-			t.Fatal("expected TableFormatter")
-		}
-		if !table.Color {
-			t.Error("expected Color to be true")
-		}
+		require.True(t, ok, "expected TableFormatter")
+		assert.True(t, table.Color)
 	})
 
 	t.Run("table format with color disabled", func(t *testing.T) {
 		f, err := GetFormatterWithColor("table", true, "1.0.0", false)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
+		require.NoError(t, err)
 		table, ok := f.(*TableFormatter)
-		if !ok {
-			t.Fatal("expected TableFormatter")
-		}
-		if table.Color {
-			t.Error("expected Color to be false")
-		}
+		require.True(t, ok, "expected TableFormatter")
+		assert.False(t, table.Color)
 	})
 }

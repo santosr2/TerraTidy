@@ -176,10 +176,9 @@ func shouldSkipDir(_ string, name string) bool {
 	return skipDirs[name]
 }
 
-// isHCLFile checks if a file has .tf, .tfvars, or .hcl extension.
+// isHCLFile checks if a file has a Terraform/HCL extension.
 func isHCLFile(path string) bool {
-	ext := strings.ToLower(filepath.Ext(path))
-	return ext == ".tf" || ext == ".hcl" || ext == ".tfvars"
+	return sdk.IsHCLFile(path)
 }
 
 // formatFileCount returns a human-readable file count string.

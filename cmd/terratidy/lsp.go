@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 
 	"github.com/santosr2/terratidy/internal/lsp"
@@ -38,11 +39,12 @@ The server provides:
   - Real-time diagnostics
   - Document formatting
   - Code actions for fixable issues`,
-	Run: func(_ *cobra.Command, _ []string) {
+	RunE: func(_ *cobra.Command, _ []string) error {
 		server := lsp.NewServer(os.Stdin, os.Stdout)
 		if err := server.Run(); err != nil {
-			os.Exit(1)
+			return fmt.Errorf("running LSP server: %w", err)
 		}
+		return nil
 	},
 }
 

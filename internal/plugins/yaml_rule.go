@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"slices"
-	"strings"
 
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/hclsyntax"
@@ -125,16 +124,7 @@ func loadYAMLRule(path string) (*YAMLRule, error) {
 	return &YAMLRule{config: config}, nil
 }
 
-// parseSeverity converts a severity string to an sdk.Severity value.
+// parseSeverity converts a severity string to an sdk.Severity value (defaults to warning).
 func parseSeverity(s string) sdk.Severity {
-	switch strings.ToLower(s) {
-	case "error":
-		return sdk.SeverityError
-	case "warning":
-		return sdk.SeverityWarning
-	case "info":
-		return sdk.SeverityInfo
-	default:
-		return sdk.SeverityWarning
-	}
+	return sdk.ParseSeverity(s, sdk.SeverityWarning)
 }

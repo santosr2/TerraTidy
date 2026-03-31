@@ -140,13 +140,13 @@ func outputLintResults(findings []sdk.Finding) error {
 		}
 
 		if errors > 0 {
-			os.Exit(1)
+			return &sdk.ExitError{Code: 1}
 		}
 	} else {
-		// Exit with error code if there are errors (for structured output)
+		// Return exit error if there are errors (for structured output)
 		for _, finding := range findings {
 			if finding.Severity == sdk.SeverityError {
-				os.Exit(1)
+				return &sdk.ExitError{Code: 1}
 			}
 		}
 	}

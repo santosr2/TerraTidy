@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/fsnotify/fsnotify"
@@ -272,7 +273,7 @@ func findPolicyFiles(dir string) ([]string, error) {
 		}
 		if !info.IsDir() && filepath.Ext(path) == ".rego" {
 			// Skip test files
-			if filepath.Ext(filepath.Base(path[:len(path)-5])) != "_test" {
+			if !strings.HasSuffix(path, "_test.rego") {
 				files = append(files, path)
 			}
 		}

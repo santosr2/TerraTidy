@@ -275,18 +275,9 @@ func (e *Engine) groupFilesByDirectory(files []string) map[string][]string {
 	return dirFiles
 }
 
-// parseSeverity converts string severity to sdk.Severity
+// parseSeverity converts string severity to sdk.Severity (defaults to warning).
 func parseSeverity(severity string) sdk.Severity {
-	switch strings.ToLower(severity) {
-	case "error":
-		return sdk.SeverityError
-	case "warning":
-		return sdk.SeverityWarning
-	case "info":
-		return sdk.SeverityInfo
-	default:
-		return sdk.SeverityWarning
-	}
+	return sdk.ParseSeverity(severity, sdk.SeverityWarning)
 }
 
 // ============================================================================

@@ -5,6 +5,7 @@ package sdk
 
 import (
 	"log"
+	"strings"
 
 	"github.com/hashicorp/hcl/v2"
 )
@@ -23,6 +24,21 @@ const (
 	// SeverityInfo indicates a suggestion or informational finding.
 	SeverityInfo Severity = "info"
 )
+
+// ParseSeverity converts a string to a Severity value.
+// Returns defaultSev if the string does not match a known severity.
+func ParseSeverity(s string, defaultSev Severity) Severity {
+	switch strings.ToLower(s) {
+	case "error":
+		return SeverityError
+	case "warning":
+		return SeverityWarning
+	case "info":
+		return SeverityInfo
+	default:
+		return defaultSev
+	}
+}
 
 // Finding represents a single issue detected by a rule. Findings are collected
 // by engines and formatted for output. Each finding identifies the rule that

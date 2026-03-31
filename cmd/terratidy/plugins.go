@@ -31,22 +31,20 @@ Plugin directories can be configured in .terratidy.yaml:
 var pluginsListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List installed plugins",
-	Run: func(_ *cobra.Command, _ []string) {
+	RunE: func(_ *cobra.Command, _ []string) error {
 		cfg, err := config.Load(cfgFile)
 		if err != nil {
-			_, _ = fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
-			os.Exit(1)
+			return fmt.Errorf("loading config: %w", err)
 		}
 
 		if !cfg.Plugins.Enabled {
 			fmt.Println("Plugins are not enabled in configuration")
-			return
+			return nil
 		}
 
 		manager := plugins.NewManager(cfg.Plugins.Directories)
 		if err := manager.LoadAll(); err != nil {
-			_, _ = fmt.Fprintf(os.Stderr, "Error loading plugins: %v\n", err)
-			os.Exit(1)
+			return fmt.Errorf("loading plugins: %w", err)
 		}
 
 		pluginList := manager.ListPlugins()
@@ -56,7 +54,7 @@ var pluginsListCmd = &cobra.Command{
 			for _, dir := range cfg.Plugins.Directories {
 				fmt.Printf("  - %s\n", dir)
 			}
-			return
+			return nil
 		}
 
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
@@ -72,6 +70,7 @@ var pluginsListCmd = &cobra.Command{
 			)
 		}
 		_ = w.Flush()
+		return nil
 	},
 }
 
@@ -79,19 +78,17 @@ var pluginsInfoCmd = &cobra.Command{
 	Use:   "info [plugin-name]",
 	Short: "Show detailed information about a plugin",
 	Args:  cobra.ExactArgs(1),
-	Run: func(_ *cobra.Command, args []string) {
+	RunE: func(_ *cobra.Command, args []string) error {
 		pluginName := args[0]
 
 		cfg, err := config.Load(cfgFile)
 		if err != nil {
-			_, _ = fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
-			os.Exit(1)
+			return fmt.Errorf("loading config: %w", err)
 		}
 
 		manager := plugins.NewManager(cfg.Plugins.Directories)
 		if err := manager.LoadAll(); err != nil {
-			_, _ = fmt.Fprintf(os.Stderr, "Error loading plugins: %v\n", err)
-			os.Exit(1)
+			return fmt.Errorf("loading plugins: %w", err)
 		}
 
 		var found *plugins.Plugin
@@ -103,8 +100,7 @@ var pluginsInfoCmd = &cobra.Command{
 		}
 
 		if found == nil {
-			_, _ = fmt.Fprintf(os.Stderr, "Plugin not found: %s\n", pluginName)
-			os.Exit(1)
+			return fmt.Errorf("plugin not found: %s", pluginName)
 		}
 
 		fmt.Printf("Name:        %s\n", found.Metadata.Name)
@@ -133,6 +129,7 @@ var pluginsInfoCmd = &cobra.Command{
 				fmt.Printf("\nFormatter name: %s\n", fp.Name())
 			}
 		}
+		return nil
 	},
 }
 
@@ -140,14 +137,13 @@ var pluginsInitCmd = &cobra.Command{
 	Use:   "init [name]",
 	Short: "Initialize a new plugin project",
 	Args:  cobra.ExactArgs(1),
-	Run: func(_ *cobra.Command, args []string) {
+	RunE: func(_ *cobra.Command, args []string) error {
 		pluginName := args[0]
 
 		// Create plugin directory
 		dir := filepath.Join(".", pluginName)
 		if err := os.MkdirAll(dir, 0o755); err != nil {
-			_, _ = fmt.Fprintf(os.Stderr, "Error creating directory: %v\n", err)
-			os.Exit(1)
+			return fmt.Errorf("creating directory: %w", err)
 		}
 
 		// Create main.go
@@ -214,8 +210,7 @@ func (r *ExampleRule) Fix(ctx *sdk.Context, file *hcl.File) ([]byte, error) {
 
 		mainPath := filepath.Join(dir, "main.go")
 		if err := os.WriteFile(mainPath, []byte(mainContent), 0o644); err != nil {
-			_, _ = fmt.Fprintf(os.Stderr, "Error writing main.go: %v\n", err)
-			os.Exit(1)
+			return fmt.Errorf("writing main.go: %w", err)
 		}
 
 		// Create go.mod
@@ -228,8 +223,7 @@ require github.com/santosr2/terratidy v0.2.0-alpha.3
 
 		goModPath := filepath.Join(dir, "go.mod")
 		if err := os.WriteFile(goModPath, []byte(goModContent), 0o644); err != nil {
-			_, _ = fmt.Fprintf(os.Stderr, "Error writing go.mod: %v\n", err)
-			os.Exit(1)
+			return fmt.Errorf("writing go.mod: %w", err)
 		}
 
 		// Create Makefile
@@ -250,8 +244,7 @@ clean:
 
 		makefilePath := filepath.Join(dir, "Makefile")
 		if err := os.WriteFile(makefilePath, []byte(makefileContent), 0o644); err != nil {
-			_, _ = fmt.Fprintf(os.Stderr, "Error writing Makefile: %v\n", err)
-			os.Exit(1)
+			return fmt.Errorf("writing Makefile: %w", err)
 		}
 
 		fmt.Printf("Plugin project created: %s/\n", dir)
@@ -260,6 +253,7 @@ clean:
 		fmt.Println("  2. Edit main.go to implement your rules")
 		fmt.Println("  3. make build")
 		fmt.Println("  4. make install")
+		return nil
 	},
 }
 

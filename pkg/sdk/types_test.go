@@ -174,6 +174,30 @@ func TestRuleInterface(t *testing.T) {
 	})
 }
 
+func TestParseSeverity(t *testing.T) {
+	tests := []struct {
+		name       string
+		input      string
+		defaultSev Severity
+		expected   Severity
+	}{
+		{"error", "error", SeverityWarning, SeverityError},
+		{"warning", "warning", SeverityError, SeverityWarning},
+		{"info", "info", SeverityError, SeverityInfo},
+		{"uppercase", "ERROR", SeverityWarning, SeverityError},
+		{"mixed case", "Warning", SeverityError, SeverityWarning},
+		{"unknown defaults to warning", "critical", SeverityWarning, SeverityWarning},
+		{"unknown defaults to error", "critical", SeverityError, SeverityError},
+		{"empty defaults", "", SeverityWarning, SeverityWarning},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, ParseSeverity(tt.input, tt.defaultSev))
+		})
+	}
+}
+
 func TestSeverityComparison(t *testing.T) {
 	t.Run("severity string comparison", func(t *testing.T) {
 		assert.Equal(t, "error", string(SeverityError))

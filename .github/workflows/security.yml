@@ -132,4 +132,4 @@ jobs:
 
       - name: Run API compatibility check
         if: steps.filter.outputs.sdk == 'true'
-        run: gorelease
+        run: gorelease -base="$(git describe --tags --abbrev=0)"

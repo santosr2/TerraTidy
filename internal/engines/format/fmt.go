@@ -7,8 +7,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"path/filepath"
-	"strings"
 
 	"github.com/hashicorp/hcl/v2/hclwrite"
 	"github.com/pmezard/go-difflib/difflib"
@@ -145,10 +143,9 @@ func (e *Engine) formatFile(path string) (*sdk.Finding, error) {
 	}, nil
 }
 
-// isHCLFile checks if a file is an HCL file (.tf or .hcl)
+// isHCLFile checks if a file has a Terraform/HCL extension.
 func isHCLFile(path string) bool {
-	ext := strings.ToLower(filepath.Ext(path))
-	return ext == ".tf" || ext == ".hcl"
+	return sdk.IsHCLFile(path)
 }
 
 // Format formats the given content and returns the formatted result

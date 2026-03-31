@@ -68,4 +68,4 @@ repos:
     hooks:
       - id: conventional-pre-commit
         stages: [commit-msg]
-        args: [feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert]
+        args: [feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert, vscode, container]

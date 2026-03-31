@@ -74,8 +74,13 @@ commit_parsers = [
   { message = "^style", group = "Changed" },
   { message = "^test", skip = true },
   { message = "^chore\\(release\\)", skip = true },
-  { message = "^chore\\(deps\\)", skip = true },
+  { message = "^chore\\(deps", group = "Dependencies" },
+  { message = "^vscode\\(deps", group = "Dependencies" },
+  { message = "^container\\(deps", group = "Dependencies" },
+  { message = "^ci\\(deps", group = "Dependencies" },
   { message = "^chore", group = "Other" },
+  { message = "^vscode", group = "VS Code Extension" },
+  { message = "^container", group = "Container" },
   { body = ".*security", group = "Security" },
 ]
 # protect breaking changes from being skipped due to matching a skipping commit_parser

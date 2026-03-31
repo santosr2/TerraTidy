@@ -17,6 +17,7 @@ package plugins
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"plugin"
@@ -73,7 +74,7 @@ type FormatterPlugin interface {
 	// Name returns the formatter name
 	Name() string
 	// Format formats the findings and writes to the writer
-	Format(findings []sdk.Finding, w any) error
+	Format(findings []sdk.Finding, w io.Writer) error
 }
 
 // Manager manages plugin loading and registration

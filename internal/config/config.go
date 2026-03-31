@@ -106,12 +106,15 @@ func Load(path string) (*Config, error) {
 
 	// Load imports if specified
 	if len(cfg.Imports) > 0 {
-		if err := cfg.loadImports(filepath.Dir(path)); err != nil {
+		absPath, _ := filepath.Abs(path)
+		visited := map[string]bool{absPath: true}
+		if err := cfg.loadImports(filepath.Dir(path), visited); err != nil {
 			return nil, fmt.Errorf("loading imports: %w", err)
 		}
 	}
 
-	// Validate configuration
+	// Apply defaults and validate
+	cfg.SetDefaults()
 	if err := cfg.Validate(); err != nil {
 		return nil, fmt.Errorf("invalid config: %w", err)
 	}
@@ -153,8 +156,9 @@ func expandEnvVars(content string) string {
 	})
 }
 
-// loadImports loads and merges imported configurations
-func (c *Config) loadImports(baseDir string) error {
+// loadImports loads and merges imported configurations.
+// The visited map tracks already-loaded files to detect circular imports.
+func (c *Config) loadImports(baseDir string, visited map[string]bool) error {
 	for _, pattern := range c.Imports {
 		// Convert relative pattern to absolute
 		if !filepath.IsAbs(pattern) {
@@ -169,9 +173,22 @@ func (c *Config) loadImports(baseDir string) error {
 
 		// Load each matched file
 		for _, match := range matches {
+			absMatch, _ := filepath.Abs(match)
+			if visited[absMatch] {
+				return fmt.Errorf("circular import detected: %s", absMatch)
+			}
+			visited[absMatch] = true
+
 			partial, err := loadPartialConfig(match)
 			if err != nil {
 				return fmt.Errorf("loading %s: %w", match, err)
+			}
+
+			// Recursively load imports from the partial config
+			if len(partial.Imports) > 0 {
+				if err := partial.loadImports(filepath.Dir(match), visited); err != nil {
+					return err
+				}
 			}
 
 			// Merge partial config into main config
@@ -225,11 +242,16 @@ func (c *Config) merge(other *Config) {
 }
 
 // Validate validates the configuration
-func (c *Config) Validate() error {
+// SetDefaults fills in default values for unset fields.
+// Call this before Validate.
+func (c *Config) SetDefaults() {
 	if c.Version == 0 {
 		c.Version = 1
 	}
+}
 
+// Validate checks the configuration for errors.
+func (c *Config) Validate() error {
 	if c.Version != 1 {
 		return fmt.Errorf("unsupported config version: %d", c.Version)
 	}

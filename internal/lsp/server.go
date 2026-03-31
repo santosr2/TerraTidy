@@ -24,6 +24,7 @@ import (
 type Server struct {
 	reader        *bufio.Reader
 	writer        io.Writer
+	writeMu       sync.Mutex // protects writer from concurrent writeMessage calls
 	config        *config.Config
 	documents     map[string]*Document
 	docMu         sync.RWMutex
@@ -108,12 +109,17 @@ func (s *Server) readMessage() (json.RawMessage, error) {
 	return content, nil
 }
 
-// writeMessage writes an LSP message to stdout
+// writeMessage writes an LSP message to stdout.
+// The mutex ensures concurrent publishDiagnostics calls don't interleave
+// the header and content of different messages.
 func (s *Server) writeMessage(msg any) error {
 	content, err := json.Marshal(msg)
 	if err != nil {
 		return fmt.Errorf("marshaling message: %w", err)
 	}
+
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
 
 	header := fmt.Sprintf("Content-Length: %d\r\n\r\n", len(content))
 	if _, err := io.WriteString(s.writer, header); err != nil {

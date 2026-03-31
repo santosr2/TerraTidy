@@ -25,6 +25,7 @@ This extension brings TerraTidy's powerful formatting, style checking, linting, 
 go install github.com/santosr2/terratidy/cmd/terratidy@latest
 
 # Using Homebrew (macOS)
+brew tap santosr2/tap https://github.com/santosr2/TerraTidy
 brew install santosr2/tap/terratidy
 
 # Download from releases

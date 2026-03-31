@@ -109,7 +109,7 @@ func (r *MyCustomRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Finding, e
 }
 
 // Fix attempts to fix the issue (optional)
-func (r *MyCustomRule) Fix(ctx *sdk.Context, file *hcl.File) error {
+func (r *MyCustomRule) Fix(ctx *sdk.Context, file *hcl.File) ([]byte, error) {
 	// Implement fix logic if the issue is auto-fixable
-	return nil
+	return nil, nil
 }

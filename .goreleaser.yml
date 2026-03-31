@@ -71,6 +71,7 @@ release:
 
     ```bash
     # Homebrew (macOS/Linux)
+    brew tap santosr2/tap https://github.com/santosr2/TerraTidy
     brew install santosr2/tap/terratidy
 
     # Go install

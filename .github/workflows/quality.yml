@@ -33,5 +33,15 @@ jobs:
         with:
           python-version: '3.x'
 
+      - name: Cache pre-commit hooks
+        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.3.0
+        with:
+          path: ~/.cache/pre-commit
+          key: pre-commit-${{ runner.os }}-${{ hashFiles('.pre-commit-config.yaml') }}
+          restore-keys: |
+            pre-commit-${{ runner.os }}-
+
       - name: Run pre-commit
         uses: pre-commit/action@2c7b3805fd2a0fd8c1884dcaebf91fc102a13ecd # v3.0.1
+        env:
+          SKIP: no-commit-to-branch

@@ -7,7 +7,7 @@ updates:
       interval: weekly
       day: monday
     commit-message:
-      prefix: "deps"
+      prefix: "chore"
       include: "scope"
     labels:
       - dependencies
@@ -19,7 +19,7 @@ updates:
       interval: weekly
       day: monday
     commit-message:
-      prefix: "deps"
+      prefix: "vscode"
       include: "scope"
     labels:
       - dependencies
@@ -31,7 +31,7 @@ updates:
       interval: weekly
       day: monday
     commit-message:
-      prefix: "deps"
+      prefix: "container"
       include: "scope"
     labels:
       - dependencies

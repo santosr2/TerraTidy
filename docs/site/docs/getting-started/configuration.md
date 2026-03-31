@@ -211,6 +211,10 @@ engines:
   # local overrides
 ```
 
+Imported files can themselves contain `imports`, which are loaded recursively.
+Circular imports (e.g., `a.yaml` imports `b.yaml` which imports `a.yaml`) are
+detected and produce a clear error.
+
 ## Full Example
 
 ```yaml

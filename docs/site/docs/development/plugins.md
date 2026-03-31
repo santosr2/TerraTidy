@@ -57,7 +57,7 @@ The `sdk.Context` provides runtime information to rules:
 
 ```go
 type Context struct {
-    Config  map[string]interface{}
+    Config  map[string]any
     Logger  *log.Logger
     WorkDir string
     File    string
@@ -132,7 +132,7 @@ Depending on the plugin type, `New()` must return one of:
 | ----------- | ------------------------ | -------------------------------------------------------- |
 | `rule`      | `plugins.RulePlugin`     | `GetRules() []sdk.Rule`                                  |
 | `engine`    | `plugins.EnginePlugin`   | `Name() string`, `Run(ctx, files) ([]sdk.Finding, error)` |
-| `formatter` | `plugins.FormatterPlugin`| `Name() string`, `Format(findings, writer) error`        |
+| `formatter` | `plugins.FormatterPlugin`| `Name() string`, `Format(findings []sdk.Finding, w io.Writer) error` |
 
 ### Complete Go Plugin Example
 

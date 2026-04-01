@@ -1,4 +1,4 @@
-.PHONY: help build test lint clean install setup integration dev
+.PHONY: help build test lint clean install setup integration dev docker-build docker-run
 
 # Variables
 BINARY_NAME=terratidy
@@ -158,3 +158,12 @@ benchmark: ## Run benchmarks
 deps-graph: ## Generate dependency graph
 	@go mod graph | bash tools/scripts/mod-graph.sh > docs/dependencies.svg
 	@echo "Dependency graph saved to docs/dependencies.svg"
+
+docker-build: build ## Build Docker image for local development
+	@echo "Building Docker image..."
+	@cp bin/$(BINARY_NAME) terratidy
+	@docker build -t terratidy-dev .
+	@rm -f terratidy
+
+docker-run: docker-build ## Run TerraTidy in Docker
+	@docker run --rm -v "$(PWD)":/app terratidy-dev check

@@ -67,6 +67,7 @@ type Server struct {
 	shutdown      bool
 	logger        *log.Logger
 	logLevel      LogLevel
+	logFile       *os.File
 }
 
 // Document represents an open document
@@ -98,7 +99,16 @@ func (s *Server) SetLogFile(path string) error {
 	if err != nil {
 		return fmt.Errorf("opening log file: %w", err)
 	}
+	s.logFile = f
 	s.logger.SetOutput(f)
+	return nil
+}
+
+// Close releases resources held by the server (e.g., log file handle)
+func (s *Server) Close() error {
+	if s.logFile != nil {
+		return s.logFile.Close()
+	}
 	return nil
 }
 

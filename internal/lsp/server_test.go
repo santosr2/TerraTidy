@@ -795,6 +795,9 @@ func TestServer_SetLogFile(t *testing.T) {
 	server.SetLogLevel(LogLevelDebug)
 	server.logDebug("test message %d", 42)
 
+	// Close before reading so Windows releases the file handle
+	require.NoError(t, server.Close())
+
 	content, err := os.ReadFile(logFile)
 	require.NoError(t, err)
 	assert.Contains(t, string(content), "test message 42")

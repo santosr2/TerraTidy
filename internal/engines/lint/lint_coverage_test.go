@@ -2,6 +2,7 @@ package lint
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -89,6 +90,47 @@ func TestRun_ContextCancellation(t *testing.T) {
 	engine := New(nil)
 	_, err := engine.Run(ctx, []string{tmpFile})
 	assert.ErrorIs(t, err, context.Canceled)
+}
+
+func BenchmarkLintLargeModule(b *testing.B) {
+	dir := b.TempDir()
+
+	// Create 50 .tf files simulating a large module
+	for i := range 50 {
+		content := fmt.Sprintf(`resource "aws_instance" "server_%d" {
+  ami           = "ami-%06d"
+  instance_type = "t2.micro"
+
+  tags = {
+    Name = "server-%d"
+  }
+}
+
+variable "var_%d" {
+  description = "Variable %d"
+  type        = string
+  default     = "value-%d"
+}
+`, i, i, i, i, i, i)
+		f := filepath.Join(dir, fmt.Sprintf("file_%02d.tf", i))
+		require.NoError(b, os.WriteFile(f, []byte(content), 0o644))
+	}
+
+	var files []string
+	entries, err := os.ReadDir(dir)
+	require.NoError(b, err)
+	for _, e := range entries {
+		files = append(files, filepath.Join(dir, e.Name()))
+	}
+
+	engine := New(nil)
+	ctx := context.Background()
+
+	b.ResetTimer()
+	b.ReportAllocs()
+	for range b.N {
+		_, _ = engine.Run(ctx, files)
+	}
 }
 
 func BenchmarkLintModule(b *testing.B) {

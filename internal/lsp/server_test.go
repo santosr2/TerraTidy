@@ -755,6 +755,80 @@ resource "aws_instance" "example2" {
 	assert.Contains(t, output, "textDocument/publishDiagnostics")
 }
 
+func TestServer_PublishDiagnostics_TempFileReuse(t *testing.T) {
+	out := &bytes.Buffer{}
+	server := NewServer(strings.NewReader(""), out)
+	server.initialized = true
+
+	uri := "file:///tmp/reuse.tf"
+	doc := &Document{
+		URI:     uri,
+		Content: "resource {}\n",
+		Version: 1,
+	}
+	server.documents[uri] = doc
+
+	// First call creates the temp file
+	err := server.publishDiagnostics(uri)
+	require.NoError(t, err)
+	assert.NotEmpty(t, doc.tempFile, "temp file should be created")
+	firstTempFile := doc.tempFile
+
+	// Second call reuses the same temp file
+	out.Reset()
+	doc.Content = "resource {}\nvariable {}\n"
+	err = server.publishDiagnostics(uri)
+	require.NoError(t, err)
+	assert.Equal(t, firstTempFile, doc.tempFile, "temp file should be reused")
+
+	// Cleanup
+	_ = os.Remove(doc.tempFile)
+}
+
+func TestServer_HandleDidClose_CleansUpTempFile(t *testing.T) {
+	out := &bytes.Buffer{}
+	server := NewServer(strings.NewReader(""), out)
+	server.initialized = true
+
+	// Create a temp file to simulate diagnostics having run
+	tmpFile, err := os.CreateTemp("", "terratidy-test-*.tf")
+	require.NoError(t, err)
+	require.NoError(t, tmpFile.Close())
+	tmpPath := tmpFile.Name()
+
+	uri := "file:///tmp/cleanup.tf"
+	server.documents[uri] = &Document{
+		URI:      uri,
+		Content:  "resource {}\n",
+		Version:  1,
+		tempFile: tmpPath,
+	}
+
+	params := DidCloseTextDocumentParams{
+		TextDocument: TextDocumentIdentifier{URI: uri},
+	}
+	paramsJSON, _ := json.Marshal(params)
+
+	msg := RequestMessage{
+		JSONRPC: "2.0",
+		Method:  "textDocument/didClose",
+		Params:  paramsJSON,
+	}
+
+	err = server.handleDidClose(msg)
+	require.NoError(t, err)
+
+	// Verify temp file was removed
+	_, statErr := os.Stat(tmpPath)
+	assert.True(t, os.IsNotExist(statErr), "temp file should be deleted on close")
+
+	// Verify document was removed
+	server.docMu.RLock()
+	_, exists := server.documents[uri]
+	server.docMu.RUnlock()
+	assert.False(t, exists, "document should be removed")
+}
+
 func TestParseLogLevel(t *testing.T) {
 	tests := []struct {
 		input    string

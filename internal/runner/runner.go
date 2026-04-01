@@ -9,12 +9,6 @@ import (
 	"github.com/santosr2/terratidy/pkg/sdk"
 )
 
-// Engine defines the interface that all engines must implement
-type Engine interface {
-	Name() string
-	Run(ctx context.Context, files []string) ([]sdk.Finding, error)
-}
-
 // EngineResult holds the result from a single engine execution
 type EngineResult struct {
 	Engine   string
@@ -24,20 +18,20 @@ type EngineResult struct {
 
 // Runner executes multiple engines, optionally in parallel
 type Runner struct {
-	engines  []Engine
+	engines  []sdk.Engine
 	parallel bool
 }
 
 // New creates a new Runner
 func New() *Runner {
 	return &Runner{
-		engines:  make([]Engine, 0),
+		engines:  make([]sdk.Engine, 0),
 		parallel: false,
 	}
 }
 
 // AddEngine adds an engine to the runner
-func (r *Runner) AddEngine(engine Engine) *Runner {
+func (r *Runner) AddEngine(engine sdk.Engine) *Runner {
 	r.engines = append(r.engines, engine)
 	return r
 }
@@ -137,7 +131,7 @@ func (r *Runner) runParallelWithResults(ctx context.Context, files []string) []E
 
 	for _, engine := range r.engines {
 		wg.Add(1)
-		go func(eng Engine) {
+		go func(eng sdk.Engine) {
 			defer wg.Done()
 
 			findings, err := eng.Run(ctx, files)
@@ -149,11 +143,9 @@ func (r *Runner) runParallelWithResults(ctx context.Context, files []string) []E
 		}(engine)
 	}
 
-	// Wait for all engines to complete
 	wg.Wait()
 	close(resultsChan)
 
-	// Collect results in order received
 	results := make([]EngineResult, 0, len(r.engines))
 	for result := range resultsChan {
 		results = append(results, result)

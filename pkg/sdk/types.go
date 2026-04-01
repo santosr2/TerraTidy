@@ -4,7 +4,7 @@
 package sdk
 
 import (
-	"log"
+	"context"
 	"strings"
 
 	"github.com/hashicorp/hcl/v2"
@@ -68,8 +68,6 @@ type Finding struct {
 type Context struct {
 	// Config holds rule-specific options from the "options" map in .terratidy.yaml.
 	Config map[string]any
-	// Logger for diagnostic output (not user-facing findings).
-	Logger *log.Logger
 	// WorkDir is the directory TerraTidy was invoked from.
 	WorkDir string
 	// File is the absolute path to the file being checked.
@@ -78,7 +76,6 @@ type Context struct {
 
 // Rule defines the interface that all rules must implement. Built-in rules,
 // Go plugin rules, YAML rules, and Bash rules all satisfy this interface.
-// The Check method detects issues; the Fix method applies corrections.
 type Rule interface {
 	// Name returns a unique identifier for the rule (e.g., "style.block-label-case").
 	Name() string
@@ -87,7 +84,20 @@ type Rule interface {
 	// Check evaluates the rule against a parsed HCL file and returns any findings.
 	// Return nil findings and nil error if the file passes the check.
 	Check(ctx *Context, file *hcl.File) ([]Finding, error)
+}
+
+// Fixer is an optional interface for rules that support auto-fixing.
+// Rules that implement both Rule and Fixer can automatically correct issues.
+type Fixer interface {
 	// Fix applies an automatic fix and returns the corrected file content as bytes.
-	// Return nil, nil if the rule does not support auto-fixing.
+	// Return nil, nil if no fix is needed.
 	Fix(ctx *Context, file *hcl.File) ([]byte, error)
+}
+
+// Engine defines the interface for analysis engines (fmt, style, lint, policy).
+type Engine interface {
+	// Name returns the engine identifier.
+	Name() string
+	// Run executes the engine on the given files and returns findings.
+	Run(ctx context.Context, files []string) ([]Finding, error)
 }

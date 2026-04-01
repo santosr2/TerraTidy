@@ -45,7 +45,13 @@ type Rule interface {
 
     // Check evaluates the rule against a parsed HCL file
     Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Finding, error)
+}
+```
 
+Rules that support auto-fixing also implement `sdk.Fixer`:
+
+```go
+type Fixer interface {
     // Fix applies an automatic fix and returns the corrected file bytes
     Fix(ctx *sdk.Context, file *hcl.File) ([]byte, error)
 }
@@ -58,7 +64,6 @@ The `sdk.Context` provides runtime information to rules:
 ```go
 type Context struct {
     Config  map[string]any
-    Logger  *log.Logger
     WorkDir string
     File    string
 }
@@ -209,9 +214,10 @@ func (r *RequireTagsRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Finding
     return findings, nil
 }
 
-func (r *RequireTagsRule) Fix(_ *sdk.Context, _ *hcl.File) ([]byte, error) {
-    return nil, nil
-}
+// Optional: implement sdk.Fixer for auto-fix support
+// func (r *RequireTagsRule) Fix(_ *sdk.Context, _ *hcl.File) ([]byte, error) {
+//     return fixedContent, nil
+// }
 ```
 
 ### Building Go Plugins

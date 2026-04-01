@@ -1,8 +1,6 @@
 package sdk
 
 import (
-	"log"
-	"os"
 	"testing"
 
 	"github.com/hashicorp/hcl/v2"
@@ -82,22 +80,10 @@ func TestContext(t *testing.T) {
 		assert.Equal(t, "main.tf", ctx.File)
 	})
 
-	t.Run("context with logger", func(t *testing.T) {
-		logger := log.New(os.Stderr, "test: ", log.LstdFlags)
-		ctx := &Context{
-			Logger:  logger,
-			WorkDir: ".",
-		}
-
-		assert.NotNil(t, ctx.Logger)
-		assert.Equal(t, ".", ctx.WorkDir)
-	})
-
 	t.Run("empty context", func(t *testing.T) {
 		ctx := &Context{}
 
 		assert.Nil(t, ctx.Config)
-		assert.Nil(t, ctx.Logger)
 		assert.Empty(t, ctx.WorkDir)
 		assert.Empty(t, ctx.File)
 	})
@@ -128,21 +114,15 @@ func (r *MockRule) Fix(ctx *Context, file *hcl.File) ([]byte, error) {
 }
 
 func TestRuleInterface(t *testing.T) {
-	t.Run("mock rule implementation", func(t *testing.T) {
+	t.Run("mock rule implements Rule", func(t *testing.T) {
 		rule := &MockRule{
 			name:        "mock-rule",
 			description: "A mock rule for testing",
 			checkFunc: func(_ *Context, _ *hcl.File) ([]Finding, error) {
-				return []Finding{
-					{Rule: "mock-rule", Message: "Found issue"},
-				}, nil
-			},
-			fixFunc: func(_ *Context, _ *hcl.File) ([]byte, error) {
-				return []byte("fixed"), nil
+				return []Finding{{Rule: "mock-rule", Message: "Found issue"}}, nil
 			},
 		}
 
-		// Test interface compliance
 		var _ Rule = rule
 
 		assert.Equal(t, "mock-rule", rule.Name())
@@ -151,7 +131,17 @@ func TestRuleInterface(t *testing.T) {
 		findings, err := rule.Check(nil, nil)
 		assert.NoError(t, err)
 		assert.Len(t, findings, 1)
-		assert.Equal(t, "mock-rule", findings[0].Rule)
+	})
+
+	t.Run("mock rule implements Fixer", func(t *testing.T) {
+		rule := &MockRule{
+			name: "fixable-rule",
+			fixFunc: func(_ *Context, _ *hcl.File) ([]byte, error) {
+				return []byte("fixed"), nil
+			},
+		}
+
+		var _ Fixer = rule
 
 		fixed, err := rule.Fix(nil, nil)
 		assert.NoError(t, err)
@@ -159,10 +149,7 @@ func TestRuleInterface(t *testing.T) {
 	})
 
 	t.Run("rule with nil functions", func(t *testing.T) {
-		rule := &MockRule{
-			name:        "empty-rule",
-			description: "Rule with no implementation",
-		}
+		rule := &MockRule{name: "empty-rule"}
 
 		findings, err := rule.Check(nil, nil)
 		assert.NoError(t, err)

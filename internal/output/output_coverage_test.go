@@ -86,12 +86,18 @@ func TestMarkdownFormatter_AllSeverities(t *testing.T) {
 
 func TestGitHubActionsFormatter_AllSeverities(t *testing.T) {
 	findings := []sdk.Finding{
-		{Rule: "r1", Message: "error msg", File: "a.tf", Severity: sdk.SeverityError,
-			Location: hcl.Range{Start: hcl.Pos{Line: 1, Column: 1}}},
-		{Rule: "r2", Message: "warn msg", File: "a.tf", Severity: sdk.SeverityWarning,
-			Location: hcl.Range{Start: hcl.Pos{Line: 2, Column: 1}}},
-		{Rule: "r3", Message: "info msg", File: "a.tf", Severity: sdk.SeverityInfo,
-			Location: hcl.Range{Start: hcl.Pos{Line: 3, Column: 1}}},
+		{
+			Rule: "r1", Message: "error msg", File: "a.tf", Severity: sdk.SeverityError,
+			Location: hcl.Range{Start: hcl.Pos{Line: 1, Column: 1}},
+		},
+		{
+			Rule: "r2", Message: "warn msg", File: "a.tf", Severity: sdk.SeverityWarning,
+			Location: hcl.Range{Start: hcl.Pos{Line: 2, Column: 1}},
+		},
+		{
+			Rule: "r3", Message: "info msg", File: "a.tf", Severity: sdk.SeverityInfo,
+			Location: hcl.Range{Start: hcl.Pos{Line: 3, Column: 1}},
+		},
 	}
 
 	formatter := &GitHubActionsFormatter{}

@@ -785,6 +785,45 @@ func TestServer_PublishDiagnostics_TempFileReuse(t *testing.T) {
 	_ = os.Remove(doc.tempFile)
 }
 
+func TestServer_PublishDiagnostics_TempFileHCLExtension(t *testing.T) {
+	out := &bytes.Buffer{}
+	server := NewServer(strings.NewReader(""), out)
+	server.initialized = true
+
+	uri := "file:///tmp/config.hcl"
+	doc := &Document{
+		URI:     uri,
+		Content: "variable {}\n",
+		Version: 1,
+	}
+	server.documents[uri] = doc
+
+	err := server.publishDiagnostics(uri)
+	require.NoError(t, err)
+	assert.NotEmpty(t, doc.tempFile)
+	assert.Contains(t, doc.tempFile, ".hcl")
+
+	_ = os.Remove(doc.tempFile)
+}
+
+func TestServer_PublishDiagnostics_NonTerraformSkipped(t *testing.T) {
+	out := &bytes.Buffer{}
+	server := NewServer(strings.NewReader(""), out)
+	server.initialized = true
+
+	uri := "file:///tmp/readme.md"
+	server.documents[uri] = &Document{
+		URI:     uri,
+		Content: "# readme",
+		Version: 1,
+	}
+
+	err := server.publishDiagnostics(uri)
+	require.NoError(t, err)
+	// Non-terraform files should be skipped, no diagnostics published
+	assert.Empty(t, out.String())
+}
+
 func TestServer_HandleDidClose_CleansUpTempFile(t *testing.T) {
 	out := &bytes.Buffer{}
 	server := NewServer(strings.NewReader(""), out)
@@ -827,6 +866,38 @@ func TestServer_HandleDidClose_CleansUpTempFile(t *testing.T) {
 	_, exists := server.documents[uri]
 	server.docMu.RUnlock()
 	assert.False(t, exists, "document should be removed")
+}
+
+func TestServer_HandleDidClose_NoTempFile(t *testing.T) {
+	out := &bytes.Buffer{}
+	server := NewServer(strings.NewReader(""), out)
+
+	uri := "file:///tmp/no-temp.tf"
+	server.documents[uri] = &Document{
+		URI:     uri,
+		Content: "resource {}\n",
+		Version: 1,
+		// tempFile intentionally empty (document never analyzed)
+	}
+
+	params := DidCloseTextDocumentParams{
+		TextDocument: TextDocumentIdentifier{URI: uri},
+	}
+	paramsJSON, _ := json.Marshal(params)
+
+	msg := RequestMessage{
+		JSONRPC: "2.0",
+		Method:  "textDocument/didClose",
+		Params:  paramsJSON,
+	}
+
+	err := server.handleDidClose(msg)
+	require.NoError(t, err)
+
+	server.docMu.RLock()
+	_, exists := server.documents[uri]
+	server.docMu.RUnlock()
+	assert.False(t, exists)
 }
 
 func TestParseLogLevel(t *testing.T) {

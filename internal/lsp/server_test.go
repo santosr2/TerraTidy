@@ -810,6 +810,32 @@ func TestServer_SetLogFile_InvalidPath(t *testing.T) {
 	assert.Error(t, err)
 }
 
+func TestServer_Close_NoLogFile(t *testing.T) {
+	server := NewServer(strings.NewReader(""), &bytes.Buffer{})
+	err := server.Close()
+	assert.NoError(t, err)
+}
+
+func TestServer_LogError(t *testing.T) {
+	server := NewServer(strings.NewReader(""), &bytes.Buffer{})
+
+	logFile := filepath.Join(t.TempDir(), "error.log")
+	require.NoError(t, server.SetLogFile(logFile))
+	server.SetLogLevel(LogLevelError)
+
+	server.logError("something went wrong: %s", "test")
+	// logDebug should be suppressed at error level
+	server.logDebug("this should not appear")
+
+	require.NoError(t, server.Close())
+
+	content, err := os.ReadFile(logFile)
+	require.NoError(t, err)
+	assert.Contains(t, string(content), "[ERROR]")
+	assert.Contains(t, string(content), "something went wrong: test")
+	assert.NotContains(t, string(content), "[DEBUG]")
+}
+
 func TestServer_HandleMessage_BeforeInitialize(t *testing.T) {
 	out := &bytes.Buffer{}
 	server := NewServer(strings.NewReader(""), out)

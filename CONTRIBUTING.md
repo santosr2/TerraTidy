@@ -10,9 +10,9 @@ Thank you for your interest in contributing to TerraTidy!
 
    ```bash
    mise install
-   make setup
-   make build
-   make test
+   mise run setup
+   mise run build
+   mise run test
    ```
 
 ## Development Guidelines
@@ -27,9 +27,9 @@ Thank you for your interest in contributing to TerraTidy!
 ### Testing
 
 ```bash
-make test           # Run unit tests
-make integration    # Run integration tests
-make lint           # Run linters
+mise run test           # Run unit tests
+mise run test:integration  # Run integration tests
+mise run lint           # Run linters
 ```
 
 ### Commit Messages
@@ -46,7 +46,7 @@ Follow [Conventional Commits](https://www.conventionalcommits.org/):
 
 1. Create a feature branch: `git checkout -b feature/my-feature`
 2. Make your changes with tests
-3. Run tests and linters: `make check`
+3. Run tests and linters: `mise run check`
 4. Commit with conventional commit messages
 5. Push and create PR
 
@@ -55,9 +55,10 @@ Follow [Conventional Commits](https://www.conventionalcommits.org/):
 ### New Rules
 
 ```bash
-make init-rule NAME=my-rule TYPE=go
+mise run build
+./bin/terratidy init-rule --name my-rule --type go
 # Edit generated files
-make test-rule RULE=my-rule
+./bin/terratidy test-rule my-rule
 ```
 
 ### New Engines

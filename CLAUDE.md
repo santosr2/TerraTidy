@@ -120,12 +120,12 @@ custom_rules:
 
 ```bash
 mise install              # Install Go 1.26.1 + tools
-make setup                # Install dependencies
-make build                # Build binary
-make test                 # Unit tests
-make integration          # Integration tests
-make lint                 # golangci-lint
-make init-rule NAME=x TYPE=go|rego|yaml   # Scaffold new rule (default: rego)
+mise run setup            # Install dependencies
+mise run build            # Build binary
+mise run test             # Unit tests
+mise run test:integration # Integration tests
+mise run lint             # golangci-lint
+mise run build && ./bin/terratidy init-rule --name x --type go|rego|yaml  # Scaffold new rule (default: rego)
 ```
 
 ## Testing

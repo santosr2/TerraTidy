@@ -11,7 +11,7 @@ This page provides the comprehensive development reference.
 ### Prerequisites
 
 - Go 1.26.1 or later
-- Make
+- [mise](https://mise.jdx.dev/) task runner
 - Git
 
 ### Clone the Repository
@@ -24,19 +24,19 @@ cd terratidy
 ### Install Dependencies
 
 ```bash
-make setup
+mise run setup
 ```
 
 ### Build
 
 ```bash
-make build
+mise run build
 ```
 
 ### Run Tests
 
 ```bash
-make test
+mise run test
 ```
 
 ## Development Workflow
@@ -57,16 +57,16 @@ git checkout -b feature/my-feature
 
 ```bash
 # Format code
-make fmt
+mise run fmt
 
 # Run linter
-make lint
+mise run lint
 
 # Run all tests
-make test
+mise run test
 
 # Build
-make build
+mise run build
 ```
 
 ### Commit
@@ -129,13 +129,13 @@ func TestMyFunction(t *testing.T) {
 ### Integration Tests
 
 ```bash
-make integration
+mise run test:integration
 ```
 
 ### Coverage
 
 ```bash
-make test-coverage
+mise run test:coverage
 ```
 
 ## Adding New Features

@@ -1,4 +1,6 @@
 import * as vscode from 'vscode';
+import * as os from 'node:os';
+import * as path from 'node:path';
 import {
     LanguageClient,
     type LanguageClientOptions,
@@ -11,6 +13,14 @@ let client: LanguageClient | undefined;
 
 // Output channel for logging
 let outputChannel: vscode.OutputChannel;
+
+// Resolve ~ prefix to the user's home directory
+function resolveExecutablePath(execPath: string): string {
+    if (execPath.startsWith('~/') || execPath === '~') {
+        return path.join(os.homedir(), execPath.slice(1));
+    }
+    return execPath;
+}
 
 // Extension activation
 export async function activate(context: vscode.ExtensionContext) {
@@ -41,12 +51,14 @@ export async function deactivate() {
 // Start the Language Server Protocol client
 async function startLanguageClient(context: vscode.ExtensionContext): Promise<void> {
     const config = vscode.workspace.getConfiguration('terratidy');
-    const executablePath = config.get<string>('executablePath') || 'terratidy';
+    const executablePath = resolveExecutablePath(
+        config.get<string>('executablePath') || 'terratidy'
+    );
 
     // Check if terratidy is available
     try {
         const cp = require('node:child_process');
-        cp.execSync(`${executablePath} --version`, { stdio: 'ignore' });
+        cp.execFileSync(executablePath, ['--version'], { stdio: 'ignore' });
     } catch (error) {
         const message =
             'TerraTidy executable not found. Please install TerraTidy or configure terratidy.executablePath.';
@@ -161,7 +173,9 @@ async function initTerraTidy(): Promise<void> {
     }
 
     const config = vscode.workspace.getConfiguration('terratidy');
-    const executablePath = config.get<string>('executablePath') || 'terratidy';
+    const executablePath = resolveExecutablePath(
+        config.get<string>('executablePath') || 'terratidy'
+    );
     const cwd = workspaceFolder.uri.fsPath;
 
     try {
@@ -169,7 +183,6 @@ async function initTerraTidy(): Promise<void> {
         await new Promise<void>((resolve, reject) => {
             const process = cp.spawn(executablePath, ['init'], {
                 cwd,
-                shell: true,
             });
 
             let stdout = '';

@@ -14,6 +14,9 @@ let client: LanguageClient | undefined;
 // Output channel for logging
 let outputChannel: vscode.OutputChannel;
 
+// Config change listener (tracked to avoid subscription leaks on restart)
+let configListener: vscode.Disposable | undefined;
+
 // Resolve ~ prefix to the user's home directory
 function resolveExecutablePath(execPath: string): string {
     if (execPath.startsWith('~/') || execPath === '~') {
@@ -115,22 +118,25 @@ async function startLanguageClient(context: vscode.ExtensionContext): Promise<vo
         vscode.window.showErrorMessage(`TerraTidy LSP server failed to start: ${errorMessage}`);
     }
 
-    // Listen for configuration changes and restart server if needed
-    context.subscriptions.push(
-        vscode.workspace.onDidChangeConfiguration(async (event) => {
-            if (event.affectsConfiguration('terratidy')) {
-                const action = await vscode.window.showInformationMessage(
-                    'TerraTidy configuration changed. Restart the language server?',
-                    'Restart',
-                    'Later'
-                );
-                if (action === 'Restart') {
-                    await stopLanguageClient();
-                    await startLanguageClient(context);
-                }
+    // Dispose old config listener before creating a new one (prevents
+    // duplicate "Restart?" prompts after multiple server restarts)
+    if (configListener) {
+        configListener.dispose();
+    }
+    configListener = vscode.workspace.onDidChangeConfiguration(async (event) => {
+        if (event.affectsConfiguration('terratidy')) {
+            const action = await vscode.window.showInformationMessage(
+                'TerraTidy configuration changed. Restart the language server?',
+                'Restart',
+                'Later'
+            );
+            if (action === 'Restart') {
+                await stopLanguageClient();
+                await startLanguageClient(context);
             }
-        })
-    );
+        }
+    });
+    context.subscriptions.push(configListener);
 }
 
 // Stop the language client

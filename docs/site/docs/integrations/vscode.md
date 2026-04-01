@@ -177,6 +177,15 @@ Run checks manually when needed.
 
 ## Limitations
 
+### Engine Selection for Diagnostics
+
+Document formatting (`Format Document` command, `Ctrl+Shift+F`) works
+regardless of engine settings. However, for real-time diagnostics
+(squiggly underlines), the LSP server only runs the lint and style
+engines. The `engines.fmt` and `engines.policy` toggles are accepted
+but do not yet control which engines produce diagnostics. Policy
+engine diagnostics are planned for a future release.
+
 ### Multi-root Workspaces
 
 The LSP server currently uses only the first workspace folder's root.
@@ -185,7 +194,12 @@ workspace support is planned for a future release.
 
 ### Remote Development
 
-Remote Development (SSH, Containers, WSL) has not been tested.
-The extension does not set `extensionKind` in `package.json`, so it
-may run on the wrong side (UI vs. remote). Ensure TerraTidy is
-installed in the remote environment if using remote development.
+The extension sets `extensionKind: ["workspace"]` so it runs on the
+remote side when using Remote Development (SSH, Containers, WSL).
+Ensure TerraTidy is installed in the remote environment.
+
+### terraform-vars Language
+
+The extension activates on the `terraform-vars` language, which is
+provided by the [HashiCorp Terraform](https://marketplace.visualstudio.com/items?itemName=HashiCorp.terraform)
+extension. Install it for `.tfvars` file support.

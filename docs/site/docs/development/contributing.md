@@ -187,7 +187,8 @@ terratidy/
 Install pre-commit hooks for automatic checks on commit:
 
 ```bash
-pip install pre-commit
+# pre-commit is installed by mise (see mise.toml)
+mise install
 pre-commit install
 pre-commit install --hook-type commit-msg  # Conventional commit validation
 ```

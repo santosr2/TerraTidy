@@ -36,13 +36,12 @@ Issues are highlighted as you type:
 - Warnings with yellow underlines
 - Info with blue underlines
 
-### Format on Save
+### Document Formatting
 
-Enable automatic formatting:
+Format Terraform and HCL files using `hclwrite`:
 
 ```json
 {
-  "terratidy.formatOnSave": true,
   "[terraform]": {
     "editor.defaultFormatter": "santosr2.terratidy",
     "editor.formatOnSave": true
@@ -52,11 +51,9 @@ Enable automatic formatting:
 
 ### Quick Fixes
 
-Click the lightbulb icon or press `Ctrl+.` / `Cmd+.` to see available fixes:
-
-- Fix naming convention violations
-- Reorder attributes
-- Add missing descriptions
+Click the lightbulb icon or press `Ctrl+.` / `Cmd+.` to apply formatting
+fixes for diagnostics. When a file has formatting issues, code actions
+offer to reformat the document.
 
 ## Commands
 
@@ -83,11 +80,11 @@ Configure in VS Code settings (`Ctrl+,` / `Cmd+,`):
   // Configuration profile to use
   "terratidy.profile": "",
 
-  // Run checks on save
-  "terratidy.runOnSave": true,
+  // Run checks on save (default: false)
+  "terratidy.runOnSave": false,
 
-  // Format on save
-  "terratidy.formatOnSave": true,
+  // Format on save (default: false)
+  "terratidy.formatOnSave": false,
 
   // Auto-fix on save
   "terratidy.fixOnSave": false,
@@ -178,26 +175,17 @@ For large projects:
 
 Run checks manually when needed.
 
-## Multi-root Workspaces
+## Limitations
 
-Each workspace folder can have its own configuration:
+### Multi-root Workspaces
 
-```text
-project/
-├── .vscode/
-│   └── settings.json
-├── module-a/
-│   └── .terratidy.yaml
-└── module-b/
-    └── .terratidy.yaml
-```
+The LSP server currently uses only the first workspace folder's root.
+Diagnostics and configuration are scoped to that folder. Multi-root
+workspace support is planned for a future release.
 
-## Remote Development
+### Remote Development
 
-The extension works with:
-
-- Remote - SSH
-- Remote - Containers
-- WSL
-
-Ensure TerraTidy is installed in the remote environment.
+Remote Development (SSH, Containers, WSL) has not been tested.
+The extension does not set `extensionKind` in `package.json`, so it
+may run on the wrong side (UI vs. remote). Ensure TerraTidy is
+installed in the remote environment if using remote development.

@@ -1,6 +1,6 @@
 # TerraTidy
 
-Single-binary Terraform/Terragrunt quality platform. Go 1.26.1, library-first, extensible plugin system.
+Single-binary Terraform/Terragrunt quality platform. Go 1.25+ (dev: 1.26.1), library-first, extensible plugin system.
 
 ## Architecture
 

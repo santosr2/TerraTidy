@@ -128,6 +128,17 @@ mise run lint             # golangci-lint
 mise run build && ./bin/terratidy init-rule --name x --type go|rego|yaml  # Scaffold new rule (default: rego)
 ```
 
+## Code Quality
+
+All static analysis runs through `golangci-lint` (`.golangci.yml`):
+
+- **Linters**: errcheck, govet, staticcheck, unused, gosec, revive, gocritic, cyclop, funlen, errorlint, and more
+- **Formatters**: gofumpt, goimports
+- **Config**: `revive.toml` for revive-specific rules
+- **Run**: `mise run lint` (or `mise run check` for fmt + vet + lint + test)
+
+Thresholds: cyclomatic complexity 25, function length 120 lines / 60 statements.
+
 ## Testing
 
 - Table-driven tests with testify (`require`, `assert`)

@@ -38,50 +38,27 @@ test-coverage: ## Run tests with coverage report
 
 lint: ## Run linters
 	@echo "Running linters..."
-	@if command -v golangci-lint > /dev/null; then \
-		golangci-lint run; \
-	else \
-		echo "golangci-lint not found. Install with: mise install golangci-lint"; \
-	fi
+	@mise exec -- golangci-lint run
 
 staticcheck: ## Run staticcheck (advanced static analysis)
 	@echo "Running staticcheck..."
-	@if command -v staticcheck > /dev/null; then \
-		staticcheck ./...; \
-	else \
-		echo "staticcheck not found. Install with: go install honnef.co/go/tools/cmd/staticcheck@latest"; \
-	fi
+	@mise exec -- staticcheck ./...
 
 revive: ## Run revive linter
 	@echo "Running revive..."
-	@if command -v revive > /dev/null; then \
-		revive -config revive.toml -formatter friendly ./...; \
-	else \
-		echo "revive not found. Install with: go install github.com/mgechev/revive@latest"; \
-	fi
+	@mise exec -- revive -config revive.toml -formatter friendly ./...
 
 vuln: ## Check for security vulnerabilities
 	@echo "Checking for vulnerabilities..."
-	@if command -v govulncheck > /dev/null; then \
-		govulncheck ./...; \
-	else \
-		echo "govulncheck not found. Install with: go install golang.org/x/vuln/cmd/govulncheck@latest"; \
-	fi
+	@mise exec -- govulncheck ./...
 
 fmt: ## Format code
 	@echo "Formatting code..."
 	@go fmt ./...
-	@if command -v goimports > /dev/null; then \
-		goimports -w .; \
-	fi
 
 fmt-strict: ## Format code with gofumpt (stricter than gofmt)
 	@echo "Formatting code with gofumpt..."
-	@if command -v gofumpt > /dev/null; then \
-		gofumpt -l -w .; \
-	else \
-		echo "gofumpt not found. Install with: go install mvdan.cc/gofumpt@latest"; \
-	fi
+	@mise exec -- gofumpt -l -w .
 
 vet: ## Run go vet
 	@echo "Running go vet..."

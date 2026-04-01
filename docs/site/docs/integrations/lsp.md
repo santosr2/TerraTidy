@@ -15,6 +15,12 @@ The TerraTidy LSP server provides:
 ```bash
 # Start LSP server
 terratidy lsp
+
+# With debug logging to a file
+terratidy lsp --log-level debug --log-file /tmp/terratidy-lsp.log
+
+# Log levels: off, error, warn, info (default), debug
+terratidy lsp --log-level error
 ```
 
 ## Editor Integration
@@ -31,7 +37,7 @@ local configs = require('lspconfig.configs')
 if not configs.terratidy then
   configs.terratidy = {
     default_config = {
-      cmd = { 'terratidy', 'lsp' },
+      cmd = { 'terratidy', 'lsp', '--log-level', 'info' },
       filetypes = { 'terraform', 'hcl' },
       root_dir = lspconfig.util.root_pattern(
         '.terratidy.yaml',
@@ -176,31 +182,30 @@ The LSP server reads configuration from:
 
 ### Initialization Options
 
+The server reads these options from the client's `initializationOptions`:
+
 ```json
 {
   "initializationOptions": {
     "profile": "development",
+    "configPath": ".terratidy.yaml",
     "engines": {
       "fmt": true,
       "style": true,
-      "lint": false
-    }
+      "lint": true,
+      "policy": false
+    },
+    "severityThreshold": "warning",
+    "formatOnSave": false,
+    "runOnSave": false,
+    "fixOnSave": false
   }
 }
 ```
 
-### Workspace Configuration
-
-The server responds to `workspace/configuration` requests:
-
-```json
-{
-  "terratidy": {
-    "profile": "ci",
-    "severityThreshold": "warning"
-  }
-}
-```
+- `profile`: Applies a named profile from the config file
+- `configPath`: Overrides the default config file path
+- `severityThreshold`: Minimum severity level to report (info, warning, error)
 
 ## Troubleshooting
 

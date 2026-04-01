@@ -19,9 +19,8 @@
   entry: terratidy fmt
   language: system
   minimum_pre_commit_version: '3.2.0'
-  types: [terraform]
-  types_or: [hcl]
-  pass_filenames: false
+  types_or: [terraform, hcl]
+  pass_filenames: true
 
 - id: terratidy-fmt-check
   name: TerraTidy Format Check
@@ -29,9 +28,8 @@
   entry: terratidy fmt --check
   language: system
   minimum_pre_commit_version: '3.2.0'
-  types: [terraform]
-  types_or: [hcl]
-  pass_filenames: false
+  types_or: [terraform, hcl]
+  pass_filenames: true
 
 - id: terratidy-style
   name: TerraTidy Style
@@ -39,9 +37,8 @@
   entry: terratidy style
   language: system
   minimum_pre_commit_version: '3.2.0'
-  types: [terraform]
-  types_or: [hcl]
-  pass_filenames: false
+  types_or: [terraform, hcl]
+  pass_filenames: true
 
 - id: terratidy-style-fix
   name: TerraTidy Style Fix
@@ -49,9 +46,8 @@
   entry: terratidy style --fix
   language: system
   minimum_pre_commit_version: '3.2.0'
-  types: [terraform]
-  types_or: [hcl]
-  pass_filenames: false
+  types_or: [terraform, hcl]
+  pass_filenames: true
 
 - id: terratidy-lint
   name: TerraTidy Lint
@@ -59,9 +55,8 @@
   entry: terratidy lint
   language: system
   minimum_pre_commit_version: '3.2.0'
-  types: [terraform]
-  types_or: [hcl]
-  pass_filenames: false
+  types_or: [terraform, hcl]
+  pass_filenames: true
 
 - id: terratidy-check
   name: TerraTidy Check All
@@ -69,9 +64,8 @@
   entry: terratidy check
   language: system
   minimum_pre_commit_version: '3.2.0'
-  types: [terraform]
-  types_or: [hcl]
-  pass_filenames: false
+  types_or: [terraform, hcl]
+  pass_filenames: true
 
 - id: terratidy-fix
   name: TerraTidy Fix All
@@ -79,9 +73,8 @@
   entry: terratidy fix
   language: system
   minimum_pre_commit_version: '3.2.0'
-  types: [terraform]
-  types_or: [hcl]
-  pass_filenames: false
+  types_or: [terraform, hcl]
+  pass_filenames: true
 
 - id: terratidy-policy
   name: TerraTidy Policy
@@ -89,6 +82,5 @@
   entry: terratidy policy
   language: system
   minimum_pre_commit_version: '3.2.0'
-  types: [terraform]
-  types_or: [hcl]
-  pass_filenames: false
+  types_or: [terraform, hcl]
+  pass_filenames: true

@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -15,10 +16,40 @@ import (
 
 	"github.com/santosr2/terratidy/internal/buildinfo"
 	"github.com/santosr2/terratidy/internal/config"
+	"github.com/santosr2/terratidy/internal/engines/format"
 	"github.com/santosr2/terratidy/internal/engines/lint"
 	"github.com/santosr2/terratidy/internal/engines/style"
 	"github.com/santosr2/terratidy/pkg/sdk"
 )
+
+// LogLevel represents the logging verbosity
+type LogLevel int
+
+const (
+	LogLevelOff LogLevel = iota
+	LogLevelError
+	LogLevelWarn
+	LogLevelInfo
+	LogLevelDebug
+)
+
+// ParseLogLevel converts a string to a LogLevel
+func ParseLogLevel(s string) LogLevel {
+	switch strings.ToLower(s) {
+	case "error":
+		return LogLevelError
+	case "warn", "warning":
+		return LogLevelWarn
+	case "info":
+		return LogLevelInfo
+	case "debug":
+		return LogLevelDebug
+	case "off":
+		return LogLevelOff
+	default:
+		return LogLevelInfo
+	}
+}
 
 // Server represents an LSP server instance
 type Server struct {
@@ -26,6 +57,7 @@ type Server struct {
 	writer        io.Writer
 	writeMu       sync.Mutex // protects writer from concurrent writeMessage calls
 	config        *config.Config
+	initOptions   *InitializationOptions
 	documents     map[string]*Document
 	docMu         sync.RWMutex
 	lintEngine    *lint.Engine
@@ -33,6 +65,9 @@ type Server struct {
 	workspaceRoot string
 	initialized   bool
 	shutdown      bool
+	logger        *log.Logger
+	logLevel      LogLevel
+	logFile       *os.File
 }
 
 // Document represents an open document
@@ -48,6 +83,50 @@ func NewServer(in io.Reader, out io.Writer) *Server {
 		reader:    bufio.NewReader(in),
 		writer:    out,
 		documents: make(map[string]*Document),
+		logger:    log.New(os.Stderr, "terratidy-lsp: ", log.Ltime),
+		logLevel:  LogLevelInfo,
+	}
+}
+
+// SetLogLevel sets the logging verbosity
+func (s *Server) SetLogLevel(level LogLevel) {
+	s.logLevel = level
+}
+
+// SetLogFile redirects log output to a file (in addition to or instead of stderr)
+func (s *Server) SetLogFile(path string) error {
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
+	if err != nil {
+		return fmt.Errorf("opening log file: %w", err)
+	}
+	s.logFile = f
+	s.logger.SetOutput(f)
+	return nil
+}
+
+// Close releases resources held by the server (e.g., log file handle)
+func (s *Server) Close() error {
+	if s.logFile != nil {
+		return s.logFile.Close()
+	}
+	return nil
+}
+
+func (s *Server) logDebug(format string, args ...any) {
+	if s.logLevel >= LogLevelDebug {
+		s.logger.Printf("[DEBUG] "+format, args...)
+	}
+}
+
+func (s *Server) logInfo(format string, args ...any) {
+	if s.logLevel >= LogLevelInfo {
+		s.logger.Printf("[INFO] "+format, args...)
+	}
+}
+
+func (s *Server) logError(format string, args ...any) {
+	if s.logLevel >= LogLevelError {
+		s.logger.Printf("[ERROR] "+format, args...)
 	}
 }
 
@@ -68,7 +147,7 @@ func (s *Server) Run() error {
 
 		if err := s.handleMessage(msg); err != nil {
 			// Log error but continue processing
-			_, _ = fmt.Fprintf(os.Stderr, "Error handling message: %v\n", err)
+			s.logError("handling message: %v", err)
 		}
 	}
 }
@@ -183,12 +262,32 @@ func (s *Server) handleInitialize(msg RequestMessage) error {
 		s.workspaceRoot = params.RootPath
 	}
 
-	// Load configuration
+	// Store initialization options from the client
+	s.initOptions = params.InitializationOptions
+
+	// Load configuration, preferring client-provided config path
 	configPath := filepath.Join(s.workspaceRoot, ".terratidy.yaml")
+	if s.initOptions != nil && s.initOptions.ConfigPath != "" {
+		configPath = s.initOptions.ConfigPath
+	}
 	cfg, err := config.Load(configPath)
 	if err != nil {
 		cfg = config.DefaultConfig()
 	}
+
+	// Apply profile from client options
+	if s.initOptions != nil && s.initOptions.Profile != "" {
+		if profileErr := cfg.ApplyProfile(s.initOptions.Profile); profileErr != nil {
+			// Profile not found is not fatal; log and continue
+			s.logInfo("profile %q not found: %v", s.initOptions.Profile, profileErr)
+		}
+	}
+
+	// Apply severity threshold from client options
+	if s.initOptions != nil && s.initOptions.SeverityThreshold != "" {
+		cfg.SeverityThreshold = s.initOptions.SeverityThreshold
+	}
+
 	s.config = cfg
 
 	// Initialize engines
@@ -334,10 +433,32 @@ func (s *Server) handleFormatting(msg RequestMessage) error {
 		return s.sendResult(msg.ID, nil)
 	}
 
-	// For now, return empty edits (formatting would require hclwrite)
-	// A full implementation would format the content and return TextEdit[]
-	_ = doc
-	return s.sendResult(msg.ID, []TextEdit{})
+	// Format the document content using hclwrite
+	original := doc.Content
+	formatted := string(format.Format([]byte(original)))
+
+	// If content is unchanged, return empty edits
+	if formatted == original {
+		return s.sendResult(msg.ID, []TextEdit{})
+	}
+
+	// Return a single edit replacing the entire document
+	lines := strings.Count(original, "\n")
+	lastLineLen := len(original)
+	if idx := strings.LastIndex(original, "\n"); idx >= 0 {
+		lastLineLen = len(original) - idx - 1
+	}
+
+	edits := []TextEdit{
+		{
+			Range: Range{
+				Start: Position{Line: 0, Character: 0},
+				End:   Position{Line: lines, Character: lastLineLen},
+			},
+			NewText: formatted,
+		},
+	}
+	return s.sendResult(msg.ID, edits)
 }
 
 // handleCodeAction handles textDocument/codeAction request
@@ -347,15 +468,53 @@ func (s *Server) handleCodeAction(msg RequestMessage) error {
 		return s.sendError(msg.ID, -32602, "Invalid params")
 	}
 
-	// Return code actions for fixable diagnostics
+	uri := params.TextDocument.URI
+
+	s.docMu.RLock()
+	doc, ok := s.documents[uri]
+	s.docMu.RUnlock()
+
+	if !ok || len(params.Context.Diagnostics) == 0 {
+		return s.sendResult(msg.ID, []CodeAction{})
+	}
+
+	// Compute the formatted version once for all fix actions
+	original := doc.Content
+	formatted := string(format.Format([]byte(original)))
+	hasFormatFix := formatted != original
+
 	var actions []CodeAction
 	for _, diag := range params.Context.Diagnostics {
-		if diag.Code != "" {
+		if diag.Code == "" {
+			continue
+		}
+
+		// Offer a format-based fix for diagnostics when formatting changes the file
+		if hasFormatFix {
+			lines := strings.Count(original, "\n")
+			lastLineLen := len(original)
+			if idx := strings.LastIndex(original, "\n"); idx >= 0 {
+				lastLineLen = len(original) - idx - 1
+			}
+
 			actions = append(actions, CodeAction{
 				Title:       fmt.Sprintf("Fix: %s", diag.Code),
 				Kind:        "quickfix",
 				Diagnostics: []Diagnostic{diag},
-				// Command or Edit would be set for actual fixes
+				IsPreferred: true,
+				Edit: &WorkspaceEdit{
+					Changes: map[string][]TextEdit{
+						uri: {
+							{
+								Range: Range{
+									Start: Position{Line: 0, Character: 0},
+									End:   Position{Line: lines, Character: lastLineLen},
+								},
+								NewText: formatted,
+							},
+						},
+					},
+				},
 			})
 		}
 	}

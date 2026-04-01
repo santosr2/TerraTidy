@@ -8,6 +8,11 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var (
+	lspLogLevel string
+	lspLogFile  string
+)
+
 var lspCmd = &cobra.Command{
 	Use:   "lsp",
 	Short: "Start the Language Server Protocol server",
@@ -28,7 +33,7 @@ Example configurations:
 
 Neovim (lua):
   require('lspconfig').terratidy.setup{
-    cmd = { "terratidy", "lsp" },
+    cmd = { "terratidy", "lsp", "--log-level", "debug", "--log-file", "/tmp/terratidy-lsp.log" },
     filetypes = { "terraform", "hcl" },
   }
 
@@ -41,6 +46,15 @@ The server provides:
   - Code actions for fixable issues`,
 	RunE: func(_ *cobra.Command, _ []string) error {
 		server := lsp.NewServer(os.Stdin, os.Stdout)
+
+		server.SetLogLevel(lsp.ParseLogLevel(lspLogLevel))
+
+		if lspLogFile != "" {
+			if err := server.SetLogFile(lspLogFile); err != nil {
+				return fmt.Errorf("setting log file: %w", err)
+			}
+		}
+
 		if err := server.Run(); err != nil {
 			return fmt.Errorf("running LSP server: %w", err)
 		}
@@ -49,5 +63,9 @@ The server provides:
 }
 
 func init() {
+	lspCmd.Flags().StringVar(&lspLogLevel, "log-level", "info",
+		"Log level: off, error, warn, info, debug")
+	lspCmd.Flags().StringVar(&lspLogFile, "log-file", "",
+		"Path to log file (defaults to stderr)")
 	rootCmd.AddCommand(lspCmd)
 }

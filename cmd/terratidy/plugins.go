@@ -142,7 +142,7 @@ var pluginsInitCmd = &cobra.Command{
 
 		// Create plugin directory
 		dir := filepath.Join(".", pluginName)
-		if err := os.MkdirAll(dir, 0o755); err != nil {
+		if err := os.MkdirAll(dir, 0o750); err != nil {
 			return fmt.Errorf("creating directory: %w", err)
 		}
 
@@ -209,7 +209,7 @@ func (r *ExampleRule) Fix(ctx *sdk.Context, file *hcl.File) ([]byte, error) {
 `, pluginName, pluginName, pluginName, pluginName)
 
 		mainPath := filepath.Join(dir, "main.go")
-		if err := os.WriteFile(mainPath, []byte(mainContent), 0o644); err != nil {
+		if err := os.WriteFile(mainPath, []byte(mainContent), 0o600); err != nil {
 			return fmt.Errorf("writing main.go: %w", err)
 		}
 
@@ -222,7 +222,7 @@ require github.com/santosr2/terratidy v0.2.0-alpha.3
 `, pluginName)
 
 		goModPath := filepath.Join(dir, "go.mod")
-		if err := os.WriteFile(goModPath, []byte(goModContent), 0o644); err != nil {
+		if err := os.WriteFile(goModPath, []byte(goModContent), 0o600); err != nil {
 			return fmt.Errorf("writing go.mod: %w", err)
 		}
 
@@ -243,7 +243,7 @@ clean:
 `, pluginName, pluginName, pluginName, pluginName)
 
 		makefilePath := filepath.Join(dir, "Makefile")
-		if err := os.WriteFile(makefilePath, []byte(makefileContent), 0o644); err != nil {
+		if err := os.WriteFile(makefilePath, []byte(makefileContent), 0o600); err != nil {
 			return fmt.Errorf("writing Makefile: %w", err)
 		}
 

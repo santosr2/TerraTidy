@@ -1,6 +1,8 @@
+// Package style implements the style-checking engine for HCL files.
 package style
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"os"
@@ -183,7 +185,7 @@ func (e *Engine) checkFile(parser *hclparse.Parser, path string) ([]sdk.Finding,
 			return nil, fmt.Errorf("reading fixed file for diff: %w", err)
 		}
 
-		if string(originalContent) != string(fixedContent) {
+		if !bytes.Equal(originalContent, fixedContent) {
 			diff := difflib.UnifiedDiff{
 				A:        difflib.SplitLines(string(originalContent)),
 				B:        difflib.SplitLines(string(fixedContent)),
@@ -215,9 +217,9 @@ func (e *Engine) checkFile(parser *hclparse.Parser, path string) ([]sdk.Finding,
 func (e *Engine) applyFixes(ctx *sdk.Context, _ *hcl.File, findings []sdk.Finding) (int, error) {
 	// Group findings by fixability
 	var fixableFindings []sdk.Finding
-	for _, f := range findings {
-		if f.Fixable && f.FixFunc != nil {
-			fixableFindings = append(fixableFindings, f)
+	for i := range findings {
+		if findings[i].Fixable && findings[i].FixFunc != nil {
+			fixableFindings = append(fixableFindings, findings[i])
 		}
 	}
 
@@ -247,7 +249,7 @@ func (e *Engine) applyFixes(ctx *sdk.Context, _ *hcl.File, findings []sdk.Findin
 
 		// Write intermediate result so next FixFunc sees updated content
 		if fixed != nil {
-			if err := os.WriteFile(ctx.File, fixed, 0o644); err != nil {
+			if err := os.WriteFile(ctx.File, fixed, 0o600); err != nil {
 				return fixedCount, fmt.Errorf("writing intermediate fix: %w", err)
 			}
 			fixedCount++

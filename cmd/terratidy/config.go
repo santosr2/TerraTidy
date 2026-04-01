@@ -234,7 +234,7 @@ func runConfigSplit(_ *cobra.Command, _ []string) error {
 	}
 
 	configDir := ".terratidy"
-	if err := os.MkdirAll(configDir, 0o755); err != nil {
+	if err := os.MkdirAll(configDir, 0o750); err != nil {
 		return fmt.Errorf("creating config directory: %w", err)
 	}
 
@@ -311,7 +311,7 @@ fail_fast: %t
 parallel: %t
 `, cfg.Version, cfg.SeverityThreshold, cfg.FailFast, cfg.Parallel)
 
-	if err := os.WriteFile(configPath, []byte(mainCfg), 0o644); err != nil {
+	if err := os.WriteFile(configPath, []byte(mainCfg), 0o600); err != nil {
 		return fmt.Errorf("writing main config: %w", err)
 	}
 	fmt.Printf("  Updated %s\n", configPath)
@@ -347,7 +347,7 @@ func runConfigMerge(_ *cobra.Command, _ []string) error {
 `
 	finalOutput := header + string(output)
 
-	if err := os.WriteFile(configPath, []byte(finalOutput), 0o644); err != nil {
+	if err := os.WriteFile(configPath, []byte(finalOutput), 0o600); err != nil {
 		return fmt.Errorf("writing merged config: %w", err)
 	}
 
@@ -397,7 +397,7 @@ func runConfigInitProfile(_ *cobra.Command, args []string) error {
 		return fmt.Errorf("marshaling config: %w", err)
 	}
 
-	if err := os.WriteFile(configPath, output, 0o644); err != nil {
+	if err := os.WriteFile(configPath, output, 0o600); err != nil {
 		return fmt.Errorf("writing config: %w", err)
 	}
 
@@ -414,5 +414,5 @@ func writeYAMLFile(path string, data any) error {
 	if err != nil {
 		return fmt.Errorf("marshaling %s: %w", path, err)
 	}
-	return os.WriteFile(path, output, 0o644)
+	return os.WriteFile(path, output, 0o600)
 }

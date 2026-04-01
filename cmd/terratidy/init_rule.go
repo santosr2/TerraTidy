@@ -55,7 +55,7 @@ func runInitRule(_ *cobra.Command, _ []string) error {
 	normalizedName := strings.ToLower(strings.ReplaceAll(initRuleName, " ", "-"))
 
 	// Create output directory
-	if err := os.MkdirAll(initRuleOutput, 0o755); err != nil {
+	if err := os.MkdirAll(initRuleOutput, 0o750); err != nil {
 		return fmt.Errorf("creating output directory: %w", err)
 	}
 
@@ -75,7 +75,7 @@ func runInitRule(_ *cobra.Command, _ []string) error {
 
 func createGoRule(name string) error {
 	ruleDir := filepath.Join(initRuleOutput, "rules", name)
-	if err := os.MkdirAll(ruleDir, 0o755); err != nil {
+	if err := os.MkdirAll(ruleDir, 0o750); err != nil {
 		return fmt.Errorf("creating rule directory: %w", err)
 	}
 
@@ -94,7 +94,7 @@ func createGoRule(name string) error {
 func writeGoRuleFile(ruleDir, name string) error {
 	goContent := goRuleTemplate(name)
 	goFile := filepath.Join(ruleDir, "rule.go")
-	if err := os.WriteFile(goFile, []byte(goContent), 0o644); err != nil {
+	if err := os.WriteFile(goFile, []byte(goContent), 0o600); err != nil {
 		return fmt.Errorf("writing rule.go: %w", err)
 	}
 	fmt.Printf("  Created %s\n", goFile)
@@ -104,7 +104,7 @@ func writeGoRuleFile(ruleDir, name string) error {
 func writeGoTestFile(ruleDir, name string) error {
 	testContent := goTestTemplate(name)
 	testFile := filepath.Join(ruleDir, "rule_test.go")
-	if err := os.WriteFile(testFile, []byte(testContent), 0o644); err != nil {
+	if err := os.WriteFile(testFile, []byte(testContent), 0o600); err != nil {
 		return fmt.Errorf("writing rule_test.go: %w", err)
 	}
 	fmt.Printf("  Created %s\n", testFile)
@@ -203,7 +203,7 @@ func TestRule_Check(t *testing.T) {
 func createRegoRule(name string) error {
 	// Create policies directory
 	policyDir := filepath.Join(initRuleOutput, "policies")
-	if err := os.MkdirAll(policyDir, 0o755); err != nil {
+	if err := os.MkdirAll(policyDir, 0o750); err != nil {
 		return fmt.Errorf("creating policies directory: %w", err)
 	}
 
@@ -247,7 +247,7 @@ warn[msg] {
 `, name, name, name, name, name, name)
 
 	regoFile := filepath.Join(policyDir, name+".rego")
-	if err := os.WriteFile(regoFile, []byte(regoContent), 0o644); err != nil {
+	if err := os.WriteFile(regoFile, []byte(regoContent), 0o600); err != nil {
 		return fmt.Errorf("writing %s.rego: %w", name, err)
 	}
 	fmt.Printf("  Created %s\n", regoFile)
@@ -272,7 +272,7 @@ test_invalid_config {
 `, name)
 
 	testFile := filepath.Join(policyDir, name+"_test.rego")
-	if err := os.WriteFile(testFile, []byte(testContent), 0o644); err != nil {
+	if err := os.WriteFile(testFile, []byte(testContent), 0o600); err != nil {
 		return fmt.Errorf("writing %s_test.rego: %w", name, err)
 	}
 	fmt.Printf("  Created %s\n", testFile)
@@ -291,7 +291,7 @@ test_invalid_config {
 func createYAMLRule(name string) error {
 	// Create rules directory
 	rulesDir := filepath.Join(initRuleOutput, "rules")
-	if err := os.MkdirAll(rulesDir, 0o755); err != nil {
+	if err := os.MkdirAll(rulesDir, 0o750); err != nil {
 		return fmt.Errorf("creating rules directory: %w", err)
 	}
 
@@ -342,7 +342,7 @@ tags:
 `, name, name, name, name)
 
 	yamlFile := filepath.Join(rulesDir, name+".yaml")
-	if err := os.WriteFile(yamlFile, []byte(yamlContent), 0o644); err != nil {
+	if err := os.WriteFile(yamlFile, []byte(yamlContent), 0o600); err != nil {
 		return fmt.Errorf("writing %s.yaml: %w", name, err)
 	}
 	fmt.Printf("  Created %s\n", yamlFile)

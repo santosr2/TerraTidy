@@ -70,14 +70,14 @@ func (f *JUnitFormatter) Format(findings []sdk.Finding, w io.Writer) error {
 
 	// Group findings by file
 	byFile := make(map[string][]sdk.Finding)
-	for _, finding := range findings {
-		byFile[finding.File] = append(byFile[finding.File], finding)
+	for i := range findings {
+		byFile[findings[i].File] = append(byFile[findings[i].File], findings[i])
 	}
 
 	// Count totals
 	var totalErrors, totalFailures int
-	for _, finding := range findings {
-		switch finding.Severity {
+	for i := range findings {
+		switch findings[i].Severity {
 		case sdk.SeverityError:
 			totalErrors++
 		case sdk.SeverityWarning:
@@ -132,33 +132,33 @@ func (f *JUnitFormatter) buildTestSuite(file string, findings []sdk.Finding, tim
 	var errors, failures int
 	var testCases []JUnitTestCase
 
-	for _, finding := range findings {
+	for i := range findings {
 		testCase := JUnitTestCase{
-			Name:      finding.Rule,
+			Name:      findings[i].Rule,
 			ClassName: file,
 		}
 
 		// Build detailed message with location
 		detail := fmt.Sprintf("File: %s\nLine: %d, Column: %d\n\n%s",
-			finding.File,
-			finding.Location.Start.Line,
-			finding.Location.Start.Column,
-			finding.Message,
+			findings[i].File,
+			findings[i].Location.Start.Line,
+			findings[i].Location.Start.Column,
+			findings[i].Message,
 		)
 
-		switch finding.Severity {
+		switch findings[i].Severity {
 		case sdk.SeverityError:
 			errors++
 			testCase.Error = &JUnitError{
-				Message: finding.Message,
-				Type:    string(finding.Severity),
+				Message: findings[i].Message,
+				Type:    string(findings[i].Severity),
 				Content: detail,
 			}
 		case sdk.SeverityWarning:
 			failures++
 			testCase.Failure = &JUnitFailure{
-				Message: finding.Message,
-				Type:    string(finding.Severity),
+				Message: findings[i].Message,
+				Type:    string(findings[i].Severity),
 				Content: detail,
 			}
 		default:

@@ -175,11 +175,11 @@ func (c *FileCache) Size() int {
 }
 
 // Stats returns cache statistics
-func (c *FileCache) Stats() CacheStats {
+func (c *FileCache) Stats() Stats {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	return CacheStats{
+	return Stats{
 		Entries:  len(c.entries),
 		MaxSize:  c.maxSize,
 		MaxAge:   c.maxAge,
@@ -187,8 +187,8 @@ func (c *FileCache) Stats() CacheStats {
 	}
 }
 
-// CacheStats holds cache statistics
-type CacheStats struct {
+// Stats holds cache statistics.
+type Stats struct {
 	Entries  int
 	MaxSize  int
 	MaxAge   time.Duration

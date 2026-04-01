@@ -236,12 +236,11 @@ func (c *Config) merge(other *Config) {
 	if c.Profiles == nil {
 		c.Profiles = make(map[string]Profile)
 	}
-	for k, v := range other.Profiles {
-		c.Profiles[k] = v
+	for k := range other.Profiles {
+		c.Profiles[k] = other.Profiles[k]
 	}
 }
 
-// Validate validates the configuration
 // SetDefaults fills in default values for unset fields.
 // Call this before Validate.
 func (c *Config) SetDefaults() {
@@ -289,7 +288,8 @@ func (c *Config) Validate() error {
 // validateProfiles validates profile configurations
 func (c *Config) validateProfiles() error {
 	// Check for circular inheritance
-	for name, profile := range c.Profiles {
+	for name := range c.Profiles {
+		profile := c.Profiles[name]
 		if profile.Inherits != "" {
 			if err := c.checkCircularInheritance(name, make(map[string]bool)); err != nil {
 				return err

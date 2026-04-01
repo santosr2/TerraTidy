@@ -5,6 +5,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -26,6 +27,7 @@ import (
 // LogLevel represents the logging verbosity
 type LogLevel int
 
+// LogLevel values control server logging verbosity.
 const (
 	LogLevelOff LogLevel = iota
 	LogLevelError
@@ -141,7 +143,7 @@ func (s *Server) Run() error {
 
 		msg, err := s.readMessage()
 		if err != nil {
-			if err == io.EOF {
+			if errors.Is(err, io.EOF) {
 				return nil
 			}
 			return fmt.Errorf("reading message: %w", err)
@@ -491,8 +493,8 @@ func (s *Server) handleCodeAction(msg RequestMessage) error {
 	hasFormatFix := formatted != original
 
 	var actions []CodeAction
-	for _, diag := range params.Context.Diagnostics {
-		if diag.Code == "" {
+	for i := range params.Context.Diagnostics {
+		if params.Context.Diagnostics[i].Code == "" {
 			continue
 		}
 
@@ -505,9 +507,9 @@ func (s *Server) handleCodeAction(msg RequestMessage) error {
 			}
 
 			actions = append(actions, CodeAction{
-				Title:       fmt.Sprintf("Fix: %s", diag.Code),
+				Title:       fmt.Sprintf("Fix: %s", params.Context.Diagnostics[i].Code),
 				Kind:        "quickfix",
-				Diagnostics: []Diagnostic{diag},
+				Diagnostics: []Diagnostic{params.Context.Diagnostics[i]},
 				IsPreferred: true,
 				Edit: &WorkspaceEdit{
 					Changes: map[string][]TextEdit{

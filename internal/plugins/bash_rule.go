@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -69,16 +70,16 @@ func (r *BashRule) Check(ctx *sdk.Context, _ *hcl.File) ([]sdk.Finding, error) {
 	execCtx, cancel := context.WithTimeout(context.Background(), bashRuleTimeout)
 	defer cancel()
 
-	cmd := exec.CommandContext(execCtx, "bash", r.path, ctx.File) //nolint:gosec // user-provided rule scripts are trusted
+	cmd := exec.CommandContext(execCtx, "bash", r.path, ctx.File)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 
 	if err := cmd.Run(); err != nil {
-		// Exit code 1 with output means findings were reported (not a script error)
-		if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 1 && stdout.Len() > 0 {
-			// fall through to parse output
-		} else {
+		// Exit code 1 means findings were reported (not a script error).
+		// Any other error (exit code 2+, signal, timeout) is a real failure.
+		exitErr := &exec.ExitError{}
+		if !errors.As(err, &exitErr) || exitErr.ExitCode() != 1 {
 			return nil, fmt.Errorf("executing bash rule %s: %w (stderr: %s)", r.name, err, stderr.String())
 		}
 	}

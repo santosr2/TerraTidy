@@ -229,19 +229,19 @@ func runDevCheck(targetFiles []string) error {
 	errors, warnings, info := countBySeverity(findings)
 
 	// Display findings
-	for _, finding := range findings {
+	for i := range findings {
 		icon := "i"
-		switch finding.Severity {
+		switch findings[i].Severity {
 		case sdk.SeverityError:
 			icon = "!"
 		case sdk.SeverityWarning:
 			icon = "!"
 		}
 
-		fmt.Printf("  [%s] %s\n", icon, finding.Rule)
-		fmt.Printf("      %s\n", finding.Message)
-		if finding.File != "" {
-			fmt.Printf("      File: %s\n", finding.File)
+		fmt.Printf("  [%s] %s\n", icon, findings[i].Rule)
+		fmt.Printf("      %s\n", findings[i].Message)
+		if findings[i].File != "" {
+			fmt.Printf("      File: %s\n", findings[i].File)
 		}
 		fmt.Println()
 	}

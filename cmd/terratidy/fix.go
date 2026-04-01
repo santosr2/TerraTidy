@@ -81,7 +81,7 @@ func runAllFixesWithConfig(cfg *config.Config, files []string) ([]sdk.Finding, i
 	allFindings = append(allFindings, fmtFindings...)
 	totalFixed += formatted
 
-	styleFindings, styleFixed, err := runStyleFixWithConfig(cfg, ctx, files)
+	styleFindings, styleFixed, err := runStyleFixWithConfig(ctx, cfg, files)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -126,7 +126,7 @@ func countFormattedFiles(findings []sdk.Finding) int {
 	return count
 }
 
-func runStyleFixWithConfig(cfg *config.Config, ctx context.Context, files []string) ([]sdk.Finding, int, error) {
+func runStyleFixWithConfig(ctx context.Context, cfg *config.Config, files []string) ([]sdk.Finding, int, error) {
 	fmt.Println("2. Fixing style issues...")
 	styleCfg := buildStyleConfig(cfg, true)
 	styleEngine := style.New(styleCfg)

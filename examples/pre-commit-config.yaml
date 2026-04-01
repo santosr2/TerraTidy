@@ -1,7 +1,7 @@
 # Example .pre-commit-config.yaml for TerraTidy
 #
 # Installation:
-#   1. Install pre-commit: pip install pre-commit
+#   1. Install pre-commit (via mise, pip, or brew)
 #   2. Copy this file to .pre-commit-config.yaml
 #   3. Run: pre-commit install
 #
@@ -11,15 +11,20 @@
 #   - Update hooks: pre-commit autoupdate
 
 repos:
-  # TerraTidy hooks
+  # TerraTidy hooks (check mode - non-modifying, safe for CI)
   - repo: https://github.com/santosr2/terratidy
     rev: v0.2.0-alpha.3
     hooks:
-      - id: terratidy-fmt
+      - id: terratidy-fmt-check
       - id: terratidy-style
       - id: terratidy-lint
       # Or use terratidy-check for all checks at once:
       # - id: terratidy-check
+      #
+      # For auto-fix mode (modifies files in place):
+      # - id: terratidy-fmt
+      # - id: terratidy-style-fix
+      # - id: terratidy-fix  # all fixable issues
 
   # Optional: Standard Terraform hooks
   - repo: https://github.com/antonbabenko/pre-commit-terraform

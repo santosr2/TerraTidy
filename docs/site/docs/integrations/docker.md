@@ -39,6 +39,25 @@ docker run --rm -v $(pwd):/app ghcr.io/santosr2/terratidy check --format json
 docker run --rm -v $(pwd):/app ghcr.io/santosr2/terratidy check --format sarif > results.sarif
 ```
 
+## Build from Source
+
+Build a local Docker image for development or testing:
+
+```bash
+# Build binary and Docker image
+make docker-build
+
+# Run the locally built image
+make docker-run
+
+# Or build manually
+make build
+cp bin/terratidy terratidy
+docker build -t terratidy-dev .
+rm terratidy
+docker run --rm -v $(pwd):/app terratidy-dev check
+```
+
 ## Environment Variables
 
 Pass environment variables for config expansion:

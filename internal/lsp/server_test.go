@@ -121,6 +121,9 @@ func TestURIToPath(t *testing.T) {
 		{"file:///tmp/test.tf", "/tmp/test.tf"},
 		{"file:///home/user/main.tf", "/home/user/main.tf"},
 		{"/direct/path.tf", "/direct/path.tf"},
+		{"file:///C:/Users/dev/main.tf", "C:/Users/dev/main.tf"},
+		{"file:///D:/projects/test.tf", "D:/projects/test.tf"},
+		{"file:///C:/path%20with%20spaces/main.tf", "C:/path with spaces/main.tf"},
 	}
 
 	for _, tt := range tests {
@@ -750,6 +753,151 @@ resource "aws_instance" "example2" {
 
 	output := out.String()
 	assert.Contains(t, output, "textDocument/publishDiagnostics")
+}
+
+func TestServer_PublishDiagnostics_TempFileReuse(t *testing.T) {
+	out := &bytes.Buffer{}
+	server := NewServer(strings.NewReader(""), out)
+	server.initialized = true
+
+	uri := "file:///tmp/reuse.tf"
+	doc := &Document{
+		URI:     uri,
+		Content: "resource {}\n",
+		Version: 1,
+	}
+	server.documents[uri] = doc
+
+	// First call creates the temp file
+	err := server.publishDiagnostics(uri)
+	require.NoError(t, err)
+	assert.NotEmpty(t, doc.tempFile, "temp file should be created")
+	firstTempFile := doc.tempFile
+
+	// Second call reuses the same temp file
+	out.Reset()
+	doc.Content = "resource {}\nvariable {}\n"
+	err = server.publishDiagnostics(uri)
+	require.NoError(t, err)
+	assert.Equal(t, firstTempFile, doc.tempFile, "temp file should be reused")
+
+	// Cleanup
+	_ = os.Remove(doc.tempFile)
+}
+
+func TestServer_PublishDiagnostics_TempFileHCLExtension(t *testing.T) {
+	out := &bytes.Buffer{}
+	server := NewServer(strings.NewReader(""), out)
+	server.initialized = true
+
+	uri := "file:///tmp/config.hcl"
+	doc := &Document{
+		URI:     uri,
+		Content: "variable {}\n",
+		Version: 1,
+	}
+	server.documents[uri] = doc
+
+	err := server.publishDiagnostics(uri)
+	require.NoError(t, err)
+	assert.NotEmpty(t, doc.tempFile)
+	assert.Contains(t, doc.tempFile, ".hcl")
+
+	_ = os.Remove(doc.tempFile)
+}
+
+func TestServer_PublishDiagnostics_NonTerraformSkipped(t *testing.T) {
+	out := &bytes.Buffer{}
+	server := NewServer(strings.NewReader(""), out)
+	server.initialized = true
+
+	uri := "file:///tmp/readme.md"
+	server.documents[uri] = &Document{
+		URI:     uri,
+		Content: "# readme",
+		Version: 1,
+	}
+
+	err := server.publishDiagnostics(uri)
+	require.NoError(t, err)
+	// Non-terraform files should be skipped, no diagnostics published
+	assert.Empty(t, out.String())
+}
+
+func TestServer_HandleDidClose_CleansUpTempFile(t *testing.T) {
+	out := &bytes.Buffer{}
+	server := NewServer(strings.NewReader(""), out)
+	server.initialized = true
+
+	// Create a temp file to simulate diagnostics having run
+	tmpFile, err := os.CreateTemp("", "terratidy-test-*.tf")
+	require.NoError(t, err)
+	require.NoError(t, tmpFile.Close())
+	tmpPath := tmpFile.Name()
+
+	uri := "file:///tmp/cleanup.tf"
+	server.documents[uri] = &Document{
+		URI:      uri,
+		Content:  "resource {}\n",
+		Version:  1,
+		tempFile: tmpPath,
+	}
+
+	params := DidCloseTextDocumentParams{
+		TextDocument: TextDocumentIdentifier{URI: uri},
+	}
+	paramsJSON, _ := json.Marshal(params)
+
+	msg := RequestMessage{
+		JSONRPC: "2.0",
+		Method:  "textDocument/didClose",
+		Params:  paramsJSON,
+	}
+
+	err = server.handleDidClose(msg)
+	require.NoError(t, err)
+
+	// Verify temp file was removed
+	_, statErr := os.Stat(tmpPath)
+	assert.True(t, os.IsNotExist(statErr), "temp file should be deleted on close")
+
+	// Verify document was removed
+	server.docMu.RLock()
+	_, exists := server.documents[uri]
+	server.docMu.RUnlock()
+	assert.False(t, exists, "document should be removed")
+}
+
+func TestServer_HandleDidClose_NoTempFile(t *testing.T) {
+	out := &bytes.Buffer{}
+	server := NewServer(strings.NewReader(""), out)
+
+	uri := "file:///tmp/no-temp.tf"
+	server.documents[uri] = &Document{
+		URI:     uri,
+		Content: "resource {}\n",
+		Version: 1,
+		// tempFile intentionally empty (document never analyzed)
+	}
+
+	params := DidCloseTextDocumentParams{
+		TextDocument: TextDocumentIdentifier{URI: uri},
+	}
+	paramsJSON, _ := json.Marshal(params)
+
+	msg := RequestMessage{
+		JSONRPC: "2.0",
+		Method:  "textDocument/didClose",
+		Params:  paramsJSON,
+	}
+
+	err := server.handleDidClose(msg)
+	require.NoError(t, err)
+
+	server.docMu.RLock()
+	_, exists := server.documents[uri]
+	server.docMu.RUnlock()
+	assert.False(t, exists)
 }
 
 func TestParseLogLevel(t *testing.T) {

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -72,9 +73,10 @@ type Server struct {
 
 // Document represents an open document
 type Document struct {
-	URI     string
-	Content string
-	Version int
+	URI      string
+	Content  string
+	Version  int
+	tempFile string // cached temp file path for analysis
 }
 
 // NewServer creates a new LSP server
@@ -385,6 +387,11 @@ func (s *Server) handleDidClose(msg RequestMessage) error {
 	}
 
 	s.docMu.Lock()
+	if doc, ok := s.documents[params.TextDocument.URI]; ok {
+		if doc.tempFile != "" {
+			_ = os.Remove(doc.tempFile)
+		}
+	}
 	delete(s.documents, params.TextDocument.URI)
 	s.docMu.Unlock()
 
@@ -540,32 +547,37 @@ func (s *Server) publishDiagnostics(uri string) error {
 		return nil
 	}
 
-	// Write content to temp file for analysis
-	tempFile, err := os.CreateTemp("", "terratidy-*.tf")
-	if err != nil {
-		return fmt.Errorf("creating temp file: %w", err)
+	// Reuse a temp file per document to avoid creating one per keystroke
+	if doc.tempFile == "" {
+		tmpExt := filepath.Ext(filePath)
+		if tmpExt == "" {
+			tmpExt = ".tf"
+		}
+		f, err := os.CreateTemp("", "terratidy-*"+tmpExt)
+		if err != nil {
+			return fmt.Errorf("creating temp file: %w", err)
+		}
+		doc.tempFile = f.Name()
+		_ = f.Close()
 	}
-	defer func() { _ = os.Remove(tempFile.Name()) }()
 
-	if _, err := tempFile.WriteString(doc.Content); err != nil {
-		_ = tempFile.Close()
+	if err := os.WriteFile(doc.tempFile, []byte(doc.Content), 0o600); err != nil {
 		return fmt.Errorf("writing temp file: %w", err)
 	}
-	_ = tempFile.Close()
 
 	// Run lint and style checks
 	ctx := context.Background()
 	var findings []sdk.Finding
 
 	if s.lintEngine != nil {
-		lintFindings, err := s.lintEngine.Run(ctx, []string{tempFile.Name()})
+		lintFindings, err := s.lintEngine.Run(ctx, []string{doc.tempFile})
 		if err == nil {
 			findings = append(findings, lintFindings...)
 		}
 	}
 
 	if s.styleEngine != nil {
-		styleFindings, err := s.styleEngine.Run(ctx, []string{tempFile.Name()})
+		styleFindings, err := s.styleEngine.Run(ctx, []string{doc.tempFile})
 		if err == nil {
 			findings = append(findings, styleFindings...)
 		}
@@ -624,12 +636,24 @@ func (s *Server) sendError(id json.RawMessage, code int, message string) error {
 	})
 }
 
-// uriToPath converts a file URI to a file path
+// uriToPath converts a file URI to a file path.
+// Handles Windows paths correctly (file:///C:/path becomes C:/path).
 func uriToPath(uri string) string {
-	if strings.HasPrefix(uri, "file://") {
+	if !strings.HasPrefix(uri, "file://") {
+		return uri
+	}
+	parsed, err := url.Parse(uri)
+	if err != nil {
+		// Fallback: strip prefix manually
 		return strings.TrimPrefix(uri, "file://")
 	}
-	return uri
+	// On Windows, url.Parse("file:///C:/path") gives Path="/C:/path".
+	// Strip the leading slash before a drive letter.
+	p := parsed.Path
+	if len(p) >= 3 && p[0] == '/' && p[2] == ':' {
+		p = p[1:]
+	}
+	return p
 }
 
 // severityToLSP converts SDK severity to LSP diagnostic severity

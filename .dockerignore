@@ -1,0 +1,5 @@
+# Exclude everything by default
+*
+
+# Only include the pre-built binary (copied by make docker-build or goreleaser)
+!terratidy

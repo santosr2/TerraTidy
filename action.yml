@@ -61,13 +61,13 @@ inputs:
 
 outputs:
   findings-count:
-    description: 'Total number of findings'
+    description: 'Total number of findings (accurate for json/json-compact; exit code for other formats)'
     value: ${{ steps.terratidy.outputs.findings-count }}
   errors-count:
-    description: 'Number of error-level findings'
+    description: 'Number of error-level findings (accurate for json/json-compact only)'
     value: ${{ steps.terratidy.outputs.errors-count }}
   warnings-count:
-    description: 'Number of warning-level findings'
+    description: 'Number of warning-level findings (accurate for json/json-compact only)'
     value: ${{ steps.terratidy.outputs.warnings-count }}
   sarif-file:
     description: 'Path to SARIF output file (if sarif format used)'

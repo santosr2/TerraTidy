@@ -51,17 +51,18 @@ if [ "$FORMAT" = "sarif" ]; then
 fi
 
 # Run TerraTidy and capture output
+TMPDIR="${RUNNER_TEMP:-/tmp}"
 set +e
 if [ "$FORMAT" = "sarif" ]; then
-  terratidy check $ARGS > "$SARIF_FILE" 2>/tmp/terratidy-stderr.txt
+  terratidy check $ARGS > "$SARIF_FILE" 2>"$TMPDIR/terratidy-stderr.txt"
   EXIT_CODE=$?
-  cat /tmp/terratidy-stderr.txt || true
+  cat "$TMPDIR/terratidy-stderr.txt" || true
   OUTPUT=$(cat "$SARIF_FILE")
 elif [ "$FORMAT" = "json" ] || [ "$FORMAT" = "json-compact" ]; then
-  terratidy check $ARGS > /tmp/terratidy-output.json 2>/tmp/terratidy-stderr.txt
+  terratidy check $ARGS > "$TMPDIR/terratidy-output.json" 2>"$TMPDIR/terratidy-stderr.txt"
   EXIT_CODE=$?
-  cat /tmp/terratidy-stderr.txt || true
-  OUTPUT=$(cat /tmp/terratidy-output.json)
+  cat "$TMPDIR/terratidy-stderr.txt" || true
+  OUTPUT=$(cat "$TMPDIR/terratidy-output.json")
 else
   OUTPUT=$(terratidy check $ARGS 2>&1)
   EXIT_CODE=$?
@@ -70,7 +71,10 @@ set -e
 
 echo "$OUTPUT"
 
-# Parse findings counts from JSON output
+# Parse findings counts from JSON output.
+# Accurate counts are only available for json/json-compact formats.
+# For other formats, findings-count reflects the exit code (0 = clean,
+# non-zero = issues found) and errors-count/warnings-count are estimates.
 if [ "$FORMAT" = "json" ] || [ "$FORMAT" = "json-compact" ]; then
   FINDINGS=$(echo "$OUTPUT" | jq -r '.summary.total // 0')
   ERRORS=$(echo "$OUTPUT" | jq -r '.summary.errors // 0')

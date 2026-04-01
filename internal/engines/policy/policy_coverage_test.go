@@ -2,6 +2,7 @@ package policy
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -73,6 +74,52 @@ deny[msg] {
 	require.NoError(t, err)
 	// Policy may or may not find issues depending on how input is structured
 	_ = findings
+}
+
+func BenchmarkPolicyMultiFile(b *testing.B) {
+	dir := b.TempDir()
+
+	// Create 20 .tf files
+	var files []string
+	for i := range 20 {
+		content := fmt.Sprintf(`resource "aws_instance" "server_%d" {
+  ami           = "ami-%06d"
+  instance_type = "t2.micro"
+}
+`, i, i)
+		f := filepath.Join(dir, fmt.Sprintf("file_%02d.tf", i))
+		require.NoError(b, os.WriteFile(f, []byte(content), 0o644))
+		files = append(files, f)
+	}
+
+	// Create 5 policy files
+	for i := range 5 {
+		policy := fmt.Sprintf(`package terraform
+
+deny[msg] {
+    resource := input.resources[_]
+    resource.type == "aws_instance"
+    not resource.values.tags
+    msg := {
+        "msg": "Policy %d: missing tags",
+        "rule": "require-tags-%d",
+        "severity": "warning"
+    }
+}
+`, i, i)
+		pf := filepath.Join(dir, fmt.Sprintf("policy_%d.rego", i))
+		require.NoError(b, os.WriteFile(pf, []byte(policy), 0o644))
+	}
+
+	cfg := &Config{PolicyDirs: []string{dir}}
+	engine := New(cfg)
+	ctx := context.Background()
+
+	b.ResetTimer()
+	b.ReportAllocs()
+	for range b.N {
+		_, _ = engine.Run(ctx, files)
+	}
 }
 
 func BenchmarkPolicyEval(b *testing.B) {

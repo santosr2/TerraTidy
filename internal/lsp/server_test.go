@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -224,6 +226,74 @@ func TestServer_HandleInitialize(t *testing.T) {
 	assert.Equal(t, "/tmp/test-project", server.workspaceRoot)
 }
 
+func TestServer_HandleInitialize_WithOptions(t *testing.T) {
+	out := &bytes.Buffer{}
+	server := NewServer(strings.NewReader(""), out)
+
+	params := InitializeParams{
+		RootURI: "file:///tmp/test-project",
+		InitializationOptions: &InitializationOptions{
+			Profile:           "production",
+			SeverityThreshold: "error",
+			Engines: EngineToggles{
+				Fmt:    true,
+				Style:  true,
+				Lint:   false,
+				Policy: true,
+			},
+			FormatOnSave: true,
+			RunOnSave:    true,
+		},
+	}
+	paramsJSON, _ := json.Marshal(params)
+
+	msg := RequestMessage{
+		JSONRPC: "2.0",
+		ID:      json.RawMessage(`1`),
+		Method:  "initialize",
+		Params:  paramsJSON,
+	}
+
+	err := server.handleInitialize(msg)
+	require.NoError(t, err)
+
+	// Verify init options were stored
+	require.NotNil(t, server.initOptions)
+	assert.Equal(t, "production", server.initOptions.Profile)
+	assert.Equal(t, "error", server.initOptions.SeverityThreshold)
+	assert.True(t, server.initOptions.Engines.Fmt)
+	assert.True(t, server.initOptions.Engines.Policy)
+	assert.False(t, server.initOptions.Engines.Lint)
+	assert.True(t, server.initOptions.FormatOnSave)
+
+	// Severity threshold should be applied to config
+	assert.Equal(t, "error", server.config.SeverityThreshold)
+}
+
+func TestServer_HandleInitialize_NilOptions(t *testing.T) {
+	out := &bytes.Buffer{}
+	server := NewServer(strings.NewReader(""), out)
+
+	params := InitializeParams{
+		RootURI: "file:///tmp/test-project",
+	}
+	paramsJSON, _ := json.Marshal(params)
+
+	msg := RequestMessage{
+		JSONRPC: "2.0",
+		ID:      json.RawMessage(`1`),
+		Method:  "initialize",
+		Params:  paramsJSON,
+	}
+
+	err := server.handleInitialize(msg)
+	require.NoError(t, err)
+
+	// Nil options should not crash
+	assert.Nil(t, server.initOptions)
+	assert.NotNil(t, server.config)
+}
+
 func TestServer_HandleInitialized(t *testing.T) {
 	server := NewServer(strings.NewReader(""), &bytes.Buffer{})
 
@@ -235,6 +305,92 @@ func TestServer_HandleInitialized(t *testing.T) {
 	err := server.handleInitialized(msg)
 	require.NoError(t, err)
 	assert.True(t, server.initialized)
+}
+
+func TestServer_HandleFormatting(t *testing.T) {
+	tests := []struct {
+		name        string
+		content     string
+		expectEdits bool
+	}{
+		{
+			name:        "unformatted HCL gets formatted",
+			content:     "resource \"aws_instance\" \"test\" {\nami = \"ami-123\"\n  instance_type=\"t2.micro\"\n}\n",
+			expectEdits: true,
+		},
+		{
+			name:        "already formatted HCL returns empty",
+			content:     "resource \"aws_instance\" \"test\" {\n  ami           = \"ami-123\"\n  instance_type = \"t2.micro\"\n}\n",
+			expectEdits: false,
+		},
+		{
+			name:        "multi-block HCL with comments",
+			content:     "# Main config\nresource \"aws_s3_bucket\" \"b\" {\nbucket=\"my-bucket\"\n}\n\n# Second block\nvariable \"name\" {\ntype=string\n}\n",
+			expectEdits: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			out := &bytes.Buffer{}
+			server := NewServer(strings.NewReader(""), out)
+
+			// Add document to the server
+			uri := "file:///tmp/test.tf"
+			server.documents[uri] = &Document{
+				URI:     uri,
+				Content: tt.content,
+				Version: 1,
+			}
+
+			params := DocumentFormattingParams{
+				TextDocument: TextDocumentIdentifier{URI: uri},
+			}
+			paramsJSON, _ := json.Marshal(params)
+
+			msg := RequestMessage{
+				JSONRPC: "2.0",
+				ID:      json.RawMessage(`1`),
+				Method:  "textDocument/formatting",
+				Params:  paramsJSON,
+			}
+
+			err := server.handleFormatting(msg)
+			require.NoError(t, err)
+
+			output := out.String()
+			if tt.expectEdits {
+				assert.Contains(t, output, `"newText"`)
+				assert.Contains(t, output, `"range"`)
+			} else {
+				assert.Contains(t, output, `[]`)
+			}
+		})
+	}
+}
+
+func TestServer_HandleFormatting_UnknownDocument(t *testing.T) {
+	out := &bytes.Buffer{}
+	server := NewServer(strings.NewReader(""), out)
+
+	params := DocumentFormattingParams{
+		TextDocument: TextDocumentIdentifier{URI: "file:///tmp/unknown.tf"},
+	}
+	paramsJSON, _ := json.Marshal(params)
+
+	msg := RequestMessage{
+		JSONRPC: "2.0",
+		ID:      json.RawMessage(`1`),
+		Method:  "textDocument/formatting",
+		Params:  paramsJSON,
+	}
+
+	err := server.handleFormatting(msg)
+	require.NoError(t, err)
+
+	output := out.String()
+	// nil result means no edits and no "newText" in the response
+	assert.NotContains(t, output, `"newText"`)
 }
 
 func TestServer_HandleShutdown(t *testing.T) {
@@ -324,82 +480,110 @@ func TestServer_HandleDidClose(t *testing.T) {
 	assert.False(t, ok)
 }
 
-func TestServer_HandleFormatting(t *testing.T) {
-	out := &bytes.Buffer{}
-	server := NewServer(strings.NewReader(""), out)
-
-	// Add a document
-	server.docMu.Lock()
-	server.documents["file:///test.tf"] = &Document{
-		URI:     "file:///test.tf",
-		Content: "resource {}",
-		Version: 1,
-	}
-	server.docMu.Unlock()
-
-	params := DocumentFormattingParams{
-		TextDocument: TextDocumentIdentifier{
-			URI: "file:///test.tf",
-		},
-		Options: FormattingOptions{
-			TabSize:      2,
-			InsertSpaces: true,
-		},
-	}
-	paramsJSON, _ := json.Marshal(params)
-
-	msg := RequestMessage{
-		JSONRPC: "2.0",
-		ID:      json.RawMessage(`1`),
-		Method:  "textDocument/formatting",
-		Params:  paramsJSON,
-	}
-
-	err := server.handleFormatting(msg)
-	require.NoError(t, err)
-
-	output := out.String()
-	assert.Contains(t, output, `"result"`)
-}
-
 func TestServer_HandleCodeAction(t *testing.T) {
-	out := &bytes.Buffer{}
-	server := NewServer(strings.NewReader(""), out)
+	t.Run("returns fix edits for unformatted document", func(t *testing.T) {
+		out := &bytes.Buffer{}
+		server := NewServer(strings.NewReader(""), out)
 
-	params := CodeActionParams{
-		TextDocument: TextDocumentIdentifier{
-			URI: "file:///test.tf",
-		},
-		Range: Range{
-			Start: Position{Line: 0, Character: 0},
-			End:   Position{Line: 0, Character: 10},
-		},
-		Context: CodeActionContext{
-			Diagnostics: []Diagnostic{
-				{
-					Range:    Range{Start: Position{Line: 0}, End: Position{Line: 0}},
-					Code:     "style.blank-lines",
-					Message:  "Missing blank line",
-					Severity: 2,
+		uri := "file:///test.tf"
+		server.documents[uri] = &Document{
+			URI:     uri,
+			Content: "resource \"test\" \"x\" {\nami=\"val\"\n}\n",
+			Version: 1,
+		}
+
+		params := CodeActionParams{
+			TextDocument: TextDocumentIdentifier{URI: uri},
+			Range:        Range{Start: Position{Line: 0}, End: Position{Line: 0}},
+			Context: CodeActionContext{
+				Diagnostics: []Diagnostic{
+					{
+						Range:    Range{Start: Position{Line: 0}, End: Position{Line: 0}},
+						Code:     "style.blank-lines",
+						Message:  "Missing blank line",
+						Severity: 2,
+					},
 				},
 			},
-		},
-	}
-	paramsJSON, _ := json.Marshal(params)
+		}
+		paramsJSON, _ := json.Marshal(params)
 
-	msg := RequestMessage{
-		JSONRPC: "2.0",
-		ID:      json.RawMessage(`1`),
-		Method:  "textDocument/codeAction",
-		Params:  paramsJSON,
-	}
+		msg := RequestMessage{
+			JSONRPC: "2.0",
+			ID:      json.RawMessage(`1`),
+			Method:  "textDocument/codeAction",
+			Params:  paramsJSON,
+		}
 
-	err := server.handleCodeAction(msg)
-	require.NoError(t, err)
+		err := server.handleCodeAction(msg)
+		require.NoError(t, err)
 
-	output := out.String()
-	assert.Contains(t, output, `"result"`)
-	assert.Contains(t, output, "Fix:")
+		output := out.String()
+		assert.Contains(t, output, "Fix:")
+		assert.Contains(t, output, `"edit"`)
+		assert.Contains(t, output, `"changes"`)
+	})
+
+	t.Run("returns empty for no diagnostics", func(t *testing.T) {
+		out := &bytes.Buffer{}
+		server := NewServer(strings.NewReader(""), out)
+
+		uri := "file:///test.tf"
+		server.documents[uri] = &Document{
+			URI:     uri,
+			Content: "resource {}\n",
+			Version: 1,
+		}
+
+		params := CodeActionParams{
+			TextDocument: TextDocumentIdentifier{URI: uri},
+			Range:        Range{Start: Position{Line: 0}, End: Position{Line: 0}},
+			Context:      CodeActionContext{Diagnostics: []Diagnostic{}},
+		}
+		paramsJSON, _ := json.Marshal(params)
+
+		msg := RequestMessage{
+			JSONRPC: "2.0",
+			ID:      json.RawMessage(`1`),
+			Method:  "textDocument/codeAction",
+			Params:  paramsJSON,
+		}
+
+		err := server.handleCodeAction(msg)
+		require.NoError(t, err)
+
+		output := out.String()
+		assert.Contains(t, output, `[]`)
+	})
+
+	t.Run("returns empty for unknown document", func(t *testing.T) {
+		out := &bytes.Buffer{}
+		server := NewServer(strings.NewReader(""), out)
+
+		params := CodeActionParams{
+			TextDocument: TextDocumentIdentifier{URI: "file:///unknown.tf"},
+			Range:        Range{Start: Position{Line: 0}, End: Position{Line: 0}},
+			Context: CodeActionContext{
+				Diagnostics: []Diagnostic{
+					{Code: "some-rule", Message: "something"},
+				},
+			},
+		}
+		paramsJSON, _ := json.Marshal(params)
+
+		msg := RequestMessage{
+			JSONRPC: "2.0",
+			ID:      json.RawMessage(`1`),
+			Method:  "textDocument/codeAction",
+			Params:  paramsJSON,
+		}
+
+		err := server.handleCodeAction(msg)
+		require.NoError(t, err)
+
+		output := out.String()
+		assert.Contains(t, output, `[]`)
+	})
 }
 
 func TestServer_Run_EOF(t *testing.T) {
@@ -566,6 +750,61 @@ resource "aws_instance" "example2" {
 
 	output := out.String()
 	assert.Contains(t, output, "textDocument/publishDiagnostics")
+}
+
+func TestParseLogLevel(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected LogLevel
+	}{
+		{"debug", LogLevelDebug},
+		{"info", LogLevelInfo},
+		{"warn", LogLevelWarn},
+		{"warning", LogLevelWarn},
+		{"error", LogLevelError},
+		{"off", LogLevelOff},
+		{"DEBUG", LogLevelDebug},
+		{"unknown", LogLevelInfo},
+		{"", LogLevelInfo},
+	}
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			assert.Equal(t, tt.expected, ParseLogLevel(tt.input))
+		})
+	}
+}
+
+func TestServer_SetLogLevel(t *testing.T) {
+	server := NewServer(strings.NewReader(""), &bytes.Buffer{})
+	assert.Equal(t, LogLevelInfo, server.logLevel)
+
+	server.SetLogLevel(LogLevelDebug)
+	assert.Equal(t, LogLevelDebug, server.logLevel)
+
+	server.SetLogLevel(LogLevelOff)
+	assert.Equal(t, LogLevelOff, server.logLevel)
+}
+
+func TestServer_SetLogFile(t *testing.T) {
+	server := NewServer(strings.NewReader(""), &bytes.Buffer{})
+
+	logFile := filepath.Join(t.TempDir(), "test.log")
+	err := server.SetLogFile(logFile)
+	require.NoError(t, err)
+
+	server.SetLogLevel(LogLevelDebug)
+	server.logDebug("test message %d", 42)
+
+	content, err := os.ReadFile(logFile)
+	require.NoError(t, err)
+	assert.Contains(t, string(content), "test message 42")
+	assert.Contains(t, string(content), "[DEBUG]")
+}
+
+func TestServer_SetLogFile_InvalidPath(t *testing.T) {
+	server := NewServer(strings.NewReader(""), &bytes.Buffer{})
+	err := server.SetLogFile("/nonexistent/dir/file.log")
+	assert.Error(t, err)
 }
 
 func TestServer_HandleMessage_BeforeInitialize(t *testing.T) {

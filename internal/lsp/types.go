@@ -34,17 +34,36 @@ type ResponseError struct {
 
 // InitializeParams represents the parameters for the initialize request
 type InitializeParams struct {
-	ProcessID             int                `json:"processId,omitempty"`
-	RootPath              string             `json:"rootPath,omitempty"`
-	RootURI               string             `json:"rootUri,omitempty"`
-	Capabilities          ClientCapabilities `json:"capabilities"`
-	InitializationOptions any                `json:"initializationOptions,omitempty"`
+	ProcessID             int                    `json:"processId,omitempty"`
+	RootPath              string                 `json:"rootPath,omitempty"`
+	RootURI               string                 `json:"rootUri,omitempty"`
+	Capabilities          ClientCapabilities     `json:"capabilities"`
+	InitializationOptions *InitializationOptions `json:"initializationOptions,omitempty"`
+}
+
+// InitializationOptions represents client-provided options from the editor
+type InitializationOptions struct {
+	Profile           string        `json:"profile,omitempty"`
+	ConfigPath        string        `json:"configPath,omitempty"`
+	Engines           EngineToggles `json:"engines,omitzero"`
+	SeverityThreshold string        `json:"severityThreshold,omitempty"`
+	FormatOnSave      bool          `json:"formatOnSave,omitempty"`
+	RunOnSave         bool          `json:"runOnSave,omitempty"`
+	FixOnSave         bool          `json:"fixOnSave,omitempty"`
+}
+
+// EngineToggles represents which engines are enabled
+type EngineToggles struct {
+	Fmt    bool `json:"fmt"`
+	Style  bool `json:"style"`
+	Lint   bool `json:"lint"`
+	Policy bool `json:"policy"`
 }
 
 // ClientCapabilities represents client capabilities
 type ClientCapabilities struct {
-	TextDocument TextDocumentClientCapabilities `json:"textDocument,omitempty"`
-	Workspace    WorkspaceClientCapabilities    `json:"workspace,omitempty"`
+	TextDocument TextDocumentClientCapabilities `json:"textDocument,omitzero"`
+	Workspace    WorkspaceClientCapabilities    `json:"workspace,omitzero"`
 }
 
 // TextDocumentClientCapabilities represents text document capabilities

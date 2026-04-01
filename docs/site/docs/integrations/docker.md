@@ -45,13 +45,13 @@ Build a local Docker image for development or testing:
 
 ```bash
 # Build binary and Docker image
-make docker-build
+mise run docker:build
 
 # Run the locally built image
-make docker-run
+mise run docker:run
 
 # Or build manually
-make build
+mise run build
 cp bin/terratidy terratidy
 docker build -t terratidy-dev .
 rm terratidy

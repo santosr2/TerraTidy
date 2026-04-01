@@ -10,65 +10,229 @@ bun = "1"  # VS Code extension development
 "pipx:bump-my-version" = "1"
 "go:golang.org/x/perf/cmd/benchstat" = "latest"  # uses date-based versions, not semver
 "go:mvdan.cc/gofumpt" = "0"
-"go:honnef.co/go/tools/cmd/staticcheck" = "0"
-"go:github.com/mgechev/revive" = "1"
-"go:golang.org/x/vuln/cmd/govulncheck" = "1"
+"go:golang.org/x/vuln/cmd/govulncheck" = "1"  # not bundled in golangci-lint
 "go:github.com/google/go-licenses" = "1"
 "go:golang.org/x/exp/cmd/gorelease" = "latest"  # uses date-based versions, not semver
 zizmor = "1"
 
-[tasks.coverage]
-description = "Generate coverage report"
-run = "bash tools/scripts/coverage-report.sh"
+# =============================================================================
+# Build & Install
+# =============================================================================
+
+[tasks.setup]
+description = "Install dependencies"
+run = """
+go mod download
+go mod tidy
+"""
+
+[tasks.build]
+description = "Build the binary"
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+VERSION="${VERSION:-dev}"
+COMMIT="$(git rev-parse --short HEAD 2>/dev/null || echo 'unknown')"
+DATE="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+LDFLAGS="-X main.version=${VERSION} -X main.commit=${COMMIT} -X main.date=${DATE}"
+echo "Building terratidy..."
+go build -ldflags "${LDFLAGS}" -o bin/terratidy ./cmd/terratidy
+"""
+
+[tasks.install]
+description = "Install the binary to GOPATH/bin"
+depends = ["build"]
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+VERSION="${VERSION:-dev}"
+COMMIT="$(git rev-parse --short HEAD 2>/dev/null || echo 'unknown')"
+DATE="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+LDFLAGS="-X main.version=${VERSION} -X main.commit=${COMMIT} -X main.date=${DATE}"
+echo "Installing terratidy to $(go env GOPATH)/bin..."
+go install -ldflags "${LDFLAGS}" ./cmd/terratidy
+"""
+
+[tasks."build:all"]
+description = "Build for all platforms"
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+VERSION="${VERSION:-dev}"
+COMMIT="$(git rev-parse --short HEAD 2>/dev/null || echo 'unknown')"
+DATE="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+LDFLAGS="-X main.version=${VERSION} -X main.commit=${COMMIT} -X main.date=${DATE}"
+echo "Building for multiple platforms..."
+GOOS=linux GOARCH=amd64 go build -ldflags "${LDFLAGS}" -o bin/terratidy-linux-amd64 ./cmd/terratidy
+GOOS=linux GOARCH=arm64 go build -ldflags "${LDFLAGS}" -o bin/terratidy-linux-arm64 ./cmd/terratidy
+GOOS=darwin GOARCH=amd64 go build -ldflags "${LDFLAGS}" -o bin/terratidy-darwin-amd64 ./cmd/terratidy
+GOOS=darwin GOARCH=arm64 go build -ldflags "${LDFLAGS}" -o bin/terratidy-darwin-arm64 ./cmd/terratidy
+GOOS=windows GOARCH=amd64 go build -ldflags "${LDFLAGS}" -o bin/terratidy-windows-amd64.exe ./cmd/terratidy
+echo "Binaries built in bin/"
+"""
+
+# =============================================================================
+# Testing
+# =============================================================================
+
+[tasks.test]
+description = "Run tests"
+run = "go test -v -race -cover ./..."
+
+[tasks."test:coverage"]
+description = "Run tests with HTML coverage report"
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+echo "Running tests with coverage..."
+go test -v -race -coverprofile=coverage.out -covermode=atomic ./...
+go tool cover -html=coverage.out -o coverage.html
+echo "Coverage report generated: coverage.html"
+"""
+
+[tasks."test:integration"]
+description = "Run integration tests"
+depends = ["build"]
+run = "go test -v -tags=integration ./..."
 
 [tasks.benchmark]
 description = "Run benchmarks"
 run = "bash tools/scripts/benchmark.sh"
 
-[tasks.deps-graph]
-description = "Generate dependency graph"
-run = "go mod graph | bash tools/scripts/mod-graph.sh > docs/dependencies.svg"
+# =============================================================================
+# Code Quality
+# =============================================================================
+
+[tasks.lint]
+description = "Run all linters (golangci-lint: staticcheck, revive, gosec, and more)"
+run = "golangci-lint run"
+
+[tasks.vuln]
+description = "Check for security vulnerabilities"
+run = "govulncheck ./..."
+
+[tasks.fmt]
+description = "Format code with gofumpt"
+run = "gofumpt -l -w ."
+
+[tasks.vet]
+description = "Run go vet"
+run = "go vet ./..."
+
+[tasks.check]
+description = "Run all quality checks"
+depends = ["fmt", "vet", "lint", "test"]
+
+[tasks."check:strict"]
+description = "Run all checks with vulnerability scan"
+depends = ["fmt", "vet", "lint", "vuln", "test"]
+
+# =============================================================================
+# Docker
+# =============================================================================
+
+[tasks."docker:build"]
+description = "Build Docker image for local development"
+depends = ["build"]
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+echo "Building Docker image..."
+cp bin/terratidy terratidy
+docker build -t terratidy-dev .
+rm -f terratidy
+"""
+
+[tasks."docker:run"]
+description = "Run TerraTidy in Docker"
+depends = ["docker:build"]
+run = 'docker run --rm -v "$PWD":/app terratidy-dev check'
+
+# =============================================================================
+# Development Tools
+# =============================================================================
+
+[tasks.dev]
+description = "Run in development mode (with hot reload)"
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+VERSION="${VERSION:-dev}"
+COMMIT="$(git rev-parse --short HEAD 2>/dev/null || echo 'unknown')"
+DATE="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+LDFLAGS="-X main.version=${VERSION} -X main.commit=${COMMIT} -X main.date=${DATE}"
+go run -ldflags "${LDFLAGS}" ./cmd/terratidy dev
+"""
+
+[tasks."deps:graph"]
+description = "Generate dependency graph SVG"
+run = """
+go mod graph | bash tools/scripts/mod-graph.sh > docs/dependencies.svg
+echo "Dependency graph saved to docs/dependencies.svg"
+"""
+
+# =============================================================================
+# Cleanup
+# =============================================================================
 
 [tasks.clean]
-description = "Clean all generated files"
-run = "make clean-all"
+description = "Clean build artifacts"
+run = """
+rm -rf bin/ dist/
+rm -f coverage.out coverage.html
+go clean
+"""
+
+[tasks."clean:all"]
+description = "Clean all generated files and caches"
+run = """
+rm -rf bin/ dist/ coverage/ benchmarks/ test_fixtures/
+rm -f coverage.out coverage.html coverage.txt
+rm -f *.test *.prof
+go clean -cache -testcache -modcache
+echo "All generated files cleaned"
+"""
 
 [tasks.uninstall]
 description = "Uninstall all development tools"
-run = "make uninstall-tools"
+run = "bash tools/scripts/uninstall.sh"
 
-[tasks.uninstall-force]
+[tasks."uninstall:force"]
 description = "Force uninstall tools without confirmation"
-run = "make uninstall-tools-force"
+run = "bash tools/scripts/uninstall.sh --force"
+
+# =============================================================================
+# Release & Versioning
+# =============================================================================
 
 [tasks.changelog]
 description = "Generate CHANGELOG.md from git commits"
 run = "git-cliff --config cliff.toml -o CHANGELOG.md"
 
-[tasks.changelog-preview]
+[tasks."changelog:preview"]
 description = "Preview changelog without writing to file"
 run = "git-cliff --config cliff.toml --unreleased"
 
-[tasks.bump-patch]
+[tasks."bump:patch"]
 description = "Bump patch version (e.g., 0.2.0 -> 0.2.1)"
 run = "uv tool run bump-my-version bump patch"
 
-[tasks.bump-minor]
+[tasks."bump:minor"]
 description = "Bump minor version (e.g., 0.2.0 -> 0.3.0)"
 run = "uv tool run bump-my-version bump minor"
 
-[tasks.bump-major]
+[tasks."bump:major"]
 description = "Bump major version (e.g., 0.2.0 -> 1.0.0)"
 run = "uv tool run bump-my-version bump major"
 
-[tasks.bump-pre]
+[tasks."bump:pre"]
 description = "Bump pre-release version (e.g., alpha.1 -> alpha.2)"
 run = "uv tool run bump-my-version bump pre_n"
 
-[tasks.bump-release]
+[tasks."bump:release"]
 description = "Bump to release version (remove pre-release suffix)"
 run = "uv tool run bump-my-version bump pre_l"
 
-[tasks.version-show]
+[tasks."version:show"]
 description = "Show current version and possible bumps"
 run = "uv tool run bump-my-version show-bump"

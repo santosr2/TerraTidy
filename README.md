@@ -334,17 +334,17 @@ Full documentation is available at [docs/site/docs/](docs/site/docs/).
 git clone https://github.com/santosr2/terratidy
 cd terratidy
 mise install        # Install Go 1.26.1 and tools
-make setup          # Download and tidy Go modules
-make build          # Build binary
+mise run setup      # Download and tidy Go modules
+mise run build      # Build binary
 ```
 
 ### Run Tests
 
 ```bash
-make test           # Unit tests
-make integration    # Integration tests
-make lint           # Run linters
-make check          # All quality checks (fmt, vet, lint, test)
+mise run test           # Unit tests
+mise run test:integration  # Integration tests
+mise run lint           # Run linters
+mise run check          # All quality checks (fmt, vet, lint, test)
 ```
 
 ## Contributing

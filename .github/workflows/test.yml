@@ -84,12 +84,6 @@ jobs:
         with:
           version: v2.11.4
 
-      - name: Install revive
-        run: go install github.com/mgechev/revive@latest
-
-      - name: Run revive
-        run: revive -config revive.toml -formatter friendly ./...
-
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 10

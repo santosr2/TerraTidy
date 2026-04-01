@@ -4,6 +4,7 @@
 package format
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"os"
@@ -87,7 +88,7 @@ func (e *Engine) formatFile(path string) (*sdk.Finding, error) {
 	formatted := hclwrite.Format(content)
 
 	// Check if formatting changed anything
-	if string(formatted) == string(content) {
+	if bytes.Equal(formatted, content) {
 		return nil, nil // Already formatted
 	}
 
@@ -126,7 +127,7 @@ func (e *Engine) formatFile(path string) (*sdk.Finding, error) {
 	}
 
 	// In normal mode, write the formatted content
-	if err := os.WriteFile(path, formatted, 0o644); err != nil {
+	if err := os.WriteFile(path, formatted, 0o600); err != nil {
 		return nil, fmt.Errorf("writing formatted file: %w", err)
 	}
 

@@ -212,8 +212,8 @@ func runAllChecksSequentialWithConfig(ctx context.Context, cfg *config.Config, f
 
 // hasErrors returns true if any finding has error severity.
 func hasErrors(findings []sdk.Finding) bool {
-	for _, f := range findings {
-		if f.Severity == sdk.SeverityError {
+	for i := range findings {
+		if findings[i].Severity == sdk.SeverityError {
 			return true
 		}
 	}
@@ -412,8 +412,8 @@ func outputCheckResults(allFindings []sdk.Finding, _ bool) error {
 	}
 
 	// Return exit error if there are errors (for structured output)
-	for _, finding := range allFindings {
-		if finding.Severity == sdk.SeverityError {
+	for i := range allFindings {
+		if allFindings[i].Severity == sdk.SeverityError {
 			return &sdk.ExitError{Code: 1}
 		}
 	}

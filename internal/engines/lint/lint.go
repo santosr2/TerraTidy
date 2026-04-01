@@ -1079,9 +1079,9 @@ func (e *Engine) RunTFLint(ctx context.Context, dir string) ([]sdk.Finding, erro
 	}
 
 	// Convert TFLint issues to sdk.Finding
-	for _, issue := range tflintOutput.Issues {
+	for i := range tflintOutput.Issues {
 		severity := sdk.SeverityWarning
-		switch strings.ToLower(issue.Rule.Severity) {
+		switch strings.ToLower(tflintOutput.Issues[i].Rule.Severity) {
 		case "error":
 			severity = sdk.SeverityError
 		case "warning":
@@ -1091,18 +1091,18 @@ func (e *Engine) RunTFLint(ctx context.Context, dir string) ([]sdk.Finding, erro
 		}
 
 		finding := sdk.Finding{
-			Rule:    "tflint." + issue.Rule.Name,
-			Message: issue.Message,
-			File:    filepath.Join(dir, issue.Range.Filename),
+			Rule:    "tflint." + tflintOutput.Issues[i].Rule.Name,
+			Message: tflintOutput.Issues[i].Message,
+			File:    filepath.Join(dir, tflintOutput.Issues[i].Range.Filename),
 			Location: hcl.Range{
-				Filename: filepath.Join(dir, issue.Range.Filename),
+				Filename: filepath.Join(dir, tflintOutput.Issues[i].Range.Filename),
 				Start: hcl.Pos{
-					Line:   issue.Range.Start.Line,
-					Column: issue.Range.Start.Column,
+					Line:   tflintOutput.Issues[i].Range.Start.Line,
+					Column: tflintOutput.Issues[i].Range.Start.Column,
 				},
 				End: hcl.Pos{
-					Line:   issue.Range.End.Line,
-					Column: issue.Range.End.Column,
+					Line:   tflintOutput.Issues[i].Range.End.Line,
+					Column: tflintOutput.Issues[i].Range.End.Column,
 				},
 			},
 			Severity: severity,

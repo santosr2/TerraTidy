@@ -1,0 +1,148 @@
+version: "2"
+
+run:
+  timeout: 5m
+  tests: true
+  modules-download-mode: readonly
+
+output:
+  formats:
+    text:
+      path: stdout
+  sort-order:
+    - linter
+    - file
+
+severity:
+  default: warning
+  rules:
+    - linters: [gosec]
+      severity: error
+    - linters: [errcheck]
+      severity: error
+
+formatters:
+  enable:
+    - gofumpt
+    - goimports
+
+linters:
+  enable:
+    # Correctness (catch real bugs)
+    - errcheck       # unchecked error returns
+    - govet          # suspicious constructs (go vet on steroids)
+    - ineffassign    # assignments to existing variables that are never used
+    - staticcheck    # advanced static analysis (SA*, S*, ST*, QF*)
+    - unused         # unused constants, variables, functions, types
+    - bodyclose      # unclosed HTTP response bodies
+    - copyloopvar    # loop variable capture bugs
+    - durationcheck  # two durations multiplied together
+    - nilerr         # returning nil error after checking err != nil
+    - sqlclosecheck  # unclosed sql.Rows and sql.Stmt
+    - wastedassign   # assignments that are never read
+
+    # Security
+    - gosec          # security-oriented checks (G* rules)
+    - bidichk        # dangerous unicode bidi character sequences
+
+    # Error handling
+    - errname        # sentinel errors prefixed with Err, error types suffixed Error
+    - errorlint      # error wrapping issues (Go 1.13+ errors)
+    - nolintlint     # ill-formed //nolint directives
+
+    # Style and complexity
+    - cyclop         # cyclomatic complexity per function
+    - funlen         # function length (lines and statements)
+    - revive         # replacement for golint, configurable rules
+
+    # Code quality
+    - gocritic       # opinionated checks (diagnostic + performance tags)
+    - misspell       # common spelling mistakes in comments and strings
+    - unconvert      # unnecessary type conversions
+    - whitespace     # leading/trailing whitespace in functions
+    - dupword        # duplicate words in comments/strings
+
+  settings:
+    cyclop:
+      max-complexity: 25
+
+    funlen:
+      lines: 120
+      statements: 60
+      ignore-comments: true
+
+    gocritic:
+      enabled-tags:
+        - diagnostic
+        - performance
+      disabled-checks:
+        - hugeParam      # sdk.Finding (144 bytes) is passed by value everywhere;
+        - ifElseChain    # many HCL block-type dispatches are clearer as if-else than switch
+        - appendCombine  # style engine registers 33 rules individually for readability
+        - rangeValCopy   # sdk.Finding (144 bytes) iterated everywhere; indexing every loop hurts readability
+
+    gosec:
+      excludes:
+        - G122  # filepath.Walk TOCTOU: acceptable for scanning user's own config directories
+        - G204  # subprocess launch: exec.Command used intentionally for TFLint integration
+        - G304  # file inclusion via variable: we read user-provided config and HCL files
+        - G703  # path traversal taint: we write back to files the user asked us to format
+
+    misspell:
+      locale: US
+
+    nolintlint:
+      require-explanation: true
+      require-specific: true
+
+    govet:
+      enable-all: true
+      disable:
+        - fieldalignment  # struct field alignment optimization is premature; readability over layout
+
+    # Settings for linters not currently enabled but configured for future use
+    gocognit:
+      min-complexity: 30
+
+    nestif:
+      min-complexity: 6
+
+    dupl:
+      threshold: 150
+
+  exclusions:
+    rules:
+      # Test files: relax style and complexity checks
+      - path: _test\.go
+        linters:
+          - dupl       # test tables often repeat structure
+          - funlen     # table-driven tests are inherently long
+          - gocognit   # test setup logic can be complex
+          - cyclop     # same as gocognit
+          - errcheck   # test helpers often ignore errors safely
+          - gosec      # test fixtures use relaxed permissions
+          - gocritic   # defer-in-loop, unused writes in test assertions
+          - govet      # shadow, unusedwrite in test struct literals
+          - unparam    # fuzz test params appear unused
+          - revive     # unused-parameter in fuzz targets
+          - prealloc   # test slice preallocation is noise
+
+      # CLI commands: flag parsing and orchestration are inherently complex
+      - path: cmd/
+        linters:
+          - funlen
+          - cyclop
+          - gocognit
+
+      # LSP protocol types: many public structs required by the LSP spec
+      - path: internal/lsp/types\.go
+        linters:
+          - revive
+        text: "max-public-structs"
+
+      # HCL engine code: AST traversal produces inherent nesting/complexity
+      - path: internal/engines/
+        linters:
+          - cyclop
+          - gocognit
+        text: "complexity"

@@ -85,7 +85,7 @@ func runInit(_ *cobra.Command, _ []string) error {
 	}
 
 	// Write configuration file
-	if err := os.WriteFile(configPath, []byte(config), 0o644); err != nil {
+	if err := os.WriteFile(configPath, []byte(config), 0o600); err != nil {
 		return fmt.Errorf("writing config file: %w", err)
 	}
 
@@ -148,7 +148,7 @@ func readYesNo(reader *bufio.Reader, defaultYes bool) bool {
 	if line == "" {
 		return defaultYes
 	}
-	return strings.ToLower(line) == "y" || strings.ToLower(line) == "yes"
+	return strings.EqualFold(line, "y") || strings.EqualFold(line, "yes")
 }
 
 func readLine(reader *bufio.Reader) string {
@@ -160,7 +160,7 @@ func readLine(reader *bufio.Reader) string {
 func initSplitConfig() error {
 	// Create .terratidy directory
 	configDir := ".terratidy"
-	if err := os.MkdirAll(configDir, 0o755); err != nil {
+	if err := os.MkdirAll(configDir, 0o750); err != nil {
 		return fmt.Errorf("creating config directory: %w", err)
 	}
 
@@ -231,7 +231,7 @@ engines:
 	}
 
 	for path, content := range files {
-		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
 			return fmt.Errorf("writing %s: %w", path, err)
 		}
 		fmt.Printf("Created %s\n", path)

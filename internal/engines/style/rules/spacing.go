@@ -168,16 +168,16 @@ func (r *BlankLineBetweenBlocksRule) getBlankLineConfig(config map[string]any) (
 		return minLines, maxLines
 	}
 
-	if min, ok := options["min_lines"].(int); ok {
-		minLines = min
-	} else if min, ok := options["min_lines"].(float64); ok {
-		minLines = int(min)
+	if v, ok := options["min_lines"].(int); ok {
+		minLines = v
+	} else if v, ok := options["min_lines"].(float64); ok {
+		minLines = int(v)
 	}
 
-	if max, ok := options["max_lines"].(int); ok {
-		maxLines = max
-	} else if max, ok := options["max_lines"].(float64); ok {
-		maxLines = int(max)
+	if v, ok := options["max_lines"].(int); ok {
+		maxLines = v
+	} else if v, ok := options["max_lines"].(float64); ok {
+		maxLines = int(v)
 	}
 
 	// Ensure min <= max

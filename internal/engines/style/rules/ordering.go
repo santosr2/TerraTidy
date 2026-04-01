@@ -367,7 +367,7 @@ func (r *LifecycleAtEndRule) Fix(ctx *sdk.Context, file *hcl.File) ([]byte, erro
 				return nil, err
 			}
 			// Write intermediate result
-			if err := os.WriteFile(ctx.File, content, 0o644); err != nil {
+			if err := os.WriteFile(ctx.File, content, 0o600); err != nil {
 				return nil, err
 			}
 		}
@@ -1840,7 +1840,7 @@ func (r *AttributeGroupSpacingRule) fixAllBlocks(filePath string) ([]byte, error
 		}
 
 		// Write intermediate result so next fixBlock sees updated line numbers
-		if err := os.WriteFile(filePath, content, 0o644); err != nil {
+		if err := os.WriteFile(filePath, content, 0o600); err != nil {
 			return nil, err
 		}
 	}
@@ -1874,7 +1874,7 @@ func (r *AttributeGroupSpacingRule) Fix(ctx *sdk.Context, file *hcl.File) ([]byt
 		}
 
 		// Write intermediate result for next iteration
-		if err := os.WriteFile(ctx.File, content, 0o644); err != nil {
+		if err := os.WriteFile(ctx.File, content, 0o600); err != nil {
 			return nil, err
 		}
 	}

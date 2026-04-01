@@ -78,9 +78,9 @@ Use --changed to only check files that have been modified in git.`,
 
 		// Show input JSON if requested
 		if policyShowJSON {
-			jsonData, err := engine.GetInput(files)
-			if err != nil {
-				return fmt.Errorf("generating input JSON: %w", err)
+			jsonData, jsonErr := engine.GetInput(files)
+			if jsonErr != nil {
+				return fmt.Errorf("generating input JSON: %w", jsonErr)
 			}
 			fmt.Println(string(jsonData))
 			return nil

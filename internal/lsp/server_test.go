@@ -121,6 +121,9 @@ func TestURIToPath(t *testing.T) {
 		{"file:///tmp/test.tf", "/tmp/test.tf"},
 		{"file:///home/user/main.tf", "/home/user/main.tf"},
 		{"/direct/path.tf", "/direct/path.tf"},
+		{"file:///C:/Users/dev/main.tf", "C:/Users/dev/main.tf"},
+		{"file:///D:/projects/test.tf", "D:/projects/test.tf"},
+		{"file:///C:/path%20with%20spaces/main.tf", "C:/path with spaces/main.tf"},
 	}
 
 	for _, tt := range tests {

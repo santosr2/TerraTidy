@@ -11,6 +11,13 @@ type Rule interface {
     Name() string
     Description() string
     Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Finding, error)
+}
+```
+
+Rules that support auto-fixing also implement `sdk.Fixer`:
+
+```go
+type Fixer interface {
     Fix(ctx *sdk.Context, file *hcl.File) ([]byte, error)
 }
 ```
@@ -20,7 +27,6 @@ The `sdk.Context` provides runtime information:
 ```go
 type Context struct {
     Config  map[string]any
-    Logger  *log.Logger
     WorkDir string
     File    string
 }

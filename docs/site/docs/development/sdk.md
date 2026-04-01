@@ -26,10 +26,26 @@ type Rule interface {
     // Check evaluates the rule against a parsed HCL file and returns any findings.
     // Return nil findings and nil error if the file passes the check.
     Check(ctx *Context, file *hcl.File) ([]Finding, error)
+}
+```
 
+Rules that support auto-fixing also implement `Fixer`:
+
+```go
+type Fixer interface {
     // Fix applies an automatic fix and returns the corrected file content.
-    // Return nil, nil if the rule does not support auto-fixing.
     Fix(ctx *Context, file *hcl.File) ([]byte, error)
+}
+```
+
+## Engine Interface
+
+All analysis engines (fmt, style, lint, policy) implement:
+
+```go
+type Engine interface {
+    Name() string
+    Run(ctx context.Context, files []string) ([]Finding, error)
 }
 ```
 
@@ -42,9 +58,6 @@ type Context struct {
     // Config holds rule-specific configuration from .terratidy.yaml.
     // Keys and values correspond to the "options" map under a rule's config.
     Config map[string]any
-
-    // Logger for diagnostic output (not user-facing findings).
-    Logger *log.Logger
 
     // WorkDir is the working directory TerraTidy was invoked from.
     WorkDir string
@@ -125,7 +138,8 @@ func (r *MyRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Finding, error) 
     }}, nil
 }
 
-func (r *MyRule) Fix(ctx *sdk.Context, file *hcl.File) ([]byte, error) {
-    return nil, nil // No auto-fix
-}
+// Optional: implement sdk.Fixer for auto-fix support
+// func (r *MyRule) Fix(ctx *sdk.Context, file *hcl.File) ([]byte, error) {
+//     return fixedContent, nil
+// }
 ```

@@ -39,6 +39,10 @@ type Rule interface {
     Name() string
     Description() string
     Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Finding, error)
+}
+
+// Rules that support auto-fixing also implement Fixer
+type Fixer interface {
     Fix(ctx *sdk.Context, file *hcl.File) ([]byte, error)
 }
 ```
@@ -185,9 +189,10 @@ func (r *MyRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Finding, error) 
     return findings, nil
 }
 
-func (r *MyRule) Fix(ctx *sdk.Context, file *hcl.File) ([]byte, error) {
-    return nil, nil
-}
+// Optional: implement sdk.Fixer for auto-fix support
+// func (r *MyRule) Fix(ctx *sdk.Context, file *hcl.File) ([]byte, error) {
+//     return fixedContent, nil
+// }
 ```
 
 ### YAML Rule

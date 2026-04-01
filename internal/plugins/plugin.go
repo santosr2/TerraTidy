@@ -15,7 +15,6 @@
 package plugins
 
 import (
-	"context"
 	"fmt"
 	"io"
 	"os"
@@ -61,13 +60,8 @@ type RulePlugin interface {
 	GetRules() []sdk.Rule
 }
 
-// EnginePlugin defines the interface for engine plugins
-type EnginePlugin interface {
-	// Name returns the engine name
-	Name() string
-	// Run executes the engine on the given files
-	Run(ctx context.Context, files []string) ([]sdk.Finding, error)
-}
+// EnginePlugin is sdk.Engine.
+type EnginePlugin = sdk.Engine
 
 // FormatterPlugin defines the interface for formatter plugins
 type FormatterPlugin interface {

@@ -11,11 +11,46 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"time"
 
 	"github.com/hashicorp/hcl/v2"
 	"github.com/santosr2/TerraTidy/pkg/sdk"
 )
+
+// maxStderrLen is the maximum length of stderr to include in error messages.
+const maxStderrLen = 500
+
+// absolutePathPattern matches Unix absolute paths for sanitization.
+// Matches paths like /home/user/file.tf but not ./relative/path.
+// Only matches paths preceded by whitespace or at start of string.
+var absolutePathPattern = regexp.MustCompile(`(^|\s)(/(?:[a-zA-Z0-9._-]+/)+[a-zA-Z0-9._-]+)`)
+
+// sanitizeStderr truncates and sanitizes stderr output for error messages.
+// It truncates to maxStderrLen and replaces absolute paths with relative names.
+func sanitizeStderr(stderr string) string {
+	// Replace absolute paths with just the filename, preserving preceding whitespace
+	sanitized := absolutePathPattern.ReplaceAllStringFunc(stderr, func(match string) string {
+		// Find where the path starts (after any whitespace)
+		pathStart := 0
+		for i, c := range match {
+			if c == '/' {
+				pathStart = i
+				break
+			}
+		}
+		prefix := match[:pathStart]
+		path := match[pathStart:]
+		return prefix + filepath.Base(path)
+	})
+
+	// Truncate if too long
+	if len(sanitized) > maxStderrLen {
+		sanitized = sanitized[:maxStderrLen] + "... (truncated)"
+	}
+
+	return sanitized
+}
 
 // bashRuleTimeout is the maximum execution time for a Bash rule script.
 const bashRuleTimeout = 30 * time.Second
@@ -80,7 +115,7 @@ func (r *BashRule) Check(ctx *sdk.Context, _ *hcl.File) ([]sdk.Finding, error) {
 		// Any other error (exit code 2+, signal, timeout) is a real failure.
 		exitErr := &exec.ExitError{}
 		if !errors.As(err, &exitErr) || exitErr.ExitCode() != 1 {
-			return nil, fmt.Errorf("executing bash rule %s: %w (stderr: %s)", r.name, err, stderr.String())
+			return nil, fmt.Errorf("executing bash rule %s: %w (stderr: %s)", r.name, err, sanitizeStderr(stderr.String()))
 		}
 	}
 

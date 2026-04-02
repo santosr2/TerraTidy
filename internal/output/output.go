@@ -7,11 +7,29 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/santosr2/TerraTidy/pkg/sdk"
 )
+
+// displayPath returns the path for display, converting to relative if not verbose.
+// Full absolute paths are only shown when verbose is true.
+func displayPath(path string, verbose bool) string {
+	if verbose {
+		return path
+	}
+	// Try to convert to relative path
+	if filepath.IsAbs(path) {
+		if cwd, err := os.Getwd(); err == nil {
+			if rel, err := filepath.Rel(cwd, path); err == nil {
+				return rel
+			}
+		}
+	}
+	return path
+}
 
 // ANSI color codes
 const (
@@ -60,11 +78,12 @@ func (f *TextFormatter) Format(findings []sdk.Finding, w io.Writer) error {
 			iconColor = colorCyan
 		}
 
+		displayFile := displayPath(finding.File, f.Verbose)
 		if f.Color {
 			if f.Verbose {
 				_, _ = fmt.Fprintf(w, "%s%s%s %s:%d:%d: %s %s(%s)%s\n",
 					iconColor, icon, colorReset,
-					finding.File,
+					displayFile,
 					finding.Location.Start.Line,
 					finding.Location.Start.Column,
 					finding.Message,
@@ -73,7 +92,7 @@ func (f *TextFormatter) Format(findings []sdk.Finding, w io.Writer) error {
 			} else {
 				_, _ = fmt.Fprintf(w, "%s%s%s %s: %s %s(%s)%s\n",
 					iconColor, icon, colorReset,
-					finding.File,
+					displayFile,
 					finding.Message,
 					colorGray, finding.Rule, colorReset,
 				)
@@ -82,7 +101,7 @@ func (f *TextFormatter) Format(findings []sdk.Finding, w io.Writer) error {
 			if f.Verbose {
 				_, _ = fmt.Fprintf(w, "%s %s:%d:%d: %s (%s)\n",
 					icon,
-					finding.File,
+					displayFile,
 					finding.Location.Start.Line,
 					finding.Location.Start.Column,
 					finding.Message,
@@ -91,7 +110,7 @@ func (f *TextFormatter) Format(findings []sdk.Finding, w io.Writer) error {
 			} else {
 				_, _ = fmt.Fprintf(w, "%s %s: %s (%s)\n",
 					icon,
-					finding.File,
+					displayFile,
 					finding.Message,
 					finding.Rule,
 				)

@@ -15,6 +15,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/santosr2/TerraTidy/internal/buildinfo"
 	"github.com/santosr2/TerraTidy/internal/config"
@@ -23,6 +24,14 @@ import (
 	"github.com/santosr2/TerraTidy/internal/engines/style"
 	"github.com/santosr2/TerraTidy/pkg/sdk"
 )
+
+// lspTempBasePath is the base directory for LSP session temp files.
+// Uses XDG cache directory structure.
+const lspTempBasePath = ".cache/terratidy/lsp-tmp"
+
+// sessionTempMaxAge is the maximum age of session temp directories before cleanup.
+// Directories older than this are removed on server start.
+const sessionTempMaxAge = 24 * time.Hour
 
 // LogLevel represents the logging verbosity
 type LogLevel int
@@ -72,22 +81,23 @@ func ParseLogLevel(s string) LogLevel {
 
 // Server represents an LSP server instance
 type Server struct {
-	reader        *bufio.Reader
-	writer        io.Writer
-	writeMu       sync.Mutex // protects writer from concurrent writeMessage calls
-	config        *config.Config
-	initOptions   *InitializationOptions
-	documents     map[string]*Document
-	docMu         sync.RWMutex
-	lintEngine    *lint.Engine
-	styleEngine   *style.Engine
-	workspaceRoot string
-	initialized   bool
-	shutdown      bool
-	logger        *log.Logger
-	logLevel      LogLevel
-	logFile       *os.File
-	diagSem       chan struct{} // semaphore for concurrent diagnostics
+	reader         *bufio.Reader
+	writer         io.Writer
+	writeMu        sync.Mutex // protects writer from concurrent writeMessage calls
+	config         *config.Config
+	initOptions    *InitializationOptions
+	documents      map[string]*Document
+	docMu          sync.RWMutex
+	lintEngine     *lint.Engine
+	styleEngine    *style.Engine
+	workspaceRoot  string
+	initialized    bool
+	shutdown       bool
+	logger         *log.Logger
+	logLevel       LogLevel
+	logFile        *os.File
+	diagSem        chan struct{} // semaphore for concurrent diagnostics
+	sessionTempDir string        // private temp directory for this session
 }
 
 // Document represents an open document
@@ -128,10 +138,87 @@ func (s *Server) SetLogFile(path string) error {
 
 // Close releases resources held by the server (e.g., log file handle)
 func (s *Server) Close() error {
+	// Clean up session temp directory
+	if s.sessionTempDir != "" {
+		_ = os.RemoveAll(s.sessionTempDir)
+	}
 	if s.logFile != nil {
 		return s.logFile.Close()
 	}
 	return nil
+}
+
+// initSessionTempDir creates a private temp directory for this server session.
+// It also cleans up stale session directories older than sessionTempMaxAge.
+func (s *Server) initSessionTempDir() error {
+	baseDir := getSessionTempBaseDir()
+
+	// Clean up old session directories
+	s.cleanupOldSessions(baseDir)
+
+	// Create session directory with PID + timestamp
+	sessionID := fmt.Sprintf("%d-%d", os.Getpid(), time.Now().UnixNano())
+	sessionDir := filepath.Join(baseDir, sessionID)
+
+	if err := os.MkdirAll(sessionDir, 0o700); err != nil {
+		// Fall back to system temp dir
+		s.logWarn("failed to create session temp dir %s, using system temp: %v", sessionDir, err)
+		s.sessionTempDir = os.TempDir()
+		return nil
+	}
+
+	s.sessionTempDir = sessionDir
+	s.logDebug("using session temp directory: %s", sessionDir)
+	return nil
+}
+
+// getSessionTempBaseDir returns the base directory for LSP session temp files.
+// Uses XDG cache directory (~/.cache/terratidy/lsp-tmp).
+func getSessionTempBaseDir() string {
+	// Try XDG_CACHE_HOME first
+	if cacheDir := os.Getenv("XDG_CACHE_HOME"); cacheDir != "" {
+		return filepath.Join(cacheDir, "terratidy", "lsp-tmp")
+	}
+
+	// Fall back to ~/.cache
+	if home, err := os.UserHomeDir(); err == nil {
+		return filepath.Join(home, lspTempBasePath)
+	}
+
+	// Last resort: system temp
+	return filepath.Join(os.TempDir(), "terratidy-lsp")
+}
+
+// cleanupOldSessions removes session temp directories older than sessionTempMaxAge.
+// This prevents accumulation of stale temp files from crashed sessions.
+func (s *Server) cleanupOldSessions(baseDir string) {
+	entries, err := os.ReadDir(baseDir)
+	if err != nil {
+		return // Directory doesn't exist or can't be read
+	}
+
+	cutoff := time.Now().Add(-sessionTempMaxAge)
+
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+
+		info, err := entry.Info()
+		if err != nil {
+			continue
+		}
+
+		// Remove directories older than cutoff
+		if info.ModTime().Before(cutoff) {
+			sessionPath := filepath.Join(baseDir, entry.Name())
+			if err := os.RemoveAll(sessionPath); err != nil {
+				s.logWarn("failed to cleanup old session %s: %v", entry.Name(), err)
+			} else {
+				s.logDebug("cleaned up old session directory: %s", entry.Name())
+			}
+		}
+	}
 }
 
 func (s *Server) logDebug(format string, args ...any) {
@@ -339,6 +426,12 @@ func (s *Server) handleInitialize(msg RequestMessage) error {
 	}
 
 	s.config = cfg
+
+	// Initialize session temp directory for document analysis
+	if err := s.initSessionTempDir(); err != nil {
+		s.logWarn("failed to initialize session temp dir: %v", err)
+		// Not fatal - will fall back to system temp
+	}
 
 	// Initialize engines with config
 	s.lintEngine = lint.New(nil)
@@ -668,7 +761,12 @@ func (s *Server) getDiagnostics(uri string) []Diagnostic {
 		if tmpExt == "" {
 			tmpExt = ".tf"
 		}
-		f, err := os.CreateTemp("", "terratidy-*"+tmpExt)
+		// Use session temp directory if available, otherwise fall back to system temp
+		tempDir := s.sessionTempDir
+		if tempDir == "" {
+			tempDir = os.TempDir()
+		}
+		f, err := os.CreateTemp(tempDir, "terratidy-*"+tmpExt)
 		if err != nil {
 			return []Diagnostic{}
 		}

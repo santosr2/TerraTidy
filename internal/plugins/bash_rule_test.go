@@ -354,3 +354,66 @@ echo '{"findings": []}'
 	// No verification warning should be logged
 	assert.NotContains(t, logBuf.String(), "verification failed")
 }
+
+func TestSanitizeStderr(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{
+			name:     "short message unchanged",
+			input:    "error: something went wrong",
+			expected: "error: something went wrong",
+		},
+		{
+			name:     "absolute path replaced with basename",
+			input:    "error in /home/user/project/file.tf: syntax error",
+			expected: "error in file.tf: syntax error",
+		},
+		{
+			name:     "multiple absolute paths replaced",
+			input:    "comparing /etc/terraform/main.tf with /var/lib/terraform/modules/vpc/main.tf",
+			expected: "comparing main.tf with main.tf",
+		},
+		{
+			name:     "long message truncated",
+			input:    string(make([]byte, 600)),
+			expected: string(make([]byte, 500)) + "... (truncated)",
+		},
+		{
+			name:     "empty string unchanged",
+			input:    "",
+			expected: "",
+		},
+		{
+			name:     "relative path unchanged",
+			input:    "error in ./modules/vpc/main.tf",
+			expected: "error in ./modules/vpc/main.tf",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := sanitizeStderr(tt.input)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestSanitizeStderr_TruncationWithPaths(t *testing.T) {
+	// Build a long message with paths that should be sanitized then truncated
+	longPath := "/very/long/path/to/some/deeply/nested/terraform/file.tf"
+	input := "error: " + longPath + " " + string(make([]byte, 600))
+
+	result := sanitizeStderr(input)
+
+	// Should not contain the full path
+	assert.NotContains(t, result, "/very/long/path")
+	// Should contain the basename
+	assert.Contains(t, result, "file.tf")
+	// Should be truncated
+	assert.Contains(t, result, "... (truncated)")
+	// Should not exceed max length + truncation suffix
+	assert.LessOrEqual(t, len(result), maxStderrLen+len("... (truncated)"))
+}

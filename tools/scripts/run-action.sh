@@ -4,6 +4,45 @@ set -euo pipefail
 # TerraTidy GitHub Action runner script
 # Called by action.yml with all inputs passed as environment variables.
 
+# Validate input to prevent shell injection.
+# Only allows alphanumeric characters, dots, underscores, slashes, hyphens, and spaces.
+# Paths with special characters ($, `, !, etc.) are rejected for security.
+validate_input() {
+  local name="$1"
+  local value="$2"
+
+  # Empty values are allowed
+  if [ -z "$value" ]; then
+    return 0
+  fi
+
+  # Validate against safe pattern
+  if ! [[ "$value" =~ ^[a-zA-Z0-9._/\ -]*$ ]]; then
+    echo "::error::Invalid $name: contains unsafe characters. Only alphanumeric, dots, underscores, slashes, hyphens, and spaces are allowed."
+    exit 1
+  fi
+}
+
+# Validate format against allowed values
+validate_format() {
+  local value="$1"
+  case "$value" in
+    text|table|json|json-compact|sarif|html|junit|markdown|github)
+      return 0
+      ;;
+    *)
+      echo "::error::Invalid format: '$value'. Allowed values: text, table, json, json-compact, sarif, html, junit, markdown, github"
+      exit 1
+      ;;
+  esac
+}
+
+# Validate user-provided inputs before any execution
+validate_input "config" "${INPUT_CONFIG:-}"
+validate_input "profile" "${INPUT_PROFILE:-}"
+validate_input "working-directory" "${INPUT_WORKING_DIRECTORY:-}"
+validate_format "${INPUT_FORMAT:-text}"
+
 # Build command arguments
 ARGS=""
 

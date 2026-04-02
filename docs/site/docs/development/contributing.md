@@ -2,7 +2,7 @@
 
 Thank you for your interest in contributing to TerraTidy!
 
-For the quick-start contributing guide, see [CONTRIBUTING.md](https://github.com/santosr2/terratidy/blob/main/CONTRIBUTING.md) at the repository root.
+For the quick-start contributing guide, see [CONTRIBUTING.md](https://github.com/santosr2/TerraTidy/blob/main/CONTRIBUTING.md) at the repository root.
 
 This page provides the comprehensive development reference.
 
@@ -17,7 +17,7 @@ This page provides the comprehensive development reference.
 ### Clone the Repository
 
 ```bash
-git clone https://github.com/santosr2/terratidy.git
+git clone https://github.com/santosr2/TerraTidy.git
 cd terratidy
 ```
 

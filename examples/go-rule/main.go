@@ -8,8 +8,8 @@ import (
 
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/hclsyntax"
-	"github.com/santosr2/terratidy/internal/plugins"
-	"github.com/santosr2/terratidy/pkg/sdk"
+	"github.com/santosr2/TerraTidy/internal/plugins"
+	"github.com/santosr2/TerraTidy/pkg/sdk"
 )
 
 // PluginMetadata provides information about this plugin.

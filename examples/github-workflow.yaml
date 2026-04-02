@@ -15,19 +15,19 @@ on:
   push:
     branches: [main, develop]
     paths:
-      - '**.tf'
-      - '**.hcl'
-      - '.github/workflows/terratidy.yml'
+      - "**.tf"
+      - "**.hcl"
+      - ".github/workflows/terratidy.yml"
   pull_request:
     branches: [main, develop]
     paths:
-      - '**.tf'
-      - '**.hcl'
+      - "**.tf"
+      - "**.hcl"
 
 permissions:
   contents: read
-  security-events: write  # For SARIF upload
-  pull-requests: write    # For PR comments
+  security-events: write # For SARIF upload
+  pull-requests: write # For PR comments
 
 jobs:
   terratidy:
@@ -48,7 +48,7 @@ jobs:
         uses: santosr2/terratidy@v0
         with:
           format: sarif
-          fail-on-error: 'false'
+          fail-on-error: "false"
 
       - name: Upload SARIF to GitHub
         if: always()
@@ -72,10 +72,10 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.26.1'
+          go-version: "1.26.1"
 
       - name: Install TerraTidy
-        run: go install github.com/santosr2/terratidy/cmd/terratidy@latest
+        run: go install github.com/santosr2/TerraTidy/cmd/terratidy@latest
 
       - name: Run TerraTidy Fix
         run: terratidy fix

@@ -5,7 +5,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/santosr2/terratidy/internal/config"
+	"github.com/santosr2/TerraTidy/internal/config"
 )
 
 func TestGetEffectiveParallel(t *testing.T) {

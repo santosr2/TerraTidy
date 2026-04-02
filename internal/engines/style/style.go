@@ -10,8 +10,8 @@ import (
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/hclparse"
 	"github.com/pmezard/go-difflib/difflib"
-	"github.com/santosr2/terratidy/internal/engines/style/rules"
-	"github.com/santosr2/terratidy/pkg/sdk"
+	"github.com/santosr2/TerraTidy/internal/engines/style/rules"
+	"github.com/santosr2/TerraTidy/pkg/sdk"
 )
 
 // Engine represents the style engine
@@ -151,6 +151,13 @@ func (e *Engine) checkFile(parser *hclparse.Parser, path string) ([]sdk.Finding,
 			ruleFindings, err := rule.Check(ruleCtx, file)
 			if err != nil {
 				return nil, fmt.Errorf("rule %s: %w", rule.Name(), err)
+			}
+
+			// Apply severity override from config if specified
+			if ruleConfig.Severity != "" {
+				for i := range ruleFindings {
+					ruleFindings[i].Severity = sdk.ParseSeverity(ruleConfig.Severity, ruleFindings[i].Severity)
+				}
 			}
 
 			findings = append(findings, ruleFindings...)

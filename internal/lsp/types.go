@@ -258,6 +258,17 @@ type PublishDiagnosticsParams struct {
 	Diagnostics []Diagnostic `json:"diagnostics"`
 }
 
+// DocumentDiagnosticParams represents textDocument/diagnostic request params
+type DocumentDiagnosticParams struct {
+	TextDocument TextDocumentIdentifier `json:"textDocument"`
+}
+
+// DocumentDiagnosticReport represents the response to textDocument/diagnostic
+type DocumentDiagnosticReport struct {
+	Kind  string       `json:"kind"` // "full" or "unchanged"
+	Items []Diagnostic `json:"items"`
+}
+
 // CodeActionParams represents code action parameters
 type CodeActionParams struct {
 	TextDocument TextDocumentIdentifier `json:"textDocument"`

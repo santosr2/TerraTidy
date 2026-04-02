@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	fmtengine "github.com/santosr2/terratidy/internal/engines/format"
-	"github.com/santosr2/terratidy/internal/engines/style"
+	fmtengine "github.com/santosr2/TerraTidy/internal/engines/format"
+	"github.com/santosr2/TerraTidy/internal/engines/style"
 	"github.com/spf13/cobra"
 )
 

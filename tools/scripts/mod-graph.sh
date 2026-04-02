@@ -30,7 +30,7 @@ INPUT="${1:-/dev/stdin}"
         to_short=$(echo "$to" | sed 's/@v[0-9].*//')
 
         # Only show direct dependencies of our module
-        if [[ "$from" == github.com/santosr2/terratidy* ]]; then
+        if [[ "$from" == github.com/santosr2/TerraTidy* ]]; then
             echo "  \"$from_short\" -> \"$to_short\";"
         fi
     done < "$INPUT"

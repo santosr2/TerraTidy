@@ -5,7 +5,7 @@ Thank you for your interest in contributing to TerraTidy!
 ## Getting Started
 
 1. Fork the repository
-2. Clone your fork: `git clone https://github.com/santosr2/terratidy`
+2. Clone your fork: `git clone https://github.com/santosr2/TerraTidy`
 3. Set up development environment:
 
    ```bash
@@ -67,6 +67,17 @@ mise run build
 2. Implement Engine interface
 3. Add tests
 4. Update documentation
+
+### VSCode Extension
+
+```bash
+cd vscode
+bun install
+bun run compile    # Build extension
+bun run lint       # Lint with Biome
+bun run test       # Run integration tests
+bun run package    # Package .vsix
+```
 
 ## Learn More
 

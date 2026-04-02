@@ -143,7 +143,7 @@ Use pre-commit for local checks and GitHub Actions for CI:
 ```yaml
 # .pre-commit-config.yaml
 repos:
-  - repo: https://github.com/santosr2/terratidy
+  - repo: https://github.com/santosr2/TerraTidy
     rev: v0.2.0-alpha.3
     hooks:
       - id: terratidy-fmt

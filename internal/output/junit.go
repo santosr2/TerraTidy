@@ -6,7 +6,7 @@ import (
 	"io"
 	"time"
 
-	"github.com/santosr2/terratidy/pkg/sdk"
+	"github.com/santosr2/TerraTidy/pkg/sdk"
 )
 
 // JUnitFormatter outputs findings in JUnit XML format for CI/CD integration.

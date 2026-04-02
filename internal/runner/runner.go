@@ -6,7 +6,7 @@ import (
 	"context"
 	"sync"
 
-	"github.com/santosr2/terratidy/pkg/sdk"
+	"github.com/santosr2/TerraTidy/pkg/sdk"
 )
 
 // EngineResult holds the result from a single engine execution

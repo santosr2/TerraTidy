@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"text/tabwriter"
 
-	"github.com/santosr2/terratidy/internal/config"
-	"github.com/santosr2/terratidy/internal/plugins"
+	"github.com/santosr2/TerraTidy/internal/config"
+	"github.com/santosr2/TerraTidy/internal/plugins"
 	"github.com/spf13/cobra"
 )
 
@@ -154,8 +154,8 @@ package main
 
 import (
 	"github.com/hashicorp/hcl/v2"
-	"github.com/santosr2/terratidy/internal/plugins"
-	"github.com/santosr2/terratidy/pkg/sdk"
+	"github.com/santosr2/TerraTidy/internal/plugins"
+	"github.com/santosr2/TerraTidy/pkg/sdk"
 )
 
 // PluginMetadata provides information about this plugin
@@ -218,7 +218,7 @@ func (r *ExampleRule) Fix(ctx *sdk.Context, file *hcl.File) ([]byte, error) {
 
 go 1.26.1
 
-require github.com/santosr2/terratidy v0.2.0-alpha.3
+require github.com/santosr2/TerraTidy v0.2.0-alpha.3
 `, pluginName)
 
 		goModPath := filepath.Join(dir, "go.mod")

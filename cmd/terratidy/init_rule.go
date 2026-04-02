@@ -128,7 +128,7 @@ package %s
 
 import (
 	"github.com/hashicorp/hcl/v2"
-	"github.com/santosr2/terratidy/pkg/sdk"
+	"github.com/santosr2/TerraTidy/pkg/sdk"
 )
 
 // Rule implements the %s check.

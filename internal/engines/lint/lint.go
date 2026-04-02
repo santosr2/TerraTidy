@@ -17,8 +17,8 @@ import (
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/hclparse"
 	"github.com/hashicorp/hcl/v2/hclsyntax"
-	"github.com/santosr2/terratidy/internal/cache"
-	"github.com/santosr2/terratidy/pkg/sdk"
+	"github.com/santosr2/TerraTidy/internal/cache"
+	"github.com/santosr2/TerraTidy/pkg/sdk"
 )
 
 // Engine represents the linting engine with AST-based analysis

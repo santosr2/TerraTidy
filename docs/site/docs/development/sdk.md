@@ -2,7 +2,7 @@
 
 Public API for rule authors and plugin developers.
 
-Package: `github.com/santosr2/terratidy/pkg/sdk`
+Package: `github.com/santosr2/TerraTidy/pkg/sdk`
 
 ## Stability
 
@@ -115,7 +115,7 @@ package main
 
 import (
     "github.com/hashicorp/hcl/v2"
-    "github.com/santosr2/terratidy/pkg/sdk"
+    "github.com/santosr2/TerraTidy/pkg/sdk"
 )
 
 type MyRule struct{}

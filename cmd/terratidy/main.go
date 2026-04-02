@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/santosr2/terratidy/internal/buildinfo"
-	"github.com/santosr2/terratidy/pkg/sdk"
+	"github.com/santosr2/TerraTidy/internal/buildinfo"
+	"github.com/santosr2/TerraTidy/pkg/sdk"
 )
 
 // Version variables - set from the buildinfo package which uses

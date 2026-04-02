@@ -7,10 +7,10 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/santosr2/terratidy/internal/config"
-	"github.com/santosr2/terratidy/internal/output"
-	"github.com/santosr2/terratidy/internal/vcs"
-	"github.com/santosr2/terratidy/pkg/sdk"
+	"github.com/santosr2/TerraTidy/internal/config"
+	"github.com/santosr2/TerraTidy/internal/output"
+	"github.com/santosr2/TerraTidy/internal/vcs"
+	"github.com/santosr2/TerraTidy/pkg/sdk"
 )
 
 // getTargetFiles returns the list of files to process based on the provided paths

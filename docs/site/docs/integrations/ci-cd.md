@@ -23,7 +23,7 @@ pipeline {
     stages {
         stage('Terraform Quality') {
             steps {
-                sh 'go install github.com/santosr2/terratidy/cmd/terratidy@latest'
+                sh 'go install github.com/santosr2/TerraTidy/cmd/terratidy@latest'
                 sh 'terratidy check --format junit > terratidy-results.xml'
             }
             post {
@@ -63,7 +63,7 @@ pipelines:
           name: TerraTidy
           image: golang:1.26.1
           script:
-            - go install github.com/santosr2/terratidy/cmd/terratidy@latest
+            - go install github.com/santosr2/TerraTidy/cmd/terratidy@latest
             - terratidy check --format text
 ```
 

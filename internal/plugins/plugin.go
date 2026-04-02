@@ -23,7 +23,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/santosr2/terratidy/pkg/sdk"
+	"github.com/santosr2/TerraTidy/pkg/sdk"
 )
 
 // PluginType represents the type of plugin

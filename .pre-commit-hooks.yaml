@@ -2,7 +2,7 @@
 # To use these hooks, add to your .pre-commit-config.yaml:
 #
 # repos:
-#   - repo: https://github.com/santosr2/terratidy
+#   - repo: https://github.com/santosr2/TerraTidy
 #     rev: v0.2.0-alpha.3  # Use the ref you want to point at
 #     hooks:
 #       - id: terratidy-fmt
@@ -18,7 +18,7 @@
   description: Format Terraform and Terragrunt files
   entry: terratidy fmt
   language: system
-  minimum_pre_commit_version: '3.2.0'
+  minimum_pre_commit_version: "3.2.0"
   types_or: [terraform, hcl]
   pass_filenames: true
 
@@ -27,7 +27,7 @@
   description: Check formatting without modifying files
   entry: terratidy fmt --check
   language: system
-  minimum_pre_commit_version: '3.2.0'
+  minimum_pre_commit_version: "3.2.0"
   types_or: [terraform, hcl]
   pass_filenames: true
 
@@ -36,7 +36,7 @@
   description: Check style issues
   entry: terratidy style
   language: system
-  minimum_pre_commit_version: '3.2.0'
+  minimum_pre_commit_version: "3.2.0"
   types_or: [terraform, hcl]
   pass_filenames: true
 
@@ -45,7 +45,7 @@
   description: Check and fix style issues
   entry: terratidy style --fix
   language: system
-  minimum_pre_commit_version: '3.2.0'
+  minimum_pre_commit_version: "3.2.0"
   types_or: [terraform, hcl]
   pass_filenames: true
 
@@ -54,7 +54,7 @@
   description: Run linting checks
   entry: terratidy lint
   language: system
-  minimum_pre_commit_version: '3.2.0'
+  minimum_pre_commit_version: "3.2.0"
   types_or: [terraform, hcl]
   pass_filenames: true
 
@@ -63,7 +63,7 @@
   description: Run all quality checks (fmt, style, lint, policy)
   entry: terratidy check
   language: system
-  minimum_pre_commit_version: '3.2.0'
+  minimum_pre_commit_version: "3.2.0"
   types_or: [terraform, hcl]
   pass_filenames: true
 
@@ -72,7 +72,7 @@
   description: Auto-fix all fixable issues
   entry: terratidy fix
   language: system
-  minimum_pre_commit_version: '3.2.0'
+  minimum_pre_commit_version: "3.2.0"
   types_or: [terraform, hcl]
   pass_filenames: true
 
@@ -81,6 +81,6 @@
   description: Run policy checks using OPA/Rego
   entry: terratidy policy
   language: system
-  minimum_pre_commit_version: '3.2.0'
+  minimum_pre_commit_version: "3.2.0"
   types_or: [terraform, hcl]
   pass_filenames: true

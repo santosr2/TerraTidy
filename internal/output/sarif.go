@@ -6,7 +6,7 @@ import (
 	"io"
 	"path/filepath"
 
-	"github.com/santosr2/terratidy/pkg/sdk"
+	"github.com/santosr2/TerraTidy/pkg/sdk"
 )
 
 // SARIFFormatter outputs findings in SARIF format for GitHub Code Scanning
@@ -231,7 +231,7 @@ func (f *SARIFFormatter) buildSARIFDocument(rules []SARIFRule, results []SARIFRe
 					Driver: SARIFDriver{
 						Name:           "TerraTidy",
 						Version:        f.Version,
-						InformationURI: "https://github.com/santosr2/terratidy",
+						InformationURI: "https://github.com/santosr2/TerraTidy",
 						Rules:          rules,
 					},
 				},

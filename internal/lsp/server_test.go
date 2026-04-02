@@ -9,7 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/santosr2/terratidy/pkg/sdk"
+	"github.com/santosr2/TerraTidy/internal/config"
+	"github.com/santosr2/TerraTidy/pkg/sdk"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -820,8 +821,11 @@ func TestServer_PublishDiagnostics_NonTerraformSkipped(t *testing.T) {
 
 	err := server.publishDiagnostics(uri)
 	require.NoError(t, err)
-	// Non-terraform files should be skipped, no diagnostics published
-	assert.Empty(t, out.String())
+
+	// Non-terraform files publish empty diagnostics (clears stale diagnostics)
+	output := out.String()
+	assert.Contains(t, output, "textDocument/publishDiagnostics")
+	assert.Contains(t, output, `"diagnostics":[]`)
 }
 
 func TestServer_HandleDidClose_CleansUpTempFile(t *testing.T) {
@@ -999,4 +1003,178 @@ func TestServer_HandleMessage_BeforeInitialize(t *testing.T) {
 	// Before initialize, the server should handle messages gracefully.
 	// An error is acceptable (not initialized), but it must not panic.
 	assert.NoError(t, err, "handleMessage before initialize should not error")
+}
+
+func TestServer_HandleShutdown_ReturnsNull(t *testing.T) {
+	out := &bytes.Buffer{}
+	server := NewServer(strings.NewReader(""), out)
+
+	msg := RequestMessage{
+		JSONRPC: "2.0",
+		ID:      json.RawMessage(`42`),
+		Method:  "shutdown",
+	}
+
+	err := server.handleShutdown(msg)
+	require.NoError(t, err)
+	assert.True(t, server.shutdown)
+
+	// LSP spec requires result: null (not omitted)
+	output := out.String()
+	assert.Contains(t, output, `"result":null`)
+	assert.Contains(t, output, `"id":42`)
+}
+
+func TestServer_HandleDiagnostic(t *testing.T) {
+	out := &bytes.Buffer{}
+	server := NewServer(strings.NewReader(""), out)
+	server.initialized = true
+
+	// Add a document
+	uri := "file:///tmp/test.tf"
+	server.documents[uri] = &Document{
+		URI:     uri,
+		Content: "resource \"test\" \"example\" {}\n",
+		Version: 1,
+	}
+
+	params := DocumentDiagnosticParams{
+		TextDocument: TextDocumentIdentifier{URI: uri},
+	}
+	paramsJSON, _ := json.Marshal(params)
+
+	msg := RequestMessage{
+		JSONRPC: "2.0",
+		ID:      json.RawMessage(`1`),
+		Method:  "textDocument/diagnostic",
+		Params:  paramsJSON,
+	}
+
+	err := server.handleDiagnostic(msg)
+	require.NoError(t, err)
+
+	output := out.String()
+	assert.Contains(t, output, `"kind":"full"`)
+	assert.Contains(t, output, `"items"`)
+}
+
+func TestServer_HandleDiagnostic_UnknownDocument(t *testing.T) {
+	out := &bytes.Buffer{}
+	server := NewServer(strings.NewReader(""), out)
+
+	params := DocumentDiagnosticParams{
+		TextDocument: TextDocumentIdentifier{URI: "file:///unknown.tf"},
+	}
+	paramsJSON, _ := json.Marshal(params)
+
+	msg := RequestMessage{
+		JSONRPC: "2.0",
+		ID:      json.RawMessage(`1`),
+		Method:  "textDocument/diagnostic",
+		Params:  paramsJSON,
+	}
+
+	err := server.handleDiagnostic(msg)
+	require.NoError(t, err)
+
+	output := out.String()
+	assert.Contains(t, output, `"kind":"full"`)
+	assert.Contains(t, output, `"items":[]`)
+}
+
+func TestServer_BuildStyleConfig_NilConfig(t *testing.T) {
+	server := NewServer(strings.NewReader(""), &bytes.Buffer{})
+	server.config = nil
+
+	cfg := server.buildStyleConfig()
+
+	require.NotNil(t, cfg)
+	assert.NotNil(t, cfg.Rules)
+	assert.Empty(t, cfg.Rules)
+}
+
+func TestServer_BuildStyleConfig_WithOverrides(t *testing.T) {
+	server := NewServer(strings.NewReader(""), &bytes.Buffer{})
+	server.config = &config.Config{
+		Overrides: config.OverridesConfig{
+			Rules: map[string]config.RuleConfig{
+				"style.resource-name-matches-type": {
+					Enabled:  true,
+					Severity: "warning",
+					Config: map[string]any{
+						"option1": "value1",
+					},
+				},
+				"style.blank-lines-between-blocks": {
+					Enabled:  false,
+					Severity: "info",
+				},
+			},
+		},
+	}
+
+	cfg := server.buildStyleConfig()
+
+	require.NotNil(t, cfg)
+	assert.Len(t, cfg.Rules, 2)
+
+	rule1 := cfg.Rules["style.resource-name-matches-type"]
+	assert.True(t, rule1.Enabled)
+	assert.Equal(t, "warning", rule1.Severity)
+	assert.Equal(t, "value1", rule1.Options["option1"])
+
+	rule2 := cfg.Rules["style.blank-lines-between-blocks"]
+	assert.False(t, rule2.Enabled)
+	assert.Equal(t, "info", rule2.Severity)
+}
+
+func TestServer_GetSeverityThreshold(t *testing.T) {
+	tests := []struct {
+		name      string
+		threshold string
+		expected  sdk.Severity
+	}{
+		{"default when nil config", "", sdk.SeverityInfo},
+		{"error threshold", "error", sdk.SeverityError},
+		{"warning threshold", "warning", sdk.SeverityWarning},
+		{"info threshold", "info", sdk.SeverityInfo},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := NewServer(strings.NewReader(""), &bytes.Buffer{})
+			if tt.threshold != "" {
+				server.config = &config.Config{SeverityThreshold: tt.threshold}
+			}
+			assert.Equal(t, tt.expected, server.getSeverityThreshold())
+		})
+	}
+}
+
+func TestMeetsThreshold(t *testing.T) {
+	tests := []struct {
+		severity  sdk.Severity
+		threshold sdk.Severity
+		expected  bool
+	}{
+		// Error threshold: only errors pass
+		{sdk.SeverityError, sdk.SeverityError, true},
+		{sdk.SeverityWarning, sdk.SeverityError, false},
+		{sdk.SeverityInfo, sdk.SeverityError, false},
+		// Warning threshold: errors and warnings pass
+		{sdk.SeverityError, sdk.SeverityWarning, true},
+		{sdk.SeverityWarning, sdk.SeverityWarning, true},
+		{sdk.SeverityInfo, sdk.SeverityWarning, false},
+		// Info threshold: all pass
+		{sdk.SeverityError, sdk.SeverityInfo, true},
+		{sdk.SeverityWarning, sdk.SeverityInfo, true},
+		{sdk.SeverityInfo, sdk.SeverityInfo, true},
+	}
+
+	for _, tt := range tests {
+		name := string(tt.severity) + "_with_" + string(tt.threshold) + "_threshold"
+		t.Run(name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, meetsThreshold(tt.severity, tt.threshold))
+		})
+	}
 }

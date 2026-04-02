@@ -1,15 +1,15 @@
-# TerraTidy
-
 <div align="center">
 
-![TerraTidy Logo](assets/terratidy-icon.svg)
+<picture>
+  <img src="assets/brand.png" alt="TerraTidy" width="400" style="max-width: 100%; height: auto;">
+</picture>
 
 <b>A comprehensive quality platform for Terraform and Terragrunt</b>
 
-[![Latest Release](https://img.shields.io/github/v/release/santosr2/terratidy)](https://github.com/santosr2/terratidy/releases/latest)
-[![Build Status](https://github.com/santosr2/terratidy/workflows/Test/badge.svg)](https://github.com/santosr2/terratidy/actions)
+[![Latest Release](https://img.shields.io/github/v/release/santosr2/terratidy)](https://github.com/santosr2/TerraTidy/releases/latest)
+[![Build Status](https://github.com/santosr2/TerraTidy/workflows/Test/badge.svg)](https://github.com/santosr2/TerraTidy/actions)
 [![codecov](https://codecov.io/gh/santosr2/terratidy/branch/main/graph/badge.svg)](https://codecov.io/gh/santosr2/terratidy)
-[![Go Report Card](https://goreportcard.com/badge/github.com/santosr2/terratidy)](https://goreportcard.com/report/github.com/santosr2/terratidy)
+[![Go Report Card](https://goreportcard.com/badge/github.com/santosr2/TerraTidy)](https://goreportcard.com/report/github.com/santosr2/TerraTidy)
 [![Go Version](https://img.shields.io/github/go-mod/go-version/santosr2/terratidy)](go.mod)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit)](https://github.com/pre-commit/pre-commit)
@@ -48,7 +48,7 @@ brew install santosr2/tap/terratidy
 
 ### Download Binary
 
-Download the latest release for your platform from [GitHub Releases](https://github.com/santosr2/terratidy/releases).
+Download the latest release for your platform from [GitHub Releases](https://github.com/santosr2/TerraTidy/releases).
 
 ### Docker
 
@@ -64,7 +64,7 @@ docker run --rm -v $(pwd):/app ghcr.io/santosr2/terratidy check
 ### From Source
 
 ```bash
-go install github.com/santosr2/terratidy/cmd/terratidy@latest
+go install github.com/santosr2/TerraTidy/cmd/terratidy@latest
 ```
 
 ## Quick Start
@@ -248,7 +248,7 @@ Add to `.pre-commit-config.yaml`:
 
 ```yaml
 repos:
-  - repo: https://github.com/santosr2/terratidy
+  - repo: https://github.com/santosr2/TerraTidy
     rev: v0.2.0-alpha.3
     hooks:
       - id: terratidy-check
@@ -331,7 +331,7 @@ Full documentation is available at [docs/site/docs/](docs/site/docs/).
 ### Setup
 
 ```bash
-git clone https://github.com/santosr2/terratidy
+git clone https://github.com/santosr2/TerraTidy
 cd terratidy
 mise install        # Install Go 1.26.1 and tools
 mise run setup      # Download and tidy Go modules
@@ -367,5 +367,5 @@ Built with:
 ## Support
 
 - [Documentation](docs/site/docs/)
-- [Issue Tracker](https://github.com/santosr2/terratidy/issues)
-- [Discussions](https://github.com/santosr2/terratidy/discussions)
+- [Issue Tracker](https://github.com/santosr2/TerraTidy/issues)
+- [Discussions](https://github.com/santosr2/TerraTidy/discussions)

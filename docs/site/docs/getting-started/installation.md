@@ -7,7 +7,7 @@ TerraTidy can be installed in several ways.
 If you have Go installed (1.26.1+):
 
 ```bash
-go install github.com/santosr2/terratidy/cmd/terratidy@latest
+go install github.com/santosr2/TerraTidy/cmd/terratidy@latest
 ```
 
 ## Homebrew (macOS/Linux)
@@ -19,12 +19,12 @@ brew install santosr2/tap/terratidy
 
 ## Download Binary
 
-Download pre-built binaries from the [GitHub Releases](https://github.com/santosr2/terratidy/releases) page.
+Download pre-built binaries from the [GitHub Releases](https://github.com/santosr2/TerraTidy/releases) page.
 
 ### Linux (amd64)
 
 ```bash
-curl -LO https://github.com/santosr2/terratidy/releases/latest/download/terratidy_linux_amd64.tar.gz
+curl -LO https://github.com/santosr2/TerraTidy/releases/latest/download/terratidy_linux_amd64.tar.gz
 tar xzf terratidy_linux_amd64.tar.gz
 sudo mv terratidy /usr/local/bin/
 ```
@@ -32,7 +32,7 @@ sudo mv terratidy /usr/local/bin/
 ### macOS (Apple Silicon)
 
 ```bash
-curl -LO https://github.com/santosr2/terratidy/releases/latest/download/terratidy_darwin_arm64.tar.gz
+curl -LO https://github.com/santosr2/TerraTidy/releases/latest/download/terratidy_darwin_arm64.tar.gz
 tar xzf terratidy_darwin_arm64.tar.gz
 sudo mv terratidy /usr/local/bin/
 ```

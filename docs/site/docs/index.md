@@ -25,7 +25,7 @@ TerraTidy is an all-in-one code quality tool for Terraform and Terragrunt that p
 
 ```bash
 # Install TerraTidy
-go install github.com/santosr2/terratidy/cmd/terratidy@latest
+go install github.com/santosr2/TerraTidy/cmd/terratidy@latest
 
 # Initialize configuration
 terratidy init
@@ -50,9 +50,9 @@ terratidy fix
 
 ## Getting Help
 
-- [GitHub Issues](https://github.com/santosr2/terratidy/issues) - Report bugs and request features
+- [GitHub Issues](https://github.com/santosr2/TerraTidy/issues) - Report bugs and request features
 - [Documentation](/) - Read the full documentation
-- [Examples](https://github.com/santosr2/terratidy/tree/main/examples) - See example configurations
+- [Examples](https://github.com/santosr2/TerraTidy/tree/main/examples) - See example configurations
 
 ## License
 

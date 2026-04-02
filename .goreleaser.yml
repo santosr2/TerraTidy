@@ -24,9 +24,9 @@ builds:
       - arm64
     ldflags:
       - -s -w
-      - -X github.com/santosr2/terratidy/internal/buildinfo.Version={{.Version}}
-      - -X github.com/santosr2/terratidy/internal/buildinfo.Commit={{.Commit}}
-      - -X github.com/santosr2/terratidy/internal/buildinfo.Date={{.Date}}
+      - -X github.com/santosr2/TerraTidy/internal/buildinfo.Version={{.Version}}
+      - -X github.com/santosr2/TerraTidy/internal/buildinfo.Commit={{.Commit}}
+      - -X github.com/santosr2/TerraTidy/internal/buildinfo.Date={{.Date}}
 
 archives:
   - id: terratidy
@@ -41,7 +41,7 @@ archives:
       - CHANGELOG.md
 
 checksum:
-  name_template: 'checksums.txt'
+  name_template: "checksums.txt"
   algorithm: sha256
 
 sboms:
@@ -75,7 +75,7 @@ release:
     brew install santosr2/tap/terratidy
 
     # Go install
-    go install github.com/santosr2/terratidy/cmd/terratidy@{{ .Tag }}
+    go install github.com/santosr2/TerraTidy/cmd/terratidy@{{ .Tag }}
 
     # Docker
     docker pull ghcr.io/santosr2/terratidy:{{ .Tag }}
@@ -86,7 +86,7 @@ release:
     ```yaml
     # .pre-commit-config.yaml
     repos:
-      - repo: https://github.com/santosr2/terratidy
+      - repo: https://github.com/santosr2/TerraTidy
         rev: {{ .Tag }}
         hooks:
           - id: terratidy-check
@@ -113,22 +113,22 @@ release:
     ## Documentation
 
     - 📖 [User Guide](https://santosr2.github.io/TerraTidy/)
-    - 📋 [Full Changelog](https://github.com/santosr2/terratidy/blob/main/CHANGELOG.md)
-    - 🐛 [Report Issues](https://github.com/santosr2/terratidy/issues)
+    - 📋 [Full Changelog](https://github.com/santosr2/TerraTidy/blob/main/CHANGELOG.md)
+    - 🐛 [Report Issues](https://github.com/santosr2/TerraTidy/issues)
 
     ---
 
-    **Full Changelog**: https://github.com/santosr2/terratidy/compare/{{ .PreviousTag }}...{{ .Tag }}
+    **Full Changelog**: https://github.com/santosr2/TerraTidy/compare/{{ .PreviousTag }}...{{ .Tag }}
 
 brews:
   - name: terratidy
     # Only publish stable releases to Homebrew
-    skip_upload: '{{ if .Prerelease }}true{{ else }}false{{ end }}'
+    skip_upload: "{{ if .Prerelease }}true{{ else }}false{{ end }}"
     repository:
       owner: santosr2
       name: TerraTidy
     directory: Formula
-    homepage: https://github.com/santosr2/terratidy
+    homepage: https://github.com/santosr2/TerraTidy
     description: "Terraform/Terragrunt quality platform"
     license: MIT
     test: |
@@ -139,7 +139,7 @@ brews:
 # Docker images for stable releases (includes stable version aliases)
 dockers:
   - id: docker-stable
-    skip_push: '{{ if .Prerelease }}true{{ else }}false{{ end }}'
+    skip_push: "{{ if .Prerelease }}true{{ else }}false{{ end }}"
     image_templates:
       - "ghcr.io/santosr2/terratidy:{{ .Tag }}"
       - "ghcr.io/santosr2/terratidy:v{{ .Major }}"
@@ -155,7 +155,7 @@ dockers:
   # Docker images for pre-releases (tag-specific only)
   # Note: :latest always points to the most recent stable release
   - id: docker-prerelease
-    skip_push: '{{ if .Prerelease }}false{{ else }}true{{ end }}'
+    skip_push: "{{ if .Prerelease }}false{{ else }}true{{ end }}"
     image_templates:
       - "ghcr.io/santosr2/terratidy:{{ .Tag }}"
     dockerfile: Dockerfile

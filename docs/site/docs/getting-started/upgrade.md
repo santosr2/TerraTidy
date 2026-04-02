@@ -15,7 +15,7 @@ terratidy version --json    # Machine-readable
 ### Go Install
 
 ```bash
-go install github.com/santosr2/terratidy/cmd/terratidy@latest
+go install github.com/santosr2/TerraTidy/cmd/terratidy@latest
 ```
 
 ### Homebrew
@@ -36,7 +36,7 @@ Update the `rev` in `.pre-commit-config.yaml`:
 
 ```yaml
 repos:
-  - repo: https://github.com/santosr2/terratidy
+  - repo: https://github.com/santosr2/TerraTidy
     rev: v0.2.0-alpha.3  # Update this
     hooks:
       - id: terratidy-check

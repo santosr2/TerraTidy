@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/santosr2/terratidy/internal/config"
+	"github.com/santosr2/TerraTidy/internal/config"
 )
 
 func TestRunPolicyCheckWithConfig(t *testing.T) {

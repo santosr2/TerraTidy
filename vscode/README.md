@@ -9,27 +9,45 @@ This extension brings TerraTidy's powerful formatting, style checking, linting, 
 - **Real-time Diagnostics**: See issues highlighted in your editor instantly
 - **Auto-formatting**: Format on save or on demand via standard VSCode format command
 - **Code Actions**: Quick fixes for common style and formatting issues
-- **Hover Documentation**: View rule documentation and configuration hints
 - **Workspace Configuration**: Dynamic configuration updates without restart
 - **Multi-engine Support**: Enable/disable fmt, style, lint, and policy engines independently
 
+## Screenshots
+
+<!-- TODO: Add screenshots showing diagnostics, formatting, and code actions -->
+
+## Installation
+
+Install from the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=santosr2.terratidy):
+
+1. Open VS Code
+2. Go to Extensions (`Ctrl+Shift+X` / `Cmd+Shift+X`)
+3. Search for "TerraTidy"
+4. Click Install
+
+Or install via command line:
+
+```bash
+code --install-extension santosr2.terratidy
+```
+
 ## Requirements
 
-- [TerraTidy CLI](https://github.com/santosr2/terratidy) must be installed and available in your PATH
-- VS Code 1.85.0 or higher
+- [TerraTidy CLI](https://github.com/santosr2/TerraTidy) must be installed and available in your PATH
+- VS Code 1.110.0 or higher
 
 ### Installing TerraTidy CLI
 
 ```bash
 # Using Go
-go install github.com/santosr2/terratidy/cmd/terratidy@latest
+go install github.com/santosr2/TerraTidy/cmd/terratidy@latest
 
 # Using Homebrew (macOS)
 brew tap santosr2/tap https://github.com/santosr2/TerraTidy
 brew install santosr2/tap/terratidy
 
 # Download from releases
-# https://github.com/santosr2/terratidy/releases
+# https://github.com/santosr2/TerraTidy/releases
 ```
 
 ## Extension Settings
@@ -67,11 +85,22 @@ and are accessed via standard VSCode features (Format Document command, Problems
 
 ### Automatic Diagnostics
 
-The extension automatically analyzes your Terraform/HCL files as you type. Issues appear:
+The extension uses push diagnostics to analyze your Terraform/HCL files in real-time.
+The LSP server automatically sends diagnostics when you open, edit, or save a file. Issues appear:
 
-- As colored underlines in the editor
+- As colored underlines in the editor (red=error, yellow=warning, blue=info)
 - In the Problems panel (`Cmd+Shift+M` / `Ctrl+Shift+M`)
 - With detailed messages on hover
+
+The server runs style and lint engines. Rule overrides from `.terratidy.yaml` are respected:
+
+```yaml
+overrides:
+  rules:
+    style.resource-name-matches-type:
+      enabled: true
+      severity: warning
+```
 
 ### Formatting
 
@@ -189,10 +218,25 @@ Or specify the full path in settings:
 2. Verify your configuration file is valid
 3. Make sure the file is recognized as Terraform/HCL
 
+## Development
+
+```bash
+cd vscode
+bun install            # Install dependencies
+bun run compile        # Build extension
+bun run lint           # Lint with Biome
+bun run test           # Run integration tests (requires VS Code)
+bun run package        # Package .vsix
+```
+
 ## Contributing
 
-Contributions are welcome! Please see the [TerraTidy repository](https://github.com/santosr2/terratidy) for contribution guidelines.
+Contributions are welcome! Please see the [TerraTidy repository](https://github.com/santosr2/TerraTidy) for contribution guidelines.
+
+## Changelog
+
+See the [project changelog](CHANGELOG.md) for release history.
 
 ## License
 
-MIT License - see [LICENSE](../LICENSE) for details.
+MIT License - see [LICENSE](LICENSE) for details.

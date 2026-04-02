@@ -4,7 +4,7 @@ site_author: santosr2
 site_url: https://santosr2.github.io/terratidy
 
 repo_name: santosr2/terratidy
-repo_url: https://github.com/santosr2/terratidy
+repo_url: https://github.com/santosr2/TerraTidy
 
 theme:
   name: material
@@ -74,48 +74,48 @@ markdown_extensions:
 nav:
   - Home: index.md
   - Getting Started:
-    - Installation: getting-started/installation.md
-    - Quick Start: getting-started/quickstart.md
-    - Configuration: getting-started/configuration.md
-    - Upgrade Guide: getting-started/upgrade.md
-    - Verification: getting-started/verification.md
+      - Installation: getting-started/installation.md
+      - Quick Start: getting-started/quickstart.md
+      - Configuration: getting-started/configuration.md
+      - Upgrade Guide: getting-started/upgrade.md
+      - Verification: getting-started/verification.md
   - User Guide:
-    - Commands: user-guide/commands.md
-    - Engines:
-      - Format (fmt): user-guide/engines/fmt.md
-      - Style: user-guide/engines/style.md
-      - Lint: user-guide/engines/lint.md
-      - Policy: user-guide/engines/policy.md
-    - Output Formats: user-guide/output-formats.md
-    - Profiles: user-guide/profiles.md
-    - Monorepos: user-guide/monorepos.md
-    - Performance: user-guide/performance.md
-    - Recipes: user-guide/recipes.md
-    - Security: user-guide/security.md
-    - Troubleshooting: user-guide/troubleshooting.md
+      - Commands: user-guide/commands.md
+      - Engines:
+          - Format (fmt): user-guide/engines/fmt.md
+          - Style: user-guide/engines/style.md
+          - Lint: user-guide/engines/lint.md
+          - Policy: user-guide/engines/policy.md
+      - Output Formats: user-guide/output-formats.md
+      - Profiles: user-guide/profiles.md
+      - Monorepos: user-guide/monorepos.md
+      - Performance: user-guide/performance.md
+      - Recipes: user-guide/recipes.md
+      - Security: user-guide/security.md
+      - Troubleshooting: user-guide/troubleshooting.md
   - Rules Reference:
-    - Style Rules: rules/style-rules.md
-    - Policy Rules: rules/policy-rules.md
-    - Lint Rules: rules/lint-rules.md
-    - Custom Rules: rules/custom-rules.md
+      - Style Rules: rules/style-rules.md
+      - Policy Rules: rules/policy-rules.md
+      - Lint Rules: rules/lint-rules.md
+      - Custom Rules: rules/custom-rules.md
   - Integrations:
-    - GitHub Actions: integrations/github-actions.md
-    - Pre-commit Hooks: integrations/pre-commit.md
-    - CI/CD Pipelines: integrations/ci-cd.md
-    - Docker: integrations/docker.md
-    - VS Code Extension: integrations/vscode.md
-    - LSP Support: integrations/lsp.md
+      - GitHub Actions: integrations/github-actions.md
+      - Pre-commit Hooks: integrations/pre-commit.md
+      - CI/CD Pipelines: integrations/ci-cd.md
+      - Docker: integrations/docker.md
+      - VS Code Extension: integrations/vscode.md
+      - LSP Support: integrations/lsp.md
   - Development:
-    - Architecture: development/architecture.md
-    - SDK Reference: development/sdk.md
-    - Plugin System: development/plugins.md
-    - Contributing: development/contributing.md
-    - Security: development/security.md
+      - Architecture: development/architecture.md
+      - SDK Reference: development/sdk.md
+      - Plugin System: development/plugins.md
+      - Contributing: development/contributing.md
+      - Security: development/security.md
   - Changelog: changelog.md
 
 extra:
   social:
     - icon: fontawesome/brands/github
-      link: https://github.com/santosr2/terratidy
+      link: https://github.com/santosr2/TerraTidy
   version:
     provider: mike

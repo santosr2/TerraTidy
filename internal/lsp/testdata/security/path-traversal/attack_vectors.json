@@ -1,0 +1,81 @@
+{
+  "description": "Path traversal attack vectors for uriToPath() and validateWorkspacePath() security tests",
+  "categories": {
+    "basic_traversal": {
+      "description": "Simple directory traversal patterns",
+      "vectors": [
+        "../",
+        "../../",
+        "../../../",
+        "..\\"
+      ]
+    },
+    "encoded_traversal": {
+      "description": "URL-encoded traversal sequences",
+      "vectors": [
+        "%2e%2e/",
+        "%2e%2e%2f",
+        "..%2f",
+        "..%5c",
+        "%2e%2e%5c"
+      ]
+    },
+    "double_encoded": {
+      "description": "Double URL-encoded sequences (should be decoded once)",
+      "vectors": [
+        "%252e%252e%252f",
+        "%252e%252e/",
+        "..%252f"
+      ]
+    },
+    "mixed_case_encoding": {
+      "description": "Mixed case hex encoding",
+      "vectors": [
+        "%2E%2E/",
+        "%2e%2E%2F",
+        "..%2F"
+      ]
+    },
+    "unicode_normalization": {
+      "description": "Unicode normalization attacks",
+      "vectors": [
+        "..%c0%af",
+        "..%c1%9c",
+        "%e0%80%af"
+      ]
+    },
+    "null_byte": {
+      "description": "Null byte injection (Go handles safely)",
+      "vectors": [
+        "../%00",
+        "..%00/",
+        "%00../"
+      ]
+    },
+    "windows_specific": {
+      "description": "Windows-specific path attacks",
+      "vectors": [
+        "....//",
+        "..../",
+        "....\\",
+        "..%5c..%5c"
+      ]
+    }
+  },
+  "test_uris": {
+    "traversal_attempts": [
+      {"uri": "file:///workspace/../etc/passwd", "decoded": "/workspace/../etc/passwd"},
+      {"uri": "file:///workspace/..%2F..%2Fetc/passwd", "decoded": "/workspace/../../etc/passwd"},
+      {"uri": "file:///workspace/%2e%2e/%2e%2e/etc/passwd", "decoded": "/workspace/../../etc/passwd"},
+      {"uri": "file:///workspace/subdir/..%2F..%2F..%2Fetc/passwd", "decoded": "/workspace/subdir/../../../etc/passwd"}
+    ],
+    "unc_paths": [
+      {"uri": "file://attacker-server/share/malware.tf", "decoded": "//attacker-server/share/malware.tf"},
+      {"uri": "file://192.168.1.1/c$/windows/system32", "decoded": "//192.168.1.1/c$/windows/system32"}
+    ],
+    "windows_paths": [
+      {"uri": "file:///C:/Users/..%2F..%2FWindows/System32", "decoded": "C:/Users/../../Windows/System32"},
+      {"uri": "file:///c:/workspace/..%5c..%5cwindows", "decoded": "c:/workspace/..\\..\\windows"}
+    ]
+  }
+}

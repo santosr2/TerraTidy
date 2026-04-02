@@ -36,6 +36,10 @@ const (
 	LogLevelDebug
 )
 
+// maxContentLength is the maximum allowed Content-Length for LSP messages (10 MB).
+// This prevents denial-of-service via memory exhaustion from malicious clients.
+const maxContentLength = 10 * 1024 * 1024
+
 // ParseLogLevel converts a string to a LogLevel
 func ParseLogLevel(s string) LogLevel {
 	switch strings.ToLower(s) {
@@ -182,6 +186,11 @@ func (s *Server) readMessage() (json.RawMessage, error) {
 		return nil, fmt.Errorf("no content length header")
 	}
 
+	// Reject oversized messages to prevent memory exhaustion
+	if contentLength > maxContentLength {
+		return nil, fmt.Errorf("content length %d exceeds maximum %d bytes", contentLength, maxContentLength)
+	}
+
 	// Read content
 	content := make([]byte, contentLength)
 	_, err := io.ReadFull(s.reader, content)
@@ -266,6 +275,16 @@ func (s *Server) handleInitialize(msg RequestMessage) error {
 		s.workspaceRoot = uriToPath(params.RootURI)
 	} else if params.RootPath != "" {
 		s.workspaceRoot = params.RootPath
+	}
+
+	// Validate workspace root is a real directory
+	if s.workspaceRoot != "" {
+		if info, err := os.Stat(s.workspaceRoot); err != nil {
+			s.logError("workspace root does not exist: %s", s.workspaceRoot)
+			// Continue anyway - the path might be created later
+		} else if !info.IsDir() {
+			s.logError("workspace root is not a directory: %s", s.workspaceRoot)
+		}
 	}
 
 	// Store initialization options from the client
@@ -579,6 +598,17 @@ func (s *Server) getDiagnostics(uri string) []Diagnostic {
 	}
 
 	filePath := uriToPath(uri)
+	if filePath == "" {
+		return []Diagnostic{} // Invalid URI
+	}
+
+	// Validate path is within workspace to prevent path traversal
+	validPath, err := s.validateWorkspacePath(filePath)
+	if err != nil {
+		s.logDebug("path validation failed for %s: %v", uri, err)
+		return []Diagnostic{}
+	}
+	filePath = validPath
 
 	// Only process .tf and .hcl files
 	ext := filepath.Ext(filePath)
@@ -678,23 +708,88 @@ func (s *Server) sendError(id json.RawMessage, code int, message string) error {
 }
 
 // uriToPath converts a file URI to a file path.
-// Handles Windows paths correctly (file:///C:/path becomes C:/path).
+// Handles URL encoding, Windows paths, and UNC paths correctly.
+// Returns empty string for invalid URIs (fail-secure).
 func uriToPath(uri string) string {
 	if !strings.HasPrefix(uri, "file://") {
 		return uri
 	}
+
 	parsed, err := url.Parse(uri)
 	if err != nil {
-		// Fallback: strip prefix manually
-		return strings.TrimPrefix(uri, "file://")
+		return "" // Invalid URI, fail secure
 	}
-	// On Windows, url.Parse("file:///C:/path") gives Path="/C:/path".
-	// Strip the leading slash before a drive letter.
-	p := parsed.Path
-	if len(p) >= 3 && p[0] == '/' && p[2] == ':' {
+
+	// Decode all percent-encoding in the path.
+	// url.Parse().Path decodes most sequences but NOT %2F (slash) or %5C (backslash).
+	// We need full decoding before any path validation to prevent traversal via encoded sequences.
+	p, err := url.PathUnescape(parsed.Path)
+	if err != nil {
+		return "" // Invalid encoding, fail secure
+	}
+
+	// Handle UNC paths: file://server/share/path -> //server/share/path
+	// The Host contains the server name for UNC paths.
+	if parsed.Host != "" {
+		p = "//" + parsed.Host + p
+	}
+
+	// Handle Windows drive letters.
+	// file:///C:/path gives Path="/C:/path", we want "C:/path".
+	// Check for /X: pattern where X is a drive letter (a-z, A-Z).
+	if len(p) >= 3 && p[0] == '/' && isASCIILetter(p[1]) && p[2] == ':' {
 		p = p[1:]
 	}
+
 	return p
+}
+
+// isASCIILetter returns true if b is an ASCII letter (a-z, A-Z).
+func isASCIILetter(b byte) bool {
+	return (b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z')
+}
+
+// validateWorkspacePath validates that a path is within the workspace root.
+// It resolves symlinks (if the file exists) and checks the path doesn't escape.
+// Returns the validated path or an error if the path is outside the workspace.
+func (s *Server) validateWorkspacePath(path string) (string, error) {
+	if s.workspaceRoot == "" {
+		return path, nil // No workspace root set, skip validation
+	}
+
+	// Clean both paths for consistent comparison
+	cleanPath := filepath.Clean(path)
+	cleanRoot := filepath.Clean(s.workspaceRoot)
+
+	// Resolve symlinks in workspace root for accurate comparison
+	resolvedRoot, err := filepath.EvalSymlinks(cleanRoot)
+	if err != nil {
+		// If workspace root can't be resolved, use cleaned version
+		resolvedRoot = cleanRoot
+	}
+
+	// Resolve symlinks in the path to catch symlink-based escapes
+	resolvedPath, err := filepath.EvalSymlinks(cleanPath)
+	if err != nil {
+		// File doesn't exist yet or can't be resolved.
+		// Validate the logical path instead.
+		resolvedPath = cleanPath
+	}
+
+	// Check if the resolved path is within the workspace using filepath.Rel.
+	// Rel returns a relative path from resolvedRoot to resolvedPath.
+	// If the path is outside, the relative path will start with "..".
+	rel, err := filepath.Rel(resolvedRoot, resolvedPath)
+	if err != nil {
+		return "", fmt.Errorf("path outside workspace: %s", path)
+	}
+
+	// Reject paths that escape the workspace (relative path starts with "..")
+	if strings.HasPrefix(rel, ".."+string(filepath.Separator)) || rel == ".." {
+		return "", fmt.Errorf("path escapes workspace: %s", path)
+	}
+
+	return resolvedPath, nil
 }
 
 // severityToLSP converts SDK severity to LSP diagnostic severity

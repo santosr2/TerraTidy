@@ -96,14 +96,6 @@ async function startLanguageClient(context: vscode.ExtensionContext): Promise<vo
         outputChannel: outputChannel,
         traceOutputChannel: outputChannel,
         initializationOptions: getInitializationOptions(),
-        middleware: {
-            workspace: {
-                configuration: (params, token, next) => {
-                    // Provide configuration to the server
-                    return next(params, token);
-                },
-            },
-        },
     };
 
     // Create and start the language client
@@ -149,7 +141,7 @@ async function stopLanguageClient(): Promise<void> {
 }
 
 // Get initialization options from configuration
-function getInitializationOptions(): Record<string, unknown> {
+export function getInitializationOptions(): Record<string, unknown> {
     const config = vscode.workspace.getConfiguration('terratidy');
 
     const engines: { [key: string]: boolean } = {

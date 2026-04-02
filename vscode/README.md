@@ -15,21 +15,21 @@ This extension brings TerraTidy's powerful formatting, style checking, linting, 
 
 ## Requirements
 
-- [TerraTidy CLI](https://github.com/santosr2/terratidy) must be installed and available in your PATH
-- VS Code 1.85.0 or higher
+- [TerraTidy CLI](https://github.com/santosr2/TerraTidy) must be installed and available in your PATH
+- VS Code 1.110.0 or higher
 
 ### Installing TerraTidy CLI
 
 ```bash
 # Using Go
-go install github.com/santosr2/terratidy/cmd/terratidy@latest
+go install github.com/santosr2/TerraTidy/cmd/terratidy@latest
 
 # Using Homebrew (macOS)
 brew tap santosr2/tap https://github.com/santosr2/TerraTidy
 brew install santosr2/tap/terratidy
 
 # Download from releases
-# https://github.com/santosr2/terratidy/releases
+# https://github.com/santosr2/TerraTidy/releases
 ```
 
 ## Extension Settings
@@ -191,8 +191,8 @@ Or specify the full path in settings:
 
 ## Contributing
 
-Contributions are welcome! Please see the [TerraTidy repository](https://github.com/santosr2/terratidy) for contribution guidelines.
+Contributions are welcome! Please see the [TerraTidy repository](https://github.com/santosr2/TerraTidy) for contribution guidelines.
 
 ## License
 
-MIT License - see [LICENSE](../LICENSE) for details.
+MIT License - see [LICENSE](LICENSE) for details.

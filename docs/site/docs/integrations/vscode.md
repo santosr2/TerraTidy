@@ -15,7 +15,7 @@ TerraTidy provides a VS Code extension for seamless integration with your editor
 
 ```bash
 # Download the extension
-wget https://github.com/santosr2/terratidy/releases/latest/download/terratidy.vsix
+wget https://github.com/santosr2/TerraTidy/releases/latest/download/terratidy.vsix
 
 # Install
 code --install-extension terratidy.vsix
@@ -24,7 +24,7 @@ code --install-extension terratidy.vsix
 ## Requirements
 
 - TerraTidy CLI must be installed and in your PATH
-- VS Code 1.85.0 or higher
+- VS Code 1.110.0 or higher
 
 ## Features
 

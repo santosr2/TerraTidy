@@ -154,7 +154,7 @@ Upload SARIF results to GitHub:
   run: terratidy check --format sarif > results.sarif
 
 - name: Upload SARIF
-  uses: github/codeql-action/upload-sarif@v3
+  uses: github/codeql-action/upload-sarif@v4
   with:
     sarif_file: results.sarif
 ```

@@ -299,20 +299,22 @@ Cache is invalidated when a file's modification time changes.
 
 ### Lint Engine
 
-The lint engine integrates with TFLint. Configure it under `engines.lint.config`:
+The lint engine provides 11 built-in AST rules and can optionally invoke TFLint as an
+external subprocess for provider-specific checks. Configure it under `engines.lint.config`:
 
 ```yaml
 engines:
   lint:
     enabled: true
     config:
-      config_file: .tflint.hcl    # Path to TFLint config (default: .tflint.hcl)
-      plugins:                     # TFLint plugins to enable
+      config_file: .tflint.hcl    # Path to TFLint config (optional)
+      plugins:                     # TFLint plugins to enable (optional)
         - aws
         - terraform
 ```
 
-If TFLint is not installed, the engine falls back to built-in lint rules.
+Built-in rules work without TFLint. If TFLint is installed and configured, provider-specific
+rules are also available. TFLint is invoked as a subprocess, not embedded or linked.
 
 ## File Discovery
 

@@ -325,7 +325,8 @@ resource "aws_db_instance" "db" {
 
 ## TFLint Integration
 
-TerraTidy can optionally integrate with TFLint for additional provider-specific rules.
+TerraTidy can optionally invoke TFLint as an external CLI tool (subprocess) for additional
+provider-specific rules. TFLint is **not embedded or linked** as a library.
 
 ### Enabling TFLint
 

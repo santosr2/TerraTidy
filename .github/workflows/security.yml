@@ -130,7 +130,7 @@ jobs:
         run: osv-scanner --lockfile=vscode/bun.lock --format=sarif --output=osv-results.sarif
 
       - name: Upload SARIF to GitHub Security
-        uses: github/codeql-action/upload-sarif@60168efe1c415ce0f5521ea06d5c2062adbeed1b # v3.28.19
+        uses: github/codeql-action/upload-sarif@66b39da20ccc656acc90dd27ea30f5d458ec33ce # v3.28.19
         if: always()
         with:
           sarif_file: osv-results.sarif

@@ -198,15 +198,16 @@ profiles:
         enabled: false
       lint:
         enabled: true
-        rules:
-          security-group-unrestricted:
-            enabled: true
-            severity: error
       policy:
         enabled: true
         config:
           policy_dirs:
             - ./policies/security
+    overrides:
+      rules:
+        security-group-unrestricted:
+          enabled: true
+          severity: error
 ```
 
 ## Team Profiles

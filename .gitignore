@@ -55,6 +55,7 @@ benchmarks/
 .claude
 .specs
 .plans
+.issues
 .history
 
 # temp

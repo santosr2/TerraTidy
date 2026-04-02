@@ -50,6 +50,26 @@ func TestBuildStyleConfig(t *testing.T) {
 		assert.True(t, cfg.Diff)
 	})
 
+	t.Run("fix from config when CLI flag is false", func(t *testing.T) {
+		appCfg := &config.Config{}
+		appCfg.Engines.Style.Config = map[string]any{
+			"fix": true,
+		}
+
+		cfg := buildStyleConfig(appCfg, false)
+		assert.True(t, cfg.Fix, "fix should be enabled from config")
+	})
+
+	t.Run("CLI fix flag overrides config", func(t *testing.T) {
+		appCfg := &config.Config{}
+		appCfg.Engines.Style.Config = map[string]any{
+			"fix": false,
+		}
+
+		cfg := buildStyleConfig(appCfg, true)
+		assert.True(t, cfg.Fix, "CLI flag should override config")
+	})
+
 	t.Run("with engine config rules", func(t *testing.T) {
 		appCfg := &config.Config{}
 		appCfg.Engines.Style.Config = map[string]any{
@@ -100,6 +120,16 @@ func TestBuildLintConfig(t *testing.T) {
 		cfg := buildLintConfig(appCfg)
 		assert.Equal(t, "custom.hcl", cfg.ConfigFile)
 		assert.Equal(t, []string{"aws", "google"}, cfg.Plugins)
+	})
+
+	t.Run("with extra args", func(t *testing.T) {
+		appCfg := &config.Config{}
+		appCfg.Engines.Lint.Config = map[string]any{
+			"args": []any{"--minimum-tf-version=1.0.0", "--no-color"},
+		}
+
+		cfg := buildLintConfig(appCfg)
+		assert.Equal(t, []string{"--minimum-tf-version=1.0.0", "--no-color"}, cfg.Args)
 	})
 }
 

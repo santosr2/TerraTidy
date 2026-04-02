@@ -188,8 +188,12 @@ func runConfigValidate(_ *cobra.Command, _ []string) error {
 
 	if len(cfg.Profiles) > 0 {
 		fmt.Printf("  Profiles: %d\n", len(cfg.Profiles))
-		for name := range cfg.Profiles {
-			fmt.Printf("    - %s\n", name)
+		for name, profile := range cfg.Profiles {
+			if profile.Description != "" {
+				fmt.Printf("    - %s: %s\n", name, profile.Description)
+			} else {
+				fmt.Printf("    - %s\n", name)
+			}
 		}
 	}
 

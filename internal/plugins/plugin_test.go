@@ -486,19 +486,26 @@ func TestLoadManifest(t *testing.T) {
 }
 
 func TestComputeFileHash(t *testing.T) {
-	tmpDir := t.TempDir()
-	testFile := filepath.Join(tmpDir, "test.txt")
+	t.Run("valid file", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		testFile := filepath.Join(tmpDir, "test.txt")
 
-	content := []byte("hello world")
-	err := os.WriteFile(testFile, content, 0o644)
-	require.NoError(t, err)
+		content := []byte("hello world")
+		err := os.WriteFile(testFile, content, 0o644)
+		require.NoError(t, err)
 
-	hash, err := computeFileHash(testFile)
-	require.NoError(t, err)
+		hash, err := computeFileHash(testFile)
+		require.NoError(t, err)
 
-	// SHA256 of "hello world"
-	expectedHash := "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9"
-	assert.Equal(t, expectedHash, hash)
+		// SHA256 of "hello world"
+		expectedHash := "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9"
+		assert.Equal(t, expectedHash, hash)
+	})
+
+	t.Run("file not found", func(t *testing.T) {
+		_, err := computeFileHash("/nonexistent/file.txt")
+		require.Error(t, err)
+	})
 }
 
 func TestManager_VerifyPluginChecksum(t *testing.T) {
@@ -557,6 +564,18 @@ func TestManager_VerifyPluginChecksum(t *testing.T) {
 		err = manager.verifyPluginChecksum(pluginPath, checksums)
 		// Should not error - just warn
 		assert.NoError(t, err)
+	})
+
+	t.Run("file read error", func(t *testing.T) {
+		// Test with a nonexistent file that's in the checksums
+		checksums := map[string]string{
+			"missing.so": "0000000000000000000000000000000000000000000000000000000000000000",
+		}
+
+		manager := NewManager(nil, true)
+		err := manager.verifyPluginChecksum("/nonexistent/missing.so", checksums)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "computing hash")
 	})
 }
 

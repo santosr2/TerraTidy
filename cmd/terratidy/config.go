@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/santosr2/terratidy/internal/config"
+	"github.com/santosr2/TerraTidy/internal/config"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 )

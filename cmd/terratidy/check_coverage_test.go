@@ -6,9 +6,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/santosr2/terratidy/internal/config"
-	"github.com/santosr2/terratidy/internal/engines/style"
-	"github.com/santosr2/terratidy/pkg/sdk"
+	"github.com/santosr2/TerraTidy/internal/config"
+	"github.com/santosr2/TerraTidy/internal/engines/style"
+	"github.com/santosr2/TerraTidy/pkg/sdk"
 )
 
 func TestHasErrors(t *testing.T) {

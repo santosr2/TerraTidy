@@ -7,10 +7,10 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/santosr2/terratidy/internal/cache"
-	fmtengine "github.com/santosr2/terratidy/internal/engines/format"
-	"github.com/santosr2/terratidy/internal/engines/style"
-	"github.com/santosr2/terratidy/internal/runner"
+	"github.com/santosr2/TerraTidy/internal/cache"
+	fmtengine "github.com/santosr2/TerraTidy/internal/engines/format"
+	"github.com/santosr2/TerraTidy/internal/engines/style"
+	"github.com/santosr2/TerraTidy/internal/runner"
 )
 
 // setupTestFiles creates temporary Terraform files for benchmarking

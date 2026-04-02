@@ -191,17 +191,7 @@ jobs:
 
 ## Status Badges
 
-Add TerraTidy status badges to your repository README to show that your Terraform code is checked:
-
-```markdown
-<!-- Passing badge -->
-![TerraTidy](https://raw.githubusercontent.com/santosr2/terratidy/main/assets/terratidy-status-passing.svg)
-
-<!-- Failing badge -->
-![TerraTidy](https://raw.githubusercontent.com/santosr2/terratidy/main/assets/terratidy-status-failing.svg)
-```
-
-To dynamically show pass/fail status based on your workflow, use GitHub's built-in workflow badge:
+Add a TerraTidy status badge to your repository README using GitHub's built-in workflow badge:
 
 ```markdown
 [![TerraTidy](https://github.com/<owner>/<repo>/actions/workflows/<workflow>.yml/badge.svg)](https://github.com/<owner>/<repo>/actions)

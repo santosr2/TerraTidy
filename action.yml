@@ -1,85 +1,85 @@
-name: 'TerraTidy'
-description: 'Run TerraTidy to lint, format, and enforce style in your Terraform/Terragrunt code'
-author: 'santosr2'
+name: "TerraTidy"
+description: "Run TerraTidy to lint, format, and enforce style in your Terraform/Terragrunt code"
+author: "santosr2"
 branding:
-  icon: 'check-circle'
-  color: 'purple'
+  icon: "check-circle"
+  color: "purple"
 
 inputs:
   version:
-    description: 'TerraTidy version to use (e.g., v0.2.0-alpha.3, latest)'
+    description: "TerraTidy version to use (e.g., v0.2.0-alpha.3, latest)"
     required: false
-    default: 'latest'
+    default: "latest"
   config:
-    description: 'Path to TerraTidy configuration file'
+    description: "Path to TerraTidy configuration file"
     required: false
-    default: '.terratidy.yaml'
+    default: ".terratidy.yaml"
   profile:
-    description: 'Configuration profile to use'
+    description: "Configuration profile to use"
     required: false
-    default: ''
+    default: ""
   format:
-    description: 'Output format (text, table, json, json-compact, sarif, html, junit, markdown, github)'
+    description: "Output format (text, table, json, json-compact, sarif, html, junit, markdown, github)"
     required: false
-    default: 'text'
+    default: "text"
   parallel:
-    description: 'Run engines in parallel for faster execution'
+    description: "Run engines in parallel for faster execution"
     required: false
-    default: 'false'
+    default: "false"
   working-directory:
-    description: 'Working directory to run TerraTidy in'
+    description: "Working directory to run TerraTidy in"
     required: false
-    default: '.'
+    default: "."
   skip-fmt:
-    description: 'Skip formatting checks'
+    description: "Skip formatting checks"
     required: false
-    default: 'false'
+    default: "false"
   skip-style:
-    description: 'Skip style checks'
+    description: "Skip style checks"
     required: false
-    default: 'false'
+    default: "false"
   skip-lint:
-    description: 'Skip linting checks'
+    description: "Skip linting checks"
     required: false
-    default: 'false'
+    default: "false"
   skip-policy:
-    description: 'Skip policy checks'
+    description: "Skip policy checks"
     required: false
-    default: 'false'
+    default: "false"
   fail-on-error:
-    description: 'Fail the action if errors are found'
+    description: "Fail the action if errors are found"
     required: false
-    default: 'true'
+    default: "true"
   fail-on-warning:
-    description: 'Fail the action if warnings are found'
+    description: "Fail the action if warnings are found"
     required: false
-    default: 'false'
+    default: "false"
   github-token:
-    description: 'GitHub token for PR annotations'
+    description: "GitHub token for PR annotations"
     required: false
-    default: ''
+    default: ""
 
 outputs:
   findings-count:
-    description: 'Total number of findings (accurate for json/json-compact; exit code for other formats)'
+    description: "Total number of findings (accurate for json/json-compact; exit code for other formats)"
     value: ${{ steps.terratidy.outputs.findings-count }}
   errors-count:
-    description: 'Number of error-level findings (accurate for json/json-compact only)'
+    description: "Number of error-level findings (accurate for json/json-compact only)"
     value: ${{ steps.terratidy.outputs.errors-count }}
   warnings-count:
-    description: 'Number of warning-level findings (accurate for json/json-compact only)'
+    description: "Number of warning-level findings (accurate for json/json-compact only)"
     value: ${{ steps.terratidy.outputs.warnings-count }}
   sarif-file:
-    description: 'Path to SARIF output file (if sarif format used)'
+    description: "Path to SARIF output file (if sarif format used)"
     value: ${{ steps.terratidy.outputs.sarif-file }}
 
 runs:
-  using: 'composite'
+  using: "composite"
   steps:
     - name: Setup Go
       uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
       with:
-        go-version: '1.26.1'
+        go-version: "1.26.1"
 
     - name: Install TerraTidy
       shell: bash
@@ -88,7 +88,7 @@ runs:
       run: |
         if [ "$INPUT_VERSION" = "latest" ]; then
           # Check if we're in a terratidy checkout (for action testing)
-          if [ -f "go.mod" ] && grep -q "github.com/santosr2/terratidy" go.mod 2>/dev/null; then
+          if [ -f "go.mod" ] && grep -q "github.com/santosr2/TerraTidy" go.mod 2>/dev/null; then
             # Build from source for local testing
             # Get version info for ldflags (shallow clones don't have VCS info)
             VERSION=$(git describe --tags --always --dirty 2>/dev/null || echo "dev")
@@ -97,10 +97,10 @@ runs:
             LDFLAGS="-s -w -X main.version=${VERSION} -X main.commit=${COMMIT} -X main.date=${DATE}"
             go build -ldflags "${LDFLAGS}" -o "$(go env GOPATH)/bin/terratidy" ./cmd/terratidy
           else
-            go install github.com/santosr2/terratidy/cmd/terratidy@latest
+            go install github.com/santosr2/TerraTidy/cmd/terratidy@latest
           fi
         else
-          go install "github.com/santosr2/terratidy/cmd/terratidy@${INPUT_VERSION}"
+          go install "github.com/santosr2/TerraTidy/cmd/terratidy@${INPUT_VERSION}"
         fi
         echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
 

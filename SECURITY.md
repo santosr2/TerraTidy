@@ -17,7 +17,7 @@ We take the security of TerraTidy seriously. If you believe you have found a sec
 
 Instead, please report them via one of the following methods:
 
-1. **GitHub Security Advisories** (Preferred): Use [GitHub's private vulnerability reporting](https://github.com/santosr2/terratidy/security/advisories/new)
+1. **GitHub Security Advisories** (Preferred): Use [GitHub's private vulnerability reporting](https://github.com/santosr2/TerraTidy/security/advisories/new)
 
 2. **Email**: Contact the maintainers directly (include "SECURITY" in the subject line)
 
@@ -102,6 +102,6 @@ We appreciate the security research community's efforts in helping keep TerraTid
 
 Security updates are released as patch versions. We recommend:
 
-1. Subscribing to [GitHub releases](https://github.com/santosr2/terratidy/releases) for notifications
+1. Subscribing to [GitHub releases](https://github.com/santosr2/TerraTidy/releases) for notifications
 2. Following the [CHANGELOG](CHANGELOG.md) for security-related changes
 3. Upgrading promptly when security patches are released

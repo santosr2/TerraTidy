@@ -7,7 +7,7 @@ import (
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/hclsyntax"
 	"github.com/hashicorp/hcl/v2/hclwrite"
-	"github.com/santosr2/terratidy/pkg/sdk"
+	"github.com/santosr2/TerraTidy/pkg/sdk"
 )
 
 // ForEachCountFirstRule ensures for_each/count is the first attribute in resource/module blocks.

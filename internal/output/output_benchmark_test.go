@@ -8,7 +8,7 @@ import (
 	"github.com/hashicorp/hcl/v2"
 	"github.com/stretchr/testify/require"
 
-	"github.com/santosr2/terratidy/pkg/sdk"
+	"github.com/santosr2/TerraTidy/pkg/sdk"
 )
 
 func generateFindings(n int) []sdk.Finding {

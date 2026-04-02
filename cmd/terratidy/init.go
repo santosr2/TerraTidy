@@ -248,7 +248,7 @@ engines:
 // generateDefaultConfig generates the default configuration.
 func generateDefaultConfig() string {
 	return `# TerraTidy Configuration
-# Documentation: https://github.com/santosr2/terratidy
+# Documentation: https://github.com/santosr2/TerraTidy
 version: 1
 
 # Global settings
@@ -303,7 +303,7 @@ engines:
 // generateMonorepoConfig generates configuration for monorepos.
 func generateMonorepoConfig() string {
 	return `# TerraTidy Configuration for Monorepo
-# Documentation: https://github.com/santosr2/terratidy
+# Documentation: https://github.com/santosr2/TerraTidy
 version: 1
 
 # Global settings optimized for monorepos

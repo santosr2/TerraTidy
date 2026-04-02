@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/santosr2/terratidy/internal/lsp"
+	"github.com/santosr2/TerraTidy/internal/lsp"
 	"github.com/spf13/cobra"
 )
 

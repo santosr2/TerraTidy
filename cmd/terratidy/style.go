@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/santosr2/terratidy/internal/engines/style"
-	"github.com/santosr2/terratidy/pkg/sdk"
+	"github.com/santosr2/TerraTidy/internal/engines/style"
+	"github.com/santosr2/TerraTidy/pkg/sdk"
 	"github.com/spf13/cobra"
 )
 

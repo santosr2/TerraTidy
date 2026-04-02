@@ -56,3 +56,6 @@ benchmarks/
 .specs
 .plans
 .history
+
+# temp
+temp/

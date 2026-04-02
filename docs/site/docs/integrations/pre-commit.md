@@ -16,7 +16,7 @@ Add to your `.pre-commit-config.yaml`:
 
 ```yaml
 repos:
-  - repo: https://github.com/santosr2/terratidy
+  - repo: https://github.com/santosr2/TerraTidy
     rev: v0.2.0-alpha.3
     hooks:
       - id: terratidy-fmt
@@ -45,7 +45,7 @@ Format and lint checks:
 
 ```yaml
 repos:
-  - repo: https://github.com/santosr2/terratidy
+  - repo: https://github.com/santosr2/TerraTidy
     rev: v0.2.0-alpha.3
     hooks:
       - id: terratidy-fmt
@@ -58,7 +58,7 @@ All checks with auto-fix:
 
 ```yaml
 repos:
-  - repo: https://github.com/santosr2/terratidy
+  - repo: https://github.com/santosr2/TerraTidy
     rev: v0.2.0-alpha.3
     hooks:
       - id: terratidy-fix
@@ -70,7 +70,7 @@ Full checks without auto-fix:
 
 ```yaml
 repos:
-  - repo: https://github.com/santosr2/terratidy
+  - repo: https://github.com/santosr2/TerraTidy
     rev: v0.2.0-alpha.3
     hooks:
       - id: terratidy-check
@@ -80,7 +80,7 @@ repos:
 
 ```yaml
 repos:
-  - repo: https://github.com/santosr2/terratidy
+  - repo: https://github.com/santosr2/TerraTidy
     rev: v0.2.0-alpha.3
     hooks:
       - id: terratidy-check
@@ -91,7 +91,7 @@ repos:
 
 ```yaml
 repos:
-  - repo: https://github.com/santosr2/terratidy
+  - repo: https://github.com/santosr2/TerraTidy
     rev: v0.2.0-alpha.3
     hooks:
       - id: terratidy-check
@@ -132,7 +132,7 @@ pre-commit autoupdate
 Ensure TerraTidy is installed:
 
 ```bash
-go install github.com/santosr2/terratidy/cmd/terratidy@latest
+go install github.com/santosr2/TerraTidy/cmd/terratidy@latest
 ```
 
 ### Slow Hooks

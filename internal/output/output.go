@@ -10,7 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/santosr2/terratidy/pkg/sdk"
+	"github.com/santosr2/TerraTidy/pkg/sdk"
 )
 
 // ANSI color codes

@@ -14,7 +14,7 @@ import (
 	"time"
 
 	"github.com/hashicorp/hcl/v2"
-	"github.com/santosr2/terratidy/pkg/sdk"
+	"github.com/santosr2/TerraTidy/pkg/sdk"
 )
 
 // bashRuleTimeout is the maximum execution time for a Bash rule script.

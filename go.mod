@@ -1,4 +1,4 @@
-module github.com/santosr2/terratidy
+module github.com/santosr2/TerraTidy
 
 go 1.25.0
 

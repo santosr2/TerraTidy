@@ -8,8 +8,8 @@ import (
 	"strings"
 	"text/tabwriter"
 
-	"github.com/santosr2/terratidy/internal/engines/lint"
-	"github.com/santosr2/terratidy/internal/engines/style"
+	"github.com/santosr2/TerraTidy/internal/engines/lint"
+	"github.com/santosr2/TerraTidy/internal/engines/style"
 	"github.com/spf13/cobra"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"

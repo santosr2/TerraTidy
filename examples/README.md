@@ -156,7 +156,7 @@ Want to check files before commit?
 ```yaml
 # .pre-commit-config.yaml
 repos:
-  - repo: https://github.com/santosr2/terratidy
+  - repo: https://github.com/santosr2/TerraTidy
     rev: v0.2.0-alpha.3
     hooks:
       - id: terratidy-check
@@ -258,7 +258,7 @@ terratidy check --severity-threshold error  # Only fail on errors
 ```yaml
 - name: Install TerraTidy
   run: |
-    curl -L https://github.com/santosr2/terratidy/releases/download/v0.2.0-alpha.3/terratidy-linux-amd64 -o terratidy
+    curl -L https://github.com/santosr2/TerraTidy/releases/download/v0.2.0-alpha.3/terratidy-linux-amd64 -o terratidy
     chmod +x terratidy
     sudo mv terratidy /usr/local/bin/
 ```

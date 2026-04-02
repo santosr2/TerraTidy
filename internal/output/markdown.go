@@ -5,7 +5,7 @@ import (
 	"io"
 	"sort"
 
-	"github.com/santosr2/terratidy/pkg/sdk"
+	"github.com/santosr2/TerraTidy/pkg/sdk"
 )
 
 // MarkdownFormatter outputs findings as a Markdown summary.

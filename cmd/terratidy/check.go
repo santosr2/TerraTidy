@@ -6,14 +6,14 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/santosr2/terratidy/internal/config"
-	fmtengine "github.com/santosr2/terratidy/internal/engines/format"
-	"github.com/santosr2/terratidy/internal/engines/lint"
-	"github.com/santosr2/terratidy/internal/engines/policy"
-	"github.com/santosr2/terratidy/internal/engines/style"
-	"github.com/santosr2/terratidy/internal/output"
-	"github.com/santosr2/terratidy/internal/runner"
-	"github.com/santosr2/terratidy/pkg/sdk"
+	"github.com/santosr2/TerraTidy/internal/config"
+	fmtengine "github.com/santosr2/TerraTidy/internal/engines/format"
+	"github.com/santosr2/TerraTidy/internal/engines/lint"
+	"github.com/santosr2/TerraTidy/internal/engines/policy"
+	"github.com/santosr2/TerraTidy/internal/engines/style"
+	"github.com/santosr2/TerraTidy/internal/output"
+	"github.com/santosr2/TerraTidy/internal/runner"
+	"github.com/santosr2/TerraTidy/pkg/sdk"
 	"github.com/spf13/cobra"
 )
 

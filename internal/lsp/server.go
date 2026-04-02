@@ -16,12 +16,12 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/santosr2/terratidy/internal/buildinfo"
-	"github.com/santosr2/terratidy/internal/config"
-	"github.com/santosr2/terratidy/internal/engines/format"
-	"github.com/santosr2/terratidy/internal/engines/lint"
-	"github.com/santosr2/terratidy/internal/engines/style"
-	"github.com/santosr2/terratidy/pkg/sdk"
+	"github.com/santosr2/TerraTidy/internal/buildinfo"
+	"github.com/santosr2/TerraTidy/internal/config"
+	"github.com/santosr2/TerraTidy/internal/engines/format"
+	"github.com/santosr2/TerraTidy/internal/engines/lint"
+	"github.com/santosr2/TerraTidy/internal/engines/style"
+	"github.com/santosr2/TerraTidy/pkg/sdk"
 )
 
 // LogLevel represents the logging verbosity

@@ -150,19 +150,22 @@ func (e *StyleEngine) Run(ctx context.Context, files []string) ([]Finding, error
 
 ### Lint Engine
 
-Integrates with TFLint:
+Provides built-in AST rules and optional TFLint integration (subprocess, not linked):
 
 ```go
 func (e *LintEngine) Run(ctx context.Context, files []string) ([]Finding, error) {
-    // Group files by module
-    modules := groupByModule(files)
+    // Run built-in AST rules first
+    for _, file := range files {
+        findings = append(findings, e.runBuiltinRules(file)...)
+    }
 
-    for _, module := range modules {
-        // Run TFLint on module
-        result, _ := tflint.Run(module.Path, e.tflintConfig)
-
-        for _, issue := range result.Issues {
-            findings = append(findings, convertIssue(issue))
+    // Optionally invoke TFLint as subprocess (not embedded)
+    if e.config.UseTFLint {
+        modules := groupByModule(files)
+        for _, module := range modules {
+            cmd := exec.CommandContext(ctx, "tflint", "--format=json", module.Path)
+            output, _ := cmd.Output()
+            findings = append(findings, parseTFLintOutput(output)...)
         }
     }
     return findings, nil

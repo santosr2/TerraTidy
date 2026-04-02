@@ -211,8 +211,9 @@ terratidy lint [paths...] [flags]
 | `--plugin`      | Plugins to enable (aws, google, azurerm)     |
 | `--rule`        | Specific rules to enable                     |
 
-**`--rule`** enables specific TFLint rules by name, overriding the `.tflint.hcl` config.
-Multiple `--rule` flags can be passed. Each enabled rule defaults to warning severity.
+**`--rule`** enables specific rules by name. Works for both built-in lint rules and TFLint
+rules (when TFLint is installed). Multiple `--rule` flags can be passed. Each enabled rule
+defaults to warning severity.
 
 **Examples:**
 

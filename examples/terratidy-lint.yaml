@@ -1,3 +1,9 @@
+# TerraTidy Lint Configuration Example
+#
+# The lint engine provides 11 built-in AST rules that work without external dependencies.
+# TFLint integration is optional and invoked as a subprocess (not embedded) for
+# provider-specific checks (AWS, Google, Azure).
+
 version: 1
 
 # Lint engine configuration

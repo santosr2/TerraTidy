@@ -24,7 +24,7 @@ TerraTidy is a single-binary quality platform for Terraform and Terragrunt that 
 
 - **Formatting** -- Format `.tf` and `.hcl` files using the HCL formatter
 - **Style Checking** -- Custom style rules for layout, ordering, and conventions
-- **Linting** -- TFLint integration for best practices and errors
+- **Linting** -- 11 built-in AST rules plus optional TFLint integration for provider-specific checks
 - **Policy Enforcement** -- OPA policy checks for compliance
 
 ### Key Features
@@ -360,7 +360,7 @@ MIT License -- see [LICENSE](LICENSE) for details.
 Built with:
 
 - [HashiCorp HCL](https://github.com/hashicorp/hcl) for parsing
-- [TFLint](https://github.com/terraform-linters/tflint) for linting
+- [TFLint](https://github.com/terraform-linters/tflint) for optional provider-specific linting (invoked as subprocess)
 - [Open Policy Agent](https://github.com/open-policy-agent/opa) for policies
 - [Cobra](https://github.com/spf13/cobra) for CLI
 

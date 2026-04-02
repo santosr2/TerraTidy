@@ -5,8 +5,9 @@ and security issues in your Terraform code.
 
 ## Overview
 
-The `lint` engine uses TFLint under the hood, providing deep analysis of Terraform configurations
-including provider-specific rules.
+The `lint` engine provides static analysis through built-in AST-based rules and optional TFLint
+integration. Built-in rules cover core Terraform hygiene (versioning, naming, security), while
+TFLint integration adds provider-specific checks when TFLint is installed.
 
 ## Usage
 
@@ -62,8 +63,9 @@ for available provider rulesets.
 
 ## TFLint Integration
 
-TerraTidy integrates with TFLint for comprehensive linting. You can use existing
-TFLint configuration files:
+TerraTidy can optionally invoke TFLint as an external CLI tool (subprocess) for comprehensive
+provider-specific linting. TFLint is **not embedded or linked** as a library. You can use
+existing TFLint configuration files:
 
 ```hcl
 # .tflint.hcl
@@ -111,3 +113,10 @@ overrides:
     terraform-unused-declarations:
       enabled: false
 ```
+
+## License Note
+
+TFLint is invoked as an external CLI tool (subprocess), not embedded or linked as a library.
+TFLint uses MPL-2.0 for its own code and BUSL-1.1 for embedded Terraform code (required since
+Terraform's license change in August 2023). TerraTidy's subprocess invocation pattern is
+compliant with these licenses. TerraTidy itself remains MIT-licensed.

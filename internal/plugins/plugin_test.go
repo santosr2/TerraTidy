@@ -697,3 +697,28 @@ func TestManager_RegisterMultipleFormattersWithSameName(t *testing.T) {
 	assert.Len(t, formatters, 1)
 	assert.Equal(t, formatter2, formatters["duplicate"])
 }
+
+func TestRelativePath(t *testing.T) {
+	cwd, err := os.Getwd()
+	require.NoError(t, err)
+
+	t.Run("absolute path in cwd becomes relative", func(t *testing.T) {
+		absPath := filepath.Join(cwd, "subdir", "file.txt")
+		rel := relativePath(absPath)
+		assert.Equal(t, filepath.Join("subdir", "file.txt"), rel)
+	})
+
+	t.Run("relative path stays relative", func(t *testing.T) {
+		relPath := "subdir/file.txt"
+		result := relativePath(relPath)
+		assert.Equal(t, relPath, result)
+	})
+
+	t.Run("absolute path outside cwd", func(t *testing.T) {
+		// Path outside cwd should still return a relative path (with ..)
+		absPath := "/tmp/outside/file.txt"
+		result := relativePath(absPath)
+		// Result should be relative (may have .. components)
+		assert.NotEqual(t, absPath, result)
+	})
+}

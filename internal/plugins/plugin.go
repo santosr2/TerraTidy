@@ -33,6 +33,23 @@ import (
 // ManifestFileName is the name of the checksum manifest file for plugin verification.
 const ManifestFileName = ".terratidy-plugins.sha256"
 
+// relativePath converts an absolute path to a relative path for error messages.
+// If conversion fails, returns the original path.
+func relativePath(path string) string {
+	if !filepath.IsAbs(path) {
+		return path
+	}
+	cwd, err := os.Getwd()
+	if err != nil {
+		return path
+	}
+	rel, err := filepath.Rel(cwd, path)
+	if err != nil {
+		return path
+	}
+	return rel
+}
+
 // PluginType represents the type of plugin
 type PluginType string
 
@@ -204,7 +221,7 @@ func (m *Manager) verifyPluginChecksum(pluginPath string, checksums map[string]s
 func (m *Manager) LoadAll() error {
 	for _, dir := range m.directories {
 		if err := m.loadFromDirectory(dir); err != nil {
-			return fmt.Errorf("loading plugins from %s: %w", dir, err)
+			return fmt.Errorf("loading plugins from %s: %w", relativePath(dir), err)
 		}
 	}
 	return nil
@@ -230,7 +247,7 @@ func (m *Manager) loadFromDirectory(dir string) error {
 		return err
 	}
 	if !info.IsDir() {
-		return fmt.Errorf("%s is not a directory", dir)
+		return fmt.Errorf("%s is not a directory", relativePath(dir))
 	}
 
 	// Load checksum manifest if verification is enabled
@@ -242,9 +259,9 @@ func (m *Manager) loadFromDirectory(dir string) error {
 		if manifestErr != nil {
 			if os.IsNotExist(manifestErr) {
 				// Manifest doesn't exist - warn but continue (warn-only mode)
-				m.logger.Printf("[WARN] no manifest file %s found in %s, plugin verification skipped", ManifestFileName, dir)
+				m.logger.Printf("[WARN] no manifest file %s found in %s, plugin verification skipped", ManifestFileName, relativePath(dir))
 			} else {
-				return fmt.Errorf("loading manifest from %s: %w", dir, manifestErr)
+				return fmt.Errorf("loading manifest from %s: %w", relativePath(dir), manifestErr)
 			}
 		}
 	}

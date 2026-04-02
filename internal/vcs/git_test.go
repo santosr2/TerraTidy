@@ -272,3 +272,73 @@ func TestGit_ToAbsolutePaths(t *testing.T) {
 		assert.True(t, filepath.IsAbs(p), "expected absolute path, got %s", p)
 	}
 }
+
+func TestValidateGitRef(t *testing.T) {
+	tests := []struct {
+		ref     string
+		wantErr bool
+	}{
+		// Valid refs
+		{"", false},                  // Empty is valid (uses default)
+		{"main", false},              // Simple branch
+		{"master", false},            // Simple branch
+		{"origin/main", false},       // Remote branch
+		{"feature/add-tests", false}, // Feature branch with slash
+		{"v1.0.0", false},            // Tag
+		{"HEAD", false},              // HEAD ref
+		{"HEAD@{1}", false},          // Reflog syntax
+		{"HEAD@{upstream}", false},   // Upstream ref
+		{"refs/heads/main", false},   // Full ref path
+		{"abc123", false},            // Short SHA
+		{"abc123def456", false},      // Longer SHA
+		{"release-1.0", false},       // Branch with hyphen
+		{"feature_branch", false},    // Branch with underscore
+		{"v1.2.3-rc1", false},        // Prerelease tag
+
+		// Invalid refs (shell injection attempts)
+		{"; rm -rf /", true},             // Command injection
+		{"$(whoami)", true},              // Command substitution
+		{"`id`", true},                   // Backtick command
+		{"main; echo pwned", true},       // Semicolon injection
+		{"main | cat /etc/passwd", true}, // Pipe injection
+		{"main && echo pwned", true},     // AND injection
+		{"main || echo pwned", true},     // OR injection
+		{"main\necho pwned", true},       // Newline injection
+		{"main'", true},                  // Single quote
+		{"main\"", true},                 // Double quote
+		{"$(cat /etc/passwd)", true},     // Nested command
+		{"main > /tmp/out", true},        // Redirect
+		{"main < /etc/passwd", true},     // Input redirect
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.ref, func(t *testing.T) {
+			err := ValidateGitRef(tt.ref)
+			if tt.wantErr {
+				assert.Error(t, err, "ValidateGitRef(%q) should return error", tt.ref)
+				if err != nil {
+					assert.Contains(t, err.Error(), "invalid git ref")
+				}
+			} else {
+				assert.NoError(t, err, "ValidateGitRef(%q) should not return error", tt.ref)
+			}
+		})
+	}
+}
+
+func TestGetChangedFiles_InvalidRef(t *testing.T) {
+	git := NewGit(".")
+
+	if !git.IsGitRepo() {
+		t.Skip("Not running in a git repository")
+	}
+
+	// Test that invalid refs are rejected before being passed to git
+	_, err := git.GetChangedFiles("; rm -rf /")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid git ref")
+
+	_, err = git.GetChangedFiles("$(whoami)")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid git ref")
+}

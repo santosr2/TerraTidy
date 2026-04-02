@@ -9,8 +9,65 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 )
+
+// gitRefPattern validates git ref names.
+// Allows alphanumeric, dots, underscores, slashes, hyphens, and @ (for HEAD@{n}).
+// This prevents shell injection via malicious ref names.
+var gitRefPattern = regexp.MustCompile(`^[a-zA-Z0-9._/@{}-]+$`)
+
+// absolutePathPattern matches Unix absolute paths for sanitization.
+var absolutePathPattern = regexp.MustCompile(`(^|\s)(/(?:[a-zA-Z0-9._-]+/)+[a-zA-Z0-9._-]+)`)
+
+// maxGitErrorLen is the maximum length of git error messages.
+const maxGitErrorLen = 500
+
+// sanitizeGitError sanitizes git error messages by removing absolute paths
+// and truncating long messages.
+func sanitizeGitError(err error) error {
+	if err == nil {
+		return nil
+	}
+
+	msg := err.Error()
+
+	// Replace absolute paths with basenames
+	msg = absolutePathPattern.ReplaceAllStringFunc(msg, func(match string) string {
+		pathStart := 0
+		for i, c := range match {
+			if c == '/' {
+				pathStart = i
+				break
+			}
+		}
+		prefix := match[:pathStart]
+		path := match[pathStart:]
+		return prefix + filepath.Base(path)
+	})
+
+	// Truncate if too long
+	if len(msg) > maxGitErrorLen {
+		msg = msg[:maxGitErrorLen] + "... (truncated)"
+	}
+
+	return fmt.Errorf("%s", msg)
+}
+
+// ValidateGitRef validates a git ref name to prevent injection attacks.
+// Returns an error if the ref contains invalid characters.
+func ValidateGitRef(ref string) error {
+	if ref == "" {
+		return nil // Empty ref is valid (will use default)
+	}
+
+	if !gitRefPattern.MatchString(ref) {
+		return fmt.Errorf("invalid git ref %q: contains unsafe characters (allowed: alphanumeric, . _ / @ { } -)", ref)
+	}
+
+	return nil
+}
 
 // Git provides Git-specific VCS operations
 type Git struct {
@@ -38,7 +95,7 @@ func (g *Git) GetRepoRoot() (string, error) {
 	cmd.Dir = g.workDir
 	out, err := cmd.Output()
 	if err != nil {
-		return "", fmt.Errorf("getting repo root: %w", err)
+		return "", sanitizeGitError(fmt.Errorf("getting repo root: %w", err))
 	}
 	return strings.TrimSpace(string(out)), nil
 }
@@ -49,7 +106,7 @@ func (g *Git) GetCurrentBranch() (string, error) {
 	cmd.Dir = g.workDir
 	out, err := cmd.Output()
 	if err != nil {
-		return "", fmt.Errorf("getting current branch: %w", err)
+		return "", sanitizeGitError(fmt.Errorf("getting current branch: %w", err))
 	}
 	return strings.TrimSpace(string(out)), nil
 }
@@ -83,6 +140,11 @@ func (g *Git) GetDefaultBranch() string {
 // GetChangedFiles returns files that have changed compared to the given base ref
 // If base is empty, it compares to the default branch
 func (g *Git) GetChangedFiles(base string) ([]string, error) {
+	// Validate ref before using it in git commands
+	if err := ValidateGitRef(base); err != nil {
+		return nil, err
+	}
+
 	if base == "" {
 		base = g.GetDefaultBranch()
 	}
@@ -102,7 +164,7 @@ func (g *Git) GetChangedFiles(base string) ([]string, error) {
 	cmd.Dir = g.workDir
 	out, err := cmd.Output()
 	if err != nil {
-		return nil, fmt.Errorf("getting changed files: %w", err)
+		return nil, sanitizeGitError(fmt.Errorf("getting changed files: %w", err))
 	}
 
 	return g.parseFileList(out)
@@ -114,7 +176,7 @@ func (g *Git) getChangedFilesDirect(base string) ([]string, error) {
 	cmd.Dir = g.workDir
 	out, err := cmd.Output()
 	if err != nil {
-		return nil, fmt.Errorf("getting changed files: %w", err)
+		return nil, sanitizeGitError(fmt.Errorf("getting changed files: %w", err))
 	}
 	return g.parseFileList(out)
 }
@@ -125,7 +187,7 @@ func (g *Git) GetStagedFiles() ([]string, error) {
 	cmd.Dir = g.workDir
 	out, err := cmd.Output()
 	if err != nil {
-		return nil, fmt.Errorf("getting staged files: %w", err)
+		return nil, sanitizeGitError(fmt.Errorf("getting staged files: %w", err))
 	}
 	return g.parseFileList(out)
 }
@@ -136,7 +198,7 @@ func (g *Git) GetUnstagedFiles() ([]string, error) {
 	cmd.Dir = g.workDir
 	out, err := cmd.Output()
 	if err != nil {
-		return nil, fmt.Errorf("getting unstaged files: %w", err)
+		return nil, sanitizeGitError(fmt.Errorf("getting unstaged files: %w", err))
 	}
 	return g.parseFileList(out)
 }
@@ -147,7 +209,7 @@ func (g *Git) GetUntrackedFiles() ([]string, error) {
 	cmd.Dir = g.workDir
 	out, err := cmd.Output()
 	if err != nil {
-		return nil, fmt.Errorf("getting untracked files: %w", err)
+		return nil, sanitizeGitError(fmt.Errorf("getting untracked files: %w", err))
 	}
 	return g.parseFileList(out)
 }
@@ -267,7 +329,7 @@ func (g *Git) GetFileStatuses() ([]FileStatus, error) {
 	cmd.Dir = g.workDir
 	out, err := cmd.Output()
 	if err != nil {
-		return nil, fmt.Errorf("getting file statuses: %w", err)
+		return nil, sanitizeGitError(fmt.Errorf("getting file statuses: %w", err))
 	}
 
 	var statuses []FileStatus

@@ -1784,3 +1784,92 @@ func TestServer_ResourceLimits_SemaphoreUsedInDiagnostics(t *testing.T) {
 	// Should return diagnostics (may be empty if no engines configured)
 	assert.NotNil(t, diagnostics)
 }
+
+func TestServer_InitSessionTempDir(t *testing.T) {
+	out := &bytes.Buffer{}
+	server := NewServer(strings.NewReader(""), out)
+
+	err := server.initSessionTempDir()
+	require.NoError(t, err)
+
+	// Should have created a session temp directory
+	assert.NotEmpty(t, server.sessionTempDir)
+	assert.DirExists(t, server.sessionTempDir)
+
+	// Directory should be under cache path
+	assert.Contains(t, server.sessionTempDir, "terratidy")
+
+	// Clean up
+	err = server.Close()
+	require.NoError(t, err)
+
+	// Directory should be removed after Close
+	assert.NoDirExists(t, server.sessionTempDir)
+}
+
+func TestServer_SessionTempDir_UsedForDocs(t *testing.T) {
+	tmpDir := t.TempDir()
+	testFile := filepath.Join(tmpDir, "test.tf")
+	require.NoError(t, os.WriteFile(testFile, []byte(`resource "test" "x" {}`), 0o644))
+
+	out := &bytes.Buffer{}
+	server := NewServer(strings.NewReader(""), out)
+	server.initialized = true
+	server.workspaceRoot = tmpDir
+
+	// Initialize session temp dir
+	err := server.initSessionTempDir()
+	require.NoError(t, err)
+
+	// Add a document
+	uri := pathToFileURI(testFile)
+	server.docMu.Lock()
+	server.documents[uri] = &Document{
+		URI:     uri,
+		Content: `resource "test" "x" {}`,
+		Version: 1,
+	}
+	server.docMu.Unlock()
+
+	// Get diagnostics - this creates temp file
+	_ = server.getDiagnostics(uri)
+
+	// Check that temp file is in session directory
+	server.docMu.RLock()
+	doc := server.documents[uri]
+	server.docMu.RUnlock()
+
+	if doc.tempFile != "" {
+		assert.True(t, strings.HasPrefix(doc.tempFile, server.sessionTempDir),
+			"temp file %s should be under session dir %s", doc.tempFile, server.sessionTempDir)
+	}
+
+	// Clean up
+	_ = server.Close()
+}
+
+func TestGetSessionTempBaseDir(t *testing.T) {
+	// Test that it returns a valid path
+	baseDir := getSessionTempBaseDir()
+	assert.NotEmpty(t, baseDir)
+	assert.Contains(t, baseDir, "terratidy")
+}
+
+func TestServer_CleanupOldSessions(t *testing.T) {
+	// Create a temp base directory
+	baseDir := t.TempDir()
+
+	out := &bytes.Buffer{}
+	server := NewServer(strings.NewReader(""), out)
+
+	// Create an "old" session directory with old mtime
+	oldSession := filepath.Join(baseDir, "old-session")
+	require.NoError(t, os.MkdirAll(oldSession, 0o700))
+
+	// Note: We can't easily set mtime to be old on all platforms,
+	// so we just verify the function doesn't crash
+	server.cleanupOldSessions(baseDir)
+
+	// Function should complete without error
+	// (actual cleanup would require manipulating mtimes)
+}

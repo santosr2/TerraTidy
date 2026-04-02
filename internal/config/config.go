@@ -5,16 +5,63 @@ package config
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
 
+// Security limits for glob operations
+const (
+	// maxImportGlobResults is the maximum number of files a single import pattern can match.
+	// This prevents resource exhaustion from overly broad glob patterns.
+	maxImportGlobResults = 1000
+
+	// globTimeout is the maximum time allowed for a single glob operation.
+	// This prevents hangs from complex patterns on large filesystems.
+	globTimeout = 5 * time.Second
+)
+
 // envVarPattern matches ${VAR} or ${VAR:-default} patterns
 var envVarPattern = regexp.MustCompile(`\$\{([^}]+)\}`)
+
+// sensitiveVarPatterns contains substrings that indicate a potentially sensitive variable.
+// These are checked case-insensitively against variable names during expansion.
+var sensitiveVarPatterns = []string{
+	"SECRET",
+	"PASSWORD",
+	"TOKEN",
+	"KEY",
+	"CREDENTIAL",
+	"PRIVATE",
+}
+
+// configLogger is the logger used for config-related warnings.
+// It writes to stderr with a prefix for easy identification.
+var configLogger = log.New(os.Stderr, "terratidy-config: ", log.LstdFlags)
+
+// isSensitiveVar checks if a variable name contains sensitive patterns.
+func isSensitiveVar(varName string) bool {
+	upper := strings.ToUpper(varName)
+	for _, pattern := range sensitiveVarPatterns {
+		if strings.Contains(upper, pattern) {
+			return true
+		}
+	}
+	return false
+}
+
+// warnIfSensitive logs a warning if the variable name appears sensitive.
+// The warning never includes the actual value, only the variable name.
+func warnIfSensitive(varName string) {
+	if isSensitiveVar(varName) {
+		configLogger.Printf("[WARN] expanding potentially sensitive variable: ${%s}", varName)
+	}
+}
 
 // Config represents the complete TerraTidy configuration
 type Config struct {
@@ -134,6 +181,7 @@ func Load(path string) (*Config, error) {
 
 // expandEnvVars expands environment variables in the config content
 // Supports ${VAR} and ${VAR:-default} syntax
+// Logs a warning (to stderr) when expanding variables with sensitive-looking names.
 func expandEnvVars(content string) string {
 	return envVarPattern.ReplaceAllStringFunc(content, func(match string) string {
 		// Extract the variable expression (without ${ and })
@@ -145,6 +193,7 @@ func expandEnvVars(content string) string {
 			defaultVal := expr[idx+2:]
 
 			if val := os.Getenv(varName); val != "" {
+				warnIfSensitive(varName)
 				return val
 			}
 			return defaultVal
@@ -155,6 +204,7 @@ func expandEnvVars(content string) string {
 			varName := expr[:idx]
 			// Return the variable value or keep the placeholder (validation will catch it)
 			if val := os.Getenv(varName); val != "" {
+				warnIfSensitive(varName)
 				return val
 			}
 			// Return empty for now; validation can catch undefined required vars
@@ -162,8 +212,30 @@ func expandEnvVars(content string) string {
 		}
 
 		// Simple variable: ${VAR}
+		warnIfSensitive(expr)
 		return os.Getenv(expr)
 	})
+}
+
+// globWithTimeout executes filepath.Glob with a timeout to prevent hangs on complex patterns.
+func globWithTimeout(pattern string, timeout time.Duration) ([]string, error) {
+	type result struct {
+		matches []string
+		err     error
+	}
+
+	ch := make(chan result, 1)
+	go func() {
+		matches, err := filepath.Glob(pattern)
+		ch <- result{matches, err}
+	}()
+
+	select {
+	case res := <-ch:
+		return res.matches, res.err
+	case <-time.After(timeout):
+		return nil, fmt.Errorf("glob pattern %q timed out after %v", pattern, timeout)
+	}
 }
 
 // loadImports loads and merges imported configurations.
@@ -175,10 +247,15 @@ func (c *Config) loadImports(baseDir string, visited map[string]bool) error {
 			pattern = filepath.Join(baseDir, pattern)
 		}
 
-		// Expand glob pattern
-		matches, err := filepath.Glob(pattern)
+		// Expand glob pattern with timeout
+		matches, err := globWithTimeout(pattern, globTimeout)
 		if err != nil {
-			return fmt.Errorf("invalid import pattern %s: %w", pattern, err)
+			return fmt.Errorf("expanding import pattern %s: %w", pattern, err)
+		}
+
+		// Check result count to prevent resource exhaustion
+		if len(matches) > maxImportGlobResults {
+			return fmt.Errorf("import pattern %q matched too many files (%d > %d)", pattern, len(matches), maxImportGlobResults)
 		}
 
 		// Load each matched file

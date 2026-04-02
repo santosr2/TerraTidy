@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -643,4 +644,107 @@ variable "instance_type" {
 	for _, f := range findings {
 		t.Logf("Finding: %s - %s", f.Rule, f.Message)
 	}
+}
+
+func TestEngine_ValidateTFLintPath(t *testing.T) {
+	t.Run("default path not in PATH", func(t *testing.T) {
+		// Use a path that definitely doesn't exist
+		engine := New(&Config{
+			UseTFLint: true,
+			// TFLintPath empty means use "tflint" from PATH
+		})
+		// IsTFLintAvailable will return false if tflint not in PATH
+		// This test verifies the validation doesn't crash
+		_ = engine.IsTFLintAvailable()
+	})
+
+	t.Run("custom path does not exist", func(t *testing.T) {
+		engine := New(&Config{
+			UseTFLint:  true,
+			TFLintPath: "/nonexistent/path/to/tflint",
+		})
+
+		err := engine.validateTFLintPath()
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "not found")
+		assert.Contains(t, err.Error(), "/nonexistent/path/to/tflint")
+	})
+
+	t.Run("custom path is directory", func(t *testing.T) {
+		tmpDir := t.TempDir()
+
+		engine := New(&Config{
+			UseTFLint:  true,
+			TFLintPath: tmpDir,
+		})
+
+		err := engine.validateTFLintPath()
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "is a directory")
+	})
+
+	t.Run("custom path not executable", func(t *testing.T) {
+		if runtime.GOOS == "windows" {
+			t.Skip("executable permission check not applicable on Windows")
+		}
+
+		tmpDir := t.TempDir()
+		fakeBinary := filepath.Join(tmpDir, "tflint")
+		require.NoError(t, os.WriteFile(fakeBinary, []byte("#!/bin/sh\necho test"), 0o644))
+
+		engine := New(&Config{
+			UseTFLint:  true,
+			TFLintPath: fakeBinary,
+		})
+
+		err := engine.validateTFLintPath()
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "not executable")
+	})
+
+	t.Run("custom path is valid executable", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		fakeBinary := filepath.Join(tmpDir, "tflint")
+		require.NoError(t, os.WriteFile(fakeBinary, []byte("#!/bin/sh\necho test"), 0o755))
+
+		engine := New(&Config{
+			UseTFLint:  true,
+			TFLintPath: fakeBinary,
+		})
+
+		err := engine.validateTFLintPath()
+		require.NoError(t, err)
+		assert.True(t, engine.IsTFLintAvailable())
+	})
+}
+
+func TestEngine_Run_TFLintPathError(t *testing.T) {
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "main.tf")
+	require.NoError(t, os.WriteFile(tmpFile, []byte(`resource "test" "x" {}`), 0o644))
+
+	t.Run("invalid TFLintPath with no fallback", func(t *testing.T) {
+		engine := New(&Config{
+			UseTFLint:       true,
+			TFLintPath:      "/nonexistent/tflint",
+			FallbackBuiltin: false,
+		})
+
+		_, err := engine.Run(context.Background(), []string{tmpFile})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "TFLint integration enabled")
+		assert.Contains(t, err.Error(), "not found")
+	})
+
+	t.Run("invalid TFLintPath with fallback", func(t *testing.T) {
+		engine := New(&Config{
+			UseTFLint:       true,
+			TFLintPath:      "/nonexistent/tflint",
+			FallbackBuiltin: true,
+		})
+
+		// Should not error - falls back to built-in rules
+		_, err := engine.Run(context.Background(), []string{tmpFile})
+		require.NoError(t, err)
+	})
 }

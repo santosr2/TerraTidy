@@ -61,6 +61,41 @@ When using TerraTidy:
 - Only run custom rules from trusted sources
 - Sandbox custom Bash rules when possible
 
+### Plugin Integrity Verification
+
+TerraTidy supports SHA256 checksum verification for Go plugins and Bash rules via
+the `plugins.verify_integrity` configuration option (enabled by default).
+
+**How it works:**
+
+1. Create a manifest file `.terratidy-plugins.sha256` in your plugin directory
+2. The manifest uses standard `sha256sum` format: `<hash>  <filename>`
+3. TerraTidy verifies each plugin/script against the manifest before loading
+
+**Current behavior (warn-only mode):**
+
+- If verification fails, a warning is logged but the plugin still loads
+- This allows gradual adoption without breaking existing setups
+- Future releases will enforce verification by default
+
+**Security considerations for Bash rules:**
+
+Bash rules execute arbitrary shell commands. Unlike Go plugins (which are compiled
+and can be code-reviewed), Bash rules are scripts that run with full shell access.
+This creates additional risks:
+
+- **Command injection**: Malicious scripts could execute harmful commands
+- **Data exfiltration**: Scripts have access to environment variables and files
+- **Privilege escalation**: If TerraTidy runs with elevated privileges, so do scripts
+
+**Mitigations:**
+
+1. Enable `plugins.verify_integrity: true` (default) and maintain checksums
+2. Review all Bash rule scripts before adding them to your project
+3. Run TerraTidy with minimal required privileges
+4. Prefer Go plugins or YAML rules over Bash rules when possible
+5. Use `plugins.verify_integrity: false` only in trusted environments
+
 ### CI/CD Integration
 
 - Use pinned versions in GitHub Actions (`@v0.2.0` not `@latest`)

@@ -76,8 +76,18 @@ type RuleConfig struct {
 
 // PluginsConfig represents plugin settings
 type PluginsConfig struct {
-	Enabled     bool     `yaml:"enabled"`
-	Directories []string `yaml:"directories,omitempty"`
+	Enabled         bool     `yaml:"enabled"`
+	Directories     []string `yaml:"directories,omitempty"`
+	VerifyIntegrity *bool    `yaml:"verify_integrity,omitempty"`
+}
+
+// ShouldVerifyIntegrity returns whether plugin integrity verification is enabled.
+// Defaults to true if not explicitly set (secure by default).
+func (p *PluginsConfig) ShouldVerifyIntegrity() bool {
+	if p.VerifyIntegrity == nil {
+		return true // Secure by default
+	}
+	return *p.VerifyIntegrity
 }
 
 // Load loads the configuration from the specified path

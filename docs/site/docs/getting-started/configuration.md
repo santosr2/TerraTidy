@@ -194,7 +194,30 @@ plugins:
   directories:
     - ~/.terratidy/plugins
     - ./plugins
+  verify_integrity: true  # Verify plugin checksums (default: true)
 ```
+
+### Plugin Integrity Verification
+
+When `verify_integrity` is enabled (default), TerraTidy verifies Go plugin checksums
+against a `.terratidy-plugins.sha256` manifest file in each plugin directory.
+
+Create the manifest using `sha256sum`:
+
+```bash
+cd ~/.terratidy/plugins
+sha256sum *.so > .terratidy-plugins.sha256
+```
+
+The manifest format is compatible with `sha256sum` output:
+
+```text
+e3b0c44298fc1c149afbf4c8996fb924...  myplugin.so
+b94d27b9934d3e08a52e52d7da7dabfa...  anotherplugin.so
+```
+
+If verification fails or the manifest is missing, a warning is logged but the plugin
+still loads (warn-only mode). Set `verify_integrity: false` to disable verification entirely.
 
 ## Configuration Imports
 

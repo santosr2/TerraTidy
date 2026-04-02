@@ -675,3 +675,31 @@ func TestApplyProfile(t *testing.T) {
 	assert.False(t, cfg.Engines.Lint.Enabled)
 	assert.False(t, cfg.Engines.Policy.Enabled)
 }
+
+func TestPluginsConfig_ShouldVerifyIntegrity(t *testing.T) {
+	t.Run("defaults to true when nil", func(t *testing.T) {
+		cfg := PluginsConfig{
+			Enabled:         true,
+			VerifyIntegrity: nil,
+		}
+		assert.True(t, cfg.ShouldVerifyIntegrity())
+	})
+
+	t.Run("returns false when explicitly disabled", func(t *testing.T) {
+		falseVal := false
+		cfg := PluginsConfig{
+			Enabled:         true,
+			VerifyIntegrity: &falseVal,
+		}
+		assert.False(t, cfg.ShouldVerifyIntegrity())
+	})
+
+	t.Run("returns true when explicitly enabled", func(t *testing.T) {
+		trueVal := true
+		cfg := PluginsConfig{
+			Enabled:         true,
+			VerifyIntegrity: &trueVal,
+		}
+		assert.True(t, cfg.ShouldVerifyIntegrity())
+	})
+}

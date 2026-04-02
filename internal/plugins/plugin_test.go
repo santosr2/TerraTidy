@@ -2,6 +2,7 @@ package plugins
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -53,7 +54,7 @@ func TestPlugin(t *testing.T) {
 
 func TestNewManager(t *testing.T) {
 	dirs := []string{"/path/to/plugins", "~/.terratidy/plugins"}
-	manager := NewManager(dirs)
+	manager := NewManager(dirs, false)
 
 	assert.NotNil(t, manager)
 	assert.NotNil(t, manager.plugins)
@@ -61,10 +62,11 @@ func TestNewManager(t *testing.T) {
 	assert.NotNil(t, manager.engines)
 	assert.NotNil(t, manager.formatters)
 	assert.Equal(t, dirs, manager.directories)
+	assert.False(t, manager.verifyIntegrity)
 }
 
 func TestManager_LoadAll_NonExistentDir(t *testing.T) {
-	manager := NewManager([]string{"/nonexistent/path"})
+	manager := NewManager([]string{"/nonexistent/path"}, false)
 
 	// Should not error on non-existent directories
 	err := manager.LoadAll()
@@ -73,7 +75,7 @@ func TestManager_LoadAll_NonExistentDir(t *testing.T) {
 
 func TestManager_LoadAll_EmptyDir(t *testing.T) {
 	tmpDir := t.TempDir()
-	manager := NewManager([]string{tmpDir})
+	manager := NewManager([]string{tmpDir}, false)
 
 	err := manager.LoadAll()
 	assert.NoError(t, err)
@@ -84,7 +86,7 @@ func TestManager_loadFromDirectory_NotADir(t *testing.T) {
 	err := os.WriteFile(tmpFile, []byte("content"), 0o644)
 	require.NoError(t, err)
 
-	manager := NewManager(nil)
+	manager := NewManager(nil, false)
 	err = manager.loadFromDirectory(tmpFile)
 
 	assert.Error(t, err)
@@ -93,7 +95,7 @@ func TestManager_loadFromDirectory_NotADir(t *testing.T) {
 
 func TestManager_loadFromDirectory_ExpandsHome(t *testing.T) {
 	// Create a manager with home directory path
-	manager := NewManager(nil)
+	manager := NewManager(nil, false)
 
 	// This should not panic even with ~ prefix
 	// It will return nil for non-existent directory
@@ -118,7 +120,7 @@ func (r *MockRule) Fix(_ *sdk.Context, _ *hcl.File) ([]byte, error) {
 }
 
 func TestManager_RegisterRule(t *testing.T) {
-	manager := NewManager(nil)
+	manager := NewManager(nil, false)
 
 	rule := &MockRule{name: "test-rule", description: "Test rule"}
 	manager.RegisterRule(rule)
@@ -129,7 +131,7 @@ func TestManager_RegisterRule(t *testing.T) {
 }
 
 func TestManager_GetRule(t *testing.T) {
-	manager := NewManager(nil)
+	manager := NewManager(nil, false)
 
 	rule := &MockRule{name: "test-rule", description: "Test rule"}
 	manager.RegisterRule(rule)
@@ -157,7 +159,7 @@ func (e *MockEngine) Run(_ context.Context, _ []string) ([]sdk.Finding, error) {
 }
 
 func TestManager_RegisterEngine(t *testing.T) {
-	manager := NewManager(nil)
+	manager := NewManager(nil, false)
 
 	engine := &MockEngine{name: "test-engine"}
 	manager.RegisterEngine(engine)
@@ -168,7 +170,7 @@ func TestManager_RegisterEngine(t *testing.T) {
 }
 
 func TestManager_GetEngine(t *testing.T) {
-	manager := NewManager(nil)
+	manager := NewManager(nil, false)
 
 	engine := &MockEngine{name: "test-engine"}
 	manager.RegisterEngine(engine)
@@ -196,7 +198,7 @@ func (f *MockFormatter) Format(_ []sdk.Finding, _ io.Writer) error {
 }
 
 func TestManager_RegisterFormatter(t *testing.T) {
-	manager := NewManager(nil)
+	manager := NewManager(nil, false)
 
 	formatter := &MockFormatter{name: "test-formatter"}
 	manager.RegisterFormatter(formatter)
@@ -207,7 +209,7 @@ func TestManager_RegisterFormatter(t *testing.T) {
 }
 
 func TestManager_GetFormatter(t *testing.T) {
-	manager := NewManager(nil)
+	manager := NewManager(nil, false)
 
 	formatter := &MockFormatter{name: "test-formatter"}
 	manager.RegisterFormatter(formatter)
@@ -225,7 +227,7 @@ func TestManager_GetFormatter(t *testing.T) {
 }
 
 func TestManager_ListPlugins(t *testing.T) {
-	manager := NewManager(nil)
+	manager := NewManager(nil, false)
 
 	// Initially empty
 	plugins := manager.ListPlugins()
@@ -244,7 +246,7 @@ func TestManager_ListPlugins(t *testing.T) {
 }
 
 func TestManager_GetRules_ReturnsCopy(t *testing.T) {
-	manager := NewManager(nil)
+	manager := NewManager(nil, false)
 
 	rule := &MockRule{name: "test-rule"}
 	manager.RegisterRule(rule)
@@ -259,7 +261,7 @@ func TestManager_GetRules_ReturnsCopy(t *testing.T) {
 }
 
 func TestManager_GetEngines_ReturnsCopy(t *testing.T) {
-	manager := NewManager(nil)
+	manager := NewManager(nil, false)
 
 	engine := &MockEngine{name: "test-engine"}
 	manager.RegisterEngine(engine)
@@ -274,7 +276,7 @@ func TestManager_GetEngines_ReturnsCopy(t *testing.T) {
 }
 
 func TestManager_GetFormatters_ReturnsCopy(t *testing.T) {
-	manager := NewManager(nil)
+	manager := NewManager(nil, false)
 
 	formatter := &MockFormatter{name: "test-formatter"}
 	manager.RegisterFormatter(formatter)
@@ -289,7 +291,7 @@ func TestManager_GetFormatters_ReturnsCopy(t *testing.T) {
 }
 
 func TestManager_ConcurrentAccess(_ *testing.T) {
-	manager := NewManager(nil)
+	manager := NewManager(nil, false)
 
 	// Run concurrent operations
 	done := make(chan bool)
@@ -365,7 +367,7 @@ func TestManager_LoadAll_WithYAMLFile(t *testing.T) {
 	err := os.WriteFile(yamlFile, []byte(content), 0o644)
 	require.NoError(t, err)
 
-	manager := NewManager([]string{tmpDir})
+	manager := NewManager([]string{tmpDir}, false)
 	err = manager.LoadAll()
 	assert.NoError(t, err)
 
@@ -387,15 +389,15 @@ func TestManager_LoadAll_WithSubdirectories(t *testing.T) {
 	err = os.WriteFile(testFile, []byte("content"), 0o644)
 	require.NoError(t, err)
 
-	manager := NewManager([]string{tmpDir})
+	manager := NewManager([]string{tmpDir}, false)
 	err = manager.LoadAll()
 	assert.NoError(t, err)
 }
 
 func TestManager_loadGoPlugin_NonExistentFile(t *testing.T) {
-	manager := NewManager(nil)
+	manager := NewManager(nil, false)
 
-	err := manager.loadGoPlugin("/nonexistent/plugin.so")
+	err := manager.loadGoPlugin("/nonexistent/plugin.so", nil)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "opening plugin")
 }
@@ -408,8 +410,8 @@ func TestManager_loadGoPlugin_InvalidFile(t *testing.T) {
 	err := os.WriteFile(invalidFile, []byte("not a plugin"), 0o644)
 	require.NoError(t, err)
 
-	manager := NewManager(nil)
-	err = manager.loadGoPlugin(invalidFile)
+	manager := NewManager(nil, false)
+	err = manager.loadGoPlugin(invalidFile, nil)
 	assert.Error(t, err)
 	// Will fail on plugin.Open
 }
@@ -419,11 +421,194 @@ func TestManager_loadGoPlugin_InvalidFile(t *testing.T) {
 // integration tests. The functions are structured to return clear errors for missing
 // symbols and incorrect types, which are tested via the error paths above.
 
+func TestLoadManifest(t *testing.T) {
+	t.Run("valid manifest", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		manifestPath := filepath.Join(tmpDir, ManifestFileName)
+
+		// Real SHA256 hashes (64 hex chars)
+		hash1 := "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855" // empty file
+		hash2 := "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9" // "hello world"
+		content := fmt.Sprintf("# Comment line\n%s  plugin1.so\n%s  plugin2.so\n", hash1, hash2)
+		err := os.WriteFile(manifestPath, []byte(content), 0o644)
+		require.NoError(t, err)
+
+		checksums, err := loadManifest(manifestPath)
+		require.NoError(t, err)
+		assert.Len(t, checksums, 2)
+		assert.Equal(t, hash1, checksums["plugin1.so"])
+		assert.Equal(t, hash2, checksums["plugin2.so"])
+	})
+
+	t.Run("empty manifest", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		manifestPath := filepath.Join(tmpDir, ManifestFileName)
+
+		err := os.WriteFile(manifestPath, []byte("# Only comments\n\n"), 0o644)
+		require.NoError(t, err)
+
+		checksums, err := loadManifest(manifestPath)
+		require.NoError(t, err)
+		assert.Empty(t, checksums)
+	})
+
+	t.Run("invalid hash length", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		manifestPath := filepath.Join(tmpDir, ManifestFileName)
+
+		content := `tooshort  plugin.so`
+		err := os.WriteFile(manifestPath, []byte(content), 0o644)
+		require.NoError(t, err)
+
+		_, err = loadManifest(manifestPath)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "expected 64 hex chars")
+	})
+
+	t.Run("invalid hex", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		manifestPath := filepath.Join(tmpDir, ManifestFileName)
+
+		content := `gggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggg  plugin.so`
+		err := os.WriteFile(manifestPath, []byte(content), 0o644)
+		require.NoError(t, err)
+
+		_, err = loadManifest(manifestPath)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "invalid hex")
+	})
+
+	t.Run("missing file", func(t *testing.T) {
+		_, err := loadManifest("/nonexistent/manifest")
+		assert.Error(t, err)
+		assert.True(t, os.IsNotExist(err))
+	})
+}
+
+func TestComputeFileHash(t *testing.T) {
+	t.Run("valid file", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		testFile := filepath.Join(tmpDir, "test.txt")
+
+		content := []byte("hello world")
+		err := os.WriteFile(testFile, content, 0o644)
+		require.NoError(t, err)
+
+		hash, err := computeFileHash(testFile)
+		require.NoError(t, err)
+
+		// SHA256 of "hello world"
+		expectedHash := "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9"
+		assert.Equal(t, expectedHash, hash)
+	})
+
+	t.Run("file not found", func(t *testing.T) {
+		_, err := computeFileHash("/nonexistent/file.txt")
+		require.Error(t, err)
+	})
+}
+
+func TestManager_VerifyPluginChecksum(t *testing.T) {
+	t.Run("valid checksum", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		pluginPath := filepath.Join(tmpDir, "plugin.so")
+
+		content := []byte("fake plugin content")
+		err := os.WriteFile(pluginPath, content, 0o644)
+		require.NoError(t, err)
+
+		// Compute actual hash
+		actualHash, err := computeFileHash(pluginPath)
+		require.NoError(t, err)
+
+		checksums := map[string]string{
+			"plugin.so": actualHash,
+		}
+
+		manager := NewManager(nil, true)
+		err = manager.verifyPluginChecksum(pluginPath, checksums)
+		assert.NoError(t, err)
+	})
+
+	t.Run("checksum mismatch", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		pluginPath := filepath.Join(tmpDir, "plugin.so")
+
+		content := []byte("fake plugin content")
+		err := os.WriteFile(pluginPath, content, 0o644)
+		require.NoError(t, err)
+
+		checksums := map[string]string{
+			"plugin.so": "0000000000000000000000000000000000000000000000000000000000000000",
+		}
+
+		manager := NewManager(nil, true)
+		err = manager.verifyPluginChecksum(pluginPath, checksums)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "checksum mismatch")
+	})
+
+	t.Run("plugin not in manifest warns but continues", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		pluginPath := filepath.Join(tmpDir, "plugin.so")
+
+		content := []byte("fake plugin content")
+		err := os.WriteFile(pluginPath, content, 0o644)
+		require.NoError(t, err)
+
+		checksums := map[string]string{
+			"other.so": "0000000000000000000000000000000000000000000000000000000000000000",
+		}
+
+		manager := NewManager(nil, true)
+		err = manager.verifyPluginChecksum(pluginPath, checksums)
+		// Should not error - just warn
+		assert.NoError(t, err)
+	})
+
+	t.Run("file read error", func(t *testing.T) {
+		// Test with a nonexistent file that's in the checksums
+		checksums := map[string]string{
+			"missing.so": "0000000000000000000000000000000000000000000000000000000000000000",
+		}
+
+		manager := NewManager(nil, true)
+		err := manager.verifyPluginChecksum("/nonexistent/missing.so", checksums)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "computing hash")
+	})
+}
+
+func TestManager_LoadAll_WithVerification(t *testing.T) {
+	t.Run("verification disabled skips manifest", func(t *testing.T) {
+		tmpDir := t.TempDir()
+
+		// Create a YAML rule (not .so, so we can actually test loading)
+		yamlContent := `name: test-rule
+description: Test rule
+severity: warning
+enabled: true
+pattern:
+  type: resource
+  missing_attribute: tags
+message: "Missing tags"
+`
+		err := os.WriteFile(filepath.Join(tmpDir, "test.yaml"), []byte(yamlContent), 0o644)
+		require.NoError(t, err)
+
+		// No manifest file - should work fine with verification disabled
+		manager := NewManager([]string{tmpDir}, false)
+		err = manager.LoadAll()
+		assert.NoError(t, err)
+		assert.Len(t, manager.rules, 1)
+	})
+}
+
 func TestManager_MultipleDirectories(t *testing.T) {
 	tmpDir1 := t.TempDir()
 	tmpDir2 := t.TempDir()
 
-	manager := NewManager([]string{tmpDir1, tmpDir2})
+	manager := NewManager([]string{tmpDir1, tmpDir2}, false)
 	err := manager.LoadAll()
 	assert.NoError(t, err)
 
@@ -439,7 +624,7 @@ func TestManager_LoadFromDirectory_WithDotFiles(t *testing.T) {
 	err := os.WriteFile(dotFile, []byte("hidden"), 0o644)
 	require.NoError(t, err)
 
-	manager := NewManager([]string{tmpDir})
+	manager := NewManager([]string{tmpDir}, false)
 	err = manager.LoadAll()
 	assert.NoError(t, err)
 
@@ -469,7 +654,7 @@ func TestPluginMetadata_AllFields(t *testing.T) {
 }
 
 func TestManager_RegisterMultipleRulesWithSameName(t *testing.T) {
-	manager := NewManager(nil)
+	manager := NewManager(nil, false)
 
 	rule1 := &MockRule{name: "duplicate", description: "First rule"}
 	rule2 := &MockRule{name: "duplicate", description: "Second rule"}
@@ -484,7 +669,7 @@ func TestManager_RegisterMultipleRulesWithSameName(t *testing.T) {
 }
 
 func TestManager_RegisterMultipleEnginesWithSameName(t *testing.T) {
-	manager := NewManager(nil)
+	manager := NewManager(nil, false)
 
 	engine1 := &MockEngine{name: "duplicate"}
 	engine2 := &MockEngine{name: "duplicate"}
@@ -499,7 +684,7 @@ func TestManager_RegisterMultipleEnginesWithSameName(t *testing.T) {
 }
 
 func TestManager_RegisterMultipleFormattersWithSameName(t *testing.T) {
-	manager := NewManager(nil)
+	manager := NewManager(nil, false)
 
 	formatter1 := &MockFormatter{name: "duplicate"}
 	formatter2 := &MockFormatter{name: "duplicate"}

@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 
 	"github.com/hashicorp/hcl/v2"
@@ -34,6 +35,7 @@ type Config struct {
 	Plugins         []string              // List of plugins to enable
 	Rules           map[string]RuleConfig // Rule-specific configuration
 	Options         map[string]any        // Additional options
+	Args            []string              // Extra arguments to pass to TFLint
 	UseTFLint       bool                  // Enable TFLint integration
 	TFLintPath      string                // Custom path to TFLint binary
 	TFLintConfig    string                // Path to TFLint config file
@@ -100,12 +102,11 @@ func (e *Engine) Run(ctx context.Context, files []string) ([]sdk.Finding, error)
 
 	// Use TFLint integration if enabled and available
 	if e.config.UseTFLint {
-		if e.IsTFLintAvailable() {
+		if err := e.validateTFLintPath(); err == nil {
 			return e.RunWithTFLint(ctx, files)
-		}
-		// If TFLint requested but not available, fallback to built-in if enabled
-		if !e.config.FallbackBuiltin {
-			return nil, fmt.Errorf("TFLint integration enabled but tflint not found in PATH")
+		} else if !e.config.FallbackBuiltin {
+			// If TFLint requested but not available, return the validation error
+			return nil, fmt.Errorf("TFLint integration enabled but %w", err)
 		}
 		// Fall through to built-in rules
 	}
@@ -1016,9 +1017,45 @@ type TFLintError struct {
 
 // IsTFLintAvailable checks if TFLint is available on the system
 func (e *Engine) IsTFLintAvailable() bool {
+	return e.validateTFLintPath() == nil
+}
+
+// validateTFLintPath checks if TFLintPath exists and is executable.
+// Returns nil if valid, or an error with a clear message if invalid.
+func (e *Engine) validateTFLintPath() error {
 	path := e.getTFLintPath()
-	_, err := exec.LookPath(path)
-	return err == nil
+
+	// If no custom path, use exec.LookPath to find in PATH
+	if e.config.TFLintPath == "" {
+		_, err := exec.LookPath(path)
+		if err != nil {
+			return fmt.Errorf("tflint not found in PATH")
+		}
+		return nil
+	}
+
+	// Custom path specified - check existence and permissions
+	info, err := os.Stat(path)
+	if os.IsNotExist(err) {
+		return fmt.Errorf("TFLintPath %q not found", path)
+	}
+	if err != nil {
+		return fmt.Errorf("TFLintPath %q: %w", path, err)
+	}
+
+	// Check it's not a directory
+	if info.IsDir() {
+		return fmt.Errorf("TFLintPath %q is a directory, not an executable", path)
+	}
+
+	// Check executable permission (Unix only - Windows doesn't use permission bits)
+	// On Windows, files are considered executable based on extension (.exe, .bat, etc.)
+	// which exec.Command handles automatically
+	if runtime.GOOS != "windows" && info.Mode()&0o111 == 0 {
+		return fmt.Errorf("TFLintPath %q is not executable", path)
+	}
+
+	return nil
 }
 
 // getTFLintPath returns the path to the TFLint binary
@@ -1050,6 +1087,11 @@ func (e *Engine) RunTFLint(ctx context.Context, dir string) ([]sdk.Finding, erro
 		if _, err := os.Stat(configPath); err == nil {
 			args = append(args, "--config="+configPath)
 		}
+	}
+
+	// Add extra args from config
+	if len(e.config.Args) > 0 {
+		args = append(args, e.config.Args...)
 	}
 
 	// Create command

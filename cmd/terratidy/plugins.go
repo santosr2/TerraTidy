@@ -42,7 +42,7 @@ var pluginsListCmd = &cobra.Command{
 			return nil
 		}
 
-		manager := plugins.NewManager(cfg.Plugins.Directories)
+		manager := plugins.NewManager(cfg.Plugins.Directories, cfg.Plugins.ShouldVerifyIntegrity())
 		if err := manager.LoadAll(); err != nil {
 			return fmt.Errorf("loading plugins: %w", err)
 		}
@@ -86,7 +86,7 @@ var pluginsInfoCmd = &cobra.Command{
 			return fmt.Errorf("loading config: %w", err)
 		}
 
-		manager := plugins.NewManager(cfg.Plugins.Directories)
+		manager := plugins.NewManager(cfg.Plugins.Directories, cfg.Plugins.ShouldVerifyIntegrity())
 		if err := manager.LoadAll(); err != nil {
 			return fmt.Errorf("loading plugins: %w", err)
 		}

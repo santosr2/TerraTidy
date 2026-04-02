@@ -15,8 +15,12 @@
 package plugins
 
 import (
+	"bufio"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"path/filepath"
 	"plugin"
@@ -25,6 +29,9 @@ import (
 
 	"github.com/santosr2/TerraTidy/pkg/sdk"
 )
+
+// ManifestFileName is the name of the checksum manifest file for plugin verification.
+const ManifestFileName = ".terratidy-plugins.sha256"
 
 // PluginType represents the type of plugin
 type PluginType string
@@ -73,23 +80,124 @@ type FormatterPlugin interface {
 
 // Manager manages plugin loading and registration
 type Manager struct {
-	plugins     map[string]*Plugin
-	rules       map[string]sdk.Rule
-	engines     map[string]EnginePlugin
-	formatters  map[string]FormatterPlugin
-	mu          sync.RWMutex
-	directories []string
+	plugins         map[string]*Plugin
+	rules           map[string]sdk.Rule
+	engines         map[string]EnginePlugin
+	formatters      map[string]FormatterPlugin
+	mu              sync.RWMutex
+	directories     []string
+	verifyIntegrity bool
+	logger          *log.Logger
 }
 
-// NewManager creates a new plugin manager
-func NewManager(directories []string) *Manager {
+// NewManager creates a new plugin manager.
+// If verifyIntegrity is true, plugins will be checked against SHA256 manifests.
+func NewManager(directories []string, verifyIntegrity bool) *Manager {
 	return &Manager{
-		plugins:     make(map[string]*Plugin),
-		rules:       make(map[string]sdk.Rule),
-		engines:     make(map[string]EnginePlugin),
-		formatters:  make(map[string]FormatterPlugin),
-		directories: directories,
+		plugins:         make(map[string]*Plugin),
+		rules:           make(map[string]sdk.Rule),
+		engines:         make(map[string]EnginePlugin),
+		formatters:      make(map[string]FormatterPlugin),
+		directories:     directories,
+		verifyIntegrity: verifyIntegrity,
+		logger:          log.New(os.Stderr, "terratidy-plugins: ", log.LstdFlags),
 	}
+}
+
+// SetLogger sets a custom logger for the plugin manager.
+func (m *Manager) SetLogger(logger *log.Logger) {
+	m.logger = logger
+}
+
+// loadManifest loads SHA256 checksums from a manifest file.
+// The manifest format is: <sha256hex>  <filename> (like sha256sum output).
+// Returns a map of filename -> expected SHA256 hash.
+func loadManifest(manifestPath string) (map[string]string, error) {
+	file, err := os.Open(manifestPath)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close() //nolint:errcheck // read-only operation
+
+	checksums := make(map[string]string)
+	scanner := bufio.NewScanner(file)
+	lineNum := 0
+
+	for scanner.Scan() {
+		lineNum++
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue // Skip empty lines and comments
+		}
+
+		// Format: <hash>  <filename> (two spaces between hash and filename)
+		// Also accept single space for compatibility
+		parts := strings.Fields(line)
+		if len(parts) < 2 {
+			return nil, fmt.Errorf("invalid manifest line %d: expected '<hash>  <filename>'", lineNum)
+		}
+
+		hash := strings.ToLower(parts[0])
+		filename := parts[len(parts)-1] // Last field is filename
+
+		// Validate hash format (64 hex chars for SHA256)
+		if len(hash) != 64 {
+			return nil, fmt.Errorf("invalid hash on line %d: expected 64 hex chars, got %d", lineNum, len(hash))
+		}
+		if _, err := hex.DecodeString(hash); err != nil {
+			return nil, fmt.Errorf("invalid hex hash on line %d: %w", lineNum, err)
+		}
+
+		checksums[filename] = hash
+	}
+
+	if err := scanner.Err(); err != nil {
+		return nil, fmt.Errorf("reading manifest: %w", err)
+	}
+
+	return checksums, nil
+}
+
+// computeFileHash computes the SHA256 hash of a file.
+func computeFileHash(path string) (string, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer file.Close() //nolint:errcheck // read-only operation
+
+	hasher := sha256.New()
+	if _, err := io.Copy(hasher, file); err != nil {
+		return "", err
+	}
+
+	return hex.EncodeToString(hasher.Sum(nil)), nil
+}
+
+// verifyPluginChecksum verifies a plugin file against the manifest.
+// Returns nil if verification passes or is skipped.
+// Returns an error if verification fails (checksum mismatch).
+// Logs a warning if manifest is missing (warn-only mode for first release).
+func (m *Manager) verifyPluginChecksum(pluginPath string, checksums map[string]string) error {
+	filename := filepath.Base(pluginPath)
+
+	expectedHash, found := checksums[filename]
+	if !found {
+		// Plugin not in manifest - warn but allow (for gradual adoption)
+		m.logger.Printf("[WARN] plugin %q not found in manifest, skipping verification", filename)
+		return nil
+	}
+
+	actualHash, err := computeFileHash(pluginPath)
+	if err != nil {
+		return fmt.Errorf("computing hash for %s: %w", filename, err)
+	}
+
+	if actualHash != expectedHash {
+		return fmt.Errorf("checksum mismatch for %s: expected %s, got %s", filename, expectedHash, actualHash)
+	}
+
+	return nil
 }
 
 // LoadAll loads all plugins from the configured directories
@@ -125,6 +233,22 @@ func (m *Manager) loadFromDirectory(dir string) error {
 		return fmt.Errorf("%s is not a directory", dir)
 	}
 
+	// Load checksum manifest if verification is enabled
+	var checksums map[string]string
+	if m.verifyIntegrity {
+		manifestPath := filepath.Join(dir, ManifestFileName)
+		var manifestErr error
+		checksums, manifestErr = loadManifest(manifestPath)
+		if manifestErr != nil {
+			if os.IsNotExist(manifestErr) {
+				// Manifest doesn't exist - warn but continue (warn-only mode)
+				m.logger.Printf("[WARN] no manifest file %s found in %s, plugin verification skipped", ManifestFileName, dir)
+			} else {
+				return fmt.Errorf("loading manifest from %s: %w", dir, manifestErr)
+			}
+		}
+	}
+
 	// Find plugin files
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -141,7 +265,7 @@ func (m *Manager) loadFromDirectory(dir string) error {
 
 		switch {
 		case strings.HasSuffix(name, ".so"):
-			if err := m.loadGoPlugin(path); err != nil {
+			if err := m.loadGoPlugin(path, checksums); err != nil {
 				return fmt.Errorf("loading Go plugin %s: %w", name, err)
 			}
 		case strings.HasSuffix(name, ".yaml") || strings.HasSuffix(name, ".yml"):
@@ -161,7 +285,7 @@ func (m *Manager) loadFromDirectory(dir string) error {
 			}
 			m.mu.Unlock()
 		case strings.HasSuffix(name, ".sh"):
-			if err := m.loadAndRegisterBashRule(path, name); err != nil {
+			if err := m.loadAndRegisterBashRule(path, name, checksums); err != nil {
 				return err
 			}
 		}
@@ -170,8 +294,18 @@ func (m *Manager) loadFromDirectory(dir string) error {
 	return nil
 }
 
-// loadGoPlugin loads a Go plugin from a .so file
-func (m *Manager) loadGoPlugin(path string) error {
+// loadGoPlugin loads a Go plugin from a .so file.
+// If checksums is non-nil and verification is enabled, the plugin is verified first.
+func (m *Manager) loadGoPlugin(path string, checksums map[string]string) error {
+	// Verify plugin integrity before loading (if enabled and manifest exists)
+	if m.verifyIntegrity && checksums != nil {
+		if err := m.verifyPluginChecksum(path, checksums); err != nil {
+			// In warn-only mode (first release), log warning but continue
+			// TODO: In future release, return error here to enforce verification
+			m.logger.Printf("[WARN] plugin verification failed for %s: %v (loading anyway - warn-only mode)", filepath.Base(path), err)
+		}
+	}
+
 	// Open the plugin
 	p, err := plugin.Open(path)
 	if err != nil {

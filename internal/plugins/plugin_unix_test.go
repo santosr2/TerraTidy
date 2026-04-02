@@ -26,7 +26,7 @@ func TestManager_LoadFromDirectory_PermissionIssues(t *testing.T) {
 		_ = os.Chmod(restrictedDir, 0o755)
 	})
 
-	manager := NewManager([]string{restrictedDir})
+	manager := NewManager([]string{restrictedDir}, false)
 	err = manager.LoadAll()
 	// Should return permission error
 	assert.Error(t, err)

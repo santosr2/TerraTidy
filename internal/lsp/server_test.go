@@ -1624,3 +1624,163 @@ func TestMeetsThreshold(t *testing.T) {
 		})
 	}
 }
+
+func TestServer_ResourceLimits_DocumentSize(t *testing.T) {
+	out := &bytes.Buffer{}
+	server := NewServer(strings.NewReader(""), out)
+	server.initialized = true
+
+	// Create content that exceeds maxDocumentSize
+	largeContent := strings.Repeat("x", maxDocumentSize+1)
+
+	// Try to open a document that's too large
+	params := DidOpenTextDocumentParams{
+		TextDocument: TextDocumentItem{
+			URI:        "file:///test.tf",
+			LanguageID: "terraform",
+			Version:    1,
+			Text:       largeContent,
+		},
+	}
+	paramsJSON, _ := json.Marshal(params)
+	msg := RequestMessage{
+		JSONRPC: "2.0",
+		Method:  "textDocument/didOpen",
+		Params:  paramsJSON,
+	}
+
+	err := server.handleDidOpen(msg)
+	require.NoError(t, err) // Should not error, just ignore
+
+	// Document should NOT be added
+	server.docMu.RLock()
+	_, exists := server.documents["file:///test.tf"]
+	server.docMu.RUnlock()
+	assert.False(t, exists, "oversized document should not be added")
+}
+
+func TestServer_ResourceLimits_DocumentCount(t *testing.T) {
+	out := &bytes.Buffer{}
+	server := NewServer(strings.NewReader(""), out)
+	server.initialized = true
+
+	// Fill up the document map to the limit
+	server.docMu.Lock()
+	for i := range maxDocuments {
+		uri := "file:///doc" + strings.Repeat("0", 4) + string(rune('a'+i/26/26%26)) + string(rune('a'+i/26%26)) + string(rune('a'+i%26)) + ".tf"
+		server.documents[uri] = &Document{URI: uri, Content: ""}
+	}
+	docCount := len(server.documents)
+	server.docMu.Unlock()
+
+	require.Equal(t, maxDocuments, docCount, "should have exactly maxDocuments")
+
+	// Try to open one more document
+	params := DidOpenTextDocumentParams{
+		TextDocument: TextDocumentItem{
+			URI:        "file:///overflow.tf",
+			LanguageID: "terraform",
+			Version:    1,
+			Text:       "resource \"test\" \"x\" {}",
+		},
+	}
+	paramsJSON, _ := json.Marshal(params)
+	msg := RequestMessage{
+		JSONRPC: "2.0",
+		Method:  "textDocument/didOpen",
+		Params:  paramsJSON,
+	}
+
+	err := server.handleDidOpen(msg)
+	require.NoError(t, err) // Should not error, just ignore
+
+	// New document should NOT be added
+	server.docMu.RLock()
+	_, exists := server.documents["file:///overflow.tf"]
+	server.docMu.RUnlock()
+	assert.False(t, exists, "document should not be added when at limit")
+}
+
+func TestServer_ResourceLimits_ChangeSize(t *testing.T) {
+	out := &bytes.Buffer{}
+	server := NewServer(strings.NewReader(""), out)
+	server.initialized = true
+
+	// First open a normal document
+	server.docMu.Lock()
+	server.documents["file:///test.tf"] = &Document{
+		URI:     "file:///test.tf",
+		Content: "small content",
+		Version: 1,
+	}
+	server.docMu.Unlock()
+
+	// Try to change it to something too large
+	largeContent := strings.Repeat("x", maxDocumentSize+1)
+	params := DidChangeTextDocumentParams{
+		TextDocument: VersionedTextDocumentIdentifier{
+			URI:     "file:///test.tf",
+			Version: 2,
+		},
+		ContentChanges: []TextDocumentContentChangeEvent{
+			{Text: largeContent},
+		},
+	}
+	paramsJSON, _ := json.Marshal(params)
+	msg := RequestMessage{
+		JSONRPC: "2.0",
+		Method:  "textDocument/didChange",
+		Params:  paramsJSON,
+	}
+
+	err := server.handleDidChange(msg)
+	require.NoError(t, err) // Should not error, just ignore
+
+	// Document content should NOT be changed
+	server.docMu.RLock()
+	doc := server.documents["file:///test.tf"]
+	server.docMu.RUnlock()
+	assert.Equal(t, "small content", doc.Content, "content should not be updated with oversized change")
+}
+
+func TestServer_ResourceLimits_SemaphoreInitialized(t *testing.T) {
+	out := &bytes.Buffer{}
+	server := NewServer(strings.NewReader(""), out)
+
+	// Verify semaphore is initialized with correct capacity
+	assert.NotNil(t, server.diagSem)
+	assert.Equal(t, maxConcurrentDiagnostics, cap(server.diagSem))
+}
+
+func TestServer_ResourceLimits_SemaphoreUsedInDiagnostics(t *testing.T) {
+	tmpDir := t.TempDir()
+	testFile := filepath.Join(tmpDir, "test.tf")
+	require.NoError(t, os.WriteFile(testFile, []byte(`resource "test" "x" {}`), 0o644))
+
+	out := &bytes.Buffer{}
+	server := NewServer(strings.NewReader(""), out)
+	server.initialized = true
+	server.workspaceRoot = tmpDir
+
+	// Add a document
+	uri := pathToFileURI(testFile)
+	server.docMu.Lock()
+	server.documents[uri] = &Document{
+		URI:     uri,
+		Content: `resource "test" "x" {}`,
+		Version: 1,
+	}
+	server.docMu.Unlock()
+
+	// Verify semaphore is empty before
+	assert.Equal(t, 0, len(server.diagSem))
+
+	// Call getDiagnostics - this exercises the semaphore acquire/release
+	diagnostics := server.getDiagnostics(uri)
+
+	// Semaphore should be released after getDiagnostics returns
+	assert.Equal(t, 0, len(server.diagSem))
+
+	// Should return diagnostics (may be empty if no engines configured)
+	assert.NotNil(t, diagnostics)
+}

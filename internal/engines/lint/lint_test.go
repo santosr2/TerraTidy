@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -683,6 +684,10 @@ func TestEngine_ValidateTFLintPath(t *testing.T) {
 	})
 
 	t.Run("custom path not executable", func(t *testing.T) {
+		if runtime.GOOS == "windows" {
+			t.Skip("executable permission check not applicable on Windows")
+		}
+
 		tmpDir := t.TempDir()
 		fakeBinary := filepath.Join(tmpDir, "tflint")
 		require.NoError(t, os.WriteFile(fakeBinary, []byte("#!/bin/sh\necho test"), 0o644))

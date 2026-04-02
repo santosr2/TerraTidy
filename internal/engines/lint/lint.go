@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 
 	"github.com/hashicorp/hcl/v2"
@@ -1047,9 +1048,10 @@ func (e *Engine) validateTFLintPath() error {
 		return fmt.Errorf("TFLintPath %q is a directory, not an executable", path)
 	}
 
-	// Check executable permission (owner execute bit on Unix)
-	// On Windows, this check is less meaningful but won't cause false negatives
-	if info.Mode()&0o111 == 0 {
+	// Check executable permission (Unix only - Windows doesn't use permission bits)
+	// On Windows, files are considered executable based on extension (.exe, .bat, etc.)
+	// which exec.Command handles automatically
+	if runtime.GOOS != "windows" && info.Mode()&0o111 == 0 {
 		return fmt.Errorf("TFLintPath %q is not executable", path)
 	}
 

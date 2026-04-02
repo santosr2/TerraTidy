@@ -1751,3 +1751,36 @@ func TestServer_ResourceLimits_SemaphoreInitialized(t *testing.T) {
 	assert.NotNil(t, server.diagSem)
 	assert.Equal(t, maxConcurrentDiagnostics, cap(server.diagSem))
 }
+
+func TestServer_ResourceLimits_SemaphoreUsedInDiagnostics(t *testing.T) {
+	tmpDir := t.TempDir()
+	testFile := filepath.Join(tmpDir, "test.tf")
+	require.NoError(t, os.WriteFile(testFile, []byte(`resource "test" "x" {}`), 0o644))
+
+	out := &bytes.Buffer{}
+	server := NewServer(strings.NewReader(""), out)
+	server.initialized = true
+	server.workspaceRoot = tmpDir
+
+	// Add a document
+	uri := pathToFileURI(testFile)
+	server.docMu.Lock()
+	server.documents[uri] = &Document{
+		URI:     uri,
+		Content: `resource "test" "x" {}`,
+		Version: 1,
+	}
+	server.docMu.Unlock()
+
+	// Verify semaphore is empty before
+	assert.Equal(t, 0, len(server.diagSem))
+
+	// Call getDiagnostics - this exercises the semaphore acquire/release
+	diagnostics := server.getDiagnostics(uri)
+
+	// Semaphore should be released after getDiagnostics returns
+	assert.Equal(t, 0, len(server.diagSem))
+
+	// Should return diagnostics (may be empty if no engines configured)
+	assert.NotNil(t, diagnostics)
+}

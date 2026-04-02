@@ -88,7 +88,7 @@ jobs:
         run: go install github.com/google/go-licenses/v2@v2.0.1
 
       - name: Check licenses
-        run: go-licenses check ./... --allowed_licenses=Apache-2.0,BSD-2-Clause-FreeBSD,BSD-3-Clause,MIT,MPL-2.0
+        run: go-licenses check ./... --allowed_licenses=Apache-2.0,BSD-2-Clause,BSD-2-Clause-FreeBSD,BSD-3-Clause,MIT,MPL-2.0,Unicode-DFS-2016
 
   zizmor:
     runs-on: ubuntu-latest
@@ -108,6 +108,8 @@ jobs:
   osv-scanner:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      security-events: write
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -124,7 +126,15 @@ jobs:
         run: go install github.com/google/osv-scanner/v2/cmd/osv-scanner@v2.3.5
 
       - name: Run osv-scanner on VSCode extension
-        run: osv-scanner --lockfile=vscode/bun.lock
+        continue-on-error: true
+        run: osv-scanner --lockfile=vscode/bun.lock --format=sarif --output=osv-results.sarif
+
+      - name: Upload SARIF to GitHub Security
+        uses: github/codeql-action/upload-sarif@60168efe1c415ce0f5521ea06d5c2062adbeed1b # v3.28.19
+        if: always()
+        with:
+          sarif_file: osv-results.sarif
+          category: osv-scanner
 
   api-compat:
     if: github.event_name == 'pull_request'

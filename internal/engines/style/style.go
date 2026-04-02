@@ -153,6 +153,13 @@ func (e *Engine) checkFile(parser *hclparse.Parser, path string) ([]sdk.Finding,
 				return nil, fmt.Errorf("rule %s: %w", rule.Name(), err)
 			}
 
+			// Apply severity override from config if specified
+			if ruleConfig.Severity != "" {
+				for i := range ruleFindings {
+					ruleFindings[i].Severity = sdk.ParseSeverity(ruleConfig.Severity, ruleFindings[i].Severity)
+				}
+			}
+
 			findings = append(findings, ruleFindings...)
 		}
 

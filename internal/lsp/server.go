@@ -276,9 +276,13 @@ func (s *Server) handleInitialize(msg RequestMessage) error {
 	if s.initOptions != nil && s.initOptions.ConfigPath != "" {
 		configPath = s.initOptions.ConfigPath
 	}
+	s.logDebug("Loading config from: %s", configPath)
 	cfg, err := config.Load(configPath)
 	if err != nil {
+		s.logDebug("Config load error (using defaults): %v", err)
 		cfg = config.DefaultConfig()
+	} else {
+		s.logDebug("Config loaded: severity_threshold=%s", cfg.SeverityThreshold)
 	}
 
 	// Apply profile from client options
@@ -289,8 +293,9 @@ func (s *Server) handleInitialize(msg RequestMessage) error {
 		}
 	}
 
-	// Apply severity threshold from client options
+	// Apply severity threshold from client options (overrides config file)
 	if s.initOptions != nil && s.initOptions.SeverityThreshold != "" {
+		s.logDebug("Overriding config severity_threshold with client setting: %s", s.initOptions.SeverityThreshold)
 		cfg.SeverityThreshold = s.initOptions.SeverityThreshold
 	}
 
@@ -617,9 +622,18 @@ func (s *Server) getDiagnostics(uri string) []Diagnostic {
 		}
 	}
 
-	// Convert findings to diagnostics
-	diagnostics := make([]Diagnostic, 0, len(findings))
+	// Filter findings by severity threshold
+	threshold := s.getSeverityThreshold()
+	filteredFindings := make([]sdk.Finding, 0, len(findings))
 	for _, f := range findings {
+		if meetsThreshold(f.Severity, threshold) {
+			filteredFindings = append(filteredFindings, f)
+		}
+	}
+
+	// Convert findings to diagnostics
+	diagnostics := make([]Diagnostic, 0, len(filteredFindings))
+	for _, f := range filteredFindings {
 		diag := Diagnostic{
 			Range: Range{
 				Start: Position{
@@ -695,6 +709,25 @@ func severityToLSP(severity sdk.Severity) int {
 	default:
 		return 4 // Hint
 	}
+}
+
+// getSeverityThreshold returns the configured severity threshold
+func (s *Server) getSeverityThreshold() sdk.Severity {
+	if s.config != nil && s.config.SeverityThreshold != "" {
+		return sdk.ParseSeverity(s.config.SeverityThreshold, sdk.SeverityInfo)
+	}
+	return sdk.SeverityInfo // Default: show all
+}
+
+// meetsThreshold returns true if the finding severity meets or exceeds the threshold
+func meetsThreshold(severity, threshold sdk.Severity) bool {
+	// Severity order: error > warning > info
+	severityRank := map[sdk.Severity]int{
+		sdk.SeverityError:   3,
+		sdk.SeverityWarning: 2,
+		sdk.SeverityInfo:    1,
+	}
+	return severityRank[severity] >= severityRank[threshold]
 }
 
 // buildStyleConfig creates a style.Config from the server's config

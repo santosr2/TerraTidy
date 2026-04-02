@@ -1127,3 +1127,54 @@ func TestServer_BuildStyleConfig_WithOverrides(t *testing.T) {
 	assert.False(t, rule2.Enabled)
 	assert.Equal(t, "info", rule2.Severity)
 }
+
+func TestServer_GetSeverityThreshold(t *testing.T) {
+	tests := []struct {
+		name      string
+		threshold string
+		expected  sdk.Severity
+	}{
+		{"default when nil config", "", sdk.SeverityInfo},
+		{"error threshold", "error", sdk.SeverityError},
+		{"warning threshold", "warning", sdk.SeverityWarning},
+		{"info threshold", "info", sdk.SeverityInfo},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := NewServer(strings.NewReader(""), &bytes.Buffer{})
+			if tt.threshold != "" {
+				server.config = &config.Config{SeverityThreshold: tt.threshold}
+			}
+			assert.Equal(t, tt.expected, server.getSeverityThreshold())
+		})
+	}
+}
+
+func TestMeetsThreshold(t *testing.T) {
+	tests := []struct {
+		severity  sdk.Severity
+		threshold sdk.Severity
+		expected  bool
+	}{
+		// Error threshold: only errors pass
+		{sdk.SeverityError, sdk.SeverityError, true},
+		{sdk.SeverityWarning, sdk.SeverityError, false},
+		{sdk.SeverityInfo, sdk.SeverityError, false},
+		// Warning threshold: errors and warnings pass
+		{sdk.SeverityError, sdk.SeverityWarning, true},
+		{sdk.SeverityWarning, sdk.SeverityWarning, true},
+		{sdk.SeverityInfo, sdk.SeverityWarning, false},
+		// Info threshold: all pass
+		{sdk.SeverityError, sdk.SeverityInfo, true},
+		{sdk.SeverityWarning, sdk.SeverityInfo, true},
+		{sdk.SeverityInfo, sdk.SeverityInfo, true},
+	}
+
+	for _, tt := range tests {
+		name := string(tt.severity) + "_with_" + string(tt.threshold) + "_threshold"
+		t.Run(name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, meetsThreshold(tt.severity, tt.threshold))
+		})
+	}
+}

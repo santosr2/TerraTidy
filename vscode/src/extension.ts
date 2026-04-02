@@ -153,11 +153,20 @@ export function getInitializationOptions(): Record<string, unknown> {
         policy: config.get<boolean>('engines.policy', false),
     };
 
+    // Only send severityThreshold if explicitly set by user (not default)
+    // This allows .terratidy.yaml to control the threshold
+    const thresholdInspect = config.inspect<string>('severityThreshold');
+    const severityThreshold =
+        thresholdInspect?.workspaceValue ??
+        thresholdInspect?.globalValue ??
+        thresholdInspect?.workspaceFolderValue ??
+        undefined;
+
     return {
         profile: config.get<string>('profile') || undefined,
         configPath: config.get<string>('configPath') || undefined,
         engines: engines,
-        severityThreshold: config.get<string>('severityThreshold', 'warning'),
+        severityThreshold: severityThreshold,
         formatOnSave: config.get<boolean>('formatOnSave', false),
         runOnSave: config.get<boolean>('runOnSave', false),
         fixOnSave: config.get<boolean>('fixOnSave', false),

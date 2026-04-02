@@ -16,42 +16,45 @@ engines:
 
   lint:
     enabled: true
-    config_file: .tflint.hcl
-
-    # Enable specific plugins (optional)
-    plugins:
-      - aws
-      # - google
-      # - azurerm
-
-    # Rule configuration
-    rules:
-      # Terraform core rules
-      terraform_required_version:
-        enabled: true
-        severity: error
-
-      terraform_deprecated_syntax:
-        enabled: true
-        severity: warning
-
-      terraform_unused_declarations:
-        enabled: true
-        severity: warning
-
-      terraform_documented_variables:
-        enabled: true
-        severity: warning
-
-      # AWS-specific rules (requires aws plugin)
-      # aws_instance_invalid_type:
-      #   enabled: true
-      #   severity: error
+    config:
+      config_file: .tflint.hcl
+      # Enable specific plugins (optional)
+      plugins:
+        - aws
+        # - google
+        # - azurerm
+      # Extra arguments to pass to TFLint (new in v0.2.0)
+      # args:
+      #   - --minimum-tf-version=1.0.0
 
   policy:
     enabled: false
 
+# Rule overrides (applies to style and lint engines)
+overrides:
+  rules:
+    # Terraform core rules
+    terraform-required-version:
+      enabled: true
+      severity: error
+
+    terraform-deprecated-syntax:
+      enabled: true
+      severity: warning
+
+    terraform-unused-declarations:
+      enabled: true
+      severity: warning
+
+    terraform-documented-variables:
+      enabled: true
+      severity: warning
+
+    # AWS-specific rules (requires aws plugin)
+    # aws_instance_invalid_type:
+    #   enabled: true
+    #   severity: error
+
 # Global settings
 severity_threshold: warning
 fail_fast: false
-output: text

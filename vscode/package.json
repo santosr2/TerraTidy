@@ -42,7 +42,10 @@
 		"workspaceContains:**/*.tf",
 		"workspaceContains:**/*.tfvars",
 		"workspaceContains:**/*.hcl",
-		"workspaceContains:.terratidy.yaml"
+		"workspaceContains:.terratidy.yaml",
+		"workspaceContains:.terratidy.yml",
+		"workspaceContains:terratidy.yaml",
+		"workspaceContains:terratidy.yml"
 	],
 	"extensionKind": [
 		"workspace"

@@ -298,6 +298,14 @@ func buildStyleConfig(cfg *config.Config, fix bool, diff ...bool) *style.Config 
 		return styleCfg
 	}
 
+	// Extract fix from config if CLI flag is not set
+	// CLI flag takes precedence over config
+	if !styleCfg.Fix {
+		if fixVal, ok := engineCfg["fix"].(bool); ok {
+			styleCfg.Fix = fixVal
+		}
+	}
+
 	// Extract rules config if present
 	if rulesRaw, ok := engineCfg["rules"]; ok {
 		if rulesMap, ok := rulesRaw.(map[string]any); ok {
@@ -357,6 +365,15 @@ func buildLintConfig(cfg *config.Config) *lint.Config {
 		for _, p := range plugins {
 			if ps, ok := p.(string); ok {
 				lintCfg.Plugins = append(lintCfg.Plugins, ps)
+			}
+		}
+	}
+
+	// Extract extra args to pass to TFLint
+	if args, ok := engineCfg["args"].([]any); ok {
+		for _, a := range args {
+			if as, ok := a.(string); ok {
+				lintCfg.Args = append(lintCfg.Args, as)
 			}
 		}
 	}

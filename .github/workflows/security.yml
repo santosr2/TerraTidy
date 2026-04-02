@@ -7,6 +7,8 @@ on:
       - '**/*.go'
       - 'go.mod'
       - 'go.sum'
+      - 'vscode/package.json'
+      - 'vscode/bun.lock'
       - '.github/workflows/**'
       - 'action.yml'
   pull_request:
@@ -15,6 +17,8 @@ on:
       - '**/*.go'
       - 'go.mod'
       - 'go.sum'
+      - 'vscode/package.json'
+      - 'vscode/bun.lock'
       - '.github/workflows/**'
       - 'action.yml'
 
@@ -81,7 +85,7 @@ jobs:
           go-version: '1.26.1'
 
       - name: Install go-licenses
-        run: go install github.com/google/go-licenses@latest
+        run: go install github.com/google/go-licenses@v2.0.1
 
       - name: Check licenses
         run: go-licenses check ./... --allowed_licenses=Apache-2.0,BSD-2-Clause-FreeBSD,BSD-3-Clause,MIT,MPL-2.0
@@ -100,6 +104,21 @@ jobs:
 
       - name: Run zizmor
         uses: zizmorcore/zizmor-action@71321a20a9ded102f6e9ce5718a2fcec2c4f70d8 # v0.5.2
+
+  osv-scanner:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Run osv-scanner on VSCode extension
+        uses: google/osv-scanner-action@c51854704019a247608d928f370c98740469d4b5 # v2.3.5
+        with:
+          scan-args: |-
+            --lockfile=vscode/bun.lock
 
   api-compat:
     if: github.event_name == 'pull_request'
@@ -128,7 +147,7 @@ jobs:
 
       - name: Install gorelease
         if: steps.filter.outputs.sdk == 'true'
-        run: go install golang.org/x/exp/cmd/gorelease@latest
+        run: go install golang.org/x/exp/cmd/gorelease@v0.0.0-20260312153236-7ab1446f8b90
 
       - name: Run API compatibility check
         if: steps.filter.outputs.sdk == 'true'

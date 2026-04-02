@@ -1855,6 +1855,27 @@ func TestGetSessionTempBaseDir(t *testing.T) {
 	assert.Contains(t, baseDir, "terratidy")
 }
 
+func TestGetSessionTempBaseDir_XDGCacheHome(t *testing.T) {
+	// Save and restore env var
+	orig := os.Getenv("XDG_CACHE_HOME")
+	defer func() {
+		if orig == "" {
+			os.Unsetenv("XDG_CACHE_HOME")
+		} else {
+			os.Setenv("XDG_CACHE_HOME", orig)
+		}
+	}()
+
+	// Set XDG_CACHE_HOME
+	testDir := t.TempDir()
+	os.Setenv("XDG_CACHE_HOME", testDir)
+
+	baseDir := getSessionTempBaseDir()
+	assert.True(t, strings.HasPrefix(baseDir, testDir))
+	assert.Contains(t, baseDir, "terratidy")
+	assert.Contains(t, baseDir, "lsp-tmp")
+}
+
 func TestServer_CleanupOldSessions(t *testing.T) {
 	// Create a temp base directory
 	baseDir := t.TempDir()
@@ -1872,4 +1893,29 @@ func TestServer_CleanupOldSessions(t *testing.T) {
 
 	// Function should complete without error
 	// (actual cleanup would require manipulating mtimes)
+}
+
+func TestServer_CleanupOldSessions_SkipsFiles(t *testing.T) {
+	baseDir := t.TempDir()
+
+	out := &bytes.Buffer{}
+	server := NewServer(strings.NewReader(""), out)
+
+	// Create a file (not a directory) in the base directory
+	testFile := filepath.Join(baseDir, "not-a-directory.txt")
+	require.NoError(t, os.WriteFile(testFile, []byte("test"), 0o644))
+
+	// Should not crash when encountering files
+	server.cleanupOldSessions(baseDir)
+
+	// File should still exist (not deleted)
+	assert.FileExists(t, testFile)
+}
+
+func TestServer_CleanupOldSessions_NonexistentDir(t *testing.T) {
+	out := &bytes.Buffer{}
+	server := NewServer(strings.NewReader(""), out)
+
+	// Should not crash when directory doesn't exist
+	server.cleanupOldSessions("/nonexistent/path/that/does/not/exist")
 }

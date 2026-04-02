@@ -1,0 +1,85 @@
+name: VSCode Extension
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'vscode/**'
+      - 'internal/lsp/**'
+      - '.github/workflows/vscode.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'vscode/**'
+      - 'internal/lsp/**'
+      - '.github/workflows/vscode.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-vscode-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+        with:
+          go-version: '1.26.x'
+
+      - name: Build TerraTidy binary
+        run: |
+          go build -o bin/terratidy ./cmd/terratidy
+          echo "${{ github.workspace }}/bin" >> $GITHUB_PATH
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@735343b667d3e6f658f44d0eca948eb6282f2b76 # v2.0.2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        working-directory: vscode
+        run: bun install --frozen-lockfile
+
+      - name: Lint
+        working-directory: vscode
+        run: bun run lint
+
+      - name: Compile
+        working-directory: vscode
+        run: bun run compile
+
+      - name: Run tests (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        working-directory: vscode
+        run: xvfb-run -a bun run test
+
+      - name: Run tests (macOS)
+        if: matrix.os == 'macos-latest'
+        working-directory: vscode
+        run: bun run test
+
+      - name: Package extension
+        working-directory: vscode
+        run: bun run package
+
+      - name: Upload VSIX
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: terratidy-vsix-${{ matrix.os }}
+          path: vscode/*.vsix
+          retention-days: 7

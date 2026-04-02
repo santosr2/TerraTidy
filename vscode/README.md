@@ -9,9 +9,27 @@ This extension brings TerraTidy's powerful formatting, style checking, linting, 
 - **Real-time Diagnostics**: See issues highlighted in your editor instantly
 - **Auto-formatting**: Format on save or on demand via standard VSCode format command
 - **Code Actions**: Quick fixes for common style and formatting issues
-- **Hover Documentation**: View rule documentation and configuration hints
 - **Workspace Configuration**: Dynamic configuration updates without restart
 - **Multi-engine Support**: Enable/disable fmt, style, lint, and policy engines independently
+
+## Screenshots
+
+<!-- TODO: Add screenshots showing diagnostics, formatting, and code actions -->
+
+## Installation
+
+Install from the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=santosr2.terratidy):
+
+1. Open VS Code
+2. Go to Extensions (`Ctrl+Shift+X` / `Cmd+Shift+X`)
+3. Search for "TerraTidy"
+4. Click Install
+
+Or install via command line:
+
+```bash
+code --install-extension santosr2.terratidy
+```
 
 ## Requirements
 

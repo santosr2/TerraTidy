@@ -19,7 +19,8 @@ import (
 var gitRefPattern = regexp.MustCompile(`^[a-zA-Z0-9._/@{}-]+$`)
 
 // absolutePathPattern matches Unix absolute paths for sanitization.
-var absolutePathPattern = regexp.MustCompile(`(^|\s)(/(?:[a-zA-Z0-9._-]+/)+[a-zA-Z0-9._-]+)`)
+// Matches paths after whitespace, quotes, or at start of string.
+var absolutePathPattern = regexp.MustCompile(`(^|[\s'"])(/(?:[a-zA-Z0-9._-]+/)+[a-zA-Z0-9._-]+)`)
 
 // maxGitErrorLen is the maximum length of git error messages.
 const maxGitErrorLen = 500

@@ -1,9 +1,11 @@
 package vcs
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -271,6 +273,41 @@ func TestGit_ToAbsolutePaths(t *testing.T) {
 	for _, p := range absPaths {
 		assert.True(t, filepath.IsAbs(p), "expected absolute path, got %s", p)
 	}
+}
+
+func TestSanitizeGitError(t *testing.T) {
+	t.Run("nil error", func(t *testing.T) {
+		result := sanitizeGitError(nil)
+		assert.Nil(t, result)
+	})
+
+	t.Run("simple error without path", func(t *testing.T) {
+		err := fmt.Errorf("git command failed")
+		result := sanitizeGitError(err)
+		assert.EqualError(t, result, "git command failed")
+	})
+
+	t.Run("error with absolute path", func(t *testing.T) {
+		err := fmt.Errorf("fatal: could not read '/home/user/secret/repo/.git/config'")
+		result := sanitizeGitError(err)
+		assert.Contains(t, result.Error(), "config")
+		assert.NotContains(t, result.Error(), "/home/user/secret")
+	})
+
+	t.Run("error with multiple paths", func(t *testing.T) {
+		err := fmt.Errorf("error: could not read '/etc/passwd' or '/home/user/.ssh/id_rsa'")
+		result := sanitizeGitError(err)
+		assert.NotContains(t, result.Error(), "/etc/")
+		assert.NotContains(t, result.Error(), "/home/user/")
+	})
+
+	t.Run("truncates long error", func(t *testing.T) {
+		longMsg := strings.Repeat("x", 600)
+		err := fmt.Errorf("error: %s", longMsg)
+		result := sanitizeGitError(err)
+		assert.LessOrEqual(t, len(result.Error()), 520) // 500 + "... (truncated)"
+		assert.Contains(t, result.Error(), "(truncated)")
+	})
 }
 
 func TestValidateGitRef(t *testing.T) {

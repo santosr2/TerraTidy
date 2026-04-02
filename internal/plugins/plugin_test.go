@@ -716,7 +716,9 @@ func TestRelativePath(t *testing.T) {
 
 	t.Run("absolute path outside cwd", func(t *testing.T) {
 		// Path outside cwd should still return a relative path (with ..)
-		absPath := "/tmp/outside/file.txt"
+		// Use filepath.Abs to get a platform-appropriate absolute path
+		absPath, err := filepath.Abs(filepath.Join(string(filepath.Separator), "tmp", "outside", "file.txt"))
+		require.NoError(t, err)
 		result := relativePath(absPath)
 		// Result should be relative (may have .. components)
 		assert.NotEqual(t, absPath, result)

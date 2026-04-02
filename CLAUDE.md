@@ -186,7 +186,7 @@ Thresholds: cyclomatic complexity 25, function length 120 lines / 60 statements.
 package main
 
 import (
-    "github.com/santosr2/terratidy/pkg/sdk"
+    "github.com/santosr2/TerraTidy/pkg/sdk"
     "github.com/hashicorp/hcl/v2"
 )
 

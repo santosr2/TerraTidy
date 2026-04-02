@@ -7,7 +7,6 @@ suite('Configuration', () => {
 
         assert.ok(typeof options === 'object', 'Should return an object');
         assert.ok('engines' in options, 'Should have engines');
-        assert.ok('severityThreshold' in options, 'Should have severityThreshold');
         assert.ok('formatOnSave' in options, 'Should have formatOnSave');
         assert.ok('runOnSave' in options, 'Should have runOnSave');
         assert.ok('fixOnSave' in options, 'Should have fixOnSave');
@@ -23,9 +22,11 @@ suite('Configuration', () => {
         assert.strictEqual(engines.policy, false, 'policy should default to false');
     });
 
-    test('severityThreshold defaults to warning', () => {
+    test('severityThreshold is undefined when not explicitly set', () => {
+        // severityThreshold is only sent when explicitly configured by the user
+        // so that .terratidy.yaml config file values are respected
         const options = getInitializationOptions();
-        assert.strictEqual(options.severityThreshold, 'warning');
+        assert.strictEqual(options.severityThreshold, undefined);
     });
 
     test('save options default to false', () => {

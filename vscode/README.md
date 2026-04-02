@@ -67,11 +67,22 @@ and are accessed via standard VSCode features (Format Document command, Problems
 
 ### Automatic Diagnostics
 
-The extension automatically analyzes your Terraform/HCL files as you type. Issues appear:
+The extension uses push diagnostics to analyze your Terraform/HCL files in real-time.
+The LSP server automatically sends diagnostics when you open, edit, or save a file. Issues appear:
 
-- As colored underlines in the editor
+- As colored underlines in the editor (red=error, yellow=warning, blue=info)
 - In the Problems panel (`Cmd+Shift+M` / `Ctrl+Shift+M`)
 - With detailed messages on hover
+
+The server runs style and lint engines. Rule overrides from `.terratidy.yaml` are respected:
+
+```yaml
+overrides:
+  rules:
+    style.resource-name-matches-type:
+      enabled: true
+      severity: warning
+```
 
 ### Formatting
 
@@ -189,9 +200,24 @@ Or specify the full path in settings:
 2. Verify your configuration file is valid
 3. Make sure the file is recognized as Terraform/HCL
 
+## Development
+
+```bash
+cd vscode
+bun install            # Install dependencies
+bun run compile        # Build extension
+bun run lint           # Lint with Biome
+bun run test           # Run integration tests (requires VS Code)
+bun run package        # Package .vsix
+```
+
 ## Contributing
 
 Contributions are welcome! Please see the [TerraTidy repository](https://github.com/santosr2/TerraTidy) for contribution guidelines.
+
+## Changelog
+
+See the [project changelog](CHANGELOG.md) for release history.
 
 ## License
 

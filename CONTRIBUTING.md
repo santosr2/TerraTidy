@@ -75,6 +75,7 @@ cd vscode
 bun install
 bun run compile    # Build extension
 bun run lint       # Lint with Biome
+bun run test       # Run integration tests
 bun run package    # Package .vsix
 ```
 

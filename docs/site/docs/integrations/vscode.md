@@ -30,11 +30,15 @@ code --install-extension terratidy.vsix
 
 ### Real-time Diagnostics
 
-Issues are highlighted as you type:
+Issues are highlighted as you type using push diagnostics. The LSP server
+automatically sends diagnostics when you open, edit, or save a file:
 
 - Errors shown with red squiggly underlines
 - Warnings with yellow underlines
 - Info with blue underlines
+
+The server runs lint and style engines to produce diagnostics. Rule overrides
+from `.terratidy.yaml` are respected (see [Configuration](../getting-started/configuration.md)).
 
 ### Document Formatting
 

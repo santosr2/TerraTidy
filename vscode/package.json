@@ -165,12 +165,15 @@
 		]
 	},
 	"scripts": {
-		"vscode:prepublish": "bun run compile",
+		"vscode:prepublish": "bun run bundle",
+		"bundle": "esbuild src/extension.ts --bundle --outfile=out/extension.js --external:vscode --format=cjs --platform=node --sourcemap",
 		"compile": "tsc -p ./",
 		"watch": "tsc -watch -p ./",
 		"lint": "biome check src",
 		"lint:fix": "biome check --write src",
 		"format": "biome format --write src",
+		"pretest": "bun run compile",
+		"test": "vscode-test",
 		"package": "vsce package",
 		"publish": "vsce publish"
 	},
@@ -179,9 +182,14 @@
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^2.4.9",
+		"@types/mocha": "^10.0.10",
 		"@types/node": "^22.0.0",
 		"@types/vscode": "^1.110.0",
+		"@vscode/test-cli": "~0.0.12",
+		"@vscode/test-electron": "^2.5.2",
 		"@vscode/vsce": "^3.7.1",
+		"esbuild": "^0.25.0",
+		"mocha": "^11.7.5",
 		"typescript": "^6.0.2"
 	}
 }

@@ -1,0 +1,13 @@
+version: 1
+
+engines:
+  fmt:
+    enabled: true
+  style:
+    enabled: true
+  lint:
+    enabled: false
+  policy:
+    enabled: false
+
+severity_threshold: warning

@@ -1,12 +1,7 @@
-import * as vscode from 'vscode';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import {
-    LanguageClient,
-    type LanguageClientOptions,
-    type ServerOptions,
-    TransportKind,
-} from 'vscode-languageclient/node';
+import * as vscode from 'vscode';
+import { LanguageClient, type LanguageClientOptions, type ServerOptions } from 'vscode-languageclient/node';
 
 // Global LSP client instance
 let client: LanguageClient | undefined;
@@ -54,15 +49,17 @@ export async function deactivate() {
 // Start the Language Server Protocol client
 async function startLanguageClient(context: vscode.ExtensionContext): Promise<void> {
     const config = vscode.workspace.getConfiguration('terratidy');
-    const executablePath = resolveExecutablePath(
-        config.get<string>('executablePath') || 'terratidy'
-    );
+    const rawPath = config.get<string>('executablePath') || 'terratidy';
+    const executablePath = resolveExecutablePath(rawPath);
+
+    outputChannel.appendLine(`Config executablePath: "${rawPath}"`);
+    outputChannel.appendLine(`Resolved executablePath: "${executablePath}"`);
 
     // Check if terratidy is available
     try {
         const cp = require('node:child_process');
-        cp.execFileSync(executablePath, ['--version'], { stdio: 'ignore' });
-    } catch (error) {
+        cp.execFileSync(executablePath, ['version'], { stdio: 'ignore' });
+    } catch {
         const message =
             'TerraTidy executable not found. Please install TerraTidy or configure terratidy.executablePath.';
         outputChannel.appendLine(message);
@@ -71,10 +68,11 @@ async function startLanguageClient(context: vscode.ExtensionContext): Promise<vo
     }
 
     // Server options: launch the LSP server
+    // Note: Don't use TransportKind.stdio as it adds --stdio flag.
+    // Our LSP server uses stdio by default without any flags.
     const serverOptions: ServerOptions = {
         command: executablePath,
         args: ['lsp'],
-        transport: TransportKind.stdio,
         options: {
             env: process.env,
         },
@@ -135,7 +133,11 @@ async function startLanguageClient(context: vscode.ExtensionContext): Promise<vo
 async function stopLanguageClient(): Promise<void> {
     if (client) {
         outputChannel.appendLine('Stopping TerraTidy LSP server');
-        await client.stop();
+        try {
+            await client.stop();
+        } catch {
+            // Server may exit before client finishes cleanup - this is normal
+        }
         client = undefined;
     }
 }
@@ -171,9 +173,7 @@ async function initTerraTidy(): Promise<void> {
     }
 
     const config = vscode.workspace.getConfiguration('terratidy');
-    const executablePath = resolveExecutablePath(
-        config.get<string>('executablePath') || 'terratidy'
-    );
+    const executablePath = resolveExecutablePath(config.get<string>('executablePath') || 'terratidy');
     const cwd = workspaceFolder.uri.fsPath;
 
     try {

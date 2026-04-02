@@ -243,6 +243,8 @@ func (s *Server) handleMessage(content json.RawMessage) error {
 		return s.handleFormatting(msg)
 	case "textDocument/codeAction":
 		return s.handleCodeAction(msg)
+	case "textDocument/diagnostic":
+		return s.handleDiagnostic(msg)
 	default:
 		// Unknown method - respond with method not found for requests
 		if msg.ID != nil {
@@ -294,9 +296,9 @@ func (s *Server) handleInitialize(msg RequestMessage) error {
 
 	s.config = cfg
 
-	// Initialize engines
+	// Initialize engines with config
 	s.lintEngine = lint.New(nil)
-	s.styleEngine = style.New(nil)
+	s.styleEngine = style.New(s.buildStyleConfig())
 
 	result := InitializeResult{
 		Capabilities: ServerCapabilities{
@@ -307,10 +309,8 @@ func (s *Server) handleInitialize(msg RequestMessage) error {
 			},
 			DocumentFormattingProvider: true,
 			CodeActionProvider:         true,
-			DiagnosticProvider: &DiagnosticOptions{
-				InterFileDependencies: false,
-				WorkspaceDiagnostics:  false,
-			},
+			// Note: We use push diagnostics (publishDiagnostics) instead of pull
+			// diagnostics to avoid duplication. Don't advertise DiagnosticProvider.
 		},
 		ServerInfo: &ServerInfo{
 			Name:    "terratidy-lsp",
@@ -330,7 +330,12 @@ func (s *Server) handleInitialized(_ RequestMessage) error {
 // handleShutdown handles the shutdown request
 func (s *Server) handleShutdown(msg RequestMessage) error {
 	s.shutdown = true
-	return s.sendResult(msg.ID, nil)
+	// LSP spec requires result: null (not omitted)
+	return s.writeMessage(ResponseMessage{
+		JSONRPC: "2.0",
+		ID:      msg.ID,
+		Result:  json.RawMessage("null"),
+	})
 }
 
 // handleExit handles the exit notification
@@ -533,12 +538,39 @@ func (s *Server) handleCodeAction(msg RequestMessage) error {
 
 // publishDiagnostics runs TerraTidy and publishes diagnostics
 func (s *Server) publishDiagnostics(uri string) error {
+	diagnostics := s.getDiagnostics(uri)
+	return s.writeMessage(NotificationMessage{
+		JSONRPC: "2.0",
+		Method:  "textDocument/publishDiagnostics",
+		Params: PublishDiagnosticsParams{
+			URI:         uri,
+			Diagnostics: diagnostics,
+		},
+	})
+}
+
+// handleDiagnostic handles textDocument/diagnostic request (pull diagnostics)
+func (s *Server) handleDiagnostic(msg RequestMessage) error {
+	var params DocumentDiagnosticParams
+	if err := json.Unmarshal(msg.Params, &params); err != nil {
+		return s.sendError(msg.ID, -32602, "Invalid params")
+	}
+
+	diagnostics := s.getDiagnostics(params.TextDocument.URI)
+	return s.sendResult(msg.ID, DocumentDiagnosticReport{
+		Kind:  "full",
+		Items: diagnostics,
+	})
+}
+
+// getDiagnostics generates diagnostics for a document
+func (s *Server) getDiagnostics(uri string) []Diagnostic {
 	s.docMu.RLock()
 	doc, ok := s.documents[uri]
 	s.docMu.RUnlock()
 
 	if !ok {
-		return nil
+		return []Diagnostic{}
 	}
 
 	filePath := uriToPath(uri)
@@ -546,7 +578,7 @@ func (s *Server) publishDiagnostics(uri string) error {
 	// Only process .tf and .hcl files
 	ext := filepath.Ext(filePath)
 	if ext != ".tf" && ext != ".hcl" && ext != ".tfvars" {
-		return nil
+		return []Diagnostic{}
 	}
 
 	// Reuse a temp file per document to avoid creating one per keystroke
@@ -557,14 +589,14 @@ func (s *Server) publishDiagnostics(uri string) error {
 		}
 		f, err := os.CreateTemp("", "terratidy-*"+tmpExt)
 		if err != nil {
-			return fmt.Errorf("creating temp file: %w", err)
+			return []Diagnostic{}
 		}
 		doc.tempFile = f.Name()
 		_ = f.Close()
 	}
 
 	if err := os.WriteFile(doc.tempFile, []byte(doc.Content), 0o600); err != nil {
-		return fmt.Errorf("writing temp file: %w", err)
+		return []Diagnostic{}
 	}
 
 	// Run lint and style checks
@@ -607,14 +639,7 @@ func (s *Server) publishDiagnostics(uri string) error {
 		diagnostics = append(diagnostics, diag)
 	}
 
-	return s.writeMessage(NotificationMessage{
-		JSONRPC: "2.0",
-		Method:  "textDocument/publishDiagnostics",
-		Params: PublishDiagnosticsParams{
-			URI:         uri,
-			Diagnostics: diagnostics,
-		},
-	})
+	return diagnostics
 }
 
 // sendResult sends a successful response
@@ -670,4 +695,29 @@ func severityToLSP(severity sdk.Severity) int {
 	default:
 		return 4 // Hint
 	}
+}
+
+// buildStyleConfig creates a style.Config from the server's config
+func (s *Server) buildStyleConfig() *style.Config {
+	styleCfg := &style.Config{
+		Rules: make(map[string]style.RuleConfig),
+	}
+
+	if s.config == nil {
+		return styleCfg
+	}
+
+	// Merge override rules from config
+	for ruleName, ruleCfg := range s.config.Overrides.Rules {
+		rc := style.RuleConfig{
+			Enabled:  ruleCfg.Enabled,
+			Severity: ruleCfg.Severity,
+		}
+		if ruleCfg.Config != nil {
+			rc.Options = ruleCfg.Config
+		}
+		styleCfg.Rules[ruleName] = rc
+	}
+
+	return styleCfg
 }

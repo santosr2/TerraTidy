@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -14,6 +15,19 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// pathToFileURI converts a file path to a file:// URI.
+// Handles Windows paths correctly (C:\path -> file:///C:/path).
+func pathToFileURI(path string) string {
+	// Convert backslashes to forward slashes for URI
+	path = filepath.ToSlash(path)
+	// On Windows, paths like C:/... need file:///C:/...
+	if runtime.GOOS == "windows" || (len(path) >= 2 && path[1] == ':') {
+		return "file:///" + path
+	}
+	// Unix paths already start with /, so file:// + /path = file:///path
+	return "file://" + path
+}
 
 func TestNewServer(t *testing.T) {
 	in := strings.NewReader("")
@@ -471,6 +485,25 @@ func TestInvalidURIHandling(t *testing.T) {
 	}
 }
 
+// TestGetDiagnostics_PathTraversalBlocked tests that getDiagnostics returns
+// empty diagnostics when a path traversal attack is attempted.
+func TestGetDiagnostics_PathTraversalBlocked(t *testing.T) {
+	server := NewServer(strings.NewReader(""), &bytes.Buffer{})
+	server.workspaceRoot = "/workspace"
+
+	// Add a document with a traversal attack URI
+	attackURI := "file:///workspace/..%2F..%2Fetc/passwd"
+	server.documents[attackURI] = &Document{
+		URI:     attackURI,
+		Content: "resource \"test\" {}",
+		Version: 1,
+	}
+
+	// getDiagnostics should return empty when path escapes workspace
+	diagnostics := server.getDiagnostics(attackURI)
+	assert.Empty(t, diagnostics, "path traversal should be blocked, returning no diagnostics")
+}
+
 func TestSeverityToLSP(t *testing.T) {
 	tests := []struct {
 		severity sdk.Severity
@@ -642,7 +675,7 @@ func TestServer_HandleInitialize_WorkspaceValidation(t *testing.T) {
 		server := NewServer(strings.NewReader(""), out)
 
 		params := InitializeParams{
-			RootURI: "file://" + tmpDir,
+			RootURI: pathToFileURI(tmpDir),
 		}
 		paramsJSON, _ := json.Marshal(params)
 
@@ -655,7 +688,8 @@ func TestServer_HandleInitialize_WorkspaceValidation(t *testing.T) {
 
 		err := server.handleInitialize(msg)
 		require.NoError(t, err)
-		assert.Equal(t, tmpDir, server.workspaceRoot)
+		// Normalize paths for comparison (handles slash differences on Windows)
+		assert.Equal(t, filepath.Clean(tmpDir), filepath.Clean(server.workspaceRoot))
 	})
 
 	t.Run("non-existent path continues", func(t *testing.T) {
@@ -691,7 +725,7 @@ func TestServer_HandleInitialize_WorkspaceValidation(t *testing.T) {
 		server := NewServer(strings.NewReader(""), out)
 
 		params := InitializeParams{
-			RootURI: "file://" + tmpFile.Name(),
+			RootURI: pathToFileURI(tmpFile.Name()),
 		}
 		paramsJSON, _ := json.Marshal(params)
 
@@ -705,7 +739,8 @@ func TestServer_HandleInitialize_WorkspaceValidation(t *testing.T) {
 		// Should not error - logs warning but continues
 		err = server.handleInitialize(msg)
 		require.NoError(t, err)
-		assert.Equal(t, tmpFile.Name(), server.workspaceRoot)
+		// Normalize paths for comparison (handles slash differences on Windows)
+		assert.Equal(t, filepath.Clean(tmpFile.Name()), filepath.Clean(server.workspaceRoot))
 	})
 }
 

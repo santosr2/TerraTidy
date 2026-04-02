@@ -162,9 +162,9 @@ repos:
       - id: terratidy-check
 ```
 
-### Scenario 4: Custom Rules
+### Scenario 4: Rule Overrides
 
-Want to add custom style rules?
+Want to customize rule behavior?
 
 ```yaml
 # .terratidy.yaml
@@ -173,15 +173,17 @@ version: 1
 engines:
   style:
     enabled: true
-    config:
-      rules:
-        style.blank-line-between-blocks:
-          enabled: true
-          severity: warning
 
-        style.block-label-case:
-          enabled: true
-          severity: error
+# Rule overrides - enable/disable rules, change severity
+overrides:
+  rules:
+    style.blank-line-between-blocks:
+      enabled: true
+      severity: warning
+
+    style.block-label-case:
+      enabled: true
+      severity: error
 ```
 
 ## Output Formats

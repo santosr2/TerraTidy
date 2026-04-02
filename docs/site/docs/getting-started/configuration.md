@@ -32,29 +32,29 @@ Each engine can be enabled/disabled and configured:
 engines:
   fmt:
     enabled: true
-    config:
-      # fmt-specific options
 
   style:
     enabled: true
     config:
-      rules:
-        block-label-case:
-          enabled: true
-          severity: warning
+      fix: false  # Auto-fix mode
 
   lint:
     enabled: true
     config:
-      config_file: .tflint.hcl    # Path to TFLint config
-      plugins:                     # TFLint provider plugins
-        - aws
+      config_file: .tflint.hcl  # Path to TFLint config
 
   policy:
     enabled: true
     config:
       policy_dirs:
         - ./policies
+
+# Rule overrides go here, NOT under engines.*.config
+overrides:
+  rules:
+    style.block-label-case:
+      enabled: true
+      severity: warning
 ```
 
 ## Configuration Precedence
@@ -223,31 +223,24 @@ version: 1
 imports:
   - ./terratidy-rules.yaml
 
+severity_threshold: warning
+fail_fast: false
+parallel: true
+
 engines:
   fmt:
     enabled: true
   style:
     enabled: true
-    config:
-      rules:
-        block-label-case:
-          enabled: true
-          severity: warning
   lint:
     enabled: true
     config:
       config_file: .tflint.hcl
-      plugins:
-        - aws
   policy:
     enabled: true
     config:
       policy_dirs:
         - ./policies
-
-severity_threshold: warning
-fail_fast: false
-parallel: true
 
 profiles:
   ci:
@@ -264,8 +257,12 @@ profiles:
       fmt: { enabled: true }
       style: { enabled: true }
 
+# Rule overrides - enable/disable rules, change severity
 overrides:
   rules:
+    style.block-label-case:
+      enabled: true
+      severity: warning
     lint.terraform-required-providers:
       severity: error
 

@@ -46,14 +46,13 @@ resource "aws_instance" "db" {
 **Configuration Example:**
 
 ```yaml
-engines:
-  style:
-    rules:
-      blank-line-between-blocks:
-        enabled: true
-        options:
-          min_lines: 1
-          max_lines: 2  # Allow up to 2 blank lines
+overrides:
+  rules:
+    style.blank-line-between-blocks:
+      enabled: true
+      config:
+        min_lines: 1
+        max_lines: 2  # Allow up to 2 blank lines
 ```
 
 ### no-empty-blocks

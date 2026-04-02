@@ -3,70 +3,101 @@
 
 version: 1
 
+# Import other config files (glob patterns supported)
+imports:
+  - .terratidy/*.yaml
+  # - ./config/base.yaml
+
 # Global settings
-severity_threshold: warning  # Fail on warnings and above (info|warning|error)
-fail_fast: false            # Stop on first error
-parallel: true              # Run engines in parallel
+severity_threshold: warning  # Filter diagnostics (info|warning|error)
+fail_fast: false             # Stop on first error
+parallel: true               # Run engines in parallel
 
 # Engine configuration
 engines:
   # Format engine - uses hclwrite.Format()
   fmt:
     enabled: true
-    config: {}
 
   # Style engine - custom layout and spacing rules
   style:
     enabled: true
-    config:
-      # Auto-fix mode (default: false)
-      fix: false
-
-      # Enable specific rules
-      rules:
-        style.blank-line-between-blocks:
-          enabled: true
-          severity: warning
-
-        style.block-label-case:
-          enabled: true
-          severity: error
 
   # Lint engine - TFLint integration
   lint:
     enabled: true
     config:
-      # Path to .tflint.hcl (default: .tflint.hcl)
-      config_file: .tflint.hcl
-
-      # Additional TFLint arguments
-      args: []
+      config_file: .tflint.hcl  # Path to .tflint.hcl
 
   # Policy engine - OPA/Conftest
   policy:
     enabled: false
     config:
-      policy_dir: policy
-      args: []
+      policy_dirs:
+        - ./policies
 
-# Custom rules
-custom_rules:
-  # Example custom rule configuration
-  # custom.my-rule:
-  #   enabled: true
-  #   severity: warning
-  #   config:
-  #     option1: value1
+# Profiles - different configurations for different contexts
+profiles:
+  ci:
+    description: "Strict CI/CD checks"
+    engines:
+      fmt: { enabled: true }
+      style: { enabled: true }
+      lint: { enabled: true }
+      policy: { enabled: true }
+
+  development:
+    description: "Fast development checks"
+    engines:
+      fmt: { enabled: true }
+      style: { enabled: true }
+      lint: { enabled: false }
+      policy: { enabled: false }
+
+  strict:
+    description: "Strict mode inheriting from ci"
+    inherits: ci
+    overrides:
+      rules:
+        style.resource-name-matches-type:
+          enabled: true
+          severity: error
+
+  minimal:
+    description: "Minimal checks"
+    inherits: ci
+    disabled_engines:
+      - lint
+      - policy
+
+# Rule overrides - enable/disable rules, change severity
+# This is the correct place for per-rule configuration
+overrides:
+  rules:
+    # Enable a rule that's disabled by default
+    style.resource-name-matches-type:
+      enabled: true
+      severity: warning
+
+    # Change severity of a rule
+    style.blank-line-between-blocks:
+      enabled: true
+      severity: error
+
+    # Disable a rule
+    style.no-empty-blocks:
+      enabled: false
+
+    # Rule with custom config options
+    style.variable-naming:
+      enabled: true
+      severity: warning
+      config:
+        convention: snake_case
 
 # Plugin configuration
 plugins:
   enabled: false
   directories:
     - .terratidy/plugins
-
-# Override rules for specific paths
-overrides:
-  rules:
-    # Disable specific rules for test files
-    style.blank-line-between-blocks:
-      enabled: false
+    - ~/.terratidy/plugins

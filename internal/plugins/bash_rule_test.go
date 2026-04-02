@@ -3,6 +3,8 @@
 package plugins
 
 import (
+	"bytes"
+	"log"
 	"os"
 	"path/filepath"
 	"testing"
@@ -170,7 +172,7 @@ func TestManager_LoadAll_WithNonExecutableBashRule(t *testing.T) {
 	script := filepath.Join(tmpDir, "bad.sh")
 	require.NoError(t, os.WriteFile(script, []byte("#!/bin/bash"), 0o644))
 
-	manager := NewManager([]string{tmpDir})
+	manager := NewManager([]string{tmpDir}, false)
 	err := manager.LoadAll()
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "loading Bash rule")
@@ -184,7 +186,7 @@ echo '{"findings": []}'
 `
 	require.NoError(t, os.WriteFile(script, []byte(content), 0o755))
 
-	manager := NewManager([]string{tmpDir})
+	manager := NewManager([]string{tmpDir}, false)
 	err := manager.LoadAll()
 	require.NoError(t, err)
 
@@ -214,7 +216,7 @@ echo '{"findings": []}'
 `
 	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "check.sh"), []byte(bashContent), 0o755))
 
-	manager := NewManager([]string{tmpDir})
+	manager := NewManager([]string{tmpDir}, false)
 	err := manager.LoadAll()
 	require.NoError(t, err)
 
@@ -226,4 +228,129 @@ echo '{"findings": []}'
 
 	_, bashOk := manager.GetRule("check")
 	assert.True(t, bashOk)
+}
+
+func TestManager_BashRuleVerification_ValidChecksum(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create bash rule
+	bashContent := `#!/usr/bin/env bash
+echo '{"findings": []}'
+`
+	scriptPath := filepath.Join(tmpDir, "verified.sh")
+	require.NoError(t, os.WriteFile(scriptPath, []byte(bashContent), 0o755))
+
+	// Compute actual hash
+	hash, err := computeFileHash(scriptPath)
+	require.NoError(t, err)
+
+	// Create manifest with correct hash
+	manifestContent := hash + "  verified.sh\n"
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, ManifestFileName), []byte(manifestContent), 0o644))
+
+	// Capture log output
+	var logBuf bytes.Buffer
+	manager := NewManager([]string{tmpDir}, true)
+	manager.SetLogger(log.New(&logBuf, "", 0))
+
+	err = manager.LoadAll()
+	require.NoError(t, err)
+
+	// Rule should be loaded
+	_, ok := manager.GetRule("verified")
+	assert.True(t, ok)
+
+	// No warning should be logged for valid checksum
+	assert.NotContains(t, logBuf.String(), "verification failed")
+}
+
+func TestManager_BashRuleVerification_InvalidChecksum(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create bash rule
+	bashContent := `#!/usr/bin/env bash
+echo '{"findings": []}'
+`
+	scriptPath := filepath.Join(tmpDir, "tampered.sh")
+	require.NoError(t, os.WriteFile(scriptPath, []byte(bashContent), 0o755))
+
+	// Create manifest with wrong hash
+	wrongHash := "0000000000000000000000000000000000000000000000000000000000000000"
+	manifestContent := wrongHash + "  tampered.sh\n"
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, ManifestFileName), []byte(manifestContent), 0o644))
+
+	// Capture log output
+	var logBuf bytes.Buffer
+	manager := NewManager([]string{tmpDir}, true)
+	manager.SetLogger(log.New(&logBuf, "", 0))
+
+	err := manager.LoadAll()
+	require.NoError(t, err) // Should succeed in warn-only mode
+
+	// Rule should still be loaded (warn-only mode)
+	_, ok := manager.GetRule("tampered")
+	assert.True(t, ok)
+
+	// Warning should be logged
+	assert.Contains(t, logBuf.String(), "bash rule verification failed")
+	assert.Contains(t, logBuf.String(), "warn-only mode")
+}
+
+func TestManager_BashRuleVerification_NotInManifest(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create bash rule
+	bashContent := `#!/usr/bin/env bash
+echo '{"findings": []}'
+`
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "unlisted.sh"), []byte(bashContent), 0o755))
+
+	// Create manifest without this script
+	manifestContent := "0000000000000000000000000000000000000000000000000000000000000000  other.sh\n"
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, ManifestFileName), []byte(manifestContent), 0o644))
+
+	// Capture log output
+	var logBuf bytes.Buffer
+	manager := NewManager([]string{tmpDir}, true)
+	manager.SetLogger(log.New(&logBuf, "", 0))
+
+	err := manager.LoadAll()
+	require.NoError(t, err)
+
+	// Rule should still be loaded
+	_, ok := manager.GetRule("unlisted")
+	assert.True(t, ok)
+
+	// Warning should be logged about missing from manifest
+	assert.Contains(t, logBuf.String(), "not found in manifest")
+}
+
+func TestManager_BashRuleVerification_Disabled(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create bash rule
+	bashContent := `#!/usr/bin/env bash
+echo '{"findings": []}'
+`
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "noverify.sh"), []byte(bashContent), 0o755))
+
+	// Create manifest with wrong hash (would fail if verification enabled)
+	wrongHash := "0000000000000000000000000000000000000000000000000000000000000000"
+	manifestContent := wrongHash + "  noverify.sh\n"
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, ManifestFileName), []byte(manifestContent), 0o644))
+
+	// Capture log output
+	var logBuf bytes.Buffer
+	manager := NewManager([]string{tmpDir}, false) // verification disabled
+	manager.SetLogger(log.New(&logBuf, "", 0))
+
+	err := manager.LoadAll()
+	require.NoError(t, err)
+
+	// Rule should be loaded
+	_, ok := manager.GetRule("noverify")
+	assert.True(t, ok)
+
+	// No verification warning should be logged
+	assert.NotContains(t, logBuf.String(), "verification failed")
 }

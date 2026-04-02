@@ -259,7 +259,7 @@ func TestManager_LoadAll_WithInvalidYAMLRule(t *testing.T) {
 	content := "description: no name\nseverity: warning\n"
 	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "bad.yaml"), []byte(content), 0o644))
 
-	manager := NewManager([]string{tmpDir})
+	manager := NewManager([]string{tmpDir}, false)
 	err := manager.LoadAll()
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "loading YAML rule")
@@ -278,7 +278,7 @@ patterns:
 `
 	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "test.yaml"), []byte(content), 0o644))
 
-	manager := NewManager([]string{tmpDir})
+	manager := NewManager([]string{tmpDir}, false)
 	err := manager.LoadAll()
 	require.NoError(t, err)
 

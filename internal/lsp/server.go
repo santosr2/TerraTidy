@@ -40,6 +40,18 @@ const (
 // This prevents denial-of-service via memory exhaustion from malicious clients.
 const maxContentLength = 10 * 1024 * 1024
 
+// maxDocumentSize is the maximum allowed size for a single document (10 MB).
+// Documents larger than this will be rejected on didOpen/didChange.
+const maxDocumentSize = maxContentLength
+
+// maxDocuments is the maximum number of open documents the server will track.
+// This prevents memory exhaustion from opening too many files.
+const maxDocuments = 1000
+
+// maxConcurrentDiagnostics is the maximum number of concurrent diagnostic computations.
+// This prevents CPU exhaustion from computing diagnostics for many files simultaneously.
+const maxConcurrentDiagnostics = 10
+
 // ParseLogLevel converts a string to a LogLevel
 func ParseLogLevel(s string) LogLevel {
 	switch strings.ToLower(s) {
@@ -75,6 +87,7 @@ type Server struct {
 	logger        *log.Logger
 	logLevel      LogLevel
 	logFile       *os.File
+	diagSem       chan struct{} // semaphore for concurrent diagnostics
 }
 
 // Document represents an open document
@@ -93,6 +106,7 @@ func NewServer(in io.Reader, out io.Writer) *Server {
 		documents: make(map[string]*Document),
 		logger:    log.New(os.Stderr, "terratidy-lsp: ", log.Ltime),
 		logLevel:  LogLevelInfo,
+		diagSem:   make(chan struct{}, maxConcurrentDiagnostics),
 	}
 }
 
@@ -129,6 +143,12 @@ func (s *Server) logDebug(format string, args ...any) {
 func (s *Server) logInfo(format string, args ...any) {
 	if s.logLevel >= LogLevelInfo {
 		s.logger.Printf("[INFO] "+format, args...)
+	}
+}
+
+func (s *Server) logWarn(format string, args ...any) {
+	if s.logLevel >= LogLevelWarn {
+		s.logger.Printf("[WARN] "+format, args...)
 	}
 }
 
@@ -378,7 +398,20 @@ func (s *Server) handleDidOpen(msg RequestMessage) error {
 		return fmt.Errorf("parsing didOpen params: %w", err)
 	}
 
+	// Check document size limit
+	if len(params.TextDocument.Text) > maxDocumentSize {
+		s.logWarn("document %s exceeds size limit (%d > %d bytes), ignoring",
+			params.TextDocument.URI, len(params.TextDocument.Text), maxDocumentSize)
+		return nil
+	}
+
 	s.docMu.Lock()
+	// Check document count limit (only for new documents)
+	if _, exists := s.documents[params.TextDocument.URI]; !exists && len(s.documents) >= maxDocuments {
+		s.docMu.Unlock()
+		s.logWarn("document limit reached (%d), cannot open %s", maxDocuments, params.TextDocument.URI)
+		return nil
+	}
 	s.documents[params.TextDocument.URI] = &Document{
 		URI:     params.TextDocument.URI,
 		Content: params.TextDocument.Text,
@@ -395,6 +428,15 @@ func (s *Server) handleDidChange(msg RequestMessage) error {
 	var params DidChangeTextDocumentParams
 	if err := json.Unmarshal(msg.Params, &params); err != nil {
 		return fmt.Errorf("parsing didChange params: %w", err)
+	}
+
+	// Check document size limit for each change
+	for _, change := range params.ContentChanges {
+		if len(change.Text) > maxDocumentSize {
+			s.logWarn("document %s change exceeds size limit (%d > %d bytes), ignoring",
+				params.TextDocument.URI, len(change.Text), maxDocumentSize)
+			return nil
+		}
 	}
 
 	s.docMu.Lock()
@@ -615,6 +657,10 @@ func (s *Server) getDiagnostics(uri string) []Diagnostic {
 	if ext != ".tf" && ext != ".hcl" && ext != ".tfvars" {
 		return []Diagnostic{}
 	}
+
+	// Acquire semaphore to limit concurrent diagnostics
+	s.diagSem <- struct{}{}
+	defer func() { <-s.diagSem }()
 
 	// Reuse a temp file per document to avoid creating one per keystroke
 	if doc.tempFile == "" {

@@ -76,7 +76,7 @@ type Finding struct {
     Rule     string                 `json:"rule"`
     Message  string                 `json:"message"`
     File     string                 `json:"file"`
-    Location hcl.Range              `json:"location"`
+    Location Location               `json:"location"`
     Severity Severity               `json:"severity"`
     Fixable  bool                   `json:"fixable"`
     FixFunc  func() ([]byte, error) `json:"-"`

@@ -82,8 +82,8 @@ type Finding struct {
     // File is the path to the file where the issue was found.
     File string `json:"file"`
 
-    // Location is the line/column range from the HCL parser.
-    Location hcl.Range `json:"location"`
+    // Location is the source code range where the issue was found.
+    Location Location `json:"location"`
 
     // Severity indicates the importance: error, warning, or info.
     Severity Severity `json:"severity"`
@@ -95,6 +95,22 @@ type Finding struct {
     FixFunc func() ([]byte, error) `json:"-"`
 }
 ```
+
+## Location
+
+Represents a source code location. This type replaces direct use of `hcl.Range` in the public API.
+
+```go
+type Location struct {
+    Filename    string `json:"filename"`     // Path to the source file
+    StartLine   int    `json:"start_line"`   // 1-based line number where the issue starts
+    StartColumn int    `json:"start_column"` // 1-based column number where the issue starts
+    EndLine     int    `json:"end_line"`     // 1-based line number where the issue ends
+    EndColumn   int    `json:"end_column"`   // 1-based column number where the issue ends
+}
+```
+
+Use `LocationFromRange(hcl.Range)` to convert from HCL ranges when implementing rules.
 
 ## Severity
 

@@ -149,6 +149,50 @@ func TestRun_NonExistentFile(t *testing.T) {
 	assert.Error(t, err)
 }
 
+func TestApplyFixes_WithFixableFindings(t *testing.T) {
+	dir := t.TempDir()
+	// Content missing blank line between blocks - this triggers a fixable finding
+	content := `resource "aws_instance" "test1" {
+  ami = "ami-123"
+}
+resource "aws_instance" "test2" {
+  ami = "ami-456"
+}
+`
+	tmpFile := filepath.Join(dir, "test.tf")
+	require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0o644))
+
+	// First run without fix to verify we get fixable findings
+	checkEngine := New(&Config{Rules: make(map[string]RuleConfig)})
+	findings, err := checkEngine.Run(context.Background(), []string{tmpFile})
+	require.NoError(t, err)
+
+	// Verify we have at least one finding with Fix populated
+	hasFixableFinding := false
+	for _, f := range findings {
+		if f.Fix != nil {
+			hasFixableFinding = true
+			assert.NotNil(t, f.Fix.Content, "Fix.Content should be set")
+			break
+		}
+	}
+	assert.True(t, hasFixableFinding, "should have at least one fixable finding")
+
+	// Now run with fix mode to apply the fix
+	fixEngine := New(&Config{
+		Fix:   true,
+		Rules: make(map[string]RuleConfig),
+	})
+	_, err = fixEngine.Run(context.Background(), []string{tmpFile})
+	require.NoError(t, err)
+
+	// Verify file was modified
+	modified, err := os.ReadFile(tmpFile)
+	require.NoError(t, err)
+	assert.NotEqual(t, content, string(modified), "fix should modify the file")
+	assert.Contains(t, string(modified), "\n\nresource", "should have blank line between blocks")
+}
+
 func TestRun_RuleDisabling(t *testing.T) {
 	dir := t.TempDir()
 	content := `resource "aws_instance" "test1" {

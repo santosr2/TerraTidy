@@ -68,4 +68,29 @@ func TestFmtCmdExecution(t *testing.T) {
 		err := rootCmd.Execute()
 		assert.NoError(t, err)
 	})
+
+	t.Run("all flag with style issues", func(t *testing.T) {
+		styleDir := t.TempDir()
+		// Content with style issue (missing blank line between blocks)
+		styleContent := `resource "aws_instance" "test1" {
+  ami = "ami-123"
+}
+resource "aws_instance" "test2" {
+  ami = "ami-456"
+}
+`
+		require.NoError(t, os.WriteFile(filepath.Join(styleDir, "style.tf"), []byte(styleContent), 0o644))
+
+		fmtCheck = false
+		fmtDiff = false
+		fmtAll = true
+		changed = false
+
+		rootCmd.SetArgs([]string{"fmt", "--all", styleDir})
+		err := rootCmd.Execute()
+		assert.NoError(t, err)
+
+		// Reset flag
+		fmtAll = false
+	})
 }

@@ -86,7 +86,6 @@ func (r *ResourceNameMatchesTypeRule) Check(ctx *sdk.Context, file *hcl.File) ([
 				File:     ctx.File,
 				Location: sdk.LocationFromRange(block.Range()),
 				Severity: sdk.SeverityInfo,
-				Fixable:  false,
 			})
 			continue
 		}
@@ -100,7 +99,6 @@ func (r *ResourceNameMatchesTypeRule) Check(ctx *sdk.Context, file *hcl.File) ([
 				File:     ctx.File,
 				Location: sdk.LocationFromRange(block.Range()),
 				Severity: sdk.SeverityInfo,
-				Fixable:  false,
 			})
 		}
 	}
@@ -214,7 +212,6 @@ func (r *OutputPrefixRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Findin
 				File:     ctx.File,
 				Location: sdk.LocationFromRange(block.Range()),
 				Severity: sdk.SeverityInfo,
-				Fixable:  false,
 			})
 		}
 
@@ -226,7 +223,6 @@ func (r *OutputPrefixRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Findin
 				File:     ctx.File,
 				Location: sdk.LocationFromRange(block.Range()),
 				Severity: sdk.SeverityInfo,
-				Fixable:  false,
 			})
 		}
 	}
@@ -304,7 +300,6 @@ func (r *ModuleNameConventionRule) Check(ctx *sdk.Context, file *hcl.File) ([]sd
 				File:     ctx.File,
 				Location: sdk.LocationFromRange(block.Range()),
 				Severity: sdk.SeverityWarning,
-				Fixable:  false,
 			})
 		}
 
@@ -316,7 +311,6 @@ func (r *ModuleNameConventionRule) Check(ctx *sdk.Context, file *hcl.File) ([]sd
 				File:     ctx.File,
 				Location: sdk.LocationFromRange(block.Range()),
 				Severity: sdk.SeverityInfo,
-				Fixable:  false,
 			})
 		}
 	}

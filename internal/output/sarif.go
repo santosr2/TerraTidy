@@ -177,7 +177,7 @@ func buildSARIFResult(finding sdk.Finding) SARIFResult {
 		},
 	}
 
-	if finding.Fixable && finding.FixFunc != nil {
+	if finding.Fix != nil {
 		result.Fixes = buildSARIFFixes(finding)
 	}
 	return result

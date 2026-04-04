@@ -51,7 +51,6 @@ func (r *BlockLabelCaseRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Find
 				File:     ctx.File,
 				Location: sdk.LocationFromRange(block.Range()),
 				Severity: sdk.SeverityError,
-				Fixable:  false,
 			})
 			continue
 		}
@@ -66,7 +65,6 @@ func (r *BlockLabelCaseRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Find
 					File:     ctx.File,
 					Location: sdk.LocationFromRange(block.Range()),
 					Severity: sdk.SeverityWarning,
-					Fixable:  false,
 				})
 			}
 		}
@@ -123,7 +121,6 @@ func (r *VariableNamingRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Find
 				File:     ctx.File,
 				Location: sdk.LocationFromRange(block.Range()),
 				Severity: sdk.SeverityWarning,
-				Fixable:  false,
 			})
 		}
 	}
@@ -179,7 +176,6 @@ func (r *OutputNamingRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Findin
 				File:     ctx.File,
 				Location: sdk.LocationFromRange(block.Range()),
 				Severity: sdk.SeverityWarning,
-				Fixable:  false,
 			})
 		}
 	}
@@ -232,7 +228,6 @@ func (r *LocalNamingRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Finding
 					File:     ctx.File,
 					Location: sdk.LocationFromRange(attr.Range()),
 					Severity: sdk.SeverityWarning,
-					Fixable:  false,
 				})
 			}
 		}

@@ -77,11 +77,14 @@ func (r *MetaArgumentsOrderRule) checkBlock(ctx *sdk.Context, block *hclsyntax.B
 		return findings
 	}
 
-	// Check ordering
-	filePath := ctx.File
-	blockType := block.Type
-	blockLabels := block.Labels
+	// Pre-compute fix once for this block (shared by all findings)
+	var fixResult *sdk.FixResult
+	fixedContent, err := r.fixBlock(ctx.File, block.Type, block.Labels)
+	if err == nil && fixedContent != nil {
+		fixResult = &sdk.FixResult{Content: fixedContent}
+	}
 
+	// Check ordering
 	for i := 0; i < len(metaArgs)-1; i++ {
 		for j := i + 1; j < len(metaArgs); j++ {
 			a, b := metaArgs[i], metaArgs[j]
@@ -93,10 +96,7 @@ func (r *MetaArgumentsOrderRule) checkBlock(ctx *sdk.Context, block *hclsyntax.B
 					File:     ctx.File,
 					Location: sdk.LocationFromRange(block.Range()),
 					Severity: sdk.SeverityInfo,
-					Fixable:  true,
-					FixFunc: func() ([]byte, error) {
-						return r.fixBlock(filePath, blockType, blockLabels)
-					},
+					Fix:      fixResult,
 				})
 			}
 			// If b appears before a in file but should come after
@@ -107,10 +107,7 @@ func (r *MetaArgumentsOrderRule) checkBlock(ctx *sdk.Context, block *hclsyntax.B
 					File:     ctx.File,
 					Location: sdk.LocationFromRange(block.Range()),
 					Severity: sdk.SeverityInfo,
-					Fixable:  true,
-					FixFunc: func() ([]byte, error) {
-						return r.fixBlock(filePath, blockType, blockLabels)
-					},
+					Fix:      fixResult,
 				})
 			}
 		}
@@ -274,10 +271,14 @@ func (r *LifecycleAttributeOrderRule) checkLifecycleBlock(ctx *sdk.Context, pare
 		return findings
 	}
 
-	// Check ordering
-	filePath := ctx.File
-	parentLabels := parentBlock.Labels
+	// Pre-compute fix once for this block
+	var fixResult *sdk.FixResult
+	fixedContent, err := r.fixLifecycleBlock(ctx.File, parentBlock.Labels)
+	if err == nil && fixedContent != nil {
+		fixResult = &sdk.FixResult{Content: fixedContent}
+	}
 
+	// Check ordering
 	for i := 0; i < len(attrs)-1; i++ {
 		for j := i + 1; j < len(attrs); j++ {
 			a, b := attrs[i], attrs[j]
@@ -288,10 +289,7 @@ func (r *LifecycleAttributeOrderRule) checkLifecycleBlock(ctx *sdk.Context, pare
 					File:     ctx.File,
 					Location: sdk.LocationFromRange(lifecycleBlock.Range()),
 					Severity: sdk.SeverityInfo,
-					Fixable:  true,
-					FixFunc: func() ([]byte, error) {
-						return r.fixLifecycleBlock(filePath, parentLabels)
-					},
+					Fix:      fixResult,
 				})
 			}
 			if b.line < a.line && b.order > a.order {
@@ -301,10 +299,7 @@ func (r *LifecycleAttributeOrderRule) checkLifecycleBlock(ctx *sdk.Context, pare
 					File:     ctx.File,
 					Location: sdk.LocationFromRange(lifecycleBlock.Range()),
 					Severity: sdk.SeverityInfo,
-					Fixable:  true,
-					FixFunc: func() ([]byte, error) {
-						return r.fixLifecycleBlock(filePath, parentLabels)
-					},
+					Fix:      fixResult,
 				})
 			}
 		}
@@ -521,7 +516,6 @@ func (r *NestedBlockOrderRule) checkNestedBlocks(ctx *sdk.Context, block *hclsyn
 					File:     ctx.File,
 					Location: sdk.LocationFromRange(block.Range()),
 					Severity: sdk.SeverityInfo,
-					Fixable:  false, // Reordering nested blocks is complex
 				})
 			}
 		}
@@ -637,7 +631,6 @@ func (r *OneLineAttributeSpacingRule) checkBlock(ctx *sdk.Context, block *hclsyn
 							EndColumn:   1,
 						},
 						Severity: sdk.SeverityInfo,
-						Fixable:  false,
 					})
 				}
 			}

@@ -131,6 +131,32 @@ func TestMetaArgumentsOrderRule(t *testing.T) {
 		})
 	}
 
+	t.Run("Check populates Fix field for fixable findings", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		tmpFile := filepath.Join(tmpDir, "test.tf")
+		content := `resource "aws_instance" "web" {
+  depends_on = [aws_vpc.main]
+  for_each   = var.instances
+
+  ami           = "ami-123"
+  instance_type = "t2.micro"
+}`
+		err := os.WriteFile(tmpFile, []byte(content), 0o644)
+		require.NoError(t, err)
+
+		file, diags := hclsyntax.ParseConfig([]byte(content), tmpFile, hcl.InitialPos)
+		require.False(t, diags.HasErrors())
+
+		hclFile := &hcl.File{Body: file.Body}
+		ctx := &sdk.Context{File: tmpFile}
+
+		findings, err := rule.Check(ctx, hclFile)
+		require.NoError(t, err)
+		require.Len(t, findings, 1)
+		require.NotNil(t, findings[0].Fix, "Fix should be populated for fixable finding")
+		require.NotEmpty(t, findings[0].Fix.Content, "Fix.Content should contain fixed bytes")
+	})
+
 	t.Run("Fix reorders meta-arguments", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		tmpFile := filepath.Join(tmpDir, "test.tf")
@@ -262,6 +288,34 @@ func TestLifecycleAttributeOrderRule(t *testing.T) {
 			assert.Len(t, findings, tt.wantFindings)
 		})
 	}
+
+	t.Run("Check populates Fix field for fixable findings", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		tmpFile := filepath.Join(tmpDir, "test.tf")
+		content := `resource "aws_instance" "web" {
+  ami           = "ami-123"
+  instance_type = "t2.micro"
+
+  lifecycle {
+    ignore_changes        = [tags]
+    create_before_destroy = true
+  }
+}`
+		err := os.WriteFile(tmpFile, []byte(content), 0o644)
+		require.NoError(t, err)
+
+		file, diags := hclsyntax.ParseConfig([]byte(content), tmpFile, hcl.InitialPos)
+		require.False(t, diags.HasErrors())
+
+		hclFile := &hcl.File{Body: file.Body}
+		ctx := &sdk.Context{File: tmpFile}
+
+		findings, err := rule.Check(ctx, hclFile)
+		require.NoError(t, err)
+		require.Len(t, findings, 1)
+		require.NotNil(t, findings[0].Fix, "Fix should be populated for fixable finding")
+		require.NotEmpty(t, findings[0].Fix.Content, "Fix.Content should contain fixed bytes")
+	})
 
 	t.Run("Fix reorders lifecycle attributes", func(t *testing.T) {
 		tmpDir := t.TempDir()

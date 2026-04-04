@@ -32,7 +32,10 @@ func (r *CommentSyntaxRule) Check(ctx *sdk.Context, _ *hcl.File) ([]sdk.Finding,
 	}
 
 	lines := SplitLines(content)
-	filePath := ctx.File
+
+	// Pre-compute fix once for all findings in this file
+	fixedContent := r.fixContent(content)
+	fixResult := &sdk.FixResult{Content: fixedContent}
 
 	for i, line := range lines {
 		lineNum := i + 1
@@ -52,10 +55,7 @@ func (r *CommentSyntaxRule) Check(ctx *sdk.Context, _ *hcl.File) ([]sdk.Finding,
 					EndColumn:   len(trimmed),
 				},
 				Severity: sdk.SeverityInfo,
-				Fixable:  true,
-				FixFunc: func() ([]byte, error) {
-					return r.fixFile(filePath)
-				},
+				Fix:      fixResult,
 			})
 		}
 	}
@@ -97,7 +97,10 @@ func (r *CommentSyntaxRule) fixFile(filePath string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	return r.fixContent(content), nil
+}
 
+func (r *CommentSyntaxRule) fixContent(content []byte) []byte {
 	lines := SplitLines(content)
 	var result []string
 
@@ -106,7 +109,7 @@ func (r *CommentSyntaxRule) fixFile(filePath string) ([]byte, error) {
 		result = append(result, fixed)
 	}
 
-	return []byte(strings.Join(result, "\n") + "\n"), nil
+	return []byte(strings.Join(result, "\n") + "\n")
 }
 
 func (r *CommentSyntaxRule) fixLine(line string) string {
@@ -172,7 +175,10 @@ func (r *NoTrailingWhitespaceRule) Check(ctx *sdk.Context, _ *hcl.File) ([]sdk.F
 	}
 
 	lines := SplitLines(content)
-	filePath := ctx.File
+
+	// Pre-compute fix once for all findings in this file
+	fixedContent := r.fixContent(content)
+	fixResult := &sdk.FixResult{Content: fixedContent}
 
 	for i, line := range lines {
 		lineNum := i + 1
@@ -190,10 +196,7 @@ func (r *NoTrailingWhitespaceRule) Check(ctx *sdk.Context, _ *hcl.File) ([]sdk.F
 					EndColumn:   len(line),
 				},
 				Severity: sdk.SeverityInfo,
-				Fixable:  true,
-				FixFunc: func() ([]byte, error) {
-					return r.fixFile(filePath)
-				},
+				Fix:      fixResult,
 			})
 		}
 	}
@@ -206,7 +209,10 @@ func (r *NoTrailingWhitespaceRule) fixFile(filePath string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	return r.fixContent(content), nil
+}
 
+func (r *NoTrailingWhitespaceRule) fixContent(content []byte) []byte {
 	lines := SplitLines(content)
 	var result []string
 
@@ -214,7 +220,7 @@ func (r *NoTrailingWhitespaceRule) fixFile(filePath string) ([]byte, error) {
 		result = append(result, strings.TrimRight(line, " \t"))
 	}
 
-	return []byte(strings.Join(result, "\n") + "\n"), nil
+	return []byte(strings.Join(result, "\n") + "\n")
 }
 
 // Fix removes trailing whitespace from all lines.
@@ -266,7 +272,6 @@ func (r *ConsistentQuotesRule) Check(ctx *sdk.Context, _ *hcl.File) ([]sdk.Findi
 					EndColumn:   len(line),
 				},
 				Severity: sdk.SeverityWarning,
-				Fixable:  false, // Fixing quote style requires careful parsing
 			})
 		}
 	}
@@ -331,7 +336,11 @@ func (r *NoConsecutiveBlankLinesRule) Check(ctx *sdk.Context, _ *hcl.File) ([]sd
 	}
 
 	lines := SplitLines(content)
-	filePath := ctx.File
+
+	// Pre-compute fix once for all findings in this file
+	fixedContent := r.fixContent(content)
+	fixResult := &sdk.FixResult{Content: fixedContent}
+
 	consecutiveBlank := 0
 
 	for i, line := range lines {
@@ -353,10 +362,7 @@ func (r *NoConsecutiveBlankLinesRule) Check(ctx *sdk.Context, _ *hcl.File) ([]sd
 						EndColumn:   1,
 					},
 					Severity: sdk.SeverityInfo,
-					Fixable:  true,
-					FixFunc: func() ([]byte, error) {
-						return r.fixFile(filePath)
-					},
+					Fix:      fixResult,
 				})
 			}
 		} else {
@@ -372,7 +378,10 @@ func (r *NoConsecutiveBlankLinesRule) fixFile(filePath string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	return r.fixContent(content), nil
+}
 
+func (r *NoConsecutiveBlankLinesRule) fixContent(content []byte) []byte {
 	lines := SplitLines(content)
 	var result []string
 	lastWasBlank := false
@@ -392,7 +401,7 @@ func (r *NoConsecutiveBlankLinesRule) fixFile(filePath string) ([]byte, error) {
 		}
 	}
 
-	return []byte(strings.Join(result, "\n") + "\n"), nil
+	return []byte(strings.Join(result, "\n") + "\n")
 }
 
 // Fix removes consecutive blank lines, keeping only one.

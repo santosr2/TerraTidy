@@ -95,7 +95,6 @@ func (e *Engine) Run(ctx context.Context, files []string) ([]sdk.Finding, error)
 				Message:  fmt.Sprintf("Failed to parse module: %v", err),
 				File:     dir,
 				Severity: sdk.SeverityError,
-				Fixable:  false,
 			})
 			continue
 		}
@@ -373,7 +372,6 @@ func (e *Engine) violationToFinding(violation any, dir string) sdk.Finding {
 	finding := sdk.Finding{
 		Rule:     "policy.violation",
 		Severity: sdk.SeverityError,
-		Fixable:  false,
 	}
 
 	switch v := violation.(type) {

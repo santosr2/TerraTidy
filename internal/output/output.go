@@ -187,7 +187,7 @@ func (f *JSONFormatter) Format(findings []sdk.Finding, w io.Writer) error {
 				},
 			},
 			Severity: string(finding.Severity),
-			Fixable:  finding.Fixable,
+			Fixable:  finding.Fix != nil,
 		})
 
 		// Count by severity
@@ -661,7 +661,7 @@ func (f *HTMLFormatter) generateFindingHTML(finding sdk.Finding) string {
 	}
 
 	fixableBadge := ""
-	if finding.Fixable {
+	if finding.Fix != nil {
 		fixableBadge = `<span class="badge badge-fixable">Fixable</span>`
 	}
 

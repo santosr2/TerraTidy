@@ -172,6 +172,7 @@ resource "aws_instance" "test2" {
 	for _, f := range findings {
 		if f.Fix != nil {
 			hasFixableFinding = true
+			assert.NotNil(t, f.Fix.Content, "Fix.Content should be set")
 			break
 		}
 	}

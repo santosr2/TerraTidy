@@ -198,7 +198,7 @@ func (r *BlankLineBetweenBlocksRule) Check(ctx *sdk.Context, file *hcl.File) ([]
 	}
 
 	// Get configuration
-	minLines, maxLines := r.getBlankLineConfig(ctx.Config)
+	minLines, maxLines := r.getBlankLineConfig(ctx.Options)
 
 	// Read file content to check for comments and blank lines
 	content, err := os.ReadFile(ctx.File)
@@ -430,7 +430,7 @@ func (r *NoEmptyBlocksRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Findi
 	}
 
 	// Get allowed empty blocks from config
-	allowedEmpty := r.getAllowedEmptyBlocks(ctx.Config)
+	allowedEmpty := r.getAllowedEmptyBlocks(ctx.Options)
 
 	for _, block := range hclFile.Blocks {
 		// Skip allowed empty block types

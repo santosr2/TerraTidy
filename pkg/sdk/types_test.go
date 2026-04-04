@@ -1,7 +1,9 @@
 package sdk
 
 import (
+	"context"
 	"testing"
+	"time"
 
 	"github.com/hashicorp/hcl/v2"
 	"github.com/stretchr/testify/assert"
@@ -70,12 +72,13 @@ func TestFinding(t *testing.T) {
 func TestContext(t *testing.T) {
 	t.Run("basic context", func(t *testing.T) {
 		ctx := &Context{
-			Config:  map[string]any{"key": "value"},
+			Context: context.Background(),
+			Options: map[string]any{"key": "value"},
 			WorkDir: "/tmp/test",
 			File:    "main.tf",
 		}
 
-		assert.Equal(t, "value", ctx.Config["key"])
+		assert.Equal(t, "value", ctx.Options["key"])
 		assert.Equal(t, "/tmp/test", ctx.WorkDir)
 		assert.Equal(t, "main.tf", ctx.File)
 	})
@@ -83,9 +86,50 @@ func TestContext(t *testing.T) {
 	t.Run("empty context", func(t *testing.T) {
 		ctx := &Context{}
 
-		assert.Nil(t, ctx.Config)
+		assert.Nil(t, ctx.Options)
 		assert.Empty(t, ctx.WorkDir)
 		assert.Empty(t, ctx.File)
+	})
+
+	t.Run("context with cancellation", func(t *testing.T) {
+		cancelCtx, cancel := context.WithCancel(context.Background())
+		ctx := &Context{
+			Context: cancelCtx,
+			File:    "test.tf",
+		}
+
+		// Initially not canceled
+		select {
+		case <-ctx.Done():
+			t.Fatal("context should not be done")
+		default:
+			// expected
+		}
+
+		// Cancel and verify
+		cancel()
+		select {
+		case <-ctx.Done():
+			// expected
+		default:
+			t.Fatal("context should be done after cancel")
+		}
+		assert.Equal(t, context.Canceled, ctx.Err())
+	})
+
+	t.Run("context with deadline", func(t *testing.T) {
+		deadline := time.Now().Add(100 * time.Millisecond)
+		deadlineCtx, cancel := context.WithDeadline(context.Background(), deadline)
+		defer cancel()
+
+		ctx := &Context{
+			Context: deadlineCtx,
+			File:    "test.tf",
+		}
+
+		dl, ok := ctx.Deadline()
+		assert.True(t, ok)
+		assert.Equal(t, deadline, dl)
 	})
 }
 

@@ -983,7 +983,7 @@ func (r *VariableOrderRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Findi
 	}
 
 	// Get attribute order from config (defaults to varAttrOrder)
-	attrOrder := GetAttributeOrderFromConfig(ctx.Config, varAttrOrder)
+	attrOrder := GetAttributeOrderFromConfig(ctx.Options, varAttrOrder)
 
 	for _, block := range hclFile.Blocks {
 		if block.Type != "variable" {
@@ -1175,7 +1175,7 @@ func (r *OutputOrderRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Finding
 	}
 
 	// Get attribute order from config (defaults to outputAttrOrder)
-	attrOrder := GetAttributeOrderFromConfig(ctx.Config, outputAttrOrder)
+	attrOrder := GetAttributeOrderFromConfig(ctx.Options, outputAttrOrder)
 
 	for _, block := range hclFile.Blocks {
 		if block.Type != "output" {

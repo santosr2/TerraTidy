@@ -30,7 +30,7 @@ body = """
             {% if commit.remote.username %} by [@{{ commit.remote.username }}](https://github.com/{{ commit.remote.username }})\
             {% elif commit.author.name %} by [@{{ commit.author.name }}](https://github.com/{{ commit.author.name }}){% endif %}\
     {% endfor %}
-{% endfor %}\n
+{% endfor %}
 """
 # template for the changelog footer
 footer = """

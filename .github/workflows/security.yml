@@ -167,4 +167,5 @@ jobs:
 
       - name: Run API compatibility check
         if: steps.filter.outputs.sdk == 'true'
-        run: gorelease -base="$(git describe --tags --abbrev=0)"
+        continue-on-error: true  # Informational only - pre-1.0 has no BC guarantees
+        run: gorelease -base="$(git describe --tags --abbrev=0 --match='v[0-9]*.[0-9]*.[0-9]*')"

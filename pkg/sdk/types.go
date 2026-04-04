@@ -65,13 +65,22 @@ type Finding struct {
 // Context provides runtime information to rules during execution. Each rule
 // invocation receives a Context with the current file path, working directory,
 // and any rule-specific configuration from .terratidy.yaml.
+//
+// Context embeds context.Context for cancellation and deadline support.
+// Rules should check ctx.Err() or ctx.Done() for long-running operations.
 type Context struct {
-	// Config holds rule-specific options from the "options" map in .terratidy.yaml.
-	Config map[string]any
-	// WorkDir is the directory TerraTidy was invoked from.
+	context.Context
+
+	// Options holds rule-specific options from the "options" map in .terratidy.yaml.
+	Options map[string]any
+	// WorkDir is the absolute path to the directory TerraTidy was invoked from.
 	WorkDir string
 	// File is the absolute path to the file being checked.
 	File string
+	// AllFiles contains the raw content of all files being processed in this run.
+	// Useful for cross-file rules that need to analyze multiple files together.
+	// Keys are absolute file paths, values are file contents.
+	AllFiles map[string][]byte
 }
 
 // Rule defines the interface that all rules must implement. Built-in rules,

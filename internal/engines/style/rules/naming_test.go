@@ -321,7 +321,7 @@ func TestNamingRulesWithConfig(t *testing.T) {
 		hclFile := &hcl.File{Body: file.Body}
 		ctx := &sdk.Context{
 			File: "test.tf",
-			Config: map[string]any{
+			Options: map[string]any{
 				"options": map[string]any{
 					"case": "camelCase",
 				},
@@ -344,7 +344,7 @@ func TestNamingRulesWithConfig(t *testing.T) {
 		hclFile := &hcl.File{Body: file.Body}
 		ctx := &sdk.Context{
 			File: "test.tf",
-			Config: map[string]any{
+			Options: map[string]any{
 				"options": map[string]any{
 					"case": "camelCase",
 				},
@@ -367,7 +367,7 @@ func TestNamingRulesWithConfig(t *testing.T) {
 		hclFile := &hcl.File{Body: file.Body}
 		ctx := &sdk.Context{
 			File: "test.tf",
-			Config: map[string]any{
+			Options: map[string]any{
 				"options": map[string]any{
 					"case": "kebab-case",
 				},
@@ -390,7 +390,7 @@ func TestNamingRulesWithConfig(t *testing.T) {
 		hclFile := &hcl.File{Body: file.Body}
 		ctx := &sdk.Context{
 			File: "test.tf",
-			Config: map[string]any{
+			Options: map[string]any{
 				"options": map[string]any{
 					"case": "PascalCase",
 				},
@@ -413,7 +413,7 @@ func TestNamingRulesWithConfig(t *testing.T) {
 		hclFile := &hcl.File{Body: file.Body}
 		ctx := &sdk.Context{
 			File: "test.tf",
-			Config: map[string]any{
+			Options: map[string]any{
 				"options": map[string]any{
 					"case":    "custom",
 					"pattern": "^prefix_",
@@ -437,7 +437,7 @@ func TestNamingRulesWithConfig(t *testing.T) {
 		hclFile := &hcl.File{Body: file.Body}
 		ctx := &sdk.Context{
 			File: "test.tf",
-			Config: map[string]any{
+			Options: map[string]any{
 				"options": map[string]any{
 					"case":    "custom",
 					"pattern": "^prefix_",

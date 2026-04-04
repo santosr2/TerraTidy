@@ -49,7 +49,7 @@ func (r *BlockLabelCaseRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Find
 				Rule:     r.Name(),
 				Message:  "Block label cannot be empty",
 				File:     ctx.File,
-				Location: block.Range(),
+				Location: sdk.LocationFromRange(block.Range()),
 				Severity: sdk.SeverityError,
 				Fixable:  false,
 			})
@@ -64,7 +64,7 @@ func (r *BlockLabelCaseRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Find
 					Rule:     r.Name(),
 					Message:  "Block label should be " + caseName + ": " + name,
 					File:     ctx.File,
-					Location: block.Range(),
+					Location: sdk.LocationFromRange(block.Range()),
 					Severity: sdk.SeverityWarning,
 					Fixable:  false,
 				})
@@ -121,7 +121,7 @@ func (r *VariableNamingRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Find
 				Rule:     r.Name(),
 				Message:  "Variable name should be " + caseName + ": " + name,
 				File:     ctx.File,
-				Location: block.Range(),
+				Location: sdk.LocationFromRange(block.Range()),
 				Severity: sdk.SeverityWarning,
 				Fixable:  false,
 			})
@@ -177,7 +177,7 @@ func (r *OutputNamingRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Findin
 				Rule:     r.Name(),
 				Message:  "Output name should be " + caseName + ": " + name,
 				File:     ctx.File,
-				Location: block.Range(),
+				Location: sdk.LocationFromRange(block.Range()),
 				Severity: sdk.SeverityWarning,
 				Fixable:  false,
 			})
@@ -230,7 +230,7 @@ func (r *LocalNamingRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Finding
 					Rule:     r.Name(),
 					Message:  "Local value name should be " + caseName + ": " + name,
 					File:     ctx.File,
-					Location: attr.Range(),
+					Location: sdk.LocationFromRange(attr.Range()),
 					Severity: sdk.SeverityWarning,
 					Fixable:  false,
 				})

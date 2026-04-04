@@ -302,7 +302,7 @@ func TestViolationToFinding_Map(t *testing.T) {
 	assert.Equal(t, "Security violation", finding.Message)
 	assert.Equal(t, "policy.no-public-ssh", finding.Rule)
 	assert.Equal(t, "/path/to/main.tf", finding.File)
-	assert.Equal(t, 10, finding.Location.Start.Line)
+	assert.Equal(t, 10, finding.Location.StartLine)
 }
 
 func TestEngine_MultipleFiles(t *testing.T) {

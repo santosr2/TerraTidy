@@ -10,7 +10,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/hclparse"
 	"github.com/hashicorp/hcl/v2/hclsyntax"
 	"github.com/open-policy-agent/opa/v1/rego"
@@ -398,9 +397,12 @@ func (e *Engine) violationToFinding(violation any, dir string) sdk.Finding {
 			finding.Severity = parseSeverity(severity)
 		}
 		if line, ok := v["line"].(float64); ok {
-			finding.Location = hcl.Range{
-				Filename: finding.File,
-				Start:    hcl.Pos{Line: int(line), Column: 1},
+			finding.Location = sdk.Location{
+				Filename:    finding.File,
+				StartLine:   int(line),
+				StartColumn: 1,
+				EndLine:     int(line),
+				EndColumn:   1,
 			}
 		}
 	}

@@ -5,7 +5,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hashicorp/hcl/v2"
 	"github.com/santosr2/TerraTidy/pkg/sdk"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -37,7 +36,7 @@ func TestJUnitFormatter_Format(t *testing.T) {
 				Rule:     "test.rule",
 				Message:  "Test error message",
 				File:     "test.tf",
-				Location: hcl.Range{Start: hcl.Pos{Line: 10, Column: 5}},
+				Location: sdk.Location{StartLine: 10, StartColumn: 5, EndLine: 10, EndColumn: 5},
 				Severity: sdk.SeverityError,
 			},
 		}
@@ -61,7 +60,7 @@ func TestJUnitFormatter_Format(t *testing.T) {
 				Rule:     "test.rule",
 				Message:  "Test warning message",
 				File:     "test.tf",
-				Location: hcl.Range{Start: hcl.Pos{Line: 10, Column: 5}},
+				Location: sdk.Location{StartLine: 10, StartColumn: 5, EndLine: 10, EndColumn: 5},
 				Severity: sdk.SeverityWarning,
 			},
 		}

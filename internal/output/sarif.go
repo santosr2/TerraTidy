@@ -167,10 +167,10 @@ func buildSARIFResult(finding sdk.Finding) SARIFResult {
 						URIBaseID: "%SRCROOT%",
 					},
 					Region: buildSARIFRegion(
-						finding.Location.Start.Line,
-						finding.Location.Start.Column,
-						finding.Location.End.Line,
-						finding.Location.End.Column,
+						finding.Location.StartLine,
+						finding.Location.StartColumn,
+						finding.Location.EndLine,
+						finding.Location.EndColumn,
 					),
 				},
 			},
@@ -208,10 +208,10 @@ func buildSARIFFixes(finding sdk.Finding) []SARIFFix {
 					Replacements: []SARIFReplacement{
 						{
 							DeletedRegion: buildSARIFRegion(
-								finding.Location.Start.Line,
-								finding.Location.Start.Column,
-								finding.Location.End.Line,
-								finding.Location.End.Column,
+								finding.Location.StartLine,
+								finding.Location.StartColumn,
+								finding.Location.EndLine,
+								finding.Location.EndColumn,
 							),
 						},
 					},

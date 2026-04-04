@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/hashicorp/hcl/v2"
 	"github.com/stretchr/testify/require"
 
 	"github.com/santosr2/TerraTidy/pkg/sdk"
@@ -26,9 +25,11 @@ func generateFindings(n int) []sdk.Finding {
 			Message:  fmt.Sprintf("Issue %d in resource block", i),
 			File:     fmt.Sprintf("modules/service-%d/main.tf", i%5),
 			Severity: sev,
-			Location: hcl.Range{
-				Start: hcl.Pos{Line: i + 1, Column: 1},
-				End:   hcl.Pos{Line: i + 1, Column: 40},
+			Location: sdk.Location{
+				StartLine:   i + 1,
+				StartColumn: 1,
+				EndLine:     i + 1,
+				EndColumn:   40,
 			},
 		}
 	}

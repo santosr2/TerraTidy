@@ -91,7 +91,7 @@ func (r *MetaArgumentsOrderRule) checkBlock(ctx *sdk.Context, block *hclsyntax.B
 					Rule:     r.Name(),
 					Message:  a.name + " should come after " + b.name,
 					File:     ctx.File,
-					Location: block.Range(),
+					Location: sdk.LocationFromRange(block.Range()),
 					Severity: sdk.SeverityInfo,
 					Fixable:  true,
 					FixFunc: func() ([]byte, error) {
@@ -105,7 +105,7 @@ func (r *MetaArgumentsOrderRule) checkBlock(ctx *sdk.Context, block *hclsyntax.B
 					Rule:     r.Name(),
 					Message:  b.name + " should come after " + a.name,
 					File:     ctx.File,
-					Location: block.Range(),
+					Location: sdk.LocationFromRange(block.Range()),
 					Severity: sdk.SeverityInfo,
 					Fixable:  true,
 					FixFunc: func() ([]byte, error) {
@@ -286,7 +286,7 @@ func (r *LifecycleAttributeOrderRule) checkLifecycleBlock(ctx *sdk.Context, pare
 					Rule:     r.Name(),
 					Message:  a.name + " should come after " + b.name + " in lifecycle block",
 					File:     ctx.File,
-					Location: lifecycleBlock.Range(),
+					Location: sdk.LocationFromRange(lifecycleBlock.Range()),
 					Severity: sdk.SeverityInfo,
 					Fixable:  true,
 					FixFunc: func() ([]byte, error) {
@@ -299,7 +299,7 @@ func (r *LifecycleAttributeOrderRule) checkLifecycleBlock(ctx *sdk.Context, pare
 					Rule:     r.Name(),
 					Message:  b.name + " should come after " + a.name + " in lifecycle block",
 					File:     ctx.File,
-					Location: lifecycleBlock.Range(),
+					Location: sdk.LocationFromRange(lifecycleBlock.Range()),
 					Severity: sdk.SeverityInfo,
 					Fixable:  true,
 					FixFunc: func() ([]byte, error) {
@@ -519,7 +519,7 @@ func (r *NestedBlockOrderRule) checkNestedBlocks(ctx *sdk.Context, block *hclsyn
 					Rule:     r.Name(),
 					Message:  a.blockType + " block should come after " + b.blockType + " block",
 					File:     ctx.File,
-					Location: block.Range(),
+					Location: sdk.LocationFromRange(block.Range()),
 					Severity: sdk.SeverityInfo,
 					Fixable:  false, // Reordering nested blocks is complex
 				})
@@ -629,10 +629,12 @@ func (r *OneLineAttributeSpacingRule) checkBlock(ctx *sdk.Context, block *hclsyn
 						Rule:    r.Name(),
 						Message: "Consider adding a blank line between block-valued and one-line attributes",
 						File:    ctx.File,
-						Location: hcl.Range{
-							Filename: ctx.File,
-							Start:    hcl.Pos{Line: attr.startLine, Column: 1},
-							End:      hcl.Pos{Line: attr.startLine, Column: 1},
+						Location: sdk.Location{
+							Filename:    ctx.File,
+							StartLine:   attr.startLine,
+							StartColumn: 1,
+							EndLine:     attr.startLine,
+							EndColumn:   1,
 						},
 						Severity: sdk.SeverityInfo,
 						Fixable:  false,

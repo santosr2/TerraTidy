@@ -103,7 +103,7 @@ func (r *ScopedFileOrganizationRule) Check(ctx *sdk.Context, file *hcl.File) ([]
 				Rule:     r.Name(),
 				Message:  resourceType + " resource may be better placed in " + resourceScope + ".tf",
 				File:     ctx.File,
-				Location: block.Range(),
+				Location: sdk.LocationFromRange(block.Range()),
 				Severity: sdk.SeverityInfo,
 				Fixable:  false,
 			})
@@ -203,7 +203,7 @@ func (r *TerraformFilesStructureRule) Check(ctx *sdk.Context, file *hcl.File) ([
 							Rule:     r.Name(),
 							Message:  block.Type + " block should be in " + standardFile,
 							File:     ctx.File,
-							Location: block.Range(),
+							Location: sdk.LocationFromRange(block.Range()),
 							Severity: sdk.SeverityInfo,
 							Fixable:  false,
 						})

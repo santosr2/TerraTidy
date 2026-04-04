@@ -45,7 +45,7 @@ func (r *VariablesInFileRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Fin
 				Rule:     r.Name(),
 				Message:  "Variable '" + varName + "' should be defined in variables.tf",
 				File:     ctx.File,
-				Location: block.Range(),
+				Location: sdk.LocationFromRange(block.Range()),
 				Severity: sdk.SeverityInfo,
 				Fixable:  false,
 			})
@@ -99,7 +99,7 @@ func (r *OutputsInFileRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Findi
 				Rule:     r.Name(),
 				Message:  "Output '" + outputName + "' should be defined in outputs.tf",
 				File:     ctx.File,
-				Location: block.Range(),
+				Location: sdk.LocationFromRange(block.Range()),
 				Severity: sdk.SeverityInfo,
 				Fixable:  false,
 			})
@@ -153,7 +153,7 @@ func (r *ProvidersInFileRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Fin
 				Rule:     r.Name(),
 				Message:  "Provider '" + providerName + "' should be defined in providers.tf or versions.tf",
 				File:     ctx.File,
-				Location: block.Range(),
+				Location: sdk.LocationFromRange(block.Range()),
 				Severity: sdk.SeverityInfo,
 				Fixable:  false,
 			})

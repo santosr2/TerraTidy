@@ -94,7 +94,7 @@ func (f *MarkdownFormatter) writeFileFindingsAsTable(w io.Writer, file string, f
 		_, _ = fmt.Fprintf(w, "\n| %s %s | %d | `%s` | %s |",
 			icon,
 			finding.Severity,
-			finding.Location.Start.Line,
+			finding.Location.StartLine,
 			finding.Rule,
 			escapeMarkdown(finding.Message),
 		)

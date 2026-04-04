@@ -811,12 +811,12 @@ func (s *Server) getDiagnostics(uri string) []Diagnostic {
 		diag := Diagnostic{
 			Range: Range{
 				Start: Position{
-					Line:      max(0, f.Location.Start.Line-1),
-					Character: max(0, f.Location.Start.Column-1),
+					Line:      max(0, f.Location.StartLine-1),
+					Character: max(0, f.Location.StartColumn-1),
 				},
 				End: Position{
-					Line:      max(0, f.Location.End.Line-1),
-					Character: max(0, f.Location.End.Column-1),
+					Line:      max(0, f.Location.EndLine-1),
+					Character: max(0, f.Location.EndColumn-1),
 				},
 			},
 			Severity: severityToLSP(f.Severity),

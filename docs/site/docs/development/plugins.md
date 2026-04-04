@@ -63,9 +63,12 @@ The `sdk.Context` provides runtime information to rules:
 
 ```go
 type Context struct {
-    Config  map[string]any
-    WorkDir string
-    File    string
+    context.Context              // Embedded for cancellation/deadline support
+
+    Options  map[string]any      // Rule-specific config from .terratidy.yaml
+    WorkDir  string              // Directory TerraTidy was invoked from
+    File     string              // Absolute path to file being checked
+    AllFiles map[string][]byte   // All files being processed (for cross-file rules)
 }
 ```
 
@@ -73,15 +76,26 @@ type Context struct {
 
 ```go
 type Finding struct {
-    Rule     string                 `json:"rule"`
-    Message  string                 `json:"message"`
-    File     string                 `json:"file"`
-    Location Location               `json:"location"`
-    Severity Severity               `json:"severity"`
-    Fixable  bool                   `json:"fixable"`
-    FixFunc  func() ([]byte, error) `json:"-"`
+    Rule     string      `json:"rule"`
+    Message  string      `json:"message"`
+    File     string      `json:"file"`
+    Location Location    `json:"location"`
+    Severity Severity    `json:"severity"`
+    Fix      *FixResult  `json:"fix,omitempty"`
 }
 ```
+
+### FixResult
+
+Holds the result of an auto-fix operation:
+
+```go
+type FixResult struct {
+    Content []byte
+}
+```
+
+A finding is auto-fixable when `Fix != nil`.
 
 ### Severity
 
@@ -206,7 +220,7 @@ func (r *RequireTagsRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Finding
                 Rule:     "require-tags",
                 Message:  fmt.Sprintf("Resource %q is missing a tags attribute", block.Labels[0]),
                 File:     ctx.File,
-                Location: block.DefRange(),
+                Location: sdk.LocationFromRange(block.DefRange()),
                 Severity: sdk.SeverityWarning,
             })
         }

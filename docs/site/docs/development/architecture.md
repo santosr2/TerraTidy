@@ -76,13 +76,16 @@ Findings represent issues detected by engines:
 
 ```go
 type Finding struct {
-    Rule     string                 `json:"rule"`
-    Message  string                 `json:"message"`
-    File     string                 `json:"file"`
-    Location Location               `json:"location"`
-    Severity Severity               `json:"severity"`
-    Fixable  bool                   `json:"fixable"`
-    FixFunc  func() ([]byte, error) `json:"-"`
+    Rule     string      `json:"rule"`
+    Message  string      `json:"message"`
+    File     string      `json:"file"`
+    Location Location    `json:"location"`
+    Severity Severity    `json:"severity"`
+    Fix      *FixResult  `json:"fix,omitempty"`
+}
+
+type FixResult struct {
+    Content []byte
 }
 ```
 
@@ -121,7 +124,7 @@ func (e *FmtEngine) Run(ctx context.Context, files []string) ([]Finding, error) 
                 Rule:    "fmt",
                 Message: "File is not formatted",
                 File:    file,
-                Fixable: true,
+                Fix:     &FixResult{Content: formatted},
             })
         }
     }

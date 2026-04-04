@@ -63,7 +63,7 @@ func (r *RequireTagsRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Finding
 				Rule:     "require-tags",
 				Message:  fmt.Sprintf("Resource %q is missing a tags attribute", block.Labels[0]),
 				File:     ctx.File,
-				Location: block.DefRange(),
+				Location: sdk.LocationFromRange(block.DefRange()),
 				Severity: sdk.SeverityWarning,
 			})
 		}

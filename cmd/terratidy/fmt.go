@@ -120,7 +120,7 @@ Use --all to also apply style fixes (equivalent to running fmt + style --fix).`,
 
 			styleFixed := 0
 			for _, finding := range styleFindings {
-				if finding.Fixable && finding.FixFunc != nil {
+				if finding.Fix != nil {
 					styleFixed++
 				}
 			}

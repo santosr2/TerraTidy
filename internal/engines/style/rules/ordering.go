@@ -57,38 +57,37 @@ func (r *ForEachCountFirstRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.F
 			}
 		}
 
+		// Pre-compute fix once for this block (shared by findings)
+		var fixResult *sdk.FixResult
+		needsFix := (forEachAttr != nil && firstAttr != nil && forEachAttr != firstAttr) ||
+			(countAttr != nil && firstAttr != nil && countAttr != firstAttr && forEachAttr == nil)
+		if needsFix {
+			fixedContent, err := r.fixBlock(ctx.File, block.Type, block.Labels, "")
+			if err == nil && fixedContent != nil {
+				fixResult = &sdk.FixResult{Content: fixedContent}
+			}
+		}
+
 		// Check if for_each/count exists but is not first
 		if forEachAttr != nil && firstAttr != nil && forEachAttr != firstAttr {
-			filePath := ctx.File
-			blockType := block.Type
-			blockLabels := block.Labels
 			findings = append(findings, sdk.Finding{
 				Rule:     r.Name(),
 				Message:  "for_each should be the first attribute in the block",
 				File:     ctx.File,
 				Location: sdk.LocationFromRange(forEachAttr.Range()),
 				Severity: sdk.SeverityWarning,
-				Fixable:  true,
-				FixFunc: func() ([]byte, error) {
-					return r.fixBlock(filePath, blockType, blockLabels, "for_each")
-				},
+				Fix:      fixResult,
 			})
 		}
 
 		if countAttr != nil && firstAttr != nil && countAttr != firstAttr && forEachAttr == nil {
-			filePath := ctx.File
-			blockType := block.Type
-			blockLabels := block.Labels
 			findings = append(findings, sdk.Finding{
 				Rule:     r.Name(),
 				Message:  "count should be the first attribute in the block",
 				File:     ctx.File,
 				Location: sdk.LocationFromRange(countAttr.Range()),
 				Severity: sdk.SeverityWarning,
-				Fixable:  true,
-				FixFunc: func() ([]byte, error) {
-					return r.fixBlock(filePath, blockType, blockLabels, "count")
-				},
+				Fix:      fixResult,
 			})
 		}
 	}
@@ -252,18 +251,18 @@ func (r *LifecycleAtEndRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Find
 
 		// If lifecycle exists and is not at the end
 		if lifecycleBlock != nil && lifecycleBlock.Range().End.Line < lastLine {
-			filePath := ctx.File
-			blockLabels := block.Labels
+			var fixResult *sdk.FixResult
+			fixedContent, err := r.fixLifecyclePosition(ctx.File, block.Labels)
+			if err == nil && fixedContent != nil {
+				fixResult = &sdk.FixResult{Content: fixedContent}
+			}
 			findings = append(findings, sdk.Finding{
 				Rule:     r.Name(),
 				Message:  "lifecycle block should be at the end of the resource block",
 				File:     ctx.File,
 				Location: sdk.LocationFromRange(lifecycleBlock.Range()),
 				Severity: sdk.SeverityWarning,
-				Fixable:  true,
-				FixFunc: func() ([]byte, error) {
-					return r.fixLifecyclePosition(filePath, blockLabels)
-				},
+				Fix:      fixResult,
 			})
 		}
 	}
@@ -418,12 +417,11 @@ func (r *TagsAtEndRule) checkTagsBlock(ctx *sdk.Context, block *hclsyntax.Block)
 		return findings
 	}
 
-	// Create fix function for this block
-	filePath := ctx.File
-	blockType := block.Type
-	blockLabels := block.Labels
-	fixFunc := func() ([]byte, error) {
-		return r.fixTagsBlock(filePath, blockType, blockLabels)
+	// Pre-compute fix once for this block
+	var fixResult *sdk.FixResult
+	fixedContent, err := r.fixTagsBlock(ctx.File, block.Type, block.Labels)
+	if err == nil && fixedContent != nil {
+		fixResult = &sdk.FixResult{Content: fixedContent}
 	}
 
 	lifecycleBlock := FindNestedBlock(body.Blocks, "lifecycle")
@@ -436,8 +434,7 @@ func (r *TagsAtEndRule) checkTagsBlock(ctx *sdk.Context, block *hclsyntax.Block)
 			File:     ctx.File,
 			Location: sdk.LocationFromRange(tagsAttr.Range()),
 			Severity: sdk.SeverityWarning,
-			Fixable:  true,
-			FixFunc:  fixFunc,
+			Fix:      fixResult,
 		})
 	}
 
@@ -448,8 +445,7 @@ func (r *TagsAtEndRule) checkTagsBlock(ctx *sdk.Context, block *hclsyntax.Block)
 			File:     ctx.File,
 			Location: sdk.LocationFromRange(tagsAttr.Range()),
 			Severity: sdk.SeverityInfo,
-			Fixable:  true,
-			FixFunc:  fixFunc,
+			Fix:      fixResult,
 		})
 	}
 
@@ -611,11 +607,11 @@ func (r *DependsOnOrderRule) checkDependsOnBlock(ctx *sdk.Context, block *hclsyn
 		return findings
 	}
 
-	filePath := ctx.File
-	blockType := block.Type
-	blockLabels := block.Labels
-	fixFunc := func() ([]byte, error) {
-		return r.fixDependsOnOrder(filePath, blockType, blockLabels)
+	// Pre-compute fix once for this block
+	var fixResult *sdk.FixResult
+	fixedContent, err := r.fixDependsOnOrder(ctx.File, block.Type, block.Labels)
+	if err == nil && fixedContent != nil {
+		fixResult = &sdk.FixResult{Content: fixedContent}
 	}
 
 	lifecycleBlock := FindNestedBlock(body.Blocks, "lifecycle")
@@ -628,8 +624,7 @@ func (r *DependsOnOrderRule) checkDependsOnBlock(ctx *sdk.Context, block *hclsyn
 			File:     ctx.File,
 			Location: sdk.LocationFromRange(dependsOnAttr.Range()),
 			Severity: sdk.SeverityWarning,
-			Fixable:  true,
-			FixFunc:  fixFunc,
+			Fix:      fixResult,
 		})
 	}
 
@@ -640,8 +635,7 @@ func (r *DependsOnOrderRule) checkDependsOnBlock(ctx *sdk.Context, block *hclsyn
 			File:     ctx.File,
 			Location: sdk.LocationFromRange(dependsOnAttr.Range()),
 			Severity: sdk.SeverityInfo,
-			Fixable:  true,
-			FixFunc:  fixFunc,
+			Fix:      fixResult,
 		})
 	}
 
@@ -787,21 +781,21 @@ func (r *SourceVersionGroupedRule) checkModuleBlock(ctx *sdk.Context, block *hcl
 	sourceAttr := FindAttribute(body.Attributes, "source")
 	versionAttr := FindAttribute(body.Attributes, "version")
 
-	// Create fix function that handles all source/version ordering for this block
-	filePath := ctx.File
-	blockLabels := block.Labels
-	fixFunc := func() ([]byte, error) {
-		return r.fixModuleBlock(filePath, blockLabels)
+	// Pre-compute fix once for this block
+	var fixResult *sdk.FixResult
+	fixedContent, err := r.fixModuleBlock(ctx.File, block.Labels)
+	if err == nil && fixedContent != nil {
+		fixResult = &sdk.FixResult{Content: fixedContent}
 	}
 
 	if sourceAttr != nil {
-		if finding := r.checkSourcePosition(ctx, body.Attributes, sourceAttr, fixFunc); finding != nil {
+		if finding := r.checkSourcePosition(ctx, body.Attributes, sourceAttr, fixResult); finding != nil {
 			findings = append(findings, *finding)
 		}
 	}
 
 	if sourceAttr != nil && versionAttr != nil {
-		if finding := r.checkVersionFollowsSource(ctx, body.Attributes, sourceAttr, versionAttr, fixFunc); finding != nil {
+		if finding := r.checkVersionFollowsSource(ctx, body.Attributes, sourceAttr, versionAttr, fixResult); finding != nil {
 			findings = append(findings, *finding)
 		}
 	}
@@ -846,7 +840,7 @@ func (r *SourceVersionGroupedRule) fixModuleBlock(filePath string, blockLabels [
 
 func (r *SourceVersionGroupedRule) checkSourcePosition(
 	ctx *sdk.Context, attrs hclsyntax.Attributes, sourceAttr *hclsyntax.Attribute,
-	fixFunc func() ([]byte, error),
+	fixResult *sdk.FixResult,
 ) *sdk.Finding {
 	sourceLine := sourceAttr.Range().Start.Line
 	allowedBefore := map[string]bool{"source": true, "for_each": true, "count": true}
@@ -859,8 +853,7 @@ func (r *SourceVersionGroupedRule) checkSourcePosition(
 				File:     ctx.File,
 				Location: sdk.LocationFromRange(sourceAttr.Range()),
 				Severity: sdk.SeverityWarning,
-				Fixable:  true,
-				FixFunc:  fixFunc,
+				Fix:      fixResult,
 			}
 		}
 	}
@@ -870,7 +863,7 @@ func (r *SourceVersionGroupedRule) checkSourcePosition(
 func (r *SourceVersionGroupedRule) checkVersionFollowsSource(
 	ctx *sdk.Context, attrs hclsyntax.Attributes,
 	sourceAttr, versionAttr *hclsyntax.Attribute,
-	fixFunc func() ([]byte, error),
+	fixResult *sdk.FixResult,
 ) *sdk.Finding {
 	sourceLine := sourceAttr.Range().End.Line
 	versionLine := versionAttr.Range().Start.Line
@@ -885,8 +878,7 @@ func (r *SourceVersionGroupedRule) checkVersionFollowsSource(
 				File:     ctx.File,
 				Location: sdk.LocationFromRange(versionAttr.Range()),
 				Severity: sdk.SeverityWarning,
-				Fixable:  true,
-				FixFunc:  fixFunc,
+				Fix:      fixResult,
 			}
 		}
 	}
@@ -998,7 +990,15 @@ func (r *VariableOrderRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Findi
 
 func (r *VariableOrderRule) checkVariableBlock(ctx *sdk.Context, block *hclsyntax.Block, attrOrder map[string]int) []sdk.Finding {
 	attrs := r.collectVariableAttrs(block.Body, attrOrder)
-	return r.findOrderViolations(ctx, block, attrs)
+
+	// Pre-compute fix once for this block
+	var fixResult *sdk.FixResult
+	fixedContent, err := r.Fix(&sdk.Context{File: ctx.File}, nil)
+	if err == nil && fixedContent != nil {
+		fixResult = &sdk.FixResult{Content: fixedContent}
+	}
+
+	return r.findOrderViolations(ctx, block, attrs, fixResult)
 }
 
 func (r *VariableOrderRule) collectVariableAttrs(body *hclsyntax.Body, attrOrder map[string]int) []varAttrPos {
@@ -1034,7 +1034,7 @@ func (r *VariableOrderRule) collectVariableAttrs(body *hclsyntax.Body, attrOrder
 }
 
 func (r *VariableOrderRule) findOrderViolations(
-	ctx *sdk.Context, block *hclsyntax.Block, attrs []varAttrPos,
+	ctx *sdk.Context, block *hclsyntax.Block, attrs []varAttrPos, fixResult *sdk.FixResult,
 ) []sdk.Finding {
 	var findings []sdk.Finding
 	if len(attrs) < 2 {
@@ -1043,7 +1043,7 @@ func (r *VariableOrderRule) findOrderViolations(
 
 	for i := 0; i < len(attrs)-1; i++ {
 		for j := i + 1; j < len(attrs); j++ {
-			if finding := r.checkAttrPair(ctx, block, attrs[i], attrs[j]); finding != nil {
+			if finding := r.checkAttrPair(ctx, block, attrs[i], attrs[j], fixResult); finding != nil {
 				findings = append(findings, *finding)
 			}
 		}
@@ -1051,9 +1051,7 @@ func (r *VariableOrderRule) findOrderViolations(
 	return findings
 }
 
-func (r *VariableOrderRule) checkAttrPair(ctx *sdk.Context, block *hclsyntax.Block, a, b varAttrPos) *sdk.Finding {
-	filePath := ctx.File
-
+func (r *VariableOrderRule) checkAttrPair(ctx *sdk.Context, block *hclsyntax.Block, a, b varAttrPos, fixResult *sdk.FixResult) *sdk.Finding {
 	if b.line < a.line && b.order > a.order {
 		return &sdk.Finding{
 			Rule:     r.Name(),
@@ -1061,10 +1059,7 @@ func (r *VariableOrderRule) checkAttrPair(ctx *sdk.Context, block *hclsyntax.Blo
 			File:     ctx.File,
 			Location: sdk.LocationFromRange(block.Range()),
 			Severity: sdk.SeverityInfo,
-			Fixable:  true,
-			FixFunc: func() ([]byte, error) {
-				return r.Fix(&sdk.Context{File: filePath}, nil)
-			},
+			Fix:      fixResult,
 		}
 	}
 
@@ -1075,10 +1070,7 @@ func (r *VariableOrderRule) checkAttrPair(ctx *sdk.Context, block *hclsyntax.Blo
 			File:     ctx.File,
 			Location: sdk.LocationFromRange(block.Range()),
 			Severity: sdk.SeverityInfo,
-			Fixable:  true,
-			FixFunc: func() ([]byte, error) {
-				return r.Fix(&sdk.Context{File: filePath}, nil)
-			},
+			Fix:      fixResult,
 		}
 	}
 
@@ -1190,7 +1182,15 @@ func (r *OutputOrderRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Finding
 
 func (r *OutputOrderRule) checkOutputBlock(ctx *sdk.Context, block *hclsyntax.Block, attrOrder map[string]int) []sdk.Finding {
 	attrs := r.collectOutputAttrs(block.Body, attrOrder)
-	return r.findOutputOrderViolations(ctx, block, attrs)
+
+	// Pre-compute fix once for this block
+	var fixResult *sdk.FixResult
+	fixedContent, err := r.Fix(&sdk.Context{File: ctx.File}, nil)
+	if err == nil && fixedContent != nil {
+		fixResult = &sdk.FixResult{Content: fixedContent}
+	}
+
+	return r.findOutputOrderViolations(ctx, block, attrs, fixResult)
 }
 
 func (r *OutputOrderRule) collectOutputAttrs(body *hclsyntax.Body, attrOrder map[string]int) []varAttrPos {
@@ -1210,7 +1210,7 @@ func (r *OutputOrderRule) collectOutputAttrs(body *hclsyntax.Body, attrOrder map
 }
 
 func (r *OutputOrderRule) findOutputOrderViolations(
-	ctx *sdk.Context, block *hclsyntax.Block, attrs []varAttrPos,
+	ctx *sdk.Context, block *hclsyntax.Block, attrs []varAttrPos, fixResult *sdk.FixResult,
 ) []sdk.Finding {
 	var findings []sdk.Finding
 	if len(attrs) < 2 {
@@ -1219,7 +1219,7 @@ func (r *OutputOrderRule) findOutputOrderViolations(
 
 	for i := 0; i < len(attrs)-1; i++ {
 		for j := i + 1; j < len(attrs); j++ {
-			if finding := r.checkOutputAttrPair(ctx, block, attrs[i], attrs[j]); finding != nil {
+			if finding := r.checkOutputAttrPair(ctx, block, attrs[i], attrs[j], fixResult); finding != nil {
 				findings = append(findings, *finding)
 			}
 		}
@@ -1227,9 +1227,7 @@ func (r *OutputOrderRule) findOutputOrderViolations(
 	return findings
 }
 
-func (r *OutputOrderRule) checkOutputAttrPair(ctx *sdk.Context, block *hclsyntax.Block, a, b varAttrPos) *sdk.Finding {
-	filePath := ctx.File
-
+func (r *OutputOrderRule) checkOutputAttrPair(ctx *sdk.Context, block *hclsyntax.Block, a, b varAttrPos, fixResult *sdk.FixResult) *sdk.Finding {
 	if b.line < a.line && b.order > a.order {
 		return &sdk.Finding{
 			Rule:     r.Name(),
@@ -1237,10 +1235,7 @@ func (r *OutputOrderRule) checkOutputAttrPair(ctx *sdk.Context, block *hclsyntax
 			File:     ctx.File,
 			Location: sdk.LocationFromRange(block.Range()),
 			Severity: sdk.SeverityInfo,
-			Fixable:  true,
-			FixFunc: func() ([]byte, error) {
-				return r.Fix(&sdk.Context{File: filePath}, nil)
-			},
+			Fix:      fixResult,
 		}
 	}
 
@@ -1251,10 +1246,7 @@ func (r *OutputOrderRule) checkOutputAttrPair(ctx *sdk.Context, block *hclsyntax
 			File:     ctx.File,
 			Location: sdk.LocationFromRange(block.Range()),
 			Severity: sdk.SeverityInfo,
-			Fixable:  true,
-			FixFunc: func() ([]byte, error) {
-				return r.Fix(&sdk.Context{File: filePath}, nil)
-			},
+			Fix:      fixResult,
 		}
 	}
 
@@ -1357,17 +1349,18 @@ func (r *TerraformBlockFirstRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk
 	}
 
 	if terraformBlock != nil && terraformBlock != firstBlock {
-		filePath := ctx.File
+		var fixResult *sdk.FixResult
+		fixedContent, err := r.fixFile(ctx.File)
+		if err == nil && fixedContent != nil {
+			fixResult = &sdk.FixResult{Content: fixedContent}
+		}
 		findings = append(findings, sdk.Finding{
 			Rule:     r.Name(),
 			Message:  "terraform block should be the first block in the file",
 			File:     ctx.File,
 			Location: sdk.LocationFromRange(terraformBlock.Range()),
 			Severity: sdk.SeverityWarning,
-			Fixable:  true,
-			FixFunc: func() ([]byte, error) {
-				return r.fixFile(filePath)
-			},
+			Fix:      fixResult,
 		})
 	}
 
@@ -1433,9 +1426,11 @@ func (r *ProviderBlockOrderRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.
 		}
 	}
 
-	filePath := ctx.File
-	fixFunc := func() ([]byte, error) {
-		return r.fixFile(filePath)
+	// Pre-compute fix once
+	var fixResult *sdk.FixResult
+	fixedContent, err := r.fixFile(ctx.File)
+	if err == nil && fixedContent != nil {
+		fixResult = &sdk.FixResult{Content: fixedContent}
 	}
 
 	for _, block := range hclFile.Blocks {
@@ -1450,8 +1445,7 @@ func (r *ProviderBlockOrderRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.
 					File:     ctx.File,
 					Location: sdk.LocationFromRange(block.Range()),
 					Severity: sdk.SeverityWarning,
-					Fixable:  true,
-					FixFunc:  fixFunc,
+					Fix:      fixResult,
 				})
 			}
 
@@ -1463,8 +1457,7 @@ func (r *ProviderBlockOrderRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.
 					File:     ctx.File,
 					Location: sdk.LocationFromRange(block.Range()),
 					Severity: sdk.SeverityWarning,
-					Fixable:  true,
-					FixFunc:  fixFunc,
+					Fix:      fixResult,
 				})
 			}
 		}
@@ -1633,9 +1626,14 @@ func (r *AttributeGroupSpacingRule) checkBlock(ctx *sdk.Context, block *hclsynta
 		}
 	}
 
-	// Check for missing blank lines between groups
-	filePath := ctx.File
+	// Pre-compute fix once for this file
+	var fixResult *sdk.FixResult
+	fixedContent, err := r.fixAllBlocks(ctx.File)
+	if err == nil && fixedContent != nil {
+		fixResult = &sdk.FixResult{Content: fixedContent}
+	}
 
+	// Check for missing blank lines between groups
 	for i := 0; i < len(attrs)-1; i++ {
 		curr := attrs[i]
 		next := attrs[i+1]
@@ -1681,11 +1679,7 @@ func (r *AttributeGroupSpacingRule) checkBlock(ctx *sdk.Context, block *hclsynta
 					EndColumn:   1,
 				},
 				Severity: sdk.SeverityInfo,
-				Fixable:  true,
-				FixFunc: func() ([]byte, error) {
-					// Fix all blocks in one pass (deduplication means only first finding's FixFunc runs)
-					return r.fixAllBlocks(filePath)
-				},
+				Fix:      fixResult,
 			})
 		}
 	}

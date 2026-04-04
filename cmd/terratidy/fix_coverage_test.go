@@ -33,7 +33,7 @@ func TestCountFormattedFiles(t *testing.T) {
 }
 
 func TestCountFixedStyleIssues(t *testing.T) {
-	fixFunc := func() ([]byte, error) { return nil, nil }
+	fixResult := &sdk.FixResult{Content: []byte("fixed")}
 
 	tests := []struct {
 		name     string
@@ -41,13 +41,12 @@ func TestCountFixedStyleIssues(t *testing.T) {
 		want     int
 	}{
 		{"nil", nil, 0},
-		{"not fixable", []sdk.Finding{{Fixable: false}}, 0},
-		{"fixable but no func", []sdk.Finding{{Fixable: true, FixFunc: nil}}, 0},
-		{"fixable with func", []sdk.Finding{{Fixable: true, FixFunc: fixFunc}}, 1},
+		{"not fixable", []sdk.Finding{{Fix: nil}}, 0},
+		{"fixable with fix", []sdk.Finding{{Fix: fixResult}}, 1},
 		{"mixed", []sdk.Finding{
-			{Fixable: true, FixFunc: fixFunc},
-			{Fixable: false},
-			{Fixable: true, FixFunc: fixFunc},
+			{Fix: fixResult},
+			{Fix: nil},
+			{Fix: fixResult},
 		}, 2},
 	}
 
@@ -59,7 +58,7 @@ func TestCountFixedStyleIssues(t *testing.T) {
 }
 
 func TestCountRemainingIssues(t *testing.T) {
-	fixFunc := func() ([]byte, error) { return nil, nil }
+	fixResult := &sdk.FixResult{Content: []byte("fixed")}
 
 	tests := []struct {
 		name     string
@@ -67,13 +66,12 @@ func TestCountRemainingIssues(t *testing.T) {
 		want     int
 	}{
 		{"nil", nil, 0},
-		{"all fixable", []sdk.Finding{{Fixable: true, FixFunc: fixFunc}}, 0},
-		{"not fixable", []sdk.Finding{{Fixable: false}}, 1},
-		{"fixable no func", []sdk.Finding{{Fixable: true, FixFunc: nil}}, 1},
+		{"all fixable", []sdk.Finding{{Fix: fixResult}}, 0},
+		{"not fixable", []sdk.Finding{{Fix: nil}}, 1},
 		{"mixed", []sdk.Finding{
-			{Fixable: true, FixFunc: fixFunc},
-			{Fixable: false},
-			{Fixable: true, FixFunc: nil},
+			{Fix: fixResult},
+			{Fix: nil},
+			{Fix: nil},
 		}, 2},
 	}
 

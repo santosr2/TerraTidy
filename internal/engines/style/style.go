@@ -83,8 +83,6 @@ func (e *Engine) Run(ctx context.Context, files []string) ([]sdk.Finding, error)
 }
 
 // checkFile checks a single file against all enabled rules
-//
-//nolint:funlen // 121 lines: multi-pass fix loop with diff generation is inherently sequential
 func (e *Engine) checkFile(parser *hclparse.Parser, path string) ([]sdk.Finding, error) {
 	// Create context for rule execution
 	ruleCtx := &sdk.Context{
@@ -127,7 +125,6 @@ func (e *Engine) checkFile(parser *hclparse.Parser, path string) ([]sdk.Finding,
 				Message:  fmt.Sprintf("Failed to parse file: %s", diags.Error()),
 				File:     path,
 				Severity: sdk.SeverityError,
-				Fixable:  false,
 			}}, nil
 		}
 
@@ -137,7 +134,6 @@ func (e *Engine) checkFile(parser *hclparse.Parser, path string) ([]sdk.Finding,
 				Message:  "Failed to parse file: unknown error",
 				File:     path,
 				Severity: sdk.SeverityError,
-				Fixable:  false,
 			}}, nil
 		}
 
@@ -213,7 +209,6 @@ func (e *Engine) checkFile(parser *hclparse.Parser, path string) ([]sdk.Finding,
 					Message:  diffText,
 					File:     path,
 					Severity: sdk.SeverityInfo,
-					Fixable:  false,
 				})
 			}
 		}
@@ -228,7 +223,7 @@ func (e *Engine) applyFixes(ctx *sdk.Context, _ *hcl.File, findings []sdk.Findin
 	// Group findings by fixability
 	var fixableFindings []sdk.Finding
 	for i := range findings {
-		if findings[i].Fixable && findings[i].FixFunc != nil {
+		if findings[i].Fix != nil {
 			fixableFindings = append(fixableFindings, findings[i])
 		}
 	}
@@ -249,18 +244,12 @@ func (e *Engine) applyFixes(ctx *sdk.Context, _ *hcl.File, findings []sdk.Findin
 	}
 
 	// Apply each unique fix sequentially
-	// Each FixFunc reads from disk, so we write intermediate results
+	// With FixResult, fixes are pre-computed so we write them directly
 	fixedCount := 0
 	for _, finding := range uniqueFindings {
-		fixed, err := finding.FixFunc()
-		if err != nil {
-			return fixedCount, fmt.Errorf("fixing %s: %w", finding.Rule, err)
-		}
-
-		// Write intermediate result so next FixFunc sees updated content
-		if fixed != nil {
-			if err := os.WriteFile(ctx.File, fixed, 0o600); err != nil {
-				return fixedCount, fmt.Errorf("writing intermediate fix: %w", err)
+		if finding.Fix.Content != nil {
+			if err := os.WriteFile(ctx.File, finding.Fix.Content, 0o600); err != nil {
+				return fixedCount, fmt.Errorf("writing fix for %s: %w", finding.Rule, err)
 			}
 			fixedCount++
 		}

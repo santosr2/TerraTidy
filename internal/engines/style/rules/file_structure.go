@@ -105,7 +105,6 @@ func (r *ScopedFileOrganizationRule) Check(ctx *sdk.Context, file *hcl.File) ([]
 				File:     ctx.File,
 				Location: sdk.LocationFromRange(block.Range()),
 				Severity: sdk.SeverityInfo,
-				Fixable:  false,
 			})
 		}
 	}
@@ -205,7 +204,6 @@ func (r *TerraformFilesStructureRule) Check(ctx *sdk.Context, file *hcl.File) ([
 							File:     ctx.File,
 							Location: sdk.LocationFromRange(block.Range()),
 							Severity: sdk.SeverityInfo,
-							Fixable:  false,
 						})
 					}
 				}

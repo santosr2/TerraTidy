@@ -34,7 +34,6 @@ func TestFinding(t *testing.T) {
 			Message:  "Test message",
 			File:     "main.tf",
 			Severity: SeverityError,
-			Fixable:  true,
 			Location: Location{
 				Filename:    "main.tf",
 				StartLine:   1,
@@ -48,26 +47,44 @@ func TestFinding(t *testing.T) {
 		assert.Equal(t, "Test message", finding.Message)
 		assert.Equal(t, "main.tf", finding.File)
 		assert.Equal(t, SeverityError, finding.Severity)
-		assert.True(t, finding.Fixable)
+		assert.Nil(t, finding.Fix)
 		assert.Equal(t, 1, finding.Location.StartLine)
 	})
 
-	t.Run("finding with fix function", func(t *testing.T) {
-		fixCalled := false
+	t.Run("finding with fix result", func(t *testing.T) {
 		finding := Finding{
-			Rule:    "fixable-rule",
-			Fixable: true,
-			FixFunc: func() ([]byte, error) {
-				fixCalled = true
-				return []byte("fixed content"), nil
-			},
+			Rule: "fixable-rule",
+			Fix:  &FixResult{Content: []byte("fixed content")},
 		}
 
-		assert.NotNil(t, finding.FixFunc)
-		result, err := finding.FixFunc()
-		assert.NoError(t, err)
-		assert.True(t, fixCalled)
-		assert.Equal(t, []byte("fixed content"), result)
+		assert.NotNil(t, finding.Fix)
+		assert.Equal(t, []byte("fixed content"), finding.Fix.Content)
+	})
+}
+
+func TestFixResult(t *testing.T) {
+	t.Run("basic fix result", func(t *testing.T) {
+		result := FixResult{
+			Content: []byte("fixed content"),
+		}
+
+		assert.Equal(t, []byte("fixed content"), result.Content)
+	})
+
+	t.Run("empty fix result", func(t *testing.T) {
+		result := FixResult{}
+
+		assert.Nil(t, result.Content)
+	})
+
+	t.Run("fix result with newlines", func(t *testing.T) {
+		content := []byte("resource \"aws_s3_bucket\" \"example\" {\n  bucket = \"my-bucket\"\n}\n")
+		result := FixResult{
+			Content: content,
+		}
+
+		assert.Contains(t, string(result.Content), "aws_s3_bucket")
+		assert.Equal(t, len(content), len(result.Content))
 	})
 }
 

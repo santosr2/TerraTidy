@@ -101,7 +101,7 @@ func TestJSONFormatter(t *testing.T) {
 					Message:  "Test message",
 					File:     "test.tf",
 					Severity: sdk.SeverityError,
-					Fixable:  true,
+					Fix:      &sdk.FixResult{Content: []byte("fixed")},
 					Location: sdk.Location{
 						StartLine:   1,
 						StartColumn: 1,
@@ -120,7 +120,6 @@ func TestJSONFormatter(t *testing.T) {
 					Message:  "Error",
 					File:     "test.tf",
 					Severity: sdk.SeverityError,
-					Fixable:  false,
 					Location: sdk.Location{
 						StartLine:   1,
 						StartColumn: 1,
@@ -133,7 +132,7 @@ func TestJSONFormatter(t *testing.T) {
 					Message:  "Warning",
 					File:     "test.tf",
 					Severity: sdk.SeverityWarning,
-					Fixable:  true,
+					Fix:      &sdk.FixResult{Content: []byte("fixed")},
 					Location: sdk.Location{
 						StartLine:   2,
 						StartColumn: 1,
@@ -285,7 +284,7 @@ func TestSARIFFormatter(t *testing.T) {
 					Message:  "Test message",
 					File:     "test.tf",
 					Severity: sdk.SeverityError,
-					Fixable:  true,
+					Fix:      &sdk.FixResult{Content: []byte("fixed")},
 					Location: sdk.Location{
 						StartLine:   1,
 						StartColumn: 1,
@@ -304,7 +303,6 @@ func TestSARIFFormatter(t *testing.T) {
 					Message:  "Error",
 					File:     "test.tf",
 					Severity: sdk.SeverityError,
-					Fixable:  false,
 					Location: sdk.Location{
 						StartLine:   1,
 						StartColumn: 1,
@@ -317,7 +315,7 @@ func TestSARIFFormatter(t *testing.T) {
 					Message:  "Warning",
 					File:     "test.tf",
 					Severity: sdk.SeverityWarning,
-					Fixable:  true,
+					Fix:      &sdk.FixResult{Content: []byte("fixed")},
 					Location: sdk.Location{
 						StartLine:   2,
 						StartColumn: 1,
@@ -380,7 +378,7 @@ func TestHTMLFormatter(t *testing.T) {
 					Message:  "Test message",
 					File:     "test.tf",
 					Severity: sdk.SeverityError,
-					Fixable:  true,
+					Fix:      &sdk.FixResult{Content: []byte("fixed")},
 					Location: sdk.Location{
 						StartLine:   1,
 						StartColumn: 1,
@@ -399,7 +397,6 @@ func TestHTMLFormatter(t *testing.T) {
 					Message:  "Error finding",
 					File:     "main.tf",
 					Severity: sdk.SeverityError,
-					Fixable:  false,
 					Location: sdk.Location{
 						StartLine:   1,
 						StartColumn: 1,
@@ -412,7 +409,7 @@ func TestHTMLFormatter(t *testing.T) {
 					Message:  "Warning finding",
 					File:     "main.tf",
 					Severity: sdk.SeverityWarning,
-					Fixable:  true,
+					Fix:      &sdk.FixResult{Content: []byte("fixed")},
 					Location: sdk.Location{
 						StartLine:   5,
 						StartColumn: 1,
@@ -425,7 +422,6 @@ func TestHTMLFormatter(t *testing.T) {
 					Message:  "Info finding",
 					File:     "variables.tf",
 					Severity: sdk.SeverityInfo,
-					Fixable:  false,
 					Location: sdk.Location{
 						StartLine:   10,
 						StartColumn: 1,
@@ -444,7 +440,6 @@ func TestHTMLFormatter(t *testing.T) {
 					Message:  "<script>alert('xss')</script>",
 					File:     "test.tf",
 					Severity: sdk.SeverityWarning,
-					Fixable:  false,
 					Location: sdk.Location{
 						StartLine:   1,
 						StartColumn: 1,
@@ -499,7 +494,7 @@ func TestHTMLFormatter(t *testing.T) {
 			// Verify fixable badge appears for fixable findings
 			hasFixable := false
 			for _, f := range tt.findings {
-				if f.Fixable {
+				if f.Fix != nil {
 					hasFixable = true
 					break
 				}

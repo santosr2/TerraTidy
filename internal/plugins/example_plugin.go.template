@@ -98,8 +98,8 @@ func (r *MyCustomRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Finding, e
 					Message:  "Resource is missing tags attribute",
 					File:     ctx.File,
 					Severity: r.Severity(),
-					Location: block.DefRange,
-					Fixable:  false,
+					Location: sdk.LocationFromRange(block.DefRange),
+					// Fix: &sdk.FixResult{Content: fixedBytes}, // Set for auto-fixable rules
 				})
 			}
 		}

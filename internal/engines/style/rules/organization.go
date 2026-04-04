@@ -47,7 +47,6 @@ func (r *VariablesInFileRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Fin
 				File:     ctx.File,
 				Location: sdk.LocationFromRange(block.Range()),
 				Severity: sdk.SeverityInfo,
-				Fixable:  false,
 			})
 		}
 	}
@@ -101,7 +100,6 @@ func (r *OutputsInFileRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Findi
 				File:     ctx.File,
 				Location: sdk.LocationFromRange(block.Range()),
 				Severity: sdk.SeverityInfo,
-				Fixable:  false,
 			})
 		}
 	}
@@ -155,7 +153,6 @@ func (r *ProvidersInFileRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Fin
 				File:     ctx.File,
 				Location: sdk.LocationFromRange(block.Range()),
 				Severity: sdk.SeverityInfo,
-				Fixable:  false,
 			})
 		}
 	}

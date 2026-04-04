@@ -119,10 +119,7 @@ func (e *Engine) formatFile(path string) (*sdk.Finding, error) {
 			Message:  message,
 			File:     path,
 			Severity: sdk.SeverityError,
-			Fixable:  true,
-			FixFunc: func() ([]byte, error) {
-				return formatted, nil
-			},
+			Fix:      &sdk.FixResult{Content: formatted},
 		}, nil
 	}
 
@@ -140,7 +137,6 @@ func (e *Engine) formatFile(path string) (*sdk.Finding, error) {
 		Message:  message,
 		File:     path,
 		Severity: sdk.SeverityInfo,
-		Fixable:  false,
 	}, nil
 }
 

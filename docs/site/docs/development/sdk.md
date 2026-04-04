@@ -55,15 +55,20 @@ Runtime context passed to every rule invocation:
 
 ```go
 type Context struct {
-    // Config holds rule-specific configuration from .terratidy.yaml.
-    // Keys and values correspond to the "options" map under a rule's config.
-    Config map[string]any
+    context.Context  // Embedded for cancellation and deadline support
 
-    // WorkDir is the working directory TerraTidy was invoked from.
+    // Options holds rule-specific options from the "options" map in .terratidy.yaml.
+    Options map[string]any
+
+    // WorkDir is the absolute path to the directory TerraTidy was invoked from.
     WorkDir string
 
     // File is the absolute path to the file being checked.
     File string
+
+    // AllFiles contains the raw content of all files being processed in this run.
+    // Useful for cross-file rules that need to analyze multiple files together.
+    AllFiles map[string][]byte
 }
 ```
 
@@ -88,11 +93,19 @@ type Finding struct {
     // Severity indicates the importance: error, warning, or info.
     Severity Severity `json:"severity"`
 
-    // Fixable indicates whether this finding can be auto-fixed.
-    Fixable bool `json:"fixable"`
+    // Fix holds the pre-computed fix result. If non-nil, the finding is auto-fixable.
+    Fix *FixResult `json:"fix,omitempty"`
+}
+```
 
-    // FixFunc is the function that applies the fix. Not serialized to JSON.
-    FixFunc func() ([]byte, error) `json:"-"`
+## FixResult
+
+Holds the result of an auto-fix operation:
+
+```go
+type FixResult struct {
+    // Content is the corrected file content after applying the fix.
+    Content []byte
 }
 ```
 
@@ -140,16 +153,17 @@ func (r *MyRule) Name() string        { return "my-org.my-rule" }
 func (r *MyRule) Description() string { return "Checks something important" }
 
 func (r *MyRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Finding, error) {
-    // Access rule config
-    if val, ok := ctx.Config["my_option"]; ok {
+    // Access rule options
+    if val, ok := ctx.Options["my_option"]; ok {
         _ = val // use it
     }
 
-    // Return findings
+    // Return findings with location
     return []sdk.Finding{{
         Rule:     r.Name(),
         Message:  "Something needs attention",
         File:     ctx.File,
+        Location: sdk.Location{Filename: ctx.File, StartLine: 1, StartColumn: 1},
         Severity: sdk.SeverityWarning,
     }}, nil
 }

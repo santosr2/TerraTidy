@@ -143,7 +143,7 @@ func runStyleFixWithConfig(ctx context.Context, cfg *config.Config, files []stri
 func countFixedStyleIssues(findings []sdk.Finding) int {
 	count := 0
 	for _, f := range findings {
-		if f.Fixable && f.FixFunc != nil {
+		if f.Fix != nil {
 			count++
 		}
 	}
@@ -166,7 +166,7 @@ func printFixSummary(allFindings []sdk.Finding, totalFixed int) {
 func countRemainingIssues(findings []sdk.Finding) int {
 	count := 0
 	for _, f := range findings {
-		if !f.Fixable || f.FixFunc == nil {
+		if f.Fix == nil {
 			count++
 		}
 	}

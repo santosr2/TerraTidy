@@ -26,9 +26,12 @@ The `sdk.Context` provides runtime information:
 
 ```go
 type Context struct {
-    Config  map[string]any
-    WorkDir string
-    File    string
+    context.Context              // Embedded for cancellation/deadline support
+
+    Options  map[string]any      // Rule-specific config from .terratidy.yaml
+    WorkDir  string              // Directory TerraTidy was invoked from
+    File     string              // Absolute path to file being checked
+    AllFiles map[string][]byte   // All files being processed (for cross-file rules)
 }
 ```
 

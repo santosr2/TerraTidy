@@ -92,8 +92,7 @@ func TestNoLeadingTrailingBlankLinesRule(t *testing.T) {
 
 			// Verify findings are fixable
 			for _, f := range findings {
-				assert.True(t, f.Fixable)
-				assert.NotNil(t, f.FixFunc)
+				assert.NotNil(t, f.Fix)
 			}
 		})
 	}

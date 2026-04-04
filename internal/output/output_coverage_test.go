@@ -17,7 +17,7 @@ func TestSARIFFormatter_WithFixableFindings(t *testing.T) {
 			Message:  "Can be fixed",
 			File:     "main.tf",
 			Severity: sdk.SeverityWarning,
-			Fixable:  true,
+			Fix:      &sdk.FixResult{Content: []byte("fixed")},
 			Location: sdk.Location{
 				StartLine:   5,
 				StartColumn: 1,

@@ -150,7 +150,6 @@ func (e *Engine) lintModule(ctx context.Context, dir string, files []string) ([]
 					Message:  fmt.Sprintf("Failed to parse file: %s", entry.ParseErrs.Error()),
 					File:     file,
 					Severity: sdk.SeverityError,
-					Fixable:  false,
 				})
 				continue
 			}
@@ -172,7 +171,6 @@ func (e *Engine) lintModule(ctx context.Context, dir string, files []string) ([]
 				Message:  fmt.Sprintf("Failed to parse file: %s", diags.Error()),
 				File:     file,
 				Severity: sdk.SeverityError,
-				Fixable:  false,
 			})
 			continue
 		}
@@ -316,7 +314,6 @@ func (r *TerraformRequiredVersionRule) Check(ctx *RuleContext) []sdk.Finding {
 			File:     ctx.File,
 			Location: sdk.Location{Filename: ctx.File, StartLine: 1, StartColumn: 1, EndLine: 1, EndColumn: 1},
 			Severity: parseSeverity(ctx.Config.Severity),
-			Fixable:  false,
 		})
 	}
 
@@ -360,7 +357,6 @@ func (r *TerraformRequiredProvidersRule) Check(ctx *RuleContext) []sdk.Finding {
 			File:     ctx.File,
 			Location: sdk.Location{Filename: ctx.File, StartLine: 1, StartColumn: 1, EndLine: 1, EndColumn: 1},
 			Severity: sdk.SeverityInfo,
-			Fixable:  false,
 		})
 	}
 
@@ -411,7 +407,6 @@ func (r *TerraformDeprecatedSyntaxRule) Check(ctx *RuleContext) []sdk.Finding {
 							EndColumn:   match[0] + 1,
 						},
 						Severity: sdk.SeverityWarning,
-						Fixable:  true,
 					})
 				}
 			}
@@ -477,7 +472,6 @@ func (r *TerraformDocumentedVariablesRule) Check(ctx *RuleContext) []sdk.Finding
 				File:     ctx.File,
 				Location: sdk.LocationFromRange(block.Range()),
 				Severity: parseSeverity(ctx.Config.Severity),
-				Fixable:  false,
 			})
 		}
 	}
@@ -527,7 +521,6 @@ func (r *TerraformTypedVariablesRule) Check(ctx *RuleContext) []sdk.Finding {
 				File:     ctx.File,
 				Location: sdk.LocationFromRange(block.Range()),
 				Severity: sdk.SeverityInfo,
-				Fixable:  false,
 			})
 		}
 	}
@@ -577,7 +570,6 @@ func (r *TerraformDocumentedOutputsRule) Check(ctx *RuleContext) []sdk.Finding {
 				File:     ctx.File,
 				Location: sdk.LocationFromRange(block.Range()),
 				Severity: sdk.SeverityInfo,
-				Fixable:  false,
 			})
 		}
 	}
@@ -646,7 +638,6 @@ func (r *TerraformModulePinnedSourceRule) Check(ctx *RuleContext) []sdk.Finding 
 				File:     ctx.File,
 				Location: sdk.LocationFromRange(block.Range()),
 				Severity: sdk.SeverityWarning,
-				Fixable:  false,
 			})
 		}
 
@@ -663,7 +654,6 @@ func (r *TerraformModulePinnedSourceRule) Check(ctx *RuleContext) []sdk.Finding 
 					File:     ctx.File,
 					Location: sdk.LocationFromRange(block.Range()),
 					Severity: sdk.SeverityWarning,
-					Fixable:  false,
 				})
 			}
 		}
@@ -714,7 +704,6 @@ func (r *TerraformNamingConventionRule) Check(ctx *RuleContext) []sdk.Finding {
 				File:     ctx.File,
 				Location: sdk.LocationFromRange(block.Range()),
 				Severity: sdk.SeverityWarning,
-				Fixable:  false,
 			})
 		}
 	}
@@ -776,7 +765,6 @@ func (r *TerraformUnusedDeclarationsRule) Check(ctx *RuleContext) []sdk.Finding 
 					File:     ctx.File,
 					Location: sdk.LocationFromRange(varRange),
 					Severity: sdk.SeverityWarning,
-					Fixable:  false,
 				})
 			}
 		}
@@ -832,7 +820,6 @@ func (r *TerraformResourceCountRule) Check(ctx *RuleContext) []sdk.Finding {
 				EndColumn:   1,
 			},
 			Severity: sdk.SeverityInfo,
-			Fixable:  false,
 		})
 	}
 
@@ -898,7 +885,6 @@ func (r *TerraformHardcodedSecretsRule) Check(ctx *RuleContext) []sdk.Finding {
 						EndColumn:   1,
 					},
 					Severity: sdk.SeverityError,
-					Fixable:  false,
 				})
 			}
 		}
@@ -966,7 +952,6 @@ func (r *TerraformHardcodedSecretsRule) checkBlockForSecrets(
 					File:     ctx.File,
 					Location: sdk.LocationFromRange(attr.Range()),
 					Severity: sdk.SeverityWarning,
-					Fixable:  false,
 				})
 			}
 		}
@@ -1153,7 +1138,6 @@ func (e *Engine) RunTFLint(ctx context.Context, dir string) ([]sdk.Finding, erro
 				EndColumn:   tflintOutput.Issues[i].Range.End.Column,
 			},
 			Severity: severity,
-			Fixable:  false,
 		}
 
 		findings = append(findings, finding)
@@ -1165,7 +1149,6 @@ func (e *Engine) RunTFLint(ctx context.Context, dir string) ([]sdk.Finding, erro
 			Rule:     "tflint.error",
 			Message:  tflintErr.Summary + ": " + tflintErr.Detail,
 			Severity: sdk.SeverityError,
-			Fixable:  false,
 		}
 
 		if tflintErr.Range != nil {

@@ -193,7 +193,7 @@ func (r *OutputPrefixRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Findin
 	}
 
 	// Get configuration
-	prefix, suffix := r.getPatternConfig(ctx.Config)
+	prefix, suffix := r.getPatternConfig(ctx.Options)
 
 	for _, block := range hclFile.Blocks {
 		if block.Type != "output" {
@@ -282,7 +282,7 @@ func (r *ModuleNameConventionRule) Check(ctx *sdk.Context, file *hcl.File) ([]sd
 	}
 
 	// Get naming convention from config
-	convention, customPattern := GetNamingConventionFromConfig(ctx.Config)
+	convention, customPattern := GetNamingConventionFromConfig(ctx.Options)
 
 	for _, block := range hclFile.Blocks {
 		if block.Type != "module" {

@@ -83,10 +83,13 @@ func (e *Engine) Run(ctx context.Context, files []string) ([]sdk.Finding, error)
 }
 
 // checkFile checks a single file against all enabled rules
+//
+//nolint:funlen // 121 lines: multi-pass fix loop with diff generation is inherently sequential
 func (e *Engine) checkFile(parser *hclparse.Parser, path string) ([]sdk.Finding, error) {
 	// Create context for rule execution
 	ruleCtx := &sdk.Context{
-		Config:  make(map[string]any),
+		Context: context.Background(),
+		Options: make(map[string]any),
 		WorkDir: ".",
 		File:    path,
 	}
@@ -146,7 +149,7 @@ func (e *Engine) checkFile(parser *hclparse.Parser, path string) ([]sdk.Finding,
 				continue
 			}
 
-			ruleCtx.Config = ruleConfig.Options
+			ruleCtx.Options = ruleConfig.Options
 
 			ruleFindings, err := rule.Check(ruleCtx, file)
 			if err != nil {

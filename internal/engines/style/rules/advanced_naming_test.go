@@ -292,8 +292,8 @@ func TestOutputPrefixRule(t *testing.T) {
 
 			hclFile := &hcl.File{Body: file.Body}
 			ctx := &sdk.Context{
-				File:   "test.tf",
-				Config: tt.config,
+				File:    "test.tf",
+				Options: tt.config,
 			}
 
 			findings, err := rule.Check(ctx, hclFile)
@@ -395,8 +395,8 @@ func TestModuleNameConventionRule(t *testing.T) {
 
 			hclFile := &hcl.File{Body: file.Body}
 			ctx := &sdk.Context{
-				File:   "test.tf",
-				Config: tt.config,
+				File:    "test.tf",
+				Options: tt.config,
 			}
 
 			findings, err := rule.Check(ctx, hclFile)

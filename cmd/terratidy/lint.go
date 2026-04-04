@@ -35,7 +35,7 @@ Use --changed to only lint files that have been modified in git.`,
 
   # Enable specific rules
   terratidy lint --rule terraform_required_version`,
-	RunE: func(_ *cobra.Command, args []string) error {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		// Load configuration
 		cfg, err := loadConfig()
 		if err != nil {
@@ -56,11 +56,11 @@ Use --changed to only lint files that have been modified in git.`,
 		// Build lint config from terratidy config, then apply CLI overrides
 		lintCfg := buildLintConfig(cfg)
 
-		// CLI flags override config file settings
-		if lintConfigFile != ".tflint.hcl" {
+		// CLI flags override config file settings (use Changed() to detect explicit flags)
+		if cmd.Flags().Changed("config-file") {
 			lintCfg.ConfigFile = lintConfigFile
 		}
-		if len(lintPlugins) > 0 {
+		if cmd.Flags().Changed("plugin") {
 			lintCfg.Plugins = lintPlugins
 		}
 

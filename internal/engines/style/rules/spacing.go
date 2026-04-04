@@ -332,8 +332,10 @@ func (r *BlankLineBetweenBlocksRule) fixContent(content []byte, filePath string)
 					result = append(result, "")
 				} else if adj.action == "remove" {
 					blankKept := false
-					for lineNum < len(lines) {
-						nextLine := lines[lineNum]
+					// Use separate index to avoid mutating outer loop counter
+					skipIdx := lineNum
+					for skipIdx < len(lines) {
+						nextLine := lines[skipIdx]
 						trimmed := TrimLeftWhitespace(nextLine)
 						if len(trimmed) > 0 {
 							break
@@ -342,8 +344,10 @@ func (r *BlankLineBetweenBlocksRule) fixContent(content []byte, filePath string)
 							result = append(result, "")
 							blankKept = true
 						}
-						lineNum++
+						skipIdx++
 					}
+					// Advance outer loop to skip processed blank lines
+					lineNum = skipIdx
 				}
 			}
 		}

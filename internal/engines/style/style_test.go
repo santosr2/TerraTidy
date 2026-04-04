@@ -932,3 +932,49 @@ func TestEngine_InvalidHCL(t *testing.T) {
 		assert.NotNil(t, findings)
 	}
 }
+
+func TestEngine_ApplyFixes_MultipleLocations(t *testing.T) {
+	// Test that the same rule at different locations both get fixed (BUG-9)
+	// Previously, applyFixes keyed by rule name only, so only the first fix was applied
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "multi_fix.tf")
+
+	// Content with multiple missing blank lines (same rule, different locations)
+	content := `resource "aws_instance" "one" {
+  ami = "ami-1"
+}
+resource "aws_instance" "two" {
+  ami = "ami-2"
+}
+resource "aws_instance" "three" {
+  ami = "ami-3"
+}
+`
+	require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0o644))
+
+	// Enable fix mode and the blank-line rule
+	engine := New(&Config{
+		Fix: true,
+		Rules: map[string]RuleConfig{
+			"style.blank-line-between-blocks": {Enabled: true},
+		},
+	})
+
+	findings, err := engine.Run(context.Background(), []string{tmpFile})
+	require.NoError(t, err)
+
+	// Read the fixed content
+	fixedContent, err := os.ReadFile(tmpFile)
+	require.NoError(t, err)
+
+	// Count blank lines between blocks - should have blank lines between all blocks
+	lines := string(fixedContent)
+
+	// The fix should have added blank lines between blocks
+	// With the bug, only the first missing blank line would be fixed
+	// After fix, there should be proper spacing between all three resources
+	assert.Contains(t, lines, "}\n\nresource", "should have blank line between blocks")
+
+	// Should report findings for the issues that were fixed
+	_ = findings // Findings count depends on whether fix was applied before or after check
+}

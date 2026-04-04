@@ -45,6 +45,28 @@ Please include the following information in your report:
 3. We will work with you to understand and resolve the issue
 4. We will credit you in the security advisory (unless you prefer to remain anonymous)
 
+## Trust Model
+
+TerraTidy operates with a clear trust boundary:
+
+**Trusted:**
+
+- Configuration files (`.terratidy.yaml`) — read but not executed
+- HCL/Terraform files in your workspace — parsed, never executed
+- Built-in engines and rules — compiled into the binary
+
+**Untrusted (require verification):**
+
+- Go plugins (`.so` files) — executable code, verify checksums
+- Bash rules (`.sh` files) — executable scripts, verify checksums
+- External tools (TFLint) — validated path only, not content
+
+**Security boundaries:**
+
+- LSP server: Confined to workspace directory, rejects path traversal
+- GitHub Action: Validates inputs against safe character patterns
+- Plugin system: SHA256 verification available (warn-only by default)
+
 ## Security Best Practices
 
 When using TerraTidy:
@@ -96,11 +118,21 @@ This creates additional risks:
 4. Prefer Go plugins or YAML rules over Bash rules when possible
 5. Use `plugins.verify_integrity: false` only in trusted environments
 
+### LSP Server
+
+The Language Server Protocol implementation includes several security measures:
+
+- **Path traversal protection**: File URIs are validated to stay within the workspace
+- **Resource limits**: Max 1000 documents, 10 MB per document, 10 concurrent diagnostics
+- **Content-Length cap**: Messages larger than 10 MB are rejected
+- **Session isolation**: Temp files use per-session directories with automatic cleanup
+
 ### CI/CD Integration
 
 - Use pinned versions in GitHub Actions (`@v0.2.0` not `@latest`)
 - Review the action permissions required
 - Use the `fail-on-error` input appropriately
+- Action inputs are validated against safe character patterns
 
 ### Docker Usage
 

@@ -5,6 +5,104 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0-alpha.4] - 2026-04-04
+
+### Added
+
+- **plugins**: Add YAML and Bash rule loaders with examples ([#4](https://github.com/santosr2/TerraTidy/pull/4)) by [@santosr2](https://github.com/santosr2)
+
+### Changed
+
+- **style**: Remove documentation rules duplicated by lint engine ([#3](https://github.com/santosr2/TerraTidy/pull/3)) by [@santosr2](https://github.com/santosr2)
+- Consolidate duplicated utilities and standardize interface{} to any ([#47](https://github.com/santosr2/TerraTidy/pull/47)) by [@santosr2](https://github.com/santosr2)
+- **sdk**: Split Rule/Fixer interfaces, unify Engine, remove Context.Logger ([#58](https://github.com/santosr2/TerraTidy/pull/58)) by [@santosr2](https://github.com/santosr2)
+- **build**: Consolidate Makefile into mise tasks ([#63](https://github.com/santosr2/TerraTidy/pull/63)) by [@santosr2](https://github.com/santosr2)
+
+### Dependencies
+
+- **deps**: Bump actions/cache from 4 to 5 ([#6](https://github.com/santosr2/TerraTidy/pull/6)) by [@dependabot[bot]](https://github.com/dependabot[bot])
+- **deps**: Bump actions/upload-pages-artifact from 3 to 4 ([#7](https://github.com/santosr2/TerraTidy/pull/7)) by [@dependabot[bot]](https://github.com/dependabot[bot])
+- **deps**: Bump actions/setup-python from 5 to 6 ([#8](https://github.com/santosr2/TerraTidy/pull/8)) by [@dependabot[bot]](https://github.com/dependabot[bot])
+- **deps**: Bump goreleaser/goreleaser-action from 6 to 7 ([#9](https://github.com/santosr2/TerraTidy/pull/9)) by [@dependabot[bot]](https://github.com/dependabot[bot])
+- **deps**: Bump docker/login-action from 3 to 4 ([#11](https://github.com/santosr2/TerraTidy/pull/11)) by [@dependabot[bot]](https://github.com/dependabot[bot])
+- **deps**: Bump github.com/open-policy-agent/opa from 1.12.0 to 1.15.0 ([#10](https://github.com/santosr2/TerraTidy/pull/10)) by [@dependabot[bot]](https://github.com/dependabot[bot])
+- **deps-dev**: Bump @types/node from 20.19.37 to 25.5.0 in /vscode ([#12](https://github.com/santosr2/TerraTidy/pull/12)) by [@dependabot[bot]](https://github.com/dependabot[bot])
+- **deps**: Bump golang.org/x/text from 0.34.0 to 0.35.0 ([#13](https://github.com/santosr2/TerraTidy/pull/13)) by [@dependabot[bot]](https://github.com/dependabot[bot])
+- **deps-dev**: Bump typescript from 5.9.3 to 6.0.2 in /vscode ([#14](https://github.com/santosr2/TerraTidy/pull/14)) by [@dependabot[bot]](https://github.com/dependabot[bot])
+- **deps-dev**: Bump @biomejs/biome from 1.9.4 to 2.4.9 in /vscode ([#16](https://github.com/santosr2/TerraTidy/pull/16)) by [@dependabot[bot]](https://github.com/dependabot[bot])
+- **deps-dev**: Bump @vscode/vsce from 2.32.0 to 3.7.1 in /vscode ([#15](https://github.com/santosr2/TerraTidy/pull/15)) by [@dependabot[bot]](https://github.com/dependabot[bot])
+- **deps**: Bump actions/checkout from 4 to 6 ([#30](https://github.com/santosr2/TerraTidy/pull/30)) by [@dependabot[bot]](https://github.com/dependabot[bot])
+- **deps**: Bump github.com/open-policy-agent/opa from 1.15.0 to 1.15.1 ([#32](https://github.com/santosr2/TerraTidy/pull/32)) by [@dependabot[bot]](https://github.com/dependabot[bot])
+- **deps**: Bump alpine from 3.21 to 3.23 ([#37](https://github.com/santosr2/TerraTidy/pull/37)) by [@dependabot[bot]](https://github.com/dependabot[bot])
+- **deps**: Bump actions/cache from 4.3.0 to 5.0.4 ([#52](https://github.com/santosr2/TerraTidy/pull/52)) by [@dependabot[bot]](https://github.com/dependabot[bot])
+- **deps**: Bump actions/upload-artifact from 4.6.2 to 7.0.0 ([#73](https://github.com/santosr2/TerraTidy/pull/73)) by [@dependabot[bot]](https://github.com/dependabot[bot])
+- **deps**: Bump anchore/sbom-action from 0.20.0 to 0.24.0 ([#75](https://github.com/santosr2/TerraTidy/pull/75)) by [@dependabot[bot]](https://github.com/dependabot[bot])
+- **deps**: Bump oven-sh/setup-bun from 2.0.2 to 2.2.0 ([#77](https://github.com/santosr2/TerraTidy/pull/77)) by [@dependabot[bot]](https://github.com/dependabot[bot])
+- **deps-dev**: Bump esbuild from 0.25.12 to 0.27.4 in /vscode ([#76](https://github.com/santosr2/TerraTidy/pull/76)) by [@dependabot[bot]](https://github.com/dependabot[bot])
+- **deps-dev**: Bump @types/node from 22.19.15 to 25.5.0 in /vscode ([#74](https://github.com/santosr2/TerraTidy/pull/74)) by [@dependabot[bot]](https://github.com/dependabot[bot])
+
+### Documentation
+
+- Update changelog for v0.2.0-alpha.3 ([f188998](https://github.com/santosr2/TerraTidy/commit/f188998f7c6d633d1485cba6c8340d72362d31eb)) by [@github-actions[bot]](https://github.com/github-actions[bot])
+- Align documentation with actual implementation ([#18](https://github.com/santosr2/TerraTidy/pull/18)) by [@santosr2](https://github.com/santosr2)
+- Fix version refs, dead links, and missing output formats ([#21](https://github.com/santosr2/TerraTidy/pull/21)) by [@santosr2](https://github.com/santosr2)
+- Document style rules, commands, and output formats ([#24](https://github.com/santosr2/TerraTidy/pull/24)) by [@santosr2](https://github.com/santosr2)
+- Document config features, plugin system, and custom rules ([#25](https://github.com/santosr2/TerraTidy/pull/25)) by [@santosr2](https://github.com/santosr2)
+- Document policy rules, LSP capabilities, and test-rule format ([#26](https://github.com/santosr2/TerraTidy/pull/26)) by [@santosr2](https://github.com/santosr2)
+- Create 9 new documentation pages and enhance SDK godoc ([#27](https://github.com/santosr2/TerraTidy/pull/27)) by [@santosr2](https://github.com/santosr2)
+- Polish navigation, fix pre-commit hooks, and add clarifications ([#28](https://github.com/santosr2/TerraTidy/pull/28)) by [@santosr2](https://github.com/santosr2)
+- Fix 16 factual inaccuracies across documentation site ([#29](https://github.com/santosr2/TerraTidy/pull/29)) by [@santosr2](https://github.com/santosr2)
+- **readme**: Fix output examples, flag docs, and bumpversion coverage ([#54](https://github.com/santosr2/TerraTidy/pull/54)) by [@santosr2](https://github.com/santosr2)
+- Fix README inaccuracies, broken Homebrew install, and plugin template bug ([#55](https://github.com/santosr2/TerraTidy/pull/55)) by [@santosr2](https://github.com/santosr2)
+- Sync documentation with recent code changes ([#57](https://github.com/santosr2/TerraTidy/pull/57)) by [@santosr2](https://github.com/santosr2)
+- **lint**: Clarify TFLint subprocess integration and add license note ([#67](https://github.com/santosr2/TerraTidy/pull/67)) by [@santosr2](https://github.com/santosr2)
+
+### Fixed
+
+- Use dynamic version in LSP and fix plugin scaffold ([#19](https://github.com/santosr2/TerraTidy/pull/19)) by [@santosr2](https://github.com/santosr2)
+- Remove false claims, fix examples, and implement --diff flag ([#23](https://github.com/santosr2/TerraTidy/pull/23)) by [@santosr2](https://github.com/santosr2)
+- Replace os.Exit with error returns and consolidate SDK utilities ([#46](https://github.com/santosr2/TerraTidy/pull/46)) by [@santosr2](https://github.com/santosr2)
+- Add LSP write mutex, config cycle detection, and interface cleanup ([#56](https://github.com/santosr2/TerraTidy/pull/56)) by [@santosr2](https://github.com/santosr2)
+- Toolchain, LSP features, pre-commit hooks, and VSCode security ([#60](https://github.com/santosr2/TerraTidy/pull/60)) by [@santosr2](https://github.com/santosr2)
+- Docker, GitHub Actions, VSCode, and LSP audit fixes ([#61](https://github.com/santosr2/TerraTidy/pull/61)) by [@santosr2](https://github.com/santosr2)
+- **lsp**: Prevent path traversal attacks in URI handling ([#68](https://github.com/santosr2/TerraTidy/pull/68)) by [@santosr2](https://github.com/santosr2)
+- **security**: Harden code execution paths ([#69](https://github.com/santosr2/TerraTidy/pull/69)) by [@santosr2](https://github.com/santosr2)
+- **security**: Add input validation and error sanitization ([#71](https://github.com/santosr2/TerraTidy/pull/71)) by [@santosr2](https://github.com/santosr2)
+- **release**: Update bump-my-version config ([#83](https://github.com/santosr2/TerraTidy/pull/83)) by [@santosr2](https://github.com/santosr2)
+- **release**: Use cosign bundle format for signing ([#85](https://github.com/santosr2/TerraTidy/pull/85)) by [@santosr2](https://github.com/santosr2)
+
+### Other
+
+- **dev**: Upgrade to Go 1.26.1 and clean up dev tooling ([#17](https://github.com/santosr2/TerraTidy/pull/17)) by [@santosr2](https://github.com/santosr2)
+- Add Claude Code project instructions ([#20](https://github.com/santosr2/TerraTidy/pull/20)) by [@santosr2](https://github.com/santosr2)
+- Apply linter fixes and add plan dirs to gitignore ([#22](https://github.com/santosr2/TerraTidy/pull/22)) by [@santosr2](https://github.com/santosr2)
+- Improve community health templates and add status badges docs ([#42](https://github.com/santosr2/TerraTidy/pull/42)) by [@santosr2](https://github.com/santosr2)
+- Add CODEOWNERS, extract action script, optimize test matrix ([#43](https://github.com/santosr2/TerraTidy/pull/43)) by [@santosr2](https://github.com/santosr2)
+- Fix Scorecard URL casing and add branch protection hook ([#44](https://github.com/santosr2/TerraTidy/pull/44)) by [@santosr2](https://github.com/santosr2)
+- **lint**: Add golangci-lint config, fix security permissions and code findings ([#62](https://github.com/santosr2/TerraTidy/pull/62)) by [@santosr2](https://github.com/santosr2)
+- **vscode**: Add tests, fix LSP diagnostics, improve config handling ([#66](https://github.com/santosr2/TerraTidy/pull/66)) by [@santosr2](https://github.com/santosr2)
+- Harden CI/CD supply chain and add config enhancements ([#72](https://github.com/santosr2/TerraTidy/pull/72)) by [@santosr2](https://github.com/santosr2)
+
+### Performance
+
+- Add benchmarks for lint, policy, and output formatters ([#59](https://github.com/santosr2/TerraTidy/pull/59)) by [@santosr2](https://github.com/santosr2)
+
+### Ci
+
+- **release**: Mark pre-releases as latest on GitHub ([8f2a130](https://github.com/santosr2/TerraTidy/commit/8f2a13026e21d4a64b4ecdebe3613ad8a6fe134a)) by [@santosr2](https://github.com/santosr2)
+- Add dependabot and development utility scripts ([#5](https://github.com/santosr2/TerraTidy/pull/5)) by [@santosr2](https://github.com/santosr2)
+- Add permissions, timeouts, concurrency, and path filters to workflows ([#35](https://github.com/santosr2/TerraTidy/pull/35)) by [@santosr2](https://github.com/santosr2)
+- Fix injection risks, pin actions to SHAs, and harden Dockerfile ([#36](https://github.com/santosr2/TerraTidy/pull/36)) by [@santosr2](https://github.com/santosr2)
+- Add security scanning, quality checks, and pin mise tool versions ([#38](https://github.com/santosr2/TerraTidy/pull/38)) by [@santosr2](https://github.com/santosr2)
+- Add SBOM, cosign signing, attestations, and OpenSSF Scorecard ([#39](https://github.com/santosr2/TerraTidy/pull/39)) by [@santosr2](https://github.com/santosr2)
+- Improve release pipeline with shared version parsing, crane, and smoke tests ([#40](https://github.com/santosr2/TerraTidy/pull/40)) by [@santosr2](https://github.com/santosr2)
+- **quality**: Cache pre-commit hooks and skip branch guard in CI ([#45](https://github.com/santosr2/TerraTidy/pull/45)) by [@santosr2](https://github.com/santosr2)
+- Add PR title checker and standardize commit conventions ([#51](https://github.com/santosr2/TerraTidy/pull/51)) by [@santosr2](https://github.com/santosr2)
+
+### Revert
+
+- Remove make_latest (GitHub limitation for prereleases) ([15c013c](https://github.com/santosr2/TerraTidy/commit/15c013c71269c3e074f83b14cfb80d0573a02a97)) by [@santosr2](https://github.com/santosr2)
+
 ## [0.2.0-alpha.3] - 2026-01-19
 
 ### Added
@@ -154,6 +252,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Exclude test files from complexity rules in revive ([2564974](https://github.com/santosr2/TerraTidy/commit/2564974b584115610107da2427e6fc292a4c3de3)) by [@santosr2](https://github.com/santosr2)
 - **vscode**: Add .gitignore for build artifacts ([854a95f](https://github.com/santosr2/TerraTidy/commit/854a95f9e3e8cadc990d3f4e93a9ae4f65ff0d20)) by [@santosr2](https://github.com/santosr2)
 
+[0.2.0-alpha.4]: https://github.com/santosr2/TerraTidy/compare/v0.2.0-alpha.3...v0.2.0-alpha.4
 [0.2.0-alpha.3]: https://github.com/santosr2/TerraTidy/compare/v0.2.0-alpha.2...v0.2.0-alpha.3
 [0.2.0-alpha.2]: https://github.com/santosr2/TerraTidy/compare/v0.2.0-alpha...v0.2.0-alpha.2
 [0.2.0-alpha]: https://github.com/santosr2/TerraTidy/compare/v0.1.0...v0.2.0-alpha
+

@@ -64,13 +64,11 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Sign checksums with cosign
-        run: cosign sign-blob --yes dist/checksums.txt --output-signature dist/checksums.txt.sig --output-certificate dist/checksums.txt.pem
-        env:
-          COSIGN_EXPERIMENTAL: "1"
+        run: cosign sign-blob --yes dist/checksums.txt --bundle dist/checksums.txt.bundle
 
       - name: Upload cosign artifacts
         run: |
-          gh release upload "$TAG_NAME" dist/checksums.txt.sig dist/checksums.txt.pem --clobber
+          gh release upload "$TAG_NAME" dist/checksums.txt.bundle --clobber
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG_NAME: ${{ github.ref_name }}

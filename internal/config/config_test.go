@@ -16,10 +16,10 @@ func TestLoad_DefaultConfig(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotNil(t, cfg)
 	assert.Equal(t, 1, cfg.Version)
-	assert.True(t, cfg.Engines.Fmt.Enabled)
-	assert.True(t, cfg.Engines.Style.Enabled)
-	assert.True(t, cfg.Engines.Lint.Enabled)
-	assert.False(t, cfg.Engines.Policy.Enabled) // Policy is opt-in
+	assert.True(t, cfg.Engines.Fmt.IsEnabled())
+	assert.True(t, cfg.Engines.Style.IsEnabled())
+	assert.True(t, cfg.Engines.Lint.IsEnabled())
+	assert.False(t, cfg.Engines.Policy.IsEnabled()) // Policy is opt-in
 }
 
 func TestLoad_FromFile(t *testing.T) {
@@ -50,10 +50,10 @@ engines:
 	assert.Equal(t, "error", cfg.SeverityThreshold)
 	assert.True(t, cfg.FailFast)
 	assert.False(t, cfg.Parallel)
-	assert.True(t, cfg.Engines.Fmt.Enabled)
-	assert.False(t, cfg.Engines.Style.Enabled)
-	assert.True(t, cfg.Engines.Lint.Enabled)
-	assert.True(t, cfg.Engines.Policy.Enabled)
+	assert.True(t, cfg.Engines.Fmt.IsEnabled())
+	assert.False(t, cfg.Engines.Style.IsEnabled())
+	assert.True(t, cfg.Engines.Lint.IsEnabled())
+	assert.True(t, cfg.Engines.Policy.IsEnabled())
 }
 
 func TestLoad_WithImports(t *testing.T) {
@@ -170,10 +170,10 @@ func TestDefaultConfig(t *testing.T) {
 	cfg := DefaultConfig()
 
 	assert.Equal(t, 1, cfg.Version)
-	assert.True(t, cfg.Engines.Fmt.Enabled)
-	assert.True(t, cfg.Engines.Style.Enabled)
-	assert.True(t, cfg.Engines.Lint.Enabled)
-	assert.False(t, cfg.Engines.Policy.Enabled)
+	assert.True(t, cfg.Engines.Fmt.IsEnabled())
+	assert.True(t, cfg.Engines.Style.IsEnabled())
+	assert.True(t, cfg.Engines.Lint.IsEnabled())
+	assert.False(t, cfg.Engines.Policy.IsEnabled())
 	assert.Equal(t, "warning", cfg.SeverityThreshold)
 	assert.False(t, cfg.FailFast)
 	assert.True(t, cfg.Parallel)
@@ -531,10 +531,10 @@ func TestGetProfile_NoInheritance(t *testing.T) {
 				Name:        "base",
 				Description: "Base profile",
 				Engines: Engines{
-					Fmt:    EngineConfig{Enabled: true},
-					Style:  EngineConfig{Enabled: true},
-					Lint:   EngineConfig{Enabled: false},
-					Policy: EngineConfig{Enabled: false},
+					Fmt:    EngineConfig{Enabled: BoolPtr(true)},
+					Style:  EngineConfig{Enabled: BoolPtr(true)},
+					Lint:   EngineConfig{Enabled: BoolPtr(false)},
+					Policy: EngineConfig{Enabled: BoolPtr(false)},
 				},
 			},
 		},
@@ -543,9 +543,9 @@ func TestGetProfile_NoInheritance(t *testing.T) {
 	profile, err := cfg.GetProfile("base")
 	require.NoError(t, err)
 	assert.Equal(t, "base", profile.Name)
-	assert.True(t, profile.Engines.Fmt.Enabled)
-	assert.True(t, profile.Engines.Style.Enabled)
-	assert.False(t, profile.Engines.Lint.Enabled)
+	assert.True(t, profile.Engines.Fmt.IsEnabled())
+	assert.True(t, profile.Engines.Style.IsEnabled())
+	assert.False(t, profile.Engines.Lint.IsEnabled())
 }
 
 func TestGetProfile_WithInheritance(t *testing.T) {
@@ -556,16 +556,18 @@ func TestGetProfile_WithInheritance(t *testing.T) {
 				Name:        "base",
 				Description: "Base profile",
 				Engines: Engines{
-					Fmt:    EngineConfig{Enabled: true},
-					Style:  EngineConfig{Enabled: true},
-					Lint:   EngineConfig{Enabled: true},
-					Policy: EngineConfig{Enabled: true},
+					Fmt:    EngineConfig{Enabled: BoolPtr(true)},
+					Style:  EngineConfig{Enabled: BoolPtr(true)},
+					Lint:   EngineConfig{Enabled: BoolPtr(true)},
+					Policy: EngineConfig{Enabled: BoolPtr(true)},
 				},
 			},
 			"dev": {
-				Name:            "dev",
-				Inherits:        "base",
-				DisabledEngines: []string{"policy"}, // Explicitly disable policy
+				Name:     "dev",
+				Inherits: "base",
+				Engines: Engines{
+					Policy: EngineConfig{Enabled: BoolPtr(false)}, // Explicitly disable policy
+				},
 			},
 		},
 	}
@@ -574,11 +576,11 @@ func TestGetProfile_WithInheritance(t *testing.T) {
 	require.NoError(t, err)
 
 	// Should inherit from base
-	assert.True(t, profile.Engines.Fmt.Enabled)
-	assert.True(t, profile.Engines.Style.Enabled)
-	assert.True(t, profile.Engines.Lint.Enabled)
+	assert.True(t, profile.Engines.Fmt.IsEnabled())
+	assert.True(t, profile.Engines.Style.IsEnabled())
+	assert.True(t, profile.Engines.Lint.IsEnabled())
 	// Should be explicitly disabled
-	assert.False(t, profile.Engines.Policy.Enabled)
+	assert.False(t, profile.Engines.Policy.IsEnabled())
 }
 
 func TestGetProfile_MultiLevelInheritance(t *testing.T) {
@@ -588,10 +590,10 @@ func TestGetProfile_MultiLevelInheritance(t *testing.T) {
 			"base": {
 				Name: "base",
 				Engines: Engines{
-					Fmt:    EngineConfig{Enabled: true},
-					Style:  EngineConfig{Enabled: true},
-					Lint:   EngineConfig{Enabled: true},
-					Policy: EngineConfig{Enabled: true},
+					Fmt:    EngineConfig{Enabled: BoolPtr(true)},
+					Style:  EngineConfig{Enabled: BoolPtr(true)},
+					Lint:   EngineConfig{Enabled: BoolPtr(true)},
+					Policy: EngineConfig{Enabled: BoolPtr(true)},
 				},
 				Overrides: OverridesConfig{
 					Rules: map[string]RuleConfig{
@@ -609,9 +611,11 @@ func TestGetProfile_MultiLevelInheritance(t *testing.T) {
 				},
 			},
 			"staging": {
-				Name:            "staging",
-				Inherits:        "ci",
-				DisabledEngines: []string{"policy"}, // Explicitly disable policy
+				Name:     "staging",
+				Inherits: "ci",
+				Engines: Engines{
+					Policy: EngineConfig{Enabled: BoolPtr(false)}, // Explicitly disable policy
+				},
 				Overrides: OverridesConfig{
 					Rules: map[string]RuleConfig{
 						"rule3": {Enabled: true},
@@ -625,8 +629,8 @@ func TestGetProfile_MultiLevelInheritance(t *testing.T) {
 	require.NoError(t, err)
 
 	// Should have all engines from base, with policy explicitly disabled
-	assert.True(t, profile.Engines.Fmt.Enabled)
-	assert.False(t, profile.Engines.Policy.Enabled)
+	assert.True(t, profile.Engines.Fmt.IsEnabled())
+	assert.False(t, profile.Engines.Policy.IsEnabled())
 
 	// Should have merged overrides from all levels
 	assert.Contains(t, profile.Overrides.Rules, "rule1")
@@ -649,19 +653,19 @@ func TestApplyProfile(t *testing.T) {
 	cfg := &Config{
 		Version: 1,
 		Engines: Engines{
-			Fmt:    EngineConfig{Enabled: true},
-			Style:  EngineConfig{Enabled: true},
-			Lint:   EngineConfig{Enabled: true},
-			Policy: EngineConfig{Enabled: true},
+			Fmt:    EngineConfig{Enabled: BoolPtr(true)},
+			Style:  EngineConfig{Enabled: BoolPtr(true)},
+			Lint:   EngineConfig{Enabled: BoolPtr(true)},
+			Policy: EngineConfig{Enabled: BoolPtr(true)},
 		},
 		Profiles: map[string]Profile{
 			"minimal": {
 				Name: "minimal",
 				Engines: Engines{
-					Fmt:    EngineConfig{Enabled: true},
-					Style:  EngineConfig{Enabled: false},
-					Lint:   EngineConfig{Enabled: false},
-					Policy: EngineConfig{Enabled: false},
+					Fmt:    EngineConfig{Enabled: BoolPtr(true)},
+					Style:  EngineConfig{Enabled: BoolPtr(false)},
+					Lint:   EngineConfig{Enabled: BoolPtr(false)},
+					Policy: EngineConfig{Enabled: BoolPtr(false)},
 				},
 			},
 		},
@@ -671,10 +675,95 @@ func TestApplyProfile(t *testing.T) {
 	require.NoError(t, err)
 
 	// Config should now reflect the profile settings
-	assert.True(t, cfg.Engines.Fmt.Enabled)
-	assert.False(t, cfg.Engines.Style.Enabled)
-	assert.False(t, cfg.Engines.Lint.Enabled)
-	assert.False(t, cfg.Engines.Policy.Enabled)
+	assert.True(t, cfg.Engines.Fmt.IsEnabled())
+	assert.False(t, cfg.Engines.Style.IsEnabled())
+	assert.False(t, cfg.Engines.Lint.IsEnabled())
+	assert.False(t, cfg.Engines.Policy.IsEnabled())
+}
+
+func TestEngineConfig_EnabledPointer(t *testing.T) {
+	t.Run("child profile explicitly disables engine with enabled: false", func(t *testing.T) {
+		cfg := &Config{
+			Version: 1,
+			Profiles: map[string]Profile{
+				"base": {
+					Name: "base",
+					Engines: Engines{
+						Fmt:    EngineConfig{Enabled: BoolPtr(true)},
+						Style:  EngineConfig{Enabled: BoolPtr(true)},
+						Lint:   EngineConfig{Enabled: BoolPtr(true)},
+						Policy: EngineConfig{Enabled: BoolPtr(true)},
+					},
+				},
+				"child": {
+					Name:     "child",
+					Inherits: "base",
+					Engines: Engines{
+						Lint: EngineConfig{Enabled: BoolPtr(false)}, // Explicitly disable
+					},
+				},
+			},
+		}
+
+		profile, err := cfg.GetProfile("child")
+		require.NoError(t, err)
+
+		// Should inherit enabled engines from parent
+		assert.True(t, profile.Engines.Fmt.IsEnabled())
+		assert.True(t, profile.Engines.Style.IsEnabled())
+		// Child explicitly disabled lint
+		assert.False(t, profile.Engines.Lint.IsEnabled())
+		// Should inherit from parent
+		assert.True(t, profile.Engines.Policy.IsEnabled())
+	})
+
+	t.Run("child profile with no enabled field inherits parent", func(t *testing.T) {
+		cfg := &Config{
+			Version: 1,
+			Profiles: map[string]Profile{
+				"base": {
+					Name: "base",
+					Engines: Engines{
+						Fmt:    EngineConfig{Enabled: BoolPtr(true)},
+						Style:  EngineConfig{Enabled: BoolPtr(false)}, // Parent disables style
+						Lint:   EngineConfig{Enabled: BoolPtr(true)},
+						Policy: EngineConfig{Enabled: BoolPtr(false)}, // Parent disables policy
+					},
+				},
+				"child": {
+					Name:     "child",
+					Inherits: "base",
+					// No engines set - should fully inherit parent
+				},
+			},
+		}
+
+		profile, err := cfg.GetProfile("child")
+		require.NoError(t, err)
+
+		// Should fully inherit parent engine settings
+		assert.True(t, profile.Engines.Fmt.IsEnabled())
+		assert.False(t, profile.Engines.Style.IsEnabled())
+		assert.True(t, profile.Engines.Lint.IsEnabled())
+		assert.False(t, profile.Engines.Policy.IsEnabled())
+	})
+
+	t.Run("nil enabled field defaults to false", func(t *testing.T) {
+		ec := EngineConfig{
+			Enabled: nil, // Not set
+		}
+		assert.False(t, ec.IsEnabled())
+	})
+
+	t.Run("BoolPtr helper works correctly", func(t *testing.T) {
+		truePtr := BoolPtr(true)
+		falsePtr := BoolPtr(false)
+
+		assert.NotNil(t, truePtr)
+		assert.NotNil(t, falsePtr)
+		assert.True(t, *truePtr)
+		assert.False(t, *falsePtr)
+	})
 }
 
 func TestPluginsConfig_ShouldVerifyIntegrity(t *testing.T) {

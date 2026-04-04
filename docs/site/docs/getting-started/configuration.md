@@ -144,15 +144,15 @@ profiles:
 
 ### Disabling Inherited Engines
 
-Use `disabled_engines` to turn off engines from a parent profile:
+Set `enabled: false` to turn off engines from a parent profile:
 
 ```yaml
 profiles:
   minimal:
     inherits: base
-    disabled_engines:
-      - lint
-      - policy
+    engines:
+      lint: { enabled: false }
+      policy: { enabled: false }
 ```
 
 ## Rule Overrides

@@ -95,18 +95,32 @@ type Engines struct {
 
 // EngineConfig represents configuration for a single engine
 type EngineConfig struct {
-	Enabled bool           `yaml:"enabled"`
+	Enabled *bool          `yaml:"enabled,omitempty"`
 	Config  map[string]any `yaml:"config,omitempty"`
+}
+
+// IsEnabled returns whether the engine is enabled.
+// Returns false if Enabled is nil (not set).
+func (e EngineConfig) IsEnabled() bool {
+	if e.Enabled == nil {
+		return false
+	}
+	return *e.Enabled
+}
+
+// BoolPtr returns a pointer to the given bool value.
+// Use this when setting EngineConfig.Enabled explicitly.
+func BoolPtr(b bool) *bool {
+	return &b
 }
 
 // Profile represents a configuration profile
 type Profile struct {
-	Name            string          `yaml:"profile"`
-	Description     string          `yaml:"description"`
-	Inherits        string          `yaml:"inherits,omitempty"`
-	Engines         Engines         `yaml:"engines"`
-	DisabledEngines []string        `yaml:"disabled_engines,omitempty"` // Explicitly disable inherited engines
-	Overrides       OverridesConfig `yaml:"overrides,omitempty"`
+	Name        string          `yaml:"profile"`
+	Description string          `yaml:"description"`
+	Inherits    string          `yaml:"inherits,omitempty"`
+	Engines     Engines         `yaml:"engines"`
+	Overrides   OverridesConfig `yaml:"overrides,omitempty"`
 }
 
 // OverridesConfig allows overriding specific settings
@@ -513,9 +527,8 @@ func (c *Config) resolveProfileInheritance(name string, visited map[string]bool)
 	return resolved, nil
 }
 
-// mergeProfiles merges a child profile into a parent, with child taking precedence
-// Note: Due to YAML parsing limitations, child profiles can only add/configure engines.
-// To disable an engine, use disabled_engines in the profile.
+// mergeProfiles merges a child profile into a parent, with child taking precedence.
+// Child profile can override any engine setting from parent using engines.<name>.enabled.
 func (c *Config) mergeProfiles(parent, child *Profile) *Profile {
 	result := &Profile{
 		Name:        child.Name,
@@ -533,33 +546,18 @@ func (c *Config) mergeProfiles(parent, child *Profile) *Profile {
 		result.Engines = parent.Engines
 	}
 
-	// Child engines ADD to parent - if child explicitly enables or configures an engine, use it
-	// Only override parent if child has something explicit (Enabled=true or Config present)
-	if child.Engines.Fmt.Enabled || len(child.Engines.Fmt.Config) > 0 {
+	// Child engines override parent if explicitly set (Enabled != nil or Config present)
+	if child.Engines.Fmt.Enabled != nil || len(child.Engines.Fmt.Config) > 0 {
 		result.Engines.Fmt = child.Engines.Fmt
 	}
-	if child.Engines.Style.Enabled || len(child.Engines.Style.Config) > 0 {
+	if child.Engines.Style.Enabled != nil || len(child.Engines.Style.Config) > 0 {
 		result.Engines.Style = child.Engines.Style
 	}
-	if child.Engines.Lint.Enabled || len(child.Engines.Lint.Config) > 0 {
+	if child.Engines.Lint.Enabled != nil || len(child.Engines.Lint.Config) > 0 {
 		result.Engines.Lint = child.Engines.Lint
 	}
-	if child.Engines.Policy.Enabled || len(child.Engines.Policy.Config) > 0 {
+	if child.Engines.Policy.Enabled != nil || len(child.Engines.Policy.Config) > 0 {
 		result.Engines.Policy = child.Engines.Policy
-	}
-
-	// Apply disabled_engines from child (explicit disables)
-	for _, engineName := range child.DisabledEngines {
-		switch engineName {
-		case "fmt":
-			result.Engines.Fmt.Enabled = false
-		case "style":
-			result.Engines.Style.Enabled = false
-		case "lint":
-			result.Engines.Lint.Enabled = false
-		case "policy":
-			result.Engines.Policy.Enabled = false
-		}
 	}
 
 	// Merge overrides - child overrides win
@@ -602,10 +600,10 @@ func DefaultConfig() *Config {
 	return &Config{
 		Version: 1,
 		Engines: Engines{
-			Fmt:    EngineConfig{Enabled: true},
-			Style:  EngineConfig{Enabled: true},
-			Lint:   EngineConfig{Enabled: true},
-			Policy: EngineConfig{Enabled: false}, // Opt-in
+			Fmt:    EngineConfig{Enabled: BoolPtr(true)},
+			Style:  EngineConfig{Enabled: BoolPtr(true)},
+			Lint:   EngineConfig{Enabled: BoolPtr(true)},
+			Policy: EngineConfig{Enabled: BoolPtr(false)}, // Opt-in
 		},
 		SeverityThreshold: "warning",
 		FailFast:          false,

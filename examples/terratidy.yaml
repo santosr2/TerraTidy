@@ -66,9 +66,9 @@ profiles:
   minimal:
     description: "Minimal checks"
     inherits: ci
-    disabled_engines:
-      - lint
-      - policy
+    engines:
+      lint: { enabled: false }
+      policy: { enabled: false }
 
 # Rule overrides - enable/disable rules, change severity
 # This is the correct place for per-rule configuration

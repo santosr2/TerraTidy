@@ -332,13 +332,13 @@ func isEngineEnabled(cfg *config.Config, engine string) bool {
 
 	switch engine {
 	case "fmt":
-		return cfg.Engines.Fmt.Enabled
+		return cfg.Engines.Fmt.IsEnabled()
 	case "style":
-		return cfg.Engines.Style.Enabled
+		return cfg.Engines.Style.IsEnabled()
 	case "lint":
-		return cfg.Engines.Lint.Enabled
+		return cfg.Engines.Lint.IsEnabled()
 	case "policy":
-		return cfg.Engines.Policy.Enabled
+		return cfg.Engines.Policy.IsEnabled()
 	default:
 		return true
 	}

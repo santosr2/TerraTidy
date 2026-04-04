@@ -49,10 +49,10 @@ func TestShouldFailFast(t *testing.T) {
 
 func TestIsEngineEnabled(t *testing.T) {
 	cfg := &config.Config{}
-	cfg.Engines.Fmt.Enabled = true
-	cfg.Engines.Style.Enabled = false
-	cfg.Engines.Lint.Enabled = true
-	cfg.Engines.Policy.Enabled = false
+	cfg.Engines.Fmt.Enabled = config.BoolPtr(true)
+	cfg.Engines.Style.Enabled = config.BoolPtr(false)
+	cfg.Engines.Lint.Enabled = config.BoolPtr(true)
+	cfg.Engines.Policy.Enabled = config.BoolPtr(false)
 
 	tests := []struct {
 		name   string

@@ -73,10 +73,12 @@ func (r *NoLeadingTrailingBlankLinesRule) checkBlock(ctx *sdk.Context, block *hc
 				Rule:    r.Name(),
 				Message: "Leading blank line inside block",
 				File:    ctx.File,
-				Location: hcl.Range{
-					Filename: ctx.File,
-					Start:    hcl.Pos{Line: lineNum, Column: 1},
-					End:      hcl.Pos{Line: lineNum, Column: 1},
+				Location: sdk.Location{
+					Filename:    ctx.File,
+					StartLine:   lineNum,
+					StartColumn: 1,
+					EndLine:     lineNum,
+					EndColumn:   1,
 				},
 				Severity: sdk.SeverityInfo,
 				Fixable:  true,
@@ -102,10 +104,12 @@ func (r *NoLeadingTrailingBlankLinesRule) checkBlock(ctx *sdk.Context, block *hc
 				Rule:    r.Name(),
 				Message: "Trailing blank line inside block",
 				File:    ctx.File,
-				Location: hcl.Range{
-					Filename: ctx.File,
-					Start:    hcl.Pos{Line: lineNum, Column: 1},
-					End:      hcl.Pos{Line: lineNum, Column: 1},
+				Location: sdk.Location{
+					Filename:    ctx.File,
+					StartLine:   lineNum,
+					StartColumn: 1,
+					EndLine:     lineNum,
+					EndColumn:   1,
 				},
 				Severity: sdk.SeverityInfo,
 				Fixable:  true,
@@ -234,7 +238,7 @@ func (r *BlankLineBetweenBlocksRule) Check(ctx *sdk.Context, file *hcl.File) ([]
 				Rule:     r.Name(),
 				Message:  "Missing blank line between blocks",
 				File:     ctx.File,
-				Location: nextBlock.Range(),
+				Location: sdk.LocationFromRange(nextBlock.Range()),
 				Severity: sdk.SeverityWarning,
 				Fixable:  true,
 				FixFunc: func() ([]byte, error) {
@@ -248,7 +252,7 @@ func (r *BlankLineBetweenBlocksRule) Check(ctx *sdk.Context, file *hcl.File) ([]
 				Rule:     r.Name(),
 				Message:  "Too many blank lines between blocks (should be exactly 1)",
 				File:     ctx.File,
-				Location: nextBlock.Range(),
+				Location: sdk.LocationFromRange(nextBlock.Range()),
 				Severity: sdk.SeverityWarning,
 				Fixable:  true,
 				FixFunc: func() ([]byte, error) {
@@ -444,7 +448,7 @@ func (r *NoEmptyBlocksRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Findi
 				Rule:     r.Name(),
 				Message:  "Empty block",
 				File:     ctx.File,
-				Location: block.Range(),
+				Location: sdk.LocationFromRange(block.Range()),
 				Severity: sdk.SeverityInfo,
 				Fixable:  false,
 			})

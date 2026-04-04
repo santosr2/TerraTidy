@@ -84,8 +84,8 @@ func (f *TextFormatter) Format(findings []sdk.Finding, w io.Writer) error {
 				_, _ = fmt.Fprintf(w, "%s%s%s %s:%d:%d: %s %s(%s)%s\n",
 					iconColor, icon, colorReset,
 					displayFile,
-					finding.Location.Start.Line,
-					finding.Location.Start.Column,
+					finding.Location.StartLine,
+					finding.Location.StartColumn,
 					finding.Message,
 					colorGray, finding.Rule, colorReset,
 				)
@@ -102,8 +102,8 @@ func (f *TextFormatter) Format(findings []sdk.Finding, w io.Writer) error {
 				_, _ = fmt.Fprintf(w, "%s %s:%d:%d: %s (%s)\n",
 					icon,
 					displayFile,
-					finding.Location.Start.Line,
-					finding.Location.Start.Column,
+					finding.Location.StartLine,
+					finding.Location.StartColumn,
 					finding.Message,
 					finding.Rule,
 				)
@@ -178,12 +178,12 @@ func (f *JSONFormatter) Format(findings []sdk.Finding, w io.Writer) error {
 			File:    finding.File,
 			Location: JSONLocation{
 				Start: JSONPosition{
-					Line:   finding.Location.Start.Line,
-					Column: finding.Location.Start.Column,
+					Line:   finding.Location.StartLine,
+					Column: finding.Location.StartColumn,
 				},
 				End: JSONPosition{
-					Line:   finding.Location.End.Line,
-					Column: finding.Location.End.Column,
+					Line:   finding.Location.EndLine,
+					Column: finding.Location.EndColumn,
 				},
 			},
 			Severity: string(finding.Severity),
@@ -327,8 +327,8 @@ func (f *TableFormatter) printFinding(w io.Writer, finding sdk.Finding) {
 	// Format location - use short filename for readability
 	filename := filepath.Base(finding.File)
 	location := filename
-	if finding.Location.Start.Line > 0 {
-		location = fmt.Sprintf("%s:%d:%d", filename, finding.Location.Start.Line, finding.Location.Start.Column)
+	if finding.Location.StartLine > 0 {
+		location = fmt.Sprintf("%s:%d:%d", filename, finding.Location.StartLine, finding.Location.StartColumn)
 	}
 
 	// Truncate location if too long
@@ -363,10 +363,10 @@ func (f *GitHubActionsFormatter) Format(findings []sdk.Finding, w io.Writer) err
 	for _, finding := range findings {
 		command := f.severityToCommand(finding.Severity)
 		file := finding.File
-		line := finding.Location.Start.Line
-		col := finding.Location.Start.Column
-		endLine := finding.Location.End.Line
-		endCol := finding.Location.End.Column
+		line := finding.Location.StartLine
+		col := finding.Location.StartColumn
+		endLine := finding.Location.EndLine
+		endCol := finding.Location.EndColumn
 
 		// Ensure we have valid line numbers (GitHub Actions requires line >= 1)
 		if line < 1 {
@@ -681,8 +681,8 @@ func (f *HTMLFormatter) generateFindingHTML(finding sdk.Finding) string {
 		escapeHTML(finding.Message),
 		fixableBadge,
 		escapeHTML(finding.Rule),
-		finding.Location.Start.Line,
-		finding.Location.Start.Column,
+		finding.Location.StartLine,
+		finding.Location.StartColumn,
 	)
 }
 

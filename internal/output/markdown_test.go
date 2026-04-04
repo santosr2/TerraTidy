@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/hashicorp/hcl/v2"
 	"github.com/santosr2/TerraTidy/pkg/sdk"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -90,7 +89,7 @@ func TestMarkdownFormatter_Format(t *testing.T) {
 				Rule:     "test.rule",
 				Message:  "Test message",
 				File:     "test.tf",
-				Location: hcl.Range{Start: hcl.Pos{Line: 42, Column: 5}},
+				Location: sdk.Location{StartLine: 42, StartColumn: 5, EndLine: 42, EndColumn: 5},
 				Severity: sdk.SeverityWarning,
 			},
 		}

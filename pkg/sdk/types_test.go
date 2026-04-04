@@ -35,10 +35,12 @@ func TestFinding(t *testing.T) {
 			File:     "main.tf",
 			Severity: SeverityError,
 			Fixable:  true,
-			Location: hcl.Range{
-				Filename: "main.tf",
-				Start:    hcl.Pos{Line: 1, Column: 1, Byte: 0},
-				End:      hcl.Pos{Line: 1, Column: 10, Byte: 9},
+			Location: Location{
+				Filename:    "main.tf",
+				StartLine:   1,
+				StartColumn: 1,
+				EndLine:     1,
+				EndColumn:   10,
 			},
 		}
 
@@ -47,7 +49,7 @@ func TestFinding(t *testing.T) {
 		assert.Equal(t, "main.tf", finding.File)
 		assert.Equal(t, SeverityError, finding.Severity)
 		assert.True(t, finding.Fixable)
-		assert.Equal(t, 1, finding.Location.Start.Line)
+		assert.Equal(t, 1, finding.Location.StartLine)
 	})
 
 	t.Run("finding with fix function", func(t *testing.T) {
@@ -239,5 +241,47 @@ func TestSeverityComparison(t *testing.T) {
 	t.Run("severity type conversion", func(t *testing.T) {
 		s := Severity("custom")
 		assert.Equal(t, "custom", string(s))
+	})
+}
+
+func TestLocation(t *testing.T) {
+	t.Run("basic location", func(t *testing.T) {
+		loc := Location{
+			Filename:    "main.tf",
+			StartLine:   10,
+			StartColumn: 5,
+			EndLine:     10,
+			EndColumn:   20,
+		}
+
+		assert.Equal(t, "main.tf", loc.Filename)
+		assert.Equal(t, 10, loc.StartLine)
+		assert.Equal(t, 5, loc.StartColumn)
+		assert.Equal(t, 10, loc.EndLine)
+		assert.Equal(t, 20, loc.EndColumn)
+	})
+
+	t.Run("multi-line location", func(t *testing.T) {
+		loc := Location{
+			Filename:    "variables.tf",
+			StartLine:   1,
+			StartColumn: 1,
+			EndLine:     5,
+			EndColumn:   2,
+		}
+
+		assert.Equal(t, "variables.tf", loc.Filename)
+		assert.Equal(t, 1, loc.StartLine)
+		assert.Equal(t, 5, loc.EndLine)
+	})
+
+	t.Run("zero value location", func(t *testing.T) {
+		loc := Location{}
+
+		assert.Empty(t, loc.Filename)
+		assert.Zero(t, loc.StartLine)
+		assert.Zero(t, loc.StartColumn)
+		assert.Zero(t, loc.EndLine)
+		assert.Zero(t, loc.EndColumn)
 	})
 }

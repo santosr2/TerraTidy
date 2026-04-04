@@ -68,7 +68,7 @@ func (r *YAMLRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Finding, error
 					Rule:     r.config.Name,
 					Message:  msg,
 					File:     ctx.File,
-					Location: block.DefRange(),
+					Location: sdk.LocationFromRange(block.DefRange()),
 					Severity: severity,
 				})
 			}

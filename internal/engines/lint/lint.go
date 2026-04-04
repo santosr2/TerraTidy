@@ -314,7 +314,7 @@ func (r *TerraformRequiredVersionRule) Check(ctx *RuleContext) []sdk.Finding {
 			Rule:     r.Name(),
 			Message:  "Missing terraform required_version constraint",
 			File:     ctx.File,
-			Location: hcl.Range{Filename: ctx.File, Start: hcl.Pos{Line: 1, Column: 1}},
+			Location: sdk.Location{Filename: ctx.File, StartLine: 1, StartColumn: 1, EndLine: 1, EndColumn: 1},
 			Severity: parseSeverity(ctx.Config.Severity),
 			Fixable:  false,
 		})
@@ -358,7 +358,7 @@ func (r *TerraformRequiredProvidersRule) Check(ctx *RuleContext) []sdk.Finding {
 			Rule:     r.Name(),
 			Message:  "Missing required_providers block in terraform configuration",
 			File:     ctx.File,
-			Location: hcl.Range{Filename: ctx.File, Start: hcl.Pos{Line: 1, Column: 1}},
+			Location: sdk.Location{Filename: ctx.File, StartLine: 1, StartColumn: 1, EndLine: 1, EndColumn: 1},
 			Severity: sdk.SeverityInfo,
 			Fixable:  false,
 		})
@@ -403,9 +403,12 @@ func (r *TerraformDeprecatedSyntaxRule) Check(ctx *RuleContext) []sdk.Finding {
 						Rule:    r.Name(),
 						Message: msg,
 						File:    ctx.File,
-						Location: hcl.Range{
-							Filename: ctx.File,
-							Start:    hcl.Pos{Line: i + 1, Column: match[0] + 1},
+						Location: sdk.Location{
+							Filename:    ctx.File,
+							StartLine:   i + 1,
+							StartColumn: match[0] + 1,
+							EndLine:     i + 1,
+							EndColumn:   match[0] + 1,
 						},
 						Severity: sdk.SeverityWarning,
 						Fixable:  true,
@@ -472,7 +475,7 @@ func (r *TerraformDocumentedVariablesRule) Check(ctx *RuleContext) []sdk.Finding
 				Rule:     r.Name(),
 				Message:  fmt.Sprintf("Variable '%s' is missing a description", varName),
 				File:     ctx.File,
-				Location: block.Range(),
+				Location: sdk.LocationFromRange(block.Range()),
 				Severity: parseSeverity(ctx.Config.Severity),
 				Fixable:  false,
 			})
@@ -522,7 +525,7 @@ func (r *TerraformTypedVariablesRule) Check(ctx *RuleContext) []sdk.Finding {
 				Rule:     r.Name(),
 				Message:  fmt.Sprintf("Variable '%s' should have an explicit type constraint", varName),
 				File:     ctx.File,
-				Location: block.Range(),
+				Location: sdk.LocationFromRange(block.Range()),
 				Severity: sdk.SeverityInfo,
 				Fixable:  false,
 			})
@@ -572,7 +575,7 @@ func (r *TerraformDocumentedOutputsRule) Check(ctx *RuleContext) []sdk.Finding {
 				Rule:     r.Name(),
 				Message:  fmt.Sprintf("Output '%s' is missing a description", outputName),
 				File:     ctx.File,
-				Location: block.Range(),
+				Location: sdk.LocationFromRange(block.Range()),
 				Severity: sdk.SeverityInfo,
 				Fixable:  false,
 			})
@@ -641,7 +644,7 @@ func (r *TerraformModulePinnedSourceRule) Check(ctx *RuleContext) []sdk.Finding 
 				Rule:     r.Name(),
 				Message:  fmt.Sprintf("Module '%s' from registry should have a version constraint", moduleName),
 				File:     ctx.File,
-				Location: block.Range(),
+				Location: sdk.LocationFromRange(block.Range()),
 				Severity: sdk.SeverityWarning,
 				Fixable:  false,
 			})
@@ -658,7 +661,7 @@ func (r *TerraformModulePinnedSourceRule) Check(ctx *RuleContext) []sdk.Finding 
 					Rule:     r.Name(),
 					Message:  msg,
 					File:     ctx.File,
-					Location: block.Range(),
+					Location: sdk.LocationFromRange(block.Range()),
 					Severity: sdk.SeverityWarning,
 					Fixable:  false,
 				})
@@ -709,7 +712,7 @@ func (r *TerraformNamingConventionRule) Check(ctx *RuleContext) []sdk.Finding {
 				Rule:     r.Name(),
 				Message:  fmt.Sprintf("%s name '%s' should use snake_case", block.Type, name),
 				File:     ctx.File,
-				Location: block.Range(),
+				Location: sdk.LocationFromRange(block.Range()),
 				Severity: sdk.SeverityWarning,
 				Fixable:  false,
 			})
@@ -771,7 +774,7 @@ func (r *TerraformUnusedDeclarationsRule) Check(ctx *RuleContext) []sdk.Finding 
 					Rule:     r.Name(),
 					Message:  fmt.Sprintf("Variable '%s' is declared but never used", varName),
 					File:     ctx.File,
-					Location: varRange,
+					Location: sdk.LocationFromRange(varRange),
 					Severity: sdk.SeverityWarning,
 					Fixable:  false,
 				})
@@ -821,9 +824,12 @@ func (r *TerraformResourceCountRule) Check(ctx *RuleContext) []sdk.Finding {
 			Rule:    r.Name(),
 			Message: msg,
 			File:    ctx.File,
-			Location: hcl.Range{
-				Filename: ctx.File,
-				Start:    hcl.Pos{Line: 1, Column: 1},
+			Location: sdk.Location{
+				Filename:    ctx.File,
+				StartLine:   1,
+				StartColumn: 1,
+				EndLine:     1,
+				EndColumn:   1,
 			},
 			Severity: sdk.SeverityInfo,
 			Fixable:  false,
@@ -884,9 +890,12 @@ func (r *TerraformHardcodedSecretsRule) Check(ctx *RuleContext) []sdk.Finding {
 					Rule:    r.Name(),
 					Message: fmt.Sprintf("Potential hardcoded %s detected", sp.name),
 					File:    ctx.File,
-					Location: hcl.Range{
-						Filename: ctx.File,
-						Start:    hcl.Pos{Line: i + 1, Column: 1},
+					Location: sdk.Location{
+						Filename:    ctx.File,
+						StartLine:   i + 1,
+						StartColumn: 1,
+						EndLine:     i + 1,
+						EndColumn:   1,
 					},
 					Severity: sdk.SeverityError,
 					Fixable:  false,
@@ -955,7 +964,7 @@ func (r *TerraformHardcodedSecretsRule) checkBlockForSecrets(
 					Rule:     r.Name(),
 					Message:  msg,
 					File:     ctx.File,
-					Location: attr.Range(),
+					Location: sdk.LocationFromRange(attr.Range()),
 					Severity: sdk.SeverityWarning,
 					Fixable:  false,
 				})
@@ -1136,16 +1145,12 @@ func (e *Engine) RunTFLint(ctx context.Context, dir string) ([]sdk.Finding, erro
 			Rule:    "tflint." + tflintOutput.Issues[i].Rule.Name,
 			Message: tflintOutput.Issues[i].Message,
 			File:    filepath.Join(dir, tflintOutput.Issues[i].Range.Filename),
-			Location: hcl.Range{
-				Filename: filepath.Join(dir, tflintOutput.Issues[i].Range.Filename),
-				Start: hcl.Pos{
-					Line:   tflintOutput.Issues[i].Range.Start.Line,
-					Column: tflintOutput.Issues[i].Range.Start.Column,
-				},
-				End: hcl.Pos{
-					Line:   tflintOutput.Issues[i].Range.End.Line,
-					Column: tflintOutput.Issues[i].Range.End.Column,
-				},
+			Location: sdk.Location{
+				Filename:    filepath.Join(dir, tflintOutput.Issues[i].Range.Filename),
+				StartLine:   tflintOutput.Issues[i].Range.Start.Line,
+				StartColumn: tflintOutput.Issues[i].Range.Start.Column,
+				EndLine:     tflintOutput.Issues[i].Range.End.Line,
+				EndColumn:   tflintOutput.Issues[i].Range.End.Column,
 			},
 			Severity: severity,
 			Fixable:  false,
@@ -1165,12 +1170,12 @@ func (e *Engine) RunTFLint(ctx context.Context, dir string) ([]sdk.Finding, erro
 
 		if tflintErr.Range != nil {
 			finding.File = filepath.Join(dir, tflintErr.Range.Filename)
-			finding.Location = hcl.Range{
-				Filename: filepath.Join(dir, tflintErr.Range.Filename),
-				Start: hcl.Pos{
-					Line:   tflintErr.Range.Start.Line,
-					Column: tflintErr.Range.Start.Column,
-				},
+			finding.Location = sdk.Location{
+				Filename:    filepath.Join(dir, tflintErr.Range.Filename),
+				StartLine:   tflintErr.Range.Start.Line,
+				StartColumn: tflintErr.Range.Start.Column,
+				EndLine:     tflintErr.Range.Start.Line,
+				EndColumn:   tflintErr.Range.Start.Column,
 			}
 		}
 

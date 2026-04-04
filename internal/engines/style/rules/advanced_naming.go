@@ -84,7 +84,7 @@ func (r *ResourceNameMatchesTypeRule) Check(ctx *sdk.Context, file *hcl.File) ([
 				Rule:     r.Name(),
 				Message:  fmt.Sprintf("Resource name '%s' is too generic; consider a more descriptive name for %s", resourceName, resourceType),
 				File:     ctx.File,
-				Location: block.Range(),
+				Location: sdk.LocationFromRange(block.Range()),
 				Severity: sdk.SeverityInfo,
 				Fixable:  false,
 			})
@@ -98,7 +98,7 @@ func (r *ResourceNameMatchesTypeRule) Check(ctx *sdk.Context, file *hcl.File) ([
 				Rule:     r.Name(),
 				Message:  fmt.Sprintf("Resource name '%s' just repeats the type; consider adding purpose (e.g., %s_web, %s_api)", resourceName, resourceName, resourceName),
 				File:     ctx.File,
-				Location: block.Range(),
+				Location: sdk.LocationFromRange(block.Range()),
 				Severity: sdk.SeverityInfo,
 				Fixable:  false,
 			})
@@ -212,7 +212,7 @@ func (r *OutputPrefixRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Findin
 				Rule:     r.Name(),
 				Message:  fmt.Sprintf("Output '%s' should have prefix '%s'", outputName, prefix),
 				File:     ctx.File,
-				Location: block.Range(),
+				Location: sdk.LocationFromRange(block.Range()),
 				Severity: sdk.SeverityInfo,
 				Fixable:  false,
 			})
@@ -224,7 +224,7 @@ func (r *OutputPrefixRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Findin
 				Rule:     r.Name(),
 				Message:  fmt.Sprintf("Output '%s' should have suffix '%s'", outputName, suffix),
 				File:     ctx.File,
-				Location: block.Range(),
+				Location: sdk.LocationFromRange(block.Range()),
 				Severity: sdk.SeverityInfo,
 				Fixable:  false,
 			})
@@ -302,7 +302,7 @@ func (r *ModuleNameConventionRule) Check(ctx *sdk.Context, file *hcl.File) ([]sd
 				Rule:     r.Name(),
 				Message:  fmt.Sprintf("Module name '%s' should use %s", moduleName, caseName),
 				File:     ctx.File,
-				Location: block.Range(),
+				Location: sdk.LocationFromRange(block.Range()),
 				Severity: sdk.SeverityWarning,
 				Fixable:  false,
 			})
@@ -314,7 +314,7 @@ func (r *ModuleNameConventionRule) Check(ctx *sdk.Context, file *hcl.File) ([]sd
 				Rule:     r.Name(),
 				Message:  fmt.Sprintf("Module name '%s' is too generic; consider a more descriptive name", moduleName),
 				File:     ctx.File,
-				Location: block.Range(),
+				Location: sdk.LocationFromRange(block.Range()),
 				Severity: sdk.SeverityInfo,
 				Fixable:  false,
 			})

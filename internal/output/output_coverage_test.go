@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/hashicorp/hcl/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -19,9 +18,11 @@ func TestSARIFFormatter_WithFixableFindings(t *testing.T) {
 			File:     "main.tf",
 			Severity: sdk.SeverityWarning,
 			Fixable:  true,
-			Location: hcl.Range{
-				Start: hcl.Pos{Line: 5, Column: 1},
-				End:   hcl.Pos{Line: 5, Column: 20},
+			Location: sdk.Location{
+				StartLine:   5,
+				StartColumn: 1,
+				EndLine:     5,
+				EndColumn:   20,
 			},
 		},
 	}
@@ -88,15 +89,15 @@ func TestGitHubActionsFormatter_AllSeverities(t *testing.T) {
 	findings := []sdk.Finding{
 		{
 			Rule: "r1", Message: "error msg", File: "a.tf", Severity: sdk.SeverityError,
-			Location: hcl.Range{Start: hcl.Pos{Line: 1, Column: 1}},
+			Location: sdk.Location{StartLine: 1, StartColumn: 1, EndLine: 1, EndColumn: 1},
 		},
 		{
 			Rule: "r2", Message: "warn msg", File: "a.tf", Severity: sdk.SeverityWarning,
-			Location: hcl.Range{Start: hcl.Pos{Line: 2, Column: 1}},
+			Location: sdk.Location{StartLine: 2, StartColumn: 1, EndLine: 2, EndColumn: 1},
 		},
 		{
 			Rule: "r3", Message: "info msg", File: "a.tf", Severity: sdk.SeverityInfo,
-			Location: hcl.Range{Start: hcl.Pos{Line: 3, Column: 1}},
+			Location: sdk.Location{StartLine: 3, StartColumn: 1, EndLine: 3, EndColumn: 1},
 		},
 	}
 

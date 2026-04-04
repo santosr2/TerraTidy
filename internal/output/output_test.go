@@ -7,7 +7,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hashicorp/hcl/v2"
 	"github.com/santosr2/TerraTidy/pkg/sdk"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -34,9 +33,11 @@ func TestTextFormatter(t *testing.T) {
 					Message:  "Test error message",
 					File:     "test.tf",
 					Severity: sdk.SeverityError,
-					Location: hcl.Range{
-						Start: hcl.Pos{Line: 1, Column: 1},
-						End:   hcl.Pos{Line: 1, Column: 10},
+					Location: sdk.Location{
+						StartLine:   1,
+						StartColumn: 1,
+						EndLine:     1,
+						EndColumn:   10,
 					},
 				},
 			},
@@ -101,9 +102,11 @@ func TestJSONFormatter(t *testing.T) {
 					File:     "test.tf",
 					Severity: sdk.SeverityError,
 					Fixable:  true,
-					Location: hcl.Range{
-						Start: hcl.Pos{Line: 1, Column: 1},
-						End:   hcl.Pos{Line: 1, Column: 10},
+					Location: sdk.Location{
+						StartLine:   1,
+						StartColumn: 1,
+						EndLine:     1,
+						EndColumn:   10,
 					},
 				},
 			},
@@ -118,9 +121,11 @@ func TestJSONFormatter(t *testing.T) {
 					File:     "test.tf",
 					Severity: sdk.SeverityError,
 					Fixable:  false,
-					Location: hcl.Range{
-						Start: hcl.Pos{Line: 1, Column: 1},
-						End:   hcl.Pos{Line: 1, Column: 10},
+					Location: sdk.Location{
+						StartLine:   1,
+						StartColumn: 1,
+						EndLine:     1,
+						EndColumn:   10,
 					},
 				},
 				{
@@ -129,9 +134,11 @@ func TestJSONFormatter(t *testing.T) {
 					File:     "test.tf",
 					Severity: sdk.SeverityWarning,
 					Fixable:  true,
-					Location: hcl.Range{
-						Start: hcl.Pos{Line: 2, Column: 1},
-						End:   hcl.Pos{Line: 2, Column: 10},
+					Location: sdk.Location{
+						StartLine:   2,
+						StartColumn: 1,
+						EndLine:     2,
+						EndColumn:   10,
 					},
 				},
 			},
@@ -279,9 +286,11 @@ func TestSARIFFormatter(t *testing.T) {
 					File:     "test.tf",
 					Severity: sdk.SeverityError,
 					Fixable:  true,
-					Location: hcl.Range{
-						Start: hcl.Pos{Line: 1, Column: 1},
-						End:   hcl.Pos{Line: 1, Column: 10},
+					Location: sdk.Location{
+						StartLine:   1,
+						StartColumn: 1,
+						EndLine:     1,
+						EndColumn:   10,
 					},
 				},
 			},
@@ -296,9 +305,11 @@ func TestSARIFFormatter(t *testing.T) {
 					File:     "test.tf",
 					Severity: sdk.SeverityError,
 					Fixable:  false,
-					Location: hcl.Range{
-						Start: hcl.Pos{Line: 1, Column: 1},
-						End:   hcl.Pos{Line: 1, Column: 10},
+					Location: sdk.Location{
+						StartLine:   1,
+						StartColumn: 1,
+						EndLine:     1,
+						EndColumn:   10,
 					},
 				},
 				{
@@ -307,9 +318,11 @@ func TestSARIFFormatter(t *testing.T) {
 					File:     "test.tf",
 					Severity: sdk.SeverityWarning,
 					Fixable:  true,
-					Location: hcl.Range{
-						Start: hcl.Pos{Line: 2, Column: 1},
-						End:   hcl.Pos{Line: 2, Column: 10},
+					Location: sdk.Location{
+						StartLine:   2,
+						StartColumn: 1,
+						EndLine:     2,
+						EndColumn:   10,
 					},
 				},
 			},
@@ -368,9 +381,11 @@ func TestHTMLFormatter(t *testing.T) {
 					File:     "test.tf",
 					Severity: sdk.SeverityError,
 					Fixable:  true,
-					Location: hcl.Range{
-						Start: hcl.Pos{Line: 1, Column: 1},
-						End:   hcl.Pos{Line: 1, Column: 10},
+					Location: sdk.Location{
+						StartLine:   1,
+						StartColumn: 1,
+						EndLine:     1,
+						EndColumn:   10,
 					},
 				},
 			},
@@ -385,9 +400,11 @@ func TestHTMLFormatter(t *testing.T) {
 					File:     "main.tf",
 					Severity: sdk.SeverityError,
 					Fixable:  false,
-					Location: hcl.Range{
-						Start: hcl.Pos{Line: 1, Column: 1},
-						End:   hcl.Pos{Line: 1, Column: 10},
+					Location: sdk.Location{
+						StartLine:   1,
+						StartColumn: 1,
+						EndLine:     1,
+						EndColumn:   10,
 					},
 				},
 				{
@@ -396,9 +413,11 @@ func TestHTMLFormatter(t *testing.T) {
 					File:     "main.tf",
 					Severity: sdk.SeverityWarning,
 					Fixable:  true,
-					Location: hcl.Range{
-						Start: hcl.Pos{Line: 5, Column: 1},
-						End:   hcl.Pos{Line: 5, Column: 10},
+					Location: sdk.Location{
+						StartLine:   5,
+						StartColumn: 1,
+						EndLine:     5,
+						EndColumn:   10,
 					},
 				},
 				{
@@ -407,9 +426,11 @@ func TestHTMLFormatter(t *testing.T) {
 					File:     "variables.tf",
 					Severity: sdk.SeverityInfo,
 					Fixable:  false,
-					Location: hcl.Range{
-						Start: hcl.Pos{Line: 10, Column: 1},
-						End:   hcl.Pos{Line: 10, Column: 10},
+					Location: sdk.Location{
+						StartLine:   10,
+						StartColumn: 1,
+						EndLine:     10,
+						EndColumn:   10,
 					},
 				},
 			},
@@ -424,9 +445,11 @@ func TestHTMLFormatter(t *testing.T) {
 					File:     "test.tf",
 					Severity: sdk.SeverityWarning,
 					Fixable:  false,
-					Location: hcl.Range{
-						Start: hcl.Pos{Line: 1, Column: 1},
-						End:   hcl.Pos{Line: 1, Column: 10},
+					Location: sdk.Location{
+						StartLine:   1,
+						StartColumn: 1,
+						EndLine:     1,
+						EndColumn:   10,
 					},
 				},
 			},
@@ -528,9 +551,11 @@ func TestGitHubActionsFormatter(t *testing.T) {
 					Message:  "Test error message",
 					File:     "test.tf",
 					Severity: sdk.SeverityError,
-					Location: hcl.Range{
-						Start: hcl.Pos{Line: 10, Column: 5},
-						End:   hcl.Pos{Line: 10, Column: 20},
+					Location: sdk.Location{
+						StartLine:   10,
+						StartColumn: 5,
+						EndLine:     10,
+						EndColumn:   20,
 					},
 				},
 			},
@@ -544,9 +569,11 @@ func TestGitHubActionsFormatter(t *testing.T) {
 					Message:  "Test warning",
 					File:     "main.tf",
 					Severity: sdk.SeverityWarning,
-					Location: hcl.Range{
-						Start: hcl.Pos{Line: 1, Column: 1},
-						End:   hcl.Pos{Line: 1, Column: 10},
+					Location: sdk.Location{
+						StartLine:   1,
+						StartColumn: 1,
+						EndLine:     1,
+						EndColumn:   10,
 					},
 				},
 			},
@@ -560,9 +587,11 @@ func TestGitHubActionsFormatter(t *testing.T) {
 					Message:  "Test info",
 					File:     "vars.tf",
 					Severity: sdk.SeverityInfo,
-					Location: hcl.Range{
-						Start: hcl.Pos{Line: 5, Column: 3},
-						End:   hcl.Pos{Line: 5, Column: 10},
+					Location: sdk.Location{
+						StartLine:   5,
+						StartColumn: 3,
+						EndLine:     5,
+						EndColumn:   10,
 					},
 				},
 			},
@@ -576,9 +605,11 @@ func TestGitHubActionsFormatter(t *testing.T) {
 					Message:  "Error 1",
 					File:     "main.tf",
 					Severity: sdk.SeverityError,
-					Location: hcl.Range{
-						Start: hcl.Pos{Line: 1, Column: 1},
-						End:   hcl.Pos{Line: 1, Column: 10},
+					Location: sdk.Location{
+						StartLine:   1,
+						StartColumn: 1,
+						EndLine:     1,
+						EndColumn:   10,
 					},
 				},
 				{
@@ -586,9 +617,11 @@ func TestGitHubActionsFormatter(t *testing.T) {
 					Message:  "Warning 1",
 					File:     "main.tf",
 					Severity: sdk.SeverityWarning,
-					Location: hcl.Range{
-						Start: hcl.Pos{Line: 5, Column: 1},
-						End:   hcl.Pos{Line: 5, Column: 10},
+					Location: sdk.Location{
+						StartLine:   5,
+						StartColumn: 1,
+						EndLine:     5,
+						EndColumn:   10,
 					},
 				},
 			},
@@ -605,9 +638,11 @@ func TestGitHubActionsFormatter(t *testing.T) {
 					Message:  "Spans multiple lines",
 					File:     "test.tf",
 					Severity: sdk.SeverityWarning,
-					Location: hcl.Range{
-						Start: hcl.Pos{Line: 1, Column: 1},
-						End:   hcl.Pos{Line: 5, Column: 10},
+					Location: sdk.Location{
+						StartLine:   1,
+						StartColumn: 1,
+						EndLine:     5,
+						EndColumn:   10,
 					},
 				},
 			},
@@ -621,9 +656,11 @@ func TestGitHubActionsFormatter(t *testing.T) {
 					Message:  "Line 1\nLine 2\rLine 3",
 					File:     "test.tf",
 					Severity: sdk.SeverityWarning,
-					Location: hcl.Range{
-						Start: hcl.Pos{Line: 1, Column: 1},
-						End:   hcl.Pos{Line: 1, Column: 10},
+					Location: sdk.Location{
+						StartLine:   1,
+						StartColumn: 1,
+						EndLine:     1,
+						EndColumn:   10,
 					},
 				},
 			},
@@ -637,9 +674,11 @@ func TestGitHubActionsFormatter(t *testing.T) {
 					Message:  "100% coverage",
 					File:     "test.tf",
 					Severity: sdk.SeverityInfo,
-					Location: hcl.Range{
-						Start: hcl.Pos{Line: 1, Column: 1},
-						End:   hcl.Pos{Line: 1, Column: 10},
+					Location: sdk.Location{
+						StartLine:   1,
+						StartColumn: 1,
+						EndLine:     1,
+						EndColumn:   10,
 					},
 				},
 			},
@@ -653,9 +692,11 @@ func TestGitHubActionsFormatter(t *testing.T) {
 					Message:  "Zero position",
 					File:     "test.tf",
 					Severity: sdk.SeverityWarning,
-					Location: hcl.Range{
-						Start: hcl.Pos{Line: 0, Column: 0},
-						End:   hcl.Pos{Line: 0, Column: 0},
+					Location: sdk.Location{
+						StartLine:   0,
+						StartColumn: 0,
+						EndLine:     0,
+						EndColumn:   0,
 					},
 				},
 			},
@@ -735,9 +776,11 @@ func TestTableFormatter(t *testing.T) {
 					Message:  "Test error message",
 					File:     "test.tf",
 					Severity: sdk.SeverityError,
-					Location: hcl.Range{
-						Start: hcl.Pos{Line: 10, Column: 5},
-						End:   hcl.Pos{Line: 10, Column: 20},
+					Location: sdk.Location{
+						StartLine:   10,
+						StartColumn: 5,
+						EndLine:     10,
+						EndColumn:   20,
 					},
 				},
 			},
@@ -752,8 +795,11 @@ func TestTableFormatter(t *testing.T) {
 					Message:  "Error",
 					File:     "test.tf",
 					Severity: sdk.SeverityError,
-					Location: hcl.Range{
-						Start: hcl.Pos{Line: 1, Column: 1},
+					Location: sdk.Location{
+						StartLine:   1,
+						StartColumn: 1,
+						EndLine:     1,
+						EndColumn:   1,
 					},
 				},
 				{
@@ -761,8 +807,11 @@ func TestTableFormatter(t *testing.T) {
 					Message:  "Warning",
 					File:     "test.tf",
 					Severity: sdk.SeverityWarning,
-					Location: hcl.Range{
-						Start: hcl.Pos{Line: 2, Column: 1},
+					Location: sdk.Location{
+						StartLine:   2,
+						StartColumn: 1,
+						EndLine:     2,
+						EndColumn:   1,
 					},
 				},
 				{
@@ -770,8 +819,11 @@ func TestTableFormatter(t *testing.T) {
 					Message:  "Info",
 					File:     "test.tf",
 					Severity: sdk.SeverityInfo,
-					Location: hcl.Range{
-						Start: hcl.Pos{Line: 3, Column: 1},
+					Location: sdk.Location{
+						StartLine:   3,
+						StartColumn: 1,
+						EndLine:     3,
+						EndColumn:   1,
 					},
 				},
 			},
@@ -786,8 +838,11 @@ func TestTableFormatter(t *testing.T) {
 					Message:  "Error",
 					File:     "/very/long/path/to/some/deeply/nested/terraform/module/file.tf",
 					Severity: sdk.SeverityError,
-					Location: hcl.Range{
-						Start: hcl.Pos{Line: 100, Column: 50},
+					Location: sdk.Location{
+						StartLine:   100,
+						StartColumn: 50,
+						EndLine:     100,
+						EndColumn:   50,
 					},
 				},
 			},

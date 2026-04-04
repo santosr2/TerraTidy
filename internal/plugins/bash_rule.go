@@ -138,10 +138,12 @@ func (r *BashRule) Check(ctx *sdk.Context, _ *hcl.File) ([]sdk.Finding, error) {
 			Rule:    ruleName,
 			Message: f.Message,
 			File:    f.File,
-			Location: hcl.Range{
-				Filename: f.File,
-				Start:    hcl.Pos{Line: f.Line, Column: f.Column},
-				End:      hcl.Pos{Line: f.Line, Column: f.Column},
+			Location: sdk.Location{
+				Filename:    f.File,
+				StartLine:   f.Line,
+				StartColumn: f.Column,
+				EndLine:     f.Line,
+				EndColumn:   f.Column,
 			},
 			Severity: parseSeverity(f.Severity),
 		})

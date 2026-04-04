@@ -40,6 +40,33 @@ func ParseSeverity(s string, defaultSev Severity) Severity {
 	}
 }
 
+// Location represents a source code location for findings. It provides
+// a stable public API that does not depend on HCL internal types.
+type Location struct {
+	// Filename is the path to the source file.
+	Filename string `json:"filename"`
+	// StartLine is the 1-based line number where the issue starts.
+	StartLine int `json:"start_line"`
+	// StartColumn is the 1-based column number where the issue starts.
+	StartColumn int `json:"start_column"`
+	// EndLine is the 1-based line number where the issue ends.
+	EndLine int `json:"end_line"`
+	// EndColumn is the 1-based column number where the issue ends.
+	EndColumn int `json:"end_column"`
+}
+
+// LocationFromRange converts an HCL Range to an sdk.Location.
+// This helper simplifies migration from hcl.Range to sdk.Location in rule implementations.
+func LocationFromRange(r hcl.Range) Location {
+	return Location{
+		Filename:    r.Filename,
+		StartLine:   r.Start.Line,
+		StartColumn: r.Start.Column,
+		EndLine:     r.End.Line,
+		EndColumn:   r.End.Column,
+	}
+}
+
 // Finding represents a single issue detected by a rule. Findings are collected
 // by engines and formatted for output. Each finding identifies the rule that
 // produced it, the file and location where the issue was found, and optionally
@@ -51,8 +78,8 @@ type Finding struct {
 	Message string `json:"message"`
 	// File is the path to the file where the issue was found.
 	File string `json:"file"`
-	// Location is the line/column range from the HCL parser (Start and End positions).
-	Location hcl.Range `json:"location"`
+	// Location is the source code range where the issue was found.
+	Location Location `json:"location"`
 	// Severity indicates the importance of this finding.
 	Severity Severity `json:"severity"`
 	// Fixable indicates whether this finding can be auto-fixed via FixFunc.

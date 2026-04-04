@@ -78,6 +78,7 @@ commit_parsers = [
   { message = "^vscode\\(deps", group = "Dependencies" },
   { message = "^container\\(deps", group = "Dependencies" },
   { message = "^ci\\(deps", group = "Dependencies" },
+  { message = "^deps", group = "Dependencies" },
   { message = "^chore", group = "Other" },
   { message = "^vscode", group = "VS Code Extension" },
   { message = "^container", group = "Container" },

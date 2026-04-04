@@ -8,7 +8,7 @@ Every release includes a `checksums.txt` file with SHA-256 hashes for all artifa
 
 ```bash
 # Download the release and checksums
-gh release download v0.2.0-alpha.3 --repo santosr2/terratidy
+gh release download v0.2.0-alpha.4 --repo santosr2/terratidy
 
 # Verify checksum
 sha256sum -c checksums.txt --ignore-missing
@@ -23,7 +23,7 @@ Checksums are signed with [Sigstore cosign](https://docs.sigstore.dev/) using ke
 go install github.com/sigstore/cosign/v2/cmd/cosign@latest
 
 # Download signature and certificate
-gh release download v0.2.0-alpha.3 --repo santosr2/terratidy -p 'checksums.txt*'
+gh release download v0.2.0-alpha.4 --repo santosr2/terratidy -p 'checksums.txt*'
 
 # Verify the signature
 cosign verify-blob checksums.txt \
@@ -48,7 +48,7 @@ SBOM files are named `<archive>.sbom.json` and are attached to the GitHub releas
 
 ```bash
 # Download and inspect an SBOM
-gh release download v0.2.0-alpha.3 --repo santosr2/terratidy -p '*.sbom.json'
+gh release download v0.2.0-alpha.4 --repo santosr2/terratidy -p '*.sbom.json'
 ```
 
 ## OpenSSF Scorecard

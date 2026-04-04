@@ -51,7 +51,7 @@ sudo mv terratidy /usr/local/bin/
 docker pull ghcr.io/santosr2/terratidy:latest
 
 # Pin to a specific version (recommended)
-docker pull ghcr.io/santosr2/terratidy:v0.2.0-alpha.3
+docker pull ghcr.io/santosr2/terratidy:v0.2.0-alpha.4
 
 docker run --rm -v $(pwd):/app ghcr.io/santosr2/terratidy check
 ```

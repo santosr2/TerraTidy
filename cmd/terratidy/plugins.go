@@ -218,7 +218,7 @@ func (r *ExampleRule) Fix(ctx *sdk.Context, file *hcl.File) ([]byte, error) {
 
 go 1.26.1
 
-require github.com/santosr2/TerraTidy v0.2.0-alpha.3
+require github.com/santosr2/TerraTidy v0.2.0-alpha.4
 `, pluginName)
 
 		goModPath := filepath.Join(dir, "go.mod")

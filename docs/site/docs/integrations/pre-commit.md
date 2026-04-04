@@ -17,7 +17,7 @@ Add to your `.pre-commit-config.yaml`:
 ```yaml
 repos:
   - repo: https://github.com/santosr2/TerraTidy
-    rev: v0.2.0-alpha.3
+    rev: v0.2.0-alpha.4
     hooks:
       - id: terratidy-fmt
       - id: terratidy-style
@@ -46,7 +46,7 @@ Format and lint checks:
 ```yaml
 repos:
   - repo: https://github.com/santosr2/TerraTidy
-    rev: v0.2.0-alpha.3
+    rev: v0.2.0-alpha.4
     hooks:
       - id: terratidy-fmt
       - id: terratidy-lint
@@ -59,7 +59,7 @@ All checks with auto-fix:
 ```yaml
 repos:
   - repo: https://github.com/santosr2/TerraTidy
-    rev: v0.2.0-alpha.3
+    rev: v0.2.0-alpha.4
     hooks:
       - id: terratidy-fix
 ```
@@ -71,7 +71,7 @@ Full checks without auto-fix:
 ```yaml
 repos:
   - repo: https://github.com/santosr2/TerraTidy
-    rev: v0.2.0-alpha.3
+    rev: v0.2.0-alpha.4
     hooks:
       - id: terratidy-check
 ```
@@ -81,7 +81,7 @@ repos:
 ```yaml
 repos:
   - repo: https://github.com/santosr2/TerraTidy
-    rev: v0.2.0-alpha.3
+    rev: v0.2.0-alpha.4
     hooks:
       - id: terratidy-check
         args: ['--config', '.terratidy-ci.yaml']
@@ -92,7 +92,7 @@ repos:
 ```yaml
 repos:
   - repo: https://github.com/santosr2/TerraTidy
-    rev: v0.2.0-alpha.3
+    rev: v0.2.0-alpha.4
     hooks:
       - id: terratidy-check
         args: ['--profile', 'development']

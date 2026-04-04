@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"runtime"
 
@@ -18,14 +19,18 @@ var versionCmd = &cobra.Command{
 	Long:  `Display version, build, and runtime information for TerraTidy.`,
 	RunE: func(_ *cobra.Command, _ []string) error {
 		if versionJSON {
-			fmt.Printf(`{
-  "version": "%s",
-  "commit": "%s",
-  "date": "%s",
-  "goVersion": "%s",
-  "platform": "%s/%s"
-}
-`, version, commit, date, runtime.Version(), runtime.GOOS, runtime.GOARCH)
+			versionInfo := map[string]string{
+				"version":   version,
+				"commit":    commit,
+				"date":      date,
+				"goVersion": runtime.Version(),
+				"platform":  fmt.Sprintf("%s/%s", runtime.GOOS, runtime.GOARCH),
+			}
+			data, err := json.MarshalIndent(versionInfo, "", "  ")
+			if err != nil {
+				return fmt.Errorf("marshaling version info: %w", err)
+			}
+			fmt.Println(string(data))
 			return nil
 		}
 

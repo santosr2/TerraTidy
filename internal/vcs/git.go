@@ -282,17 +282,17 @@ func (g *Git) filterTerraformFiles(files []string) []string {
 
 // parseFileList parses git output into a list of files
 func (g *Git) parseFileList(out []byte) ([]string, error) {
+	// Fetch repo root once before the loop to avoid repeated exec calls
+	repoRoot, _ := g.GetRepoRoot()
+
 	var files []string
 	scanner := bufio.NewScanner(bytes.NewReader(out))
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
 		if line != "" {
 			// Make paths absolute
-			if !filepath.IsAbs(line) {
-				repoRoot, err := g.GetRepoRoot()
-				if err == nil {
-					line = filepath.Join(repoRoot, line)
-				}
+			if !filepath.IsAbs(line) && repoRoot != "" {
+				line = filepath.Join(repoRoot, line)
 			}
 			files = append(files, line)
 		}

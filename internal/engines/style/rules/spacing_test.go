@@ -3,6 +3,7 @@ package rules
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/hashicorp/hcl/v2"
@@ -306,4 +307,50 @@ func TestNoEmptyBlocksRule(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Nil(t, result)
 	})
+}
+
+func TestBlankLineBetweenBlocksRule_FixMultipleConsecutiveBlanks(t *testing.T) {
+	// Test for BUG-3: inner loop was mutating outer loop counter
+	// This caused issues when removing multiple consecutive blank lines
+	rule := &BlankLineBetweenBlocksRule{}
+
+	// Content with 4 consecutive blank lines between blocks
+	content := `resource "aws_instance" "a" {
+  ami = "ami-123"
+}
+
+
+
+
+resource "aws_instance" "b" {
+  ami = "ami-456"
+}
+`
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "test.tf")
+	require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0o644))
+
+	ctx := &sdk.Context{File: tmpFile}
+	result, err := rule.Fix(ctx, nil)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+
+	// Should have exactly one blank line between blocks
+	lines := strings.Split(string(result), "\n")
+	blankCount := 0
+	inBlanks := false
+	for _, line := range lines {
+		if strings.TrimSpace(line) == "" {
+			if inBlanks {
+				blankCount++
+			}
+			inBlanks = true
+		} else {
+			inBlanks = false
+		}
+	}
+
+	// The fix should collapse multiple blanks to one
+	assert.Contains(t, string(result), "}\n\nresource", "should have exactly one blank line")
+	assert.NotContains(t, string(result), "}\n\n\nresource", "should not have multiple consecutive blanks")
 }

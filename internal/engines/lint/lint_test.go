@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -715,6 +716,115 @@ func TestEngine_ValidateTFLintPath(t *testing.T) {
 		err := engine.validateTFLintPath()
 		require.NoError(t, err)
 		assert.True(t, engine.IsTFLintAvailable())
+	})
+}
+
+func TestTerraformUnusedDeclarationsRule(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	t.Run("detects unused variable", func(t *testing.T) {
+		// Create file with unused variable
+		content := `
+variable "used_var" {
+  type = string
+}
+
+variable "unused_var" {
+  type = string
+}
+
+resource "test" "example" {
+  name = var.used_var
+}
+`
+		tmpFile := filepath.Join(tmpDir, "unused.tf")
+		require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0o644))
+
+		engine := New(&Config{
+			UseTFLint: false,
+			Rules: map[string]RuleConfig{
+				"lint.terraform-unused-declarations": {Enabled: true},
+			},
+		})
+
+		findings, err := engine.Run(context.Background(), []string{tmpFile})
+		require.NoError(t, err)
+
+		// Should find the unused variable
+		var foundUnused bool
+		for _, f := range findings {
+			if f.Rule == "lint.terraform-unused-declarations" && strings.Contains(f.Message, "unused_var") {
+				foundUnused = true
+			}
+		}
+		assert.True(t, foundUnused, "should detect unused_var as unused")
+	})
+
+	t.Run("no false positive for used variable", func(t *testing.T) {
+		content := `
+variable "my_var" {
+  type = string
+}
+
+resource "test" "example" {
+  name = var.my_var
+}
+`
+		tmpFile := filepath.Join(tmpDir, "used.tf")
+		require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0o644))
+
+		engine := New(&Config{
+			UseTFLint: false,
+			Rules: map[string]RuleConfig{
+				"lint.terraform-unused-declarations": {Enabled: true},
+			},
+		})
+
+		findings, err := engine.Run(context.Background(), []string{tmpFile})
+		require.NoError(t, err)
+
+		// Should not report my_var as unused
+		for _, f := range findings {
+			if f.Rule == "lint.terraform-unused-declarations" {
+				assert.NotContains(t, f.Message, "my_var", "should not report used variable")
+			}
+		}
+	})
+
+	t.Run("handles multiple files correctly", func(t *testing.T) {
+		// Variable declared in one file, used in another
+		varFile := filepath.Join(tmpDir, "variables.tf")
+		mainFile := filepath.Join(tmpDir, "main.tf")
+
+		varContent := `
+variable "cross_file_var" {
+  type = string
+}
+`
+		mainContent := `
+resource "test" "example" {
+  name = var.cross_file_var
+}
+`
+		require.NoError(t, os.WriteFile(varFile, []byte(varContent), 0o644))
+		require.NoError(t, os.WriteFile(mainFile, []byte(mainContent), 0o644))
+
+		engine := New(&Config{
+			UseTFLint: false,
+			Rules: map[string]RuleConfig{
+				"lint.terraform-unused-declarations": {Enabled: true},
+			},
+		})
+
+		findings, err := engine.Run(context.Background(), []string{varFile, mainFile})
+		require.NoError(t, err)
+
+		// Should not report cross_file_var as unused
+		for _, f := range findings {
+			if f.Rule == "lint.terraform-unused-declarations" {
+				assert.NotContains(t, f.Message, "cross_file_var", "should find usage across files")
+			}
+		}
 	})
 }
 

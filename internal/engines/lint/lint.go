@@ -737,18 +737,12 @@ func (r *TerraformUnusedDeclarationsRule) Check(ctx *RuleContext) []sdk.Finding 
 	}
 
 	// Search for var.X references in all module files
+	// Get content from all files for usage detection
 	contentStr := ""
-	for _, hclFile := range ctx.AllFiles {
-		if hclFile == nil {
-			continue
+	for path := range ctx.AllFiles {
+		if content, err := os.ReadFile(path); err == nil {
+			contentStr += string(content) + "\n"
 		}
-		// Get the raw bytes from the file
-		for path := range ctx.AllFiles {
-			if content, err := os.ReadFile(path); err == nil {
-				contentStr += string(content) + "\n"
-			}
-		}
-		break // Only need to do this once
 	}
 
 	// Check each variable

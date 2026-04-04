@@ -62,8 +62,6 @@ func (e *Engine) Name() string {
 func (e *Engine) Run(ctx context.Context, files []string) ([]sdk.Finding, error) {
 	var allFindings []sdk.Finding
 
-	parser := hclparse.NewParser()
-
 	for _, file := range files {
 		select {
 		case <-ctx.Done():
@@ -71,6 +69,8 @@ func (e *Engine) Run(ctx context.Context, files []string) ([]sdk.Finding, error)
 		default:
 		}
 
+		// Create fresh parser per file to avoid cached state issues
+		parser := hclparse.NewParser()
 		findings, err := e.checkFile(parser, file)
 		if err != nil {
 			return nil, fmt.Errorf("checking %s: %w", file, err)
@@ -232,13 +232,15 @@ func (e *Engine) applyFixes(ctx *sdk.Context, _ *hcl.File, findings []sdk.Findin
 		return 0, nil
 	}
 
-	// Deduplicate findings by rule to avoid redundant fixes
-	// Many findings might result in the same fix operation
-	seenRules := make(map[string]bool)
+	// Deduplicate findings by rule+location to avoid redundant fixes
+	// The same rule at the same location would produce the same fix
+	seenFixes := make(map[string]bool)
 	var uniqueFindings []sdk.Finding
 	for _, f := range fixableFindings {
-		if !seenRules[f.Rule] {
-			seenRules[f.Rule] = true
+		// Key by rule name and location to allow same rule at different locations
+		key := fmt.Sprintf("%s:%s:%d:%d", f.Rule, f.File, f.Location.StartLine, f.Location.StartColumn)
+		if !seenFixes[key] {
+			seenFixes[key] = true
 			uniqueFindings = append(uniqueFindings, f)
 		}
 	}

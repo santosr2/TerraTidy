@@ -1,9 +1,13 @@
 package main
 
 import (
+	"bytes"
+	"encoding/json"
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestVersionCmd(t *testing.T) {
@@ -54,4 +58,40 @@ func TestVersionCmdExecution(t *testing.T) {
 		err := rootCmd.Execute()
 		assert.NoError(t, err)
 	})
+}
+
+func TestVersionJSONOutput(t *testing.T) {
+	// Capture stdout
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	versionShort = false
+	versionJSON = true
+
+	err := versionCmd.RunE(versionCmd, nil)
+	require.NoError(t, err)
+
+	// Restore stdout and read captured output
+	w.Close()
+	os.Stdout = oldStdout
+
+	var buf bytes.Buffer
+	_, _ = buf.ReadFrom(r)
+
+	// Reset for other tests
+	versionJSON = false
+
+	// The output should be valid JSON
+	output := buf.String()
+	var result map[string]string
+	err = json.Unmarshal([]byte(output), &result)
+	require.NoError(t, err, "JSON output should be valid: %s", output)
+
+	// Check expected fields exist
+	assert.Contains(t, result, "version")
+	assert.Contains(t, result, "commit")
+	assert.Contains(t, result, "date")
+	assert.Contains(t, result, "goVersion")
+	assert.Contains(t, result, "platform")
 }

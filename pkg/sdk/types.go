@@ -40,6 +40,22 @@ func ParseSeverity(s string, defaultSev Severity) Severity {
 	}
 }
 
+// Level returns the numeric priority level for the severity.
+// Higher values indicate more severe findings: error=2, warning=1, info=0.
+// Unknown severities return 0.
+func (s Severity) Level() int {
+	switch s {
+	case SeverityError:
+		return 2
+	case SeverityWarning:
+		return 1
+	case SeverityInfo:
+		return 0
+	default:
+		return 0
+	}
+}
+
 // Location represents a source code location for findings. It provides
 // a stable public API that does not depend on HCL internal types.
 type Location struct {

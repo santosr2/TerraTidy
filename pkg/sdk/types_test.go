@@ -261,6 +261,32 @@ func TestSeverityComparison(t *testing.T) {
 	})
 }
 
+func TestSeverityLevel(t *testing.T) {
+	tests := []struct {
+		name     string
+		severity Severity
+		expected int
+	}{
+		{"error has highest level", SeverityError, 2},
+		{"warning has middle level", SeverityWarning, 1},
+		{"info has lowest level", SeverityInfo, 0},
+		{"unknown severity returns 0", Severity("unknown"), 0},
+		{"empty severity returns 0", Severity(""), 0},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, tt.severity.Level())
+		})
+	}
+
+	t.Run("level ordering for filtering", func(t *testing.T) {
+		// Verify error > warning > info for severity filtering
+		assert.Greater(t, SeverityError.Level(), SeverityWarning.Level())
+		assert.Greater(t, SeverityWarning.Level(), SeverityInfo.Level())
+	})
+}
+
 func TestLocation(t *testing.T) {
 	t.Run("basic location", func(t *testing.T) {
 		loc := Location{

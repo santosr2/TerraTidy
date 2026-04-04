@@ -22,13 +22,12 @@ Checksums are signed with [Sigstore cosign](https://docs.sigstore.dev/) using ke
 # Install cosign
 go install github.com/sigstore/cosign/v2/cmd/cosign@latest
 
-# Download signature and certificate
+# Download checksums and signature bundle
 gh release download v0.2.0-alpha.4 --repo santosr2/terratidy -p 'checksums.txt*'
 
 # Verify the signature
 cosign verify-blob checksums.txt \
-  --signature checksums.txt.sig \
-  --certificate checksums.txt.pem \
+  --bundle checksums.txt.bundle \
   --certificate-identity-regexp 'https://github.com/santosr2/TerraTidy' \
   --certificate-oidc-issuer 'https://token.actions.githubusercontent.com'
 ```

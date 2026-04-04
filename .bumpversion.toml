@@ -79,12 +79,6 @@ filename = "examples/README.md"
 search = "download/v{current_version}"
 replace = "download/v{new_version}"
 
-# Examples - GitHub workflow download URL
-[[tool.bumpversion.files]]
-filename = "examples/github-workflow.yaml"
-search = "download/v{current_version}"
-replace = "download/v{new_version}"
-
 # README - Docker image tag
 [[tool.bumpversion.files]]
 filename = "README.md"
@@ -150,3 +144,15 @@ replace = "download v{new_version}"
 filename = ".github/ISSUE_TEMPLATE/bug_report.yml"
 search = "v{current_version}"
 replace = "v{new_version}"
+
+# Examples - Go rule plugin module dependency
+[[tool.bumpversion.files]]
+filename = "examples/go-rule/go.mod"
+search = "github.com/santosr2/TerraTidy v{current_version}"
+replace = "github.com/santosr2/TerraTidy v{new_version}"
+
+# CLI - init-rule template module dependency
+[[tool.bumpversion.files]]
+filename = "cmd/terratidy/plugins.go"
+search = "github.com/santosr2/TerraTidy v{current_version}"
+replace = "github.com/santosr2/TerraTidy v{new_version}"

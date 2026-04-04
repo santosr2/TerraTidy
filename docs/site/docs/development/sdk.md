@@ -137,6 +137,24 @@ const (
 )
 ```
 
+### Helper Functions
+
+Parse severity strings with a default fallback:
+
+```go
+sev := sdk.ParseSeverity("warning", sdk.SeverityInfo)  // Returns SeverityWarning
+sev := sdk.ParseSeverity("unknown", sdk.SeverityInfo)  // Returns SeverityInfo (default)
+```
+
+Get numeric level for filtering or comparison:
+
+```go
+// Levels: error=2, warning=1, info=0
+if finding.Severity.Level() >= sdk.SeverityWarning.Level() {
+    // Handle warnings and errors
+}
+```
+
 ## Usage Example
 
 ```go

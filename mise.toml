@@ -180,13 +180,14 @@ description = "Clean build artifacts"
 run = """
 rm -rf bin/ dist/
 rm -f coverage.out coverage.html
+rm -f *.test
 go clean
 """
 
 [tasks."clean:all"]
 description = "Clean all generated files and caches"
 run = """
-rm -rf bin/ dist/ coverage/ benchmarks/ test_fixtures/
+rm -rf bin/ dist/ coverage/ benchmarks/
 rm -f coverage.out coverage.html coverage.txt
 rm -f *.test *.prof
 go clean -cache -testcache -modcache

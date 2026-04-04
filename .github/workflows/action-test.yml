@@ -44,29 +44,28 @@ jobs:
         shell: bash
         run: |
           mkdir -p test-terraform
-          cat > test-terraform/main.tf << 'EOF'
-          terraform {
-            required_version = ">= 1.0"
-            required_providers {
-              aws = {
-                source  = "hashicorp/aws"
-                version = "~> 5.0"
-              }
-            }
-          }
-
-          provider "aws" {
-            region = "us-east-1"
-          }
-
-          resource "aws_s3_bucket" "example" {
-            bucket = "my-tf-test-bucket"
-            tags = {
-              Name = "My bucket"
-              Environment = "Test"
-            }
-          }
-          EOF
+          printf '%s\n' \
+            'terraform {' \
+            '  required_version = ">= 1.0"' \
+            '  required_providers {' \
+            '    aws = {' \
+            '      source  = "hashicorp/aws"' \
+            '      version = "~> 5.0"' \
+            '    }' \
+            '  }' \
+            '}' \
+            '' \
+            'provider "aws" {' \
+            '  region = "us-east-1"' \
+            '}' \
+            '' \
+            'resource "aws_s3_bucket" "example" {' \
+            '  bucket = "my-tf-test-bucket"' \
+            '  tags = {' \
+            '    Name        = "My bucket"' \
+            '    Environment = "Test"' \
+            '  }' \
+            '}' > test-terraform/main.tf
 
       - name: Run TerraTidy Action (text format)
         uses: ./
@@ -110,12 +109,11 @@ jobs:
       - name: Create test Terraform files
         run: |
           mkdir -p test-terraform
-          cat > test-terraform/main.tf << 'EOF'
-          resource "aws_instance" "example" {
-            ami           = "ami-12345678"
-            instance_type = "t2.micro"
-          }
-          EOF
+          printf '%s\n' \
+            'resource "aws_instance" "example" {' \
+            '  ami           = "ami-12345678"' \
+            '  instance_type = "t2.micro"' \
+            '}' > test-terraform/main.tf
 
       - name: Run TerraTidy Action (SARIF format)
         uses: ./

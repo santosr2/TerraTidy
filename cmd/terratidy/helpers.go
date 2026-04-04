@@ -272,20 +272,6 @@ func loadConfig() (*config.Config, error) {
 	return cfg, nil
 }
 
-// getSeverityLevel returns the numeric level for a severity.
-func getSeverityLevel(s sdk.Severity) int {
-	switch s {
-	case sdk.SeverityInfo:
-		return 0
-	case sdk.SeverityWarning:
-		return 1
-	case sdk.SeverityError:
-		return 2
-	default:
-		return 0
-	}
-}
-
 // filterFindingsBySeverity filters findings based on the severity threshold.
 // Only findings with severity >= threshold are returned.
 // If threshold is empty, all findings are returned.
@@ -294,11 +280,11 @@ func filterFindingsBySeverity(findings []sdk.Finding, threshold string) []sdk.Fi
 		return findings
 	}
 
-	thresholdLevel := getSeverityLevel(sdk.Severity(threshold))
+	thresholdLevel := sdk.Severity(threshold).Level()
 
 	var filtered []sdk.Finding
 	for _, f := range findings {
-		if getSeverityLevel(f.Severity) >= thresholdLevel {
+		if f.Severity.Level() >= thresholdLevel {
 			filtered = append(filtered, f)
 		}
 	}

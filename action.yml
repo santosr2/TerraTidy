@@ -7,7 +7,7 @@ branding:
 
 inputs:
   version:
-    description: "TerraTidy version to use (e.g., v0.2.0-alpha.3, latest)"
+    description: "TerraTidy version to use (e.g., v0.2.0-alpha.4, latest)"
     required: false
     default: "latest"
   config:

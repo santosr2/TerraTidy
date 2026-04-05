@@ -39,38 +39,30 @@ func TestMerge_KeyOverride(t *testing.T) {
 	base := &Config{
 		Version:           1,
 		SeverityThreshold: "warning",
-		CustomRules: map[string]RuleConfig{
-			"rule-a": {Enabled: true, Severity: "warning"},
+		Overrides: OverridesConfig{
+			Rules: map[string]RuleConfig{
+				"rule-a": {Enabled: true, Severity: "warning"},
+			},
 		},
-	}
-	base.Overrides.Rules = map[string]RuleConfig{
-		"override-a": {Enabled: true},
 	}
 
 	other := &Config{
-		CustomRules: map[string]RuleConfig{
-			"rule-a": {Enabled: false, Severity: "error"}, // override
-			"rule-b": {Enabled: true},                     // new
+		Overrides: OverridesConfig{
+			Rules: map[string]RuleConfig{
+				"rule-a": {Enabled: false, Severity: "error"}, // override
+				"rule-b": {Enabled: true},                     // new
+			},
 		},
-	}
-	other.Overrides.Rules = map[string]RuleConfig{
-		"override-a": {Enabled: false}, // override
-		"override-b": {Enabled: true},  // new
 	}
 
 	base.merge(other)
 
-	// Custom rules should be merged with override
-	require.Contains(t, base.CustomRules, "rule-a")
-	assert.False(t, base.CustomRules["rule-a"].Enabled, "rule-a should be overridden to disabled")
-	assert.Equal(t, "error", base.CustomRules["rule-a"].Severity)
-	require.Contains(t, base.CustomRules, "rule-b")
-	assert.True(t, base.CustomRules["rule-b"].Enabled)
-
 	// Override rules should be merged
-	require.Contains(t, base.Overrides.Rules, "override-a")
-	assert.False(t, base.Overrides.Rules["override-a"].Enabled)
-	require.Contains(t, base.Overrides.Rules, "override-b")
+	require.Contains(t, base.Overrides.Rules, "rule-a")
+	assert.False(t, base.Overrides.Rules["rule-a"].Enabled, "rule-a should be overridden to disabled")
+	assert.Equal(t, "error", base.Overrides.Rules["rule-a"].Severity)
+	require.Contains(t, base.Overrides.Rules, "rule-b")
+	assert.True(t, base.Overrides.Rules["rule-b"].Enabled)
 }
 
 func TestLoad_EmptyPath_ReturnsDefaults(t *testing.T) {

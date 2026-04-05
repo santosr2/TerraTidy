@@ -114,11 +114,6 @@ overrides:
     my-rule:
       enabled: true
       severity: error
-
-custom_rules:
-  my-custom-rule:
-    enabled: true
-    severity: warning
 ```
 
 ## Development

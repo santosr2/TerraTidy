@@ -199,3 +199,82 @@ func TestRunCheck(t *testing.T) {
 	// May return ExitError if findings have errors
 	_ = err
 }
+
+// TestEnginesStyleConfigFix verifies that engines.style.fix: true in config
+// enables auto-fix mode without requiring the --fix CLI flag.
+func TestEnginesStyleConfigFix(t *testing.T) {
+	dir := t.TempDir()
+
+	// Create config with style.fix: true
+	configContent := `version: 1
+engines:
+  fmt:
+    enabled: false
+  style:
+    enabled: true
+    fix: true
+  lint:
+    enabled: false
+  policy:
+    enabled: false
+`
+	cfgPath := filepath.Join(dir, ".terratidy.yaml")
+	require.NoError(t, os.WriteFile(cfgPath, []byte(configContent), 0o644))
+
+	// Create a file with style issues (multiple blank lines between blocks)
+	tfContent := `resource "aws_instance" "one" {
+  ami = "ami-123"
+}
+
+
+resource "aws_instance" "two" {
+  ami = "ami-456"
+}
+`
+	tfPath := filepath.Join(dir, "main.tf")
+	require.NoError(t, os.WriteFile(tfPath, []byte(tfContent), 0o644))
+
+	// Load config and run style checks
+	cfg, err := config.Load(cfgPath)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	_, err = runStyleCheckWithConfig(ctx, cfg, []string{tfPath}, 1, true)
+	require.NoError(t, err)
+
+	// Verify the file was modified (2 blank lines → 1)
+	modifiedContent, err := os.ReadFile(tfPath)
+	require.NoError(t, err)
+
+	expectedContent := `resource "aws_instance" "one" {
+  ami = "ami-123"
+}
+
+resource "aws_instance" "two" {
+  ami = "ami-456"
+}
+`
+	assert.Equal(t, expectedContent, string(modifiedContent), "style.fix: true should auto-fix blank line issues")
+}
+
+// TestEnginesLintConfigArgs verifies that engines.lint.args in config
+// are passed to buildLintConfig and available in the lint engine.
+func TestEnginesLintConfigArgs(t *testing.T) {
+	cfg := &config.Config{
+		Version: 1,
+		Engines: config.Engines{
+			Lint: config.LintEngineConfig{
+				Enabled:    config.BoolPtr(true),
+				Args:       []string{"--force", "--no-color", "--minimum-tf-version=1.5.0"},
+				ConfigFile: ".tflint.hcl",
+			},
+		},
+	}
+
+	lintCfg := buildLintConfig(cfg)
+
+	require.NotNil(t, lintCfg)
+	assert.Equal(t, []string{"--force", "--no-color", "--minimum-tf-version=1.5.0"}, lintCfg.Args,
+		"lint config should include args from engines.lint.args")
+	assert.Equal(t, ".tflint.hcl", lintCfg.ConfigFile)
+}

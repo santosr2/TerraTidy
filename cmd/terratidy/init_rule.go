@@ -352,10 +352,11 @@ tags:
 	fmt.Println()
 	fmt.Println("Next steps:")
 	fmt.Printf("  1. Edit %s to configure your rule\n", yamlFile)
-	fmt.Println("  2. Add the rule to your .terratidy.yaml:")
-	fmt.Printf("     custom_rules:\n")
-	fmt.Printf("       %s:\n", name)
-	fmt.Printf("         enabled: true\n")
+	fmt.Println("  2. Enable plugins in your .terratidy.yaml:")
+	fmt.Println("     plugins:")
+	fmt.Println("       enabled: true")
+	fmt.Println("       directories:")
+	fmt.Printf("         - %s\n", rulesDir)
 
 	return nil
 }

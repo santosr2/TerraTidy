@@ -167,19 +167,6 @@ overrides:
         min_version: "1.5.0"
 ```
 
-## Custom Rules
-
-Define custom rules:
-
-```yaml
-custom_rules:
-  my-org.naming-convention:
-    enabled: true
-    severity: warning
-    config:
-      pattern: "^(dev|staging|prod)_.*"
-```
-
 ## Plugins
 
 Enable and configure plugins:

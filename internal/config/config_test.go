@@ -1186,6 +1186,220 @@ engines:
 	assert.Equal(t, "error", cfg.Engines.Policy.Rules["require-tags"].Severity)
 }
 
+func TestTypedEngineConfig_IsEnabled(t *testing.T) {
+	t.Run("FmtEngineConfig", func(t *testing.T) {
+		// Nil returns false
+		cfg := FmtEngineConfig{Enabled: nil}
+		assert.False(t, cfg.IsEnabled())
+
+		// Explicit true
+		cfg = FmtEngineConfig{Enabled: BoolPtr(true)}
+		assert.True(t, cfg.IsEnabled())
+
+		// Explicit false
+		cfg = FmtEngineConfig{Enabled: BoolPtr(false)}
+		assert.False(t, cfg.IsEnabled())
+	})
+
+	t.Run("StyleEngineConfig", func(t *testing.T) {
+		cfg := StyleEngineConfig{Enabled: nil}
+		assert.False(t, cfg.IsEnabled())
+
+		cfg = StyleEngineConfig{Enabled: BoolPtr(true)}
+		assert.True(t, cfg.IsEnabled())
+
+		cfg = StyleEngineConfig{Enabled: BoolPtr(false)}
+		assert.False(t, cfg.IsEnabled())
+	})
+
+	t.Run("LintEngineConfig", func(t *testing.T) {
+		cfg := LintEngineConfig{Enabled: nil}
+		assert.False(t, cfg.IsEnabled())
+
+		cfg = LintEngineConfig{Enabled: BoolPtr(true)}
+		assert.True(t, cfg.IsEnabled())
+
+		cfg = LintEngineConfig{Enabled: BoolPtr(false)}
+		assert.False(t, cfg.IsEnabled())
+	})
+
+	t.Run("PolicyEngineConfig", func(t *testing.T) {
+		cfg := PolicyEngineConfig{Enabled: nil}
+		assert.False(t, cfg.IsEnabled())
+
+		cfg = PolicyEngineConfig{Enabled: BoolPtr(true)}
+		assert.True(t, cfg.IsEnabled())
+
+		cfg = PolicyEngineConfig{Enabled: BoolPtr(false)}
+		assert.False(t, cfg.IsEnabled())
+	})
+}
+
+func TestTypedEngineConfig_MergeFrom(t *testing.T) {
+	t.Run("FmtEngineConfig merges all fields", func(t *testing.T) {
+		base := &FmtEngineConfig{
+			Enabled: BoolPtr(false),
+			Check:   false,
+			Diff:    false,
+		}
+		other := &FmtEngineConfig{
+			Enabled: BoolPtr(true),
+			Check:   true,
+			Diff:    true,
+		}
+		base.mergeFrom(other)
+		assert.True(t, *base.Enabled)
+		assert.True(t, base.Check)
+		assert.True(t, base.Diff)
+	})
+
+	t.Run("FmtEngineConfig skips zero values", func(t *testing.T) {
+		base := &FmtEngineConfig{
+			Enabled: BoolPtr(true),
+			Check:   true,
+			Diff:    true,
+		}
+		other := &FmtEngineConfig{} // All zero values
+		base.mergeFrom(other)
+		assert.True(t, *base.Enabled) // Unchanged
+		assert.True(t, base.Check)    // Unchanged
+		assert.True(t, base.Diff)     // Unchanged
+	})
+
+	t.Run("StyleEngineConfig merges all fields", func(t *testing.T) {
+		base := &StyleEngineConfig{
+			Enabled: BoolPtr(false),
+			Fix:     false,
+			Diff:    false,
+			Rules:   nil,
+		}
+		other := &StyleEngineConfig{
+			Enabled: BoolPtr(true),
+			Fix:     true,
+			Diff:    true,
+			Rules: map[string]RuleConfig{
+				"test-rule": {Enabled: true, Severity: "error"},
+			},
+		}
+		base.mergeFrom(other)
+		assert.True(t, *base.Enabled)
+		assert.True(t, base.Fix)
+		assert.True(t, base.Diff)
+		assert.Contains(t, base.Rules, "test-rule")
+	})
+
+	t.Run("StyleEngineConfig appends to existing rules", func(t *testing.T) {
+		base := &StyleEngineConfig{
+			Rules: map[string]RuleConfig{
+				"existing-rule": {Enabled: true},
+			},
+		}
+		other := &StyleEngineConfig{
+			Rules: map[string]RuleConfig{
+				"new-rule": {Enabled: false},
+			},
+		}
+		base.mergeFrom(other)
+		assert.Contains(t, base.Rules, "existing-rule")
+		assert.Contains(t, base.Rules, "new-rule")
+	})
+
+	t.Run("LintEngineConfig merges all fields", func(t *testing.T) {
+		base := &LintEngineConfig{
+			Enabled:         BoolPtr(false),
+			ConfigFile:      "",
+			Plugins:         nil,
+			Args:            nil,
+			UseTFLint:       false,
+			TFLintPath:      "",
+			FallbackBuiltin: false,
+			Rules:           nil,
+		}
+		other := &LintEngineConfig{
+			Enabled:         BoolPtr(true),
+			ConfigFile:      ".tflint.hcl",
+			Plugins:         []string{"aws"},
+			Args:            []string{"--color"},
+			UseTFLint:       true,
+			TFLintPath:      "/usr/bin/tflint",
+			FallbackBuiltin: true,
+			Rules: map[string]RuleConfig{
+				"lint-rule": {Enabled: true},
+			},
+		}
+		base.mergeFrom(other)
+		assert.True(t, *base.Enabled)
+		assert.Equal(t, ".tflint.hcl", base.ConfigFile)
+		assert.Equal(t, []string{"aws"}, base.Plugins)
+		assert.Equal(t, []string{"--color"}, base.Args)
+		assert.True(t, base.UseTFLint)
+		assert.Equal(t, "/usr/bin/tflint", base.TFLintPath)
+		assert.True(t, base.FallbackBuiltin)
+		assert.Contains(t, base.Rules, "lint-rule")
+	})
+
+	t.Run("LintEngineConfig skips zero values", func(t *testing.T) {
+		base := &LintEngineConfig{
+			Enabled:         BoolPtr(true),
+			ConfigFile:      "original.hcl",
+			Plugins:         []string{"google"},
+			Args:            []string{"--force"},
+			UseTFLint:       true,
+			TFLintPath:      "/original/path",
+			FallbackBuiltin: true,
+		}
+		other := &LintEngineConfig{} // All zero values
+		base.mergeFrom(other)
+		assert.True(t, *base.Enabled)
+		assert.Equal(t, "original.hcl", base.ConfigFile)
+		assert.Equal(t, []string{"google"}, base.Plugins)
+		assert.Equal(t, []string{"--force"}, base.Args)
+		assert.True(t, base.UseTFLint)
+		assert.Equal(t, "/original/path", base.TFLintPath)
+		assert.True(t, base.FallbackBuiltin)
+	})
+
+	t.Run("PolicyEngineConfig merges all fields", func(t *testing.T) {
+		base := &PolicyEngineConfig{
+			Enabled:     BoolPtr(false),
+			PolicyDirs:  nil,
+			PolicyFiles: nil,
+			DataFiles:   nil,
+			Rules:       nil,
+		}
+		other := &PolicyEngineConfig{
+			Enabled:     BoolPtr(true),
+			PolicyDirs:  []string{"policies"},
+			PolicyFiles: []string{"main.rego"},
+			DataFiles:   []string{"data.json"},
+			Rules: map[string]RuleConfig{
+				"policy-rule": {Enabled: true},
+			},
+		}
+		base.mergeFrom(other)
+		assert.True(t, *base.Enabled)
+		assert.Equal(t, []string{"policies"}, base.PolicyDirs)
+		assert.Equal(t, []string{"main.rego"}, base.PolicyFiles)
+		assert.Equal(t, []string{"data.json"}, base.DataFiles)
+		assert.Contains(t, base.Rules, "policy-rule")
+	})
+
+	t.Run("PolicyEngineConfig skips zero values", func(t *testing.T) {
+		base := &PolicyEngineConfig{
+			Enabled:     BoolPtr(true),
+			PolicyDirs:  []string{"original"},
+			PolicyFiles: []string{"original.rego"},
+			DataFiles:   []string{"original.json"},
+		}
+		other := &PolicyEngineConfig{} // All zero values
+		base.mergeFrom(other)
+		assert.True(t, *base.Enabled)
+		assert.Equal(t, []string{"original"}, base.PolicyDirs)
+		assert.Equal(t, []string{"original.rego"}, base.PolicyFiles)
+		assert.Equal(t, []string{"original.json"}, base.DataFiles)
+	})
+}
+
 func TestExpandEnvVars_SensitiveWarning(t *testing.T) {
 	// This test verifies that expandEnvVars still works correctly with sensitive vars.
 	// The warning is logged to stderr; we verify the expansion still happens.

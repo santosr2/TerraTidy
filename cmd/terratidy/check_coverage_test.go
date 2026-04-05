@@ -1,6 +1,9 @@
 package main
 
 import (
+	"context"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -155,3 +158,41 @@ func TestBuildStyleConfig_RuleConfigTypes(t *testing.T) {
 
 // Verify the style.RuleConfig type is properly imported
 var _ style.RuleConfig
+
+func TestRunAllChecksSequentialWithConfig(t *testing.T) {
+	dir := t.TempDir()
+	tfFile := filepath.Join(dir, "main.tf")
+	require.NoError(t, os.WriteFile(tfFile, []byte(`resource "aws_instance" "example" {
+  ami           = "ami-123"
+  instance_type = "t2.micro"
+}
+`), 0o644))
+
+	ctx := context.Background()
+
+	t.Run("sequential mode with default config runs all enabled engines", func(t *testing.T) {
+		cfg := config.DefaultConfig()
+		// Policy is opt-in and disabled by default, which avoids loading rego files.
+		cfg.Engines.Policy.Enabled = config.BoolPtr(false)
+
+		oldParallel := checkParallel
+		checkParallel = false
+		defer func() { checkParallel = oldParallel }()
+
+		findings, err := runAllChecksSequentialWithConfig(ctx, cfg, []string{tfFile}, true)
+		require.NoError(t, err)
+		assert.NotNil(t, findings)
+	})
+
+	t.Run("sequential mode skips disabled engines", func(t *testing.T) {
+		cfg := config.DefaultConfig()
+		cfg.Engines.Fmt.Enabled = config.BoolPtr(false)
+		cfg.Engines.Style.Enabled = config.BoolPtr(false)
+		cfg.Engines.Lint.Enabled = config.BoolPtr(false)
+		cfg.Engines.Policy.Enabled = config.BoolPtr(false)
+
+		findings, err := runAllChecksSequentialWithConfig(ctx, cfg, []string{tfFile}, true)
+		require.NoError(t, err)
+		assert.Empty(t, findings)
+	})
+}

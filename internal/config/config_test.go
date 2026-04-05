@@ -1428,3 +1428,246 @@ func TestExpandEnvVars_SensitiveWarning(t *testing.T) {
 		assert.Equal(t, "region: us-west-2", result)
 	})
 }
+
+func TestEngineConfig_IsEnabled_TruePath(t *testing.T) {
+	// The base EngineConfig.IsEnabled true-return branch must be exercised.
+	ec := EngineConfig{Enabled: BoolPtr(true)}
+	assert.True(t, ec.IsEnabled())
+
+	ec2 := EngineConfig{Enabled: BoolPtr(false)}
+	assert.False(t, ec2.IsEnabled())
+}
+
+func TestConfig_merge_GlobalSettings(t *testing.T) {
+	// Covers the FailFast, Parallel, and Plugins merge branches in merge().
+	base := &Config{
+		Version:           1,
+		SeverityThreshold: "info",
+		FailFast:          false,
+		Parallel:          false,
+		Plugins: PluginsConfig{
+			Enabled:     false,
+			Directories: []string{},
+		},
+	}
+
+	other := &Config{
+		SeverityThreshold: "error",
+		FailFast:          true,
+		Parallel:          true,
+		Plugins: PluginsConfig{
+			Enabled:         true,
+			Directories:     []string{"./plugins"},
+			VerifyIntegrity: BoolPtr(false),
+		},
+	}
+
+	base.merge(other)
+
+	assert.Equal(t, "error", base.SeverityThreshold)
+	assert.True(t, base.FailFast)
+	assert.True(t, base.Parallel)
+	assert.True(t, base.Plugins.Enabled)
+	assert.Equal(t, []string{"./plugins"}, base.Plugins.Directories)
+	require.NotNil(t, base.Plugins.VerifyIntegrity)
+	assert.False(t, *base.Plugins.VerifyIntegrity)
+}
+
+func TestConfig_merge_PluginDirectoriesAppended(t *testing.T) {
+	// When base already has plugin dirs and other adds more, they should be combined.
+	base := &Config{
+		Plugins: PluginsConfig{
+			Enabled:     true,
+			Directories: []string{"./base-plugins"},
+		},
+	}
+	other := &Config{
+		Plugins: PluginsConfig{
+			Directories: []string{"./extra-plugins"},
+		},
+	}
+
+	base.merge(other)
+
+	assert.Equal(t, []string{"./base-plugins", "./extra-plugins"}, base.Plugins.Directories)
+}
+
+func TestValidateCustomRules_EmptyName(t *testing.T) {
+	// The empty rule name check is a distinct branch in validateCustomRules.
+	cfg := &Config{
+		Version: 1,
+		CustomRules: map[string]RuleConfig{
+			"": {Enabled: true},
+		},
+	}
+	err := cfg.Validate()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "custom rule name cannot be empty")
+}
+
+func TestValidateCustomRules_EmptyOverrideName(t *testing.T) {
+	// The empty override rule name check path.
+	cfg := &Config{
+		Version: 1,
+		Overrides: OverridesConfig{
+			Rules: map[string]RuleConfig{
+				"": {Enabled: true},
+			},
+		},
+	}
+	err := cfg.Validate()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "override rule name cannot be empty")
+}
+
+func TestLoadPartialConfig_ReadError(t *testing.T) {
+	_, err := loadPartialConfig("/nonexistent/path/does-not-exist.yaml")
+	require.Error(t, err)
+}
+
+func TestLoadPartialConfig_InvalidYAML(t *testing.T) {
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, "bad.yaml")
+	require.NoError(t, os.WriteFile(path, []byte(":\tinvalid: [yaml"), 0o644))
+
+	_, err := loadPartialConfig(path)
+	require.Error(t, err)
+}
+
+func TestResolveProfileInheritance_CircularDetected(t *testing.T) {
+	// Directly exercise resolveProfileInheritance circular path.
+	cfg := &Config{
+		Version: 1,
+		Profiles: map[string]Profile{
+			"a": {Name: "a", Inherits: "b"},
+			"b": {Name: "b", Inherits: "a"},
+		},
+	}
+	_, err := cfg.resolveProfileInheritance("a", make(map[string]bool))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "circular inheritance")
+}
+
+func TestResolveProfileInheritance_ParentNotFound(t *testing.T) {
+	// Parent referenced in Inherits does not exist.
+	cfg := &Config{
+		Version: 1,
+		Profiles: map[string]Profile{
+			"child": {Name: "child", Inherits: "ghost"},
+		},
+	}
+	_, err := cfg.resolveProfileInheritance("child", make(map[string]bool))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "not found")
+}
+
+func TestMergeProfiles_FmtWithCheckOrDiff(t *testing.T) {
+	// Exercises the branch where child sets Fmt.Check or Fmt.Diff (not just Enabled).
+	parent := &Profile{
+		Name: "parent",
+		Engines: Engines{
+			Fmt: FmtEngineConfig{Enabled: BoolPtr(true)},
+		},
+	}
+	child := &Profile{
+		Name: "child",
+		Engines: Engines{
+			Fmt: FmtEngineConfig{Check: true}, // Enabled is nil but Check is set
+		},
+	}
+	cfg := &Config{}
+	result := cfg.mergeProfiles(parent, child)
+	assert.True(t, result.Engines.Fmt.Check)
+}
+
+func TestMergeProfiles_StyleWithFixOrDiffOrRules(t *testing.T) {
+	parent := &Profile{
+		Name: "parent",
+		Engines: Engines{
+			Style: StyleEngineConfig{Enabled: BoolPtr(true)},
+		},
+	}
+	child := &Profile{
+		Name: "child",
+		Engines: Engines{
+			Style: StyleEngineConfig{
+				Fix: true,
+				Rules: map[string]RuleConfig{
+					"some-rule": {Enabled: true},
+				},
+			},
+		},
+	}
+	cfg := &Config{}
+	result := cfg.mergeProfiles(parent, child)
+	assert.True(t, result.Engines.Style.Fix)
+	assert.Contains(t, result.Engines.Style.Rules, "some-rule")
+}
+
+func TestMergeProfiles_LintWithConfigFile(t *testing.T) {
+	parent := &Profile{
+		Name: "parent",
+		Engines: Engines{
+			Lint: LintEngineConfig{Enabled: BoolPtr(true)},
+		},
+	}
+	child := &Profile{
+		Name: "child",
+		Engines: Engines{
+			Lint: LintEngineConfig{ConfigFile: "custom.hcl"},
+		},
+	}
+	cfg := &Config{}
+	result := cfg.mergeProfiles(parent, child)
+	assert.Equal(t, "custom.hcl", result.Engines.Lint.ConfigFile)
+}
+
+func TestApplyProfile_Error(t *testing.T) {
+	// Covers the error return path in ApplyProfile.
+	cfg := &Config{
+		Version:  1,
+		Profiles: map[string]Profile{},
+	}
+	err := cfg.ApplyProfile("nonexistent")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "not found")
+}
+
+func TestApplyProfile_WithExistingOverrides(t *testing.T) {
+	// Covers the path where c.Overrides.Rules is already non-nil.
+	cfg := &Config{
+		Version: 1,
+		Overrides: OverridesConfig{
+			Rules: map[string]RuleConfig{
+				"pre-existing": {Enabled: true},
+			},
+		},
+		Profiles: map[string]Profile{
+			"ci": {
+				Name: "ci",
+				Engines: Engines{
+					Fmt: FmtEngineConfig{Enabled: BoolPtr(true)},
+				},
+				Overrides: OverridesConfig{
+					Rules: map[string]RuleConfig{
+						"from-profile": {Enabled: true, Severity: "error"},
+					},
+				},
+			},
+		},
+	}
+
+	err := cfg.ApplyProfile("ci")
+	require.NoError(t, err)
+	assert.Contains(t, cfg.Overrides.Rules, "pre-existing")
+	assert.Contains(t, cfg.Overrides.Rules, "from-profile")
+}
+
+func TestLoad_ReadError(t *testing.T) {
+	// Create a directory where a file is expected - os.ReadFile will fail.
+	tmpDir := t.TempDir()
+	// Use a path that exists but is a directory, not a file.
+	_, err := Load(tmpDir)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "reading config file")
+}

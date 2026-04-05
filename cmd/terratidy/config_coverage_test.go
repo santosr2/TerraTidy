@@ -7,6 +7,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/santosr2/TerraTidy/internal/config"
 )
 
 func TestGetConfigPath(t *testing.T) {
@@ -135,4 +137,149 @@ func TestRunConfigMerge(t *testing.T) {
 
 	err = runConfigMerge(nil, nil)
 	require.NoError(t, err)
+}
+
+func TestRunConfigInitProfile(t *testing.T) {
+	t.Run("creates profile in new config", func(t *testing.T) {
+		dir := t.TempDir()
+		cfgPath := filepath.Join(dir, ".terratidy.yaml")
+
+		old := cfgFile
+		cfgFile = cfgPath
+		defer func() { cfgFile = old }()
+
+		err := runConfigInitProfile(nil, []string{"production"})
+		require.NoError(t, err)
+
+		content, err := os.ReadFile(cfgPath)
+		require.NoError(t, err)
+		assert.Contains(t, string(content), "production")
+	})
+
+	t.Run("creates profile in existing config", func(t *testing.T) {
+		dir := t.TempDir()
+		cfgPath := filepath.Join(dir, ".terratidy.yaml")
+		require.NoError(t, os.WriteFile(cfgPath, []byte("version: 1\n"), 0o644))
+
+		old := cfgFile
+		cfgFile = cfgPath
+		defer func() { cfgFile = old }()
+
+		err := runConfigInitProfile(nil, []string{"staging"})
+		require.NoError(t, err)
+
+		content, err := os.ReadFile(cfgPath)
+		require.NoError(t, err)
+		assert.Contains(t, string(content), "staging")
+	})
+
+	t.Run("errors when profile already exists", func(t *testing.T) {
+		dir := t.TempDir()
+		cfgPath := filepath.Join(dir, ".terratidy.yaml")
+		require.NoError(t, os.WriteFile(cfgPath, []byte("version: 1\nprofiles:\n  dev:\n    profile: dev\n"), 0o644))
+
+		old := cfgFile
+		cfgFile = cfgPath
+		defer func() { cfgFile = old }()
+
+		err := runConfigInitProfile(nil, []string{"dev"})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "already exists")
+	})
+}
+
+func TestRunConfigShow_JSONFormat(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, ".terratidy.yaml")
+	require.NoError(t, os.WriteFile(cfgPath, []byte("version: 1\n"), 0o644))
+
+	old := cfgFile
+	oldFmt := configOutputFormat
+	cfgFile = cfgPath
+	configOutputFormat = "json"
+	defer func() {
+		cfgFile = old
+		configOutputFormat = oldFmt
+	}()
+
+	err := runConfigShow(nil, nil)
+	assert.NoError(t, err)
+}
+
+func TestRunConfigShow_InvalidFormat(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, ".terratidy.yaml")
+	require.NoError(t, os.WriteFile(cfgPath, []byte("version: 1\n"), 0o644))
+
+	old := cfgFile
+	oldFmt := configOutputFormat
+	cfgFile = cfgPath
+	configOutputFormat = "toml"
+	defer func() {
+		cfgFile = old
+		configOutputFormat = oldFmt
+	}()
+
+	err := runConfigShow(nil, nil)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "unsupported format")
+}
+
+func TestRunConfigValidate_LoadFailure(t *testing.T) {
+	// Point at a file that exists but has invalid YAML to trigger load failure.
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, ".terratidy.yaml")
+	require.NoError(t, os.WriteFile(cfgPath, []byte("version: 99\n"), 0o644))
+
+	old := cfgFile
+	cfgFile = cfgPath
+	defer func() { cfgFile = old }()
+
+	err := runConfigValidate(nil, nil)
+	require.Error(t, err)
+}
+
+func TestRunConfigValidate_WithEnabledEngines(t *testing.T) {
+	// Exercises the engine summary output for each enabled/disabled engine.
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, ".terratidy.yaml")
+	content := `version: 1
+engines:
+  fmt:
+    enabled: true
+  style:
+    enabled: true
+  lint:
+    enabled: false
+  policy:
+    enabled: true
+profiles:
+  ci:
+    profile: ci
+    description: "CI profile"
+`
+	require.NoError(t, os.WriteFile(cfgPath, []byte(content), 0o644))
+
+	old := cfgFile
+	cfgFile = cfgPath
+	defer func() { cfgFile = old }()
+
+	err := runConfigValidate(nil, nil)
+	assert.NoError(t, err)
+}
+
+func TestValidateConfig_NoEnginesEnabled(t *testing.T) {
+	cfg := &config.Config{}
+	// All engines nil (IsEnabled returns false for all).
+	issues := validateConfig(cfg)
+	assert.Contains(t, issues, "no engines are enabled")
+}
+
+func TestValidateConfig_InvalidSeverity(t *testing.T) {
+	cfg := &config.Config{
+		SeverityThreshold: "FATAL",
+	}
+	issues := validateConfig(cfg)
+	require.NotEmpty(t, issues)
+	assert.Contains(t, issues[0], "invalid severity_threshold")
 }

@@ -89,9 +89,6 @@ type Config struct {
 
 	// Plugin settings
 	Plugins PluginsConfig `yaml:"plugins,omitempty"`
-
-	// Custom rules
-	CustomRules map[string]RuleConfig `yaml:"custom_rules,omitempty"`
 }
 
 // Engines holds typed configuration for all engines.
@@ -504,14 +501,6 @@ func (c *Config) merge(other *Config) {
 	c.Engines.Lint.mergeFrom(&other.Engines.Lint)
 	c.Engines.Policy.mergeFrom(&other.Engines.Policy)
 
-	// Merge custom rules
-	if c.CustomRules == nil {
-		c.CustomRules = make(map[string]RuleConfig)
-	}
-	for k, v := range other.CustomRules {
-		c.CustomRules[k] = v
-	}
-
 	// Merge override rules
 	if c.Overrides.Rules == nil {
 		c.Overrides.Rules = make(map[string]RuleConfig)
@@ -582,9 +571,9 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("profile validation: %w", err)
 	}
 
-	// Validate custom rules
-	if err := c.validateCustomRules(); err != nil {
-		return fmt.Errorf("custom rules validation: %w", err)
+	// Validate rule overrides
+	if err := c.validateRuleOverrides(); err != nil {
+		return fmt.Errorf("rule overrides validation: %w", err)
 	}
 
 	// Validate plugin configuration
@@ -635,8 +624,8 @@ func (c *Config) checkCircularInheritance(name string, visited map[string]bool) 
 	return nil
 }
 
-// validateCustomRules validates custom rule configurations
-func (c *Config) validateCustomRules() error {
+// validateRuleOverrides validates rule override configurations
+func (c *Config) validateRuleOverrides() error {
 	validSeverities := map[string]bool{
 		"error":   true,
 		"warning": true,
@@ -644,17 +633,6 @@ func (c *Config) validateCustomRules() error {
 		"":        true, // Allow empty (default)
 	}
 
-	for name, rule := range c.CustomRules {
-		if name == "" {
-			return fmt.Errorf("custom rule name cannot be empty")
-		}
-
-		if !validSeverities[rule.Severity] {
-			return fmt.Errorf("custom rule %q has invalid severity: %s", name, rule.Severity)
-		}
-	}
-
-	// Also validate override rules
 	for name, rule := range c.Overrides.Rules {
 		if name == "" {
 			return fmt.Errorf("override rule name cannot be empty")

@@ -76,20 +76,21 @@ engines:
 	require.NoError(t, os.MkdirAll(configsDir, 0o755))
 
 	// Create imported config
-	importedConfig := `custom_rules:
-  my-rule:
-    enabled: true
-    severity: warning
+	importedConfig := `overrides:
+  rules:
+    my-rule:
+      enabled: true
+      severity: warning
 `
-	importPath := filepath.Join(configsDir, "custom.yaml")
+	importPath := filepath.Join(configsDir, "rules.yaml")
 	require.NoError(t, os.WriteFile(importPath, []byte(importedConfig), 0o644))
 
 	cfg, err := Load(mainPath)
 	require.NoError(t, err)
 
-	// Check that custom rule was imported
-	assert.Contains(t, cfg.CustomRules, "my-rule")
-	assert.True(t, cfg.CustomRules["my-rule"].Enabled)
+	// Check that override rule was imported
+	assert.Contains(t, cfg.Overrides.Rules, "my-rule")
+	assert.True(t, cfg.Overrides.Rules["my-rule"].Enabled)
 }
 
 func TestLoad_WithImports_EnvVarExpansion(t *testing.T) {
@@ -371,8 +372,10 @@ func TestDefaultConfig(t *testing.T) {
 
 func TestConfig_merge(t *testing.T) {
 	cfg := &Config{
-		CustomRules: map[string]RuleConfig{
-			"rule1": {Enabled: true},
+		Overrides: OverridesConfig{
+			Rules: map[string]RuleConfig{
+				"rule1": {Enabled: true},
+			},
 		},
 		Profiles: map[string]Profile{
 			"profile1": {Name: "profile1"},
@@ -380,45 +383,41 @@ func TestConfig_merge(t *testing.T) {
 	}
 
 	other := &Config{
-		CustomRules: map[string]RuleConfig{
-			"rule2": {Enabled: true},
+		Overrides: OverridesConfig{
+			Rules: map[string]RuleConfig{
+				"rule2": {Enabled: true},
+			},
 		},
 		Profiles: map[string]Profile{
 			"profile2": {Name: "profile2"},
 		},
+	}
+
+	cfg.merge(other)
+
+	// Check that overrides were merged
+	assert.Contains(t, cfg.Overrides.Rules, "rule1")
+	assert.Contains(t, cfg.Overrides.Rules, "rule2")
+
+	// Check that profiles were merged
+	assert.Contains(t, cfg.Profiles, "profile1")
+	assert.Contains(t, cfg.Profiles, "profile2")
+}
+
+func TestConfig_merge_NilMaps(t *testing.T) {
+	cfg := &Config{} // All maps are nil
+	other := &Config{
 		Overrides: OverridesConfig{
 			Rules: map[string]RuleConfig{
-				"override1": {Enabled: false},
+				"rule": {Enabled: true},
 			},
 		},
 	}
 
 	cfg.merge(other)
 
-	// Check that rules were merged
-	assert.Contains(t, cfg.CustomRules, "rule1")
-	assert.Contains(t, cfg.CustomRules, "rule2")
-
-	// Check that profiles were merged
-	assert.Contains(t, cfg.Profiles, "profile1")
-	assert.Contains(t, cfg.Profiles, "profile2")
-
-	// Check that overrides were merged
-	assert.Contains(t, cfg.Overrides.Rules, "override1")
-}
-
-func TestConfig_merge_NilMaps(t *testing.T) {
-	cfg := &Config{} // All maps are nil
-	other := &Config{
-		CustomRules: map[string]RuleConfig{
-			"rule": {Enabled: true},
-		},
-	}
-
-	cfg.merge(other)
-
-	assert.NotNil(t, cfg.CustomRules)
-	assert.Contains(t, cfg.CustomRules, "rule")
+	assert.NotNil(t, cfg.Overrides.Rules)
+	assert.Contains(t, cfg.Overrides.Rules, "rule")
 }
 
 func TestLoad_NonExistentFile(t *testing.T) {
@@ -431,15 +430,16 @@ func TestLoadPartialConfig(t *testing.T) {
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "partial.yaml")
 
-	content := `custom_rules:
-  partial-rule:
-    enabled: true
+	content := `overrides:
+  rules:
+    partial-rule:
+      enabled: true
 `
 	require.NoError(t, os.WriteFile(configPath, []byte(content), 0o644))
 
 	cfg, err := loadPartialConfig(configPath)
 	require.NoError(t, err)
-	assert.Contains(t, cfg.CustomRules, "partial-rule")
+	assert.Contains(t, cfg.Overrides.Rules, "partial-rule")
 }
 
 func TestLoad_WithProfiles(t *testing.T) {
@@ -540,7 +540,7 @@ func TestValidate_NonExistentInheritedProfile(t *testing.T) {
 	assert.Contains(t, err.Error(), "inherits from non-existent profile")
 }
 
-func TestValidate_CustomRuleSeverity(t *testing.T) {
+func TestValidate_RuleOverrideSeverity(t *testing.T) {
 	tests := []struct {
 		name     string
 		severity string
@@ -557,8 +557,10 @@ func TestValidate_CustomRuleSeverity(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			cfg := &Config{
 				Version: 1,
-				CustomRules: map[string]RuleConfig{
-					"my-rule": {Enabled: true, Severity: tt.severity},
+				Overrides: OverridesConfig{
+					Rules: map[string]RuleConfig{
+						"my-rule": {Enabled: true, Severity: tt.severity},
+					},
 				},
 			}
 			err := cfg.Validate()
@@ -1036,7 +1038,7 @@ imports:
 
 		// Create a few config files (not exceeding limit, just testing normal case)
 		for i := 0; i < 3; i++ {
-			content := "custom_rules: {}\n"
+			content := "version: 1\n"
 			filePath := filepath.Join(configsDir, "config"+string(rune('a'+i))+".yaml")
 			require.NoError(t, os.WriteFile(filePath, []byte(content), 0o644))
 		}
@@ -1492,20 +1494,7 @@ func TestConfig_merge_PluginDirectoriesAppended(t *testing.T) {
 	assert.Equal(t, []string{"./base-plugins", "./extra-plugins"}, base.Plugins.Directories)
 }
 
-func TestValidateCustomRules_EmptyName(t *testing.T) {
-	// The empty rule name check is a distinct branch in validateCustomRules.
-	cfg := &Config{
-		Version: 1,
-		CustomRules: map[string]RuleConfig{
-			"": {Enabled: true},
-		},
-	}
-	err := cfg.Validate()
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "custom rule name cannot be empty")
-}
-
-func TestValidateCustomRules_EmptyOverrideName(t *testing.T) {
+func TestValidateRuleOverrides_EmptyOverrideName(t *testing.T) {
 	// The empty override rule name check path.
 	cfg := &Config{
 		Version: 1,

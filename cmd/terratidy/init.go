@@ -289,14 +289,6 @@ engines:
 #     lint.terraform_required_version:
 #       enabled: true
 #       severity: error
-
-# Custom rules (advanced)
-# custom_rules:
-#   my-custom-rule:
-#     enabled: true
-#     severity: warning
-#     config:
-#       option: value
 `
 }
 

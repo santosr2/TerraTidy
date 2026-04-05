@@ -6,8 +6,10 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/hashicorp/hcl/v2"
 	"github.com/santosr2/TerraTidy/internal/config"
 	"github.com/santosr2/TerraTidy/internal/engines/style/rules"
+	"github.com/santosr2/TerraTidy/pkg/sdk"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -1041,4 +1043,70 @@ func TestConfigFromEngine(t *testing.T) {
 		require.NotNil(t, cfg.Rules)
 		assert.Empty(t, cfg.Rules)
 	})
+}
+
+// mockPluginRule is a simple rule implementation for testing plugin integration
+type mockPluginRule struct {
+	name string
+}
+
+func (r *mockPluginRule) Name() string        { return r.name }
+func (r *mockPluginRule) Description() string { return "Mock plugin rule for testing" }
+func (r *mockPluginRule) Check(_ *sdk.Context, _ *hcl.File) ([]sdk.Finding, error) {
+	return nil, nil
+}
+
+func TestNew_AcceptsPluginRules(t *testing.T) {
+	t.Run("no plugin rules", func(t *testing.T) {
+		engine := New(nil)
+		rules := engine.GetAllRules()
+
+		// Should have 33 built-in rules
+		assert.Len(t, rules, 33)
+	})
+
+	t.Run("with single plugin rule", func(t *testing.T) {
+		pluginRule := &mockPluginRule{name: "plugin.test-rule"}
+		engine := New(nil, pluginRule)
+		rules := engine.GetAllRules()
+
+		// Should have 33 built-in + 1 plugin = 34 rules
+		assert.Len(t, rules, 34)
+
+		// Plugin rule should be present
+		found := false
+		for _, r := range rules {
+			if r.Name() == "plugin.test-rule" {
+				found = true
+				break
+			}
+		}
+		assert.True(t, found, "plugin rule should be registered")
+	})
+
+	t.Run("with multiple plugin rules", func(t *testing.T) {
+		plugin1 := &mockPluginRule{name: "plugin.rule-one"}
+		plugin2 := &mockPluginRule{name: "plugin.rule-two"}
+		plugin3 := &mockPluginRule{name: "plugin.rule-three"}
+		engine := New(nil, plugin1, plugin2, plugin3)
+		rules := engine.GetAllRules()
+
+		// Should have 33 built-in + 3 plugin = 36 rules
+		assert.Len(t, rules, 36)
+	})
+}
+
+func TestNew_PluginRulesAppendedAfterBuiltIn(t *testing.T) {
+	pluginRule := &mockPluginRule{name: "plugin.test-rule"}
+	engine := New(nil, pluginRule)
+	rules := engine.GetAllRules()
+
+	// Plugin rules should be at the end of the slice
+	// Get the last rule
+	lastRule := rules[len(rules)-1]
+	assert.Equal(t, "plugin.test-rule", lastRule.Name(), "plugin rule should be appended after built-in rules")
+
+	// First rule should be a built-in rule (blank-line-between-blocks is first)
+	firstRule := rules[0]
+	assert.Equal(t, "style.blank-line-between-blocks", firstRule.Name(), "first rule should be built-in")
 }

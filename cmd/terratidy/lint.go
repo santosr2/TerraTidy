@@ -53,6 +53,12 @@ Use --changed to only lint files that have been modified in git.`,
 			return nil
 		}
 
+		// Load plugin rules
+		pluginRules, err := loadPluginRules(cfg)
+		if err != nil {
+			return err
+		}
+
 		// Build lint config from terratidy config, then apply CLI overrides
 		lintCfg := buildLintConfig(cfg)
 
@@ -75,8 +81,8 @@ Use --changed to only lint files that have been modified in git.`,
 			}
 		}
 
-		// Create lint engine
-		engine := lint.New(lintCfg)
+		// Create lint engine with plugin rules
+		engine := lint.New(lintCfg, pluginRules...)
 
 		// For structured output formats, skip the progress messages
 		useStructuredOutput := format != "" && format != "text"

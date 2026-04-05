@@ -12,6 +12,9 @@
 // Note: The actual .so plugin loading functions (loadGoPlugin, loadRulePlugin,
 // loadEnginePlugin, loadFormatterPlugin) are tested via integration tests as
 // they require building real compiled plugin binaries.
+//
+// Plugin authors should import github.com/santosr2/TerraTidy/pkg/plugins for
+// the public plugin API types.
 package plugins
 
 import (
@@ -27,6 +30,7 @@ import (
 	"strings"
 	"sync"
 
+	pkgplugins "github.com/santosr2/TerraTidy/pkg/plugins"
 	"github.com/santosr2/TerraTidy/pkg/sdk"
 )
 
@@ -50,49 +54,32 @@ func relativePath(path string) string {
 	return rel
 }
 
-// PluginType represents the type of plugin
-type PluginType string
+// PluginType is an alias to pkgplugins.PluginType for internal use.
+type PluginType = pkgplugins.PluginType
 
+// PluginMetadata is an alias to pkgplugins.PluginMetadata for internal use.
+type PluginMetadata = pkgplugins.PluginMetadata
+
+// RulePlugin is an alias to pkgplugins.RulePlugin for internal use.
+type RulePlugin = pkgplugins.RulePlugin
+
+// EnginePlugin is an alias to pkgplugins.EnginePlugin for internal use.
+type EnginePlugin = pkgplugins.EnginePlugin
+
+// FormatterPlugin is an alias to pkgplugins.FormatterPlugin for internal use.
+type FormatterPlugin = pkgplugins.FormatterPlugin
+
+// Re-export constants from pkg/plugins.
 const (
-	// PluginTypeRule represents a custom rule plugin
-	PluginTypeRule PluginType = "rule"
-	// PluginTypeEngine represents a custom engine plugin
-	PluginTypeEngine PluginType = "engine"
-	// PluginTypeFormatter represents a custom output formatter plugin
-	PluginTypeFormatter PluginType = "formatter"
+	PluginTypeRule      = pkgplugins.PluginTypeRule
+	PluginTypeEngine    = pkgplugins.PluginTypeEngine
+	PluginTypeFormatter = pkgplugins.PluginTypeFormatter
 )
-
-// PluginMetadata contains information about a plugin
-type PluginMetadata struct {
-	Name        string     `json:"name"`
-	Version     string     `json:"version"`
-	Description string     `json:"description"`
-	Author      string     `json:"author"`
-	Type        PluginType `json:"type"`
-	Path        string     `json:"path"`
-}
 
 // Plugin represents a loaded plugin
 type Plugin struct {
 	Metadata PluginMetadata
 	Instance any
-}
-
-// RulePlugin defines the interface for rule plugins
-type RulePlugin interface {
-	// GetRules returns all rules provided by this plugin
-	GetRules() []sdk.Rule
-}
-
-// EnginePlugin is sdk.Engine.
-type EnginePlugin = sdk.Engine
-
-// FormatterPlugin defines the interface for formatter plugins
-type FormatterPlugin interface {
-	// Name returns the formatter name
-	Name() string
-	// Format formats the findings and writes to the writer
-	Format(findings []sdk.Finding, w io.Writer) error
 }
 
 // Manager manages plugin loading and registration
@@ -335,10 +322,13 @@ func (m *Manager) loadGoPlugin(path string, checksums map[string]string) error {
 		return fmt.Errorf("plugin missing PluginMetadata symbol: %w", err)
 	}
 
-	metadata, ok := metaSym.(*PluginMetadata)
+	// plugin.Lookup returns a pointer to the symbol, so for a *PluginMetadata
+	// variable, we get **PluginMetadata. Dereference to get the actual metadata.
+	metaPtr, ok := metaSym.(**PluginMetadata)
 	if !ok {
-		return fmt.Errorf("PluginMetadata has wrong type")
+		return fmt.Errorf("PluginMetadata has wrong type (expected **PluginMetadata, got %T)", metaSym)
 	}
+	metadata := *metaPtr
 
 	metadata.Path = path
 

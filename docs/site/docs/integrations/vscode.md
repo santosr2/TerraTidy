@@ -38,7 +38,8 @@ automatically sends diagnostics when you open, edit, or save a file:
 - Info with blue underlines
 
 The server runs lint and style engines to produce diagnostics. Rule overrides
-from `.terratidy.yaml` are respected (see [Configuration](../getting-started/configuration.md)).
+from `.terratidy.yaml` are respected, including plugin rules loaded from
+configured plugin directories (see [Configuration](../getting-started/configuration.md)).
 
 ### Document Formatting
 

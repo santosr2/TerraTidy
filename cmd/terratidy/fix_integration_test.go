@@ -48,7 +48,7 @@ resource "aws_instance" "test2" {
 
 	ctx := context.Background()
 	cfg := config.DefaultConfig()
-	findings, fixed, err := runStyleFixWithConfig(ctx, cfg, []string{tmpFile})
+	findings, fixed, err := runStyleFixWithConfig(ctx, cfg, []string{tmpFile}, nil)
 	require.NoError(t, err)
 	_ = findings
 	_ = fixed

@@ -11,6 +11,9 @@ import (
 	"testing"
 
 	"github.com/santosr2/TerraTidy/internal/config"
+	"github.com/santosr2/TerraTidy/internal/engines/lint"
+	"github.com/santosr2/TerraTidy/internal/engines/style"
+	"github.com/santosr2/TerraTidy/internal/plugins"
 	"github.com/santosr2/TerraTidy/pkg/sdk"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -1918,4 +1921,79 @@ func TestServer_CleanupOldSessions_NonexistentDir(t *testing.T) {
 
 	// Should not crash when directory doesn't exist
 	server.cleanupOldSessions("/nonexistent/path/that/does/not/exist")
+}
+
+func TestServer_LintEngineWithPluginRules(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create a YAML plugin rule that requires 'tags' attribute
+	yamlRule := `name: lsp-require-tags
+description: Resources must have tags
+severity: warning
+enabled: true
+message: "Resource is missing 'tags' attribute"
+patterns:
+  required_attributes:
+    - tags
+`
+	pluginDir := filepath.Join(tmpDir, "plugins")
+	require.NoError(t, os.MkdirAll(pluginDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(pluginDir, "require-tags.yaml"), []byte(yamlRule), 0o644))
+
+	// Create a test TF file without tags (will trigger the rule)
+	tfContent := `resource "aws_instance" "test" {
+  ami           = "ami-123"
+  instance_type = "t2.micro"
+}
+`
+	testFile := filepath.Join(tmpDir, "main.tf")
+	require.NoError(t, os.WriteFile(testFile, []byte(tfContent), 0o644))
+
+	// Create server and configure with plugin rules
+	out := &bytes.Buffer{}
+	server := NewServer(strings.NewReader(""), out)
+	server.initialized = true
+	server.workspaceRoot = tmpDir
+
+	// Load plugin rules using the plugin manager
+	cfg := config.DefaultConfig()
+	cfg.Plugins.Enabled = true
+	cfg.Plugins.Directories = []string{pluginDir}
+
+	mgr := plugins.NewManager(cfg.Plugins.Directories, false)
+	require.NoError(t, mgr.LoadAll())
+
+	rulesMap := mgr.GetRules()
+	server.pluginRules = make([]sdk.Rule, 0, len(rulesMap))
+	for _, rule := range rulesMap {
+		server.pluginRules = append(server.pluginRules, rule)
+	}
+	require.Len(t, server.pluginRules, 1, "should have loaded 1 plugin rule")
+
+	// Initialize engines with plugin rules
+	server.lintEngine = lint.New(nil, server.pluginRules...)
+	server.styleEngine = style.New(nil, server.pluginRules...)
+
+	// Add document
+	uri := pathToFileURI(testFile)
+	server.docMu.Lock()
+	server.documents[uri] = &Document{
+		URI:     uri,
+		Content: tfContent,
+		Version: 1,
+	}
+	server.docMu.Unlock()
+
+	// Get diagnostics
+	diagnostics := server.getDiagnostics(uri)
+
+	// Should have at least one diagnostic from the plugin rule
+	var foundPluginDiagnostic bool
+	for _, diag := range diagnostics {
+		if strings.Contains(diag.Message, "tags") {
+			foundPluginDiagnostic = true
+			break
+		}
+	}
+	assert.True(t, foundPluginDiagnostic, "should have diagnostic from plugin rule requiring tags")
 }

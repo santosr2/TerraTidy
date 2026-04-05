@@ -110,6 +110,40 @@ resource "aws_instance" "my_server" {
 }
 ```
 
+## Plugin Rules
+
+The style engine supports custom rules loaded from plugin directories. Plugin rules
+run alongside built-in style rules and produce findings in the same output.
+
+### Enabling Plugin Rules
+
+```yaml
+plugins:
+  enabled: true
+  directories:
+    - .terratidy/plugins
+    - ~/.terratidy/plugins
+```
+
+Plugin rules can be YAML files, Bash scripts, or Go plugins. See the
+[Plugin Development](../../development/plugins.md) guide for details on creating custom rules.
+
+### Plugin Rule Example
+
+A YAML rule that checks for a required attribute:
+
+```yaml
+# .terratidy/plugins/require-description.yaml
+name: require-description
+description: Resources must have a description
+severity: warning
+enabled: true
+message: "Resource is missing a 'description' attribute"
+patterns:
+  required_attributes:
+    - description
+```
+
 ## Disabling Rules
 
 Disable specific rules inline:

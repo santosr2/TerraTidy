@@ -43,6 +43,12 @@ Use --fix to automatically fix fixable style issues.`,
 			return err
 		}
 
+		// Load plugin rules if plugins are enabled
+		pluginRules, err := loadPluginRules(cfg)
+		if err != nil {
+			return fmt.Errorf("loading plugins: %w", err)
+		}
+
 		// Get target files (respecting --changed flag)
 		files, err := getTargetFiles(args, changed)
 		if err != nil {
@@ -54,8 +60,8 @@ Use --fix to automatically fix fixable style issues.`,
 			return nil
 		}
 
-		// Create style engine with config
-		engine := style.New(buildStyleConfig(cfg, styleFix, styleDiff))
+		// Create style engine with config and plugin rules
+		engine := style.New(buildStyleConfig(cfg, styleFix, styleDiff), pluginRules...)
 
 		// For structured output formats, skip the progress messages
 		useStructuredOutput := format != "" && format != "text"

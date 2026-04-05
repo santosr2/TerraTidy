@@ -57,8 +57,9 @@ func ConfigFromEngine(engineCfg config.StyleEngineConfig) *Config {
 	return cfg
 }
 
-// New creates a new style engine
-func New(config *Config) *Engine {
+// New creates a new style engine.
+// Plugin rules can be passed as optional additional arguments; they are appended after built-in rules.
+func New(config *Config, pluginRules ...sdk.Rule) *Engine {
 	if config == nil {
 		config = &Config{
 			Rules: make(map[string]RuleConfig),
@@ -72,6 +73,9 @@ func New(config *Config) *Engine {
 
 	// Register built-in rules
 	engine.registerRules()
+
+	// Append plugin rules after built-in rules
+	engine.rules = append(engine.rules, pluginRules...)
 
 	return engine
 }

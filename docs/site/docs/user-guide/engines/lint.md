@@ -93,6 +93,55 @@ The lint command is read-only and does not modify files. To auto-fix formatting
 and style issues, use [`terratidy fix`](../../getting-started/quickstart.md)
 or `terratidy style --fix`.
 
+## Plugin Rules
+
+The lint engine supports custom rules loaded from plugin directories. Plugin rules
+run alongside built-in lint rules and produce findings in the same output.
+
+### Enabling Plugin Rules
+
+```yaml
+plugins:
+  enabled: true
+  directories:
+    - .terratidy/plugins
+    - ~/.terratidy/plugins
+```
+
+Plugin rules can be YAML files, Bash scripts, or Go plugins. See the
+[Plugin Development](../../development/plugins.md) guide for details on creating custom rules.
+
+### Plugin Rule Example
+
+A YAML rule that checks for required tags:
+
+```yaml
+# .terratidy/plugins/require-tags.yaml
+name: require-tags
+description: Resources must have tags
+severity: warning
+enabled: true
+message: "Resource is missing a 'tags' attribute"
+patterns:
+  required_attributes:
+    - tags
+```
+
+### Configuring Plugin Rules
+
+Plugin rules can be enabled, disabled, or have their severity overridden:
+
+```yaml
+plugins:
+  enabled: true
+  directories:
+    - .terratidy/plugins
+  rules:
+    require-tags:
+      enabled: true
+      severity: error  # Override default severity
+```
+
 ## Disabling Rules
 
 Disable specific rules inline:

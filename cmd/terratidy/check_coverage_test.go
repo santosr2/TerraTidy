@@ -179,7 +179,7 @@ func TestRunAllChecksSequentialWithConfig(t *testing.T) {
 		checkParallel = false
 		defer func() { checkParallel = oldParallel }()
 
-		findings, err := runAllChecksSequentialWithConfig(ctx, cfg, []string{tfFile}, true)
+		findings, err := runAllChecksSequentialWithConfig(ctx, cfg, []string{tfFile}, true, nil)
 		require.NoError(t, err)
 		assert.NotNil(t, findings)
 	})
@@ -191,7 +191,7 @@ func TestRunAllChecksSequentialWithConfig(t *testing.T) {
 		cfg.Engines.Lint.Enabled = config.BoolPtr(false)
 		cfg.Engines.Policy.Enabled = config.BoolPtr(false)
 
-		findings, err := runAllChecksSequentialWithConfig(ctx, cfg, []string{tfFile}, true)
+		findings, err := runAllChecksSequentialWithConfig(ctx, cfg, []string{tfFile}, true, nil)
 		require.NoError(t, err)
 		assert.Empty(t, findings)
 	})

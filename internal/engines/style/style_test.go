@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/santosr2/TerraTidy/internal/config"
 	"github.com/santosr2/TerraTidy/internal/engines/style/rules"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -977,4 +978,67 @@ resource "aws_instance" "three" {
 
 	// Should report findings for the issues that were fixed
 	_ = findings // Findings count depends on whether fix was applied before or after check
+}
+
+func TestConfigFromEngine(t *testing.T) {
+	t.Run("empty config", func(t *testing.T) {
+		engineCfg := config.StyleEngineConfig{}
+		cfg := ConfigFromEngine(engineCfg)
+
+		require.NotNil(t, cfg)
+		assert.False(t, cfg.Fix)
+		assert.False(t, cfg.Diff)
+		assert.Empty(t, cfg.Rules)
+	})
+
+	t.Run("fix and diff enabled", func(t *testing.T) {
+		engineCfg := config.StyleEngineConfig{
+			Fix:  true,
+			Diff: true,
+		}
+		cfg := ConfigFromEngine(engineCfg)
+
+		assert.True(t, cfg.Fix)
+		assert.True(t, cfg.Diff)
+	})
+
+	t.Run("with rules", func(t *testing.T) {
+		engineCfg := config.StyleEngineConfig{
+			Rules: map[string]config.RuleConfig{
+				"blank-line-between-blocks": {
+					Enabled:  true,
+					Severity: "warning",
+				},
+				"block-label-case": {
+					Enabled:  false,
+					Severity: "error",
+					Config:   map[string]any{"case": "snake"},
+				},
+			},
+		}
+		cfg := ConfigFromEngine(engineCfg)
+
+		require.Len(t, cfg.Rules, 2)
+
+		blankLineRule := cfg.Rules["blank-line-between-blocks"]
+		assert.True(t, blankLineRule.Enabled)
+		assert.Equal(t, "warning", blankLineRule.Severity)
+		assert.Nil(t, blankLineRule.Options)
+
+		caseRule := cfg.Rules["block-label-case"]
+		assert.False(t, caseRule.Enabled)
+		assert.Equal(t, "error", caseRule.Severity)
+		assert.Equal(t, "snake", caseRule.Options["case"])
+	})
+
+	t.Run("nil rules map", func(t *testing.T) {
+		engineCfg := config.StyleEngineConfig{
+			Fix:   true,
+			Rules: nil,
+		}
+		cfg := ConfigFromEngine(engineCfg)
+
+		require.NotNil(t, cfg.Rules)
+		assert.Empty(t, cfg.Rules)
+	})
 }

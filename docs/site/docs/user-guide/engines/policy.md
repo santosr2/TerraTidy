@@ -26,12 +26,11 @@ terratidy policy --show-input
 engines:
   policy:
     enabled: true
-    config:
-      policy_dirs:
-        - ./policies
-        - ~/.terratidy/policies
-      policy_files:
-        - ./custom-policy.rego
+    policy_dirs:
+      - ./policies
+      - ~/.terratidy/policies
+    policy_files:
+      - ./custom-policy.rego
 ```
 
 ## Writing Policies

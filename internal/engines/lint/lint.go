@@ -19,6 +19,7 @@ import (
 	"github.com/hashicorp/hcl/v2/hclparse"
 	"github.com/hashicorp/hcl/v2/hclsyntax"
 	"github.com/santosr2/TerraTidy/internal/cache"
+	"github.com/santosr2/TerraTidy/internal/config"
 	"github.com/santosr2/TerraTidy/pkg/sdk"
 )
 
@@ -47,6 +48,36 @@ type RuleConfig struct {
 	Enabled  bool
 	Severity string
 	Options  map[string]any
+}
+
+// ConfigFromEngine creates a lint.Config from the config package's LintEngineConfig.
+// This converts the typed config struct used for YAML parsing into the engine's
+// internal Config type. CLI flag overrides should be applied by the caller.
+func ConfigFromEngine(engineCfg config.LintEngineConfig) *Config {
+	cfg := &Config{
+		ConfigFile:      engineCfg.ConfigFile,
+		Plugins:         engineCfg.Plugins,
+		Args:            engineCfg.Args,
+		UseTFLint:       engineCfg.UseTFLint,
+		TFLintPath:      engineCfg.TFLintPath,
+		FallbackBuiltin: engineCfg.FallbackBuiltin,
+		Rules:           make(map[string]RuleConfig),
+	}
+
+	// Set default config file if not specified
+	if cfg.ConfigFile == "" {
+		cfg.ConfigFile = ".tflint.hcl"
+	}
+
+	for ruleName, ruleCfg := range engineCfg.Rules {
+		cfg.Rules[ruleName] = RuleConfig{
+			Enabled:  ruleCfg.Enabled,
+			Severity: ruleCfg.Severity,
+			Options:  ruleCfg.Config,
+		}
+	}
+
+	return cfg
 }
 
 // Rule defines the interface for lint rules

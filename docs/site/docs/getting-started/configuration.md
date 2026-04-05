@@ -35,19 +35,16 @@ engines:
 
   style:
     enabled: true
-    config:
-      fix: false  # Auto-fix mode
+    fix: false  # Auto-fix mode
 
   lint:
     enabled: true
-    config:
-      config_file: .tflint.hcl  # Path to TFLint config
+    config_file: .tflint.hcl  # Path to TFLint config
 
   policy:
     enabled: true
-    config:
-      policy_dirs:
-        - ./policies
+    policy_dirs:
+      - ./policies
 
 # Rule overrides go here, NOT under engines.*.config
 overrides:
@@ -78,15 +75,14 @@ Configuration values can use environment variables with three syntaxes:
 ```yaml
 engines:
   policy:
-    config:
-      # Simple variable
-      api_key: ${API_KEY}
+    # Simple variable
+    api_key: ${API_KEY}
 
-      # With default value
-      region: ${AWS_REGION:-us-east-1}
+    # With default value
+    region: ${AWS_REGION:-us-east-1}
 
-      # Required variable
-      account_id: ${AWS_ACCOUNT_ID:?must be set}
+    # Required variable
+    account_id: ${AWS_ACCOUNT_ID:?must be set}
 ```
 
 Select a profile via CLI flag:
@@ -144,15 +140,15 @@ profiles:
 
 ### Disabling Inherited Engines
 
-Use `disabled_engines` to turn off engines from a parent profile:
+Set `enabled: false` to turn off engines from a parent profile:
 
 ```yaml
 profiles:
   minimal:
     inherits: base
-    disabled_engines:
-      - lint
-      - policy
+    engines:
+      lint: { enabled: false }
+      policy: { enabled: false }
 ```
 
 ## Rule Overrides
@@ -257,13 +253,11 @@ engines:
     enabled: true
   lint:
     enabled: true
-    config:
-      config_file: .tflint.hcl
+    config_file: .tflint.hcl
   policy:
     enabled: true
-    config:
-      policy_dirs:
-        - ./policies
+    policy_dirs:
+      - ./policies
 
 profiles:
   ci:
@@ -323,17 +317,16 @@ Cache is invalidated when a file's modification time changes.
 ### Lint Engine
 
 The lint engine provides 11 built-in AST rules and can optionally invoke TFLint as an
-external subprocess for provider-specific checks. Configure it under `engines.lint.config`:
+external subprocess for provider-specific checks:
 
 ```yaml
 engines:
   lint:
     enabled: true
-    config:
-      config_file: .tflint.hcl    # Path to TFLint config (optional)
-      plugins:                     # TFLint plugins to enable (optional)
-        - aws
-        - terraform
+    config_file: .tflint.hcl    # Path to TFLint config (optional)
+    plugins:                     # TFLint plugins to enable (optional)
+      - aws
+      - terraform
 ```
 
 Built-in rules work without TFLint. If TFLint is installed and configured, provider-specific

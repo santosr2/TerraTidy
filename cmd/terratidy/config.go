@@ -173,16 +173,16 @@ func runConfigValidate(_ *cobra.Command, _ []string) error {
 	fmt.Println("Configuration summary:")
 	fmt.Printf("  Version: %d\n", cfg.Version)
 	fmt.Printf("  Engines enabled:\n")
-	if cfg.Engines.Fmt.Enabled {
+	if cfg.Engines.Fmt.IsEnabled() {
 		fmt.Println("    - fmt")
 	}
-	if cfg.Engines.Style.Enabled {
+	if cfg.Engines.Style.IsEnabled() {
 		fmt.Println("    - style")
 	}
-	if cfg.Engines.Lint.Enabled {
+	if cfg.Engines.Lint.IsEnabled() {
 		fmt.Println("    - lint")
 	}
-	if cfg.Engines.Policy.Enabled {
+	if cfg.Engines.Policy.IsEnabled() {
 		fmt.Println("    - policy")
 	}
 
@@ -217,8 +217,8 @@ func validateConfig(cfg *config.Config) []string {
 	}
 
 	// Check for empty engines
-	if !cfg.Engines.Fmt.Enabled && !cfg.Engines.Style.Enabled &&
-		!cfg.Engines.Lint.Enabled && !cfg.Engines.Policy.Enabled {
+	if !cfg.Engines.Fmt.IsEnabled() && !cfg.Engines.Style.IsEnabled() &&
+		!cfg.Engines.Lint.IsEnabled() && !cfg.Engines.Policy.IsEnabled() {
 		issues = append(issues, "no engines are enabled")
 	}
 
@@ -270,10 +270,10 @@ func writeEngineConfigs(cfg *config.Config, configDir string) error {
 		enabled bool
 		config  any
 	}{
-		{"fmt", cfg.Engines.Fmt.Enabled, cfg.Engines.Fmt},
-		{"style", cfg.Engines.Style.Enabled, cfg.Engines.Style},
-		{"lint", cfg.Engines.Lint.Enabled, cfg.Engines.Lint},
-		{"policy", cfg.Engines.Policy.Enabled, cfg.Engines.Policy},
+		{"fmt", cfg.Engines.Fmt.IsEnabled(), cfg.Engines.Fmt},
+		{"style", cfg.Engines.Style.IsEnabled(), cfg.Engines.Style},
+		{"lint", cfg.Engines.Lint.IsEnabled(), cfg.Engines.Lint},
+		{"policy", cfg.Engines.Policy.IsEnabled(), cfg.Engines.Policy},
 	}
 
 	for _, eng := range engines {
@@ -388,10 +388,10 @@ func runConfigInitProfile(_ *cobra.Command, args []string) error {
 		Name:        profileName,
 		Description: fmt.Sprintf("%s profile", profileName),
 		Engines: config.Engines{
-			Fmt:    config.EngineConfig{Enabled: true},
-			Style:  config.EngineConfig{Enabled: true},
-			Lint:   config.EngineConfig{Enabled: true},
-			Policy: config.EngineConfig{Enabled: false},
+			Fmt:    config.FmtEngineConfig{Enabled: config.BoolPtr(true)},
+			Style:  config.StyleEngineConfig{Enabled: config.BoolPtr(true)},
+			Lint:   config.LintEngineConfig{Enabled: config.BoolPtr(true)},
+			Policy: config.PolicyEngineConfig{Enabled: config.BoolPtr(false)},
 		},
 	}
 

@@ -49,10 +49,10 @@ func TestShouldFailFast(t *testing.T) {
 
 func TestIsEngineEnabled(t *testing.T) {
 	cfg := &config.Config{}
-	cfg.Engines.Fmt.Enabled = true
-	cfg.Engines.Style.Enabled = false
-	cfg.Engines.Lint.Enabled = true
-	cfg.Engines.Policy.Enabled = false
+	cfg.Engines.Fmt.Enabled = config.BoolPtr(true)
+	cfg.Engines.Style.Enabled = config.BoolPtr(false)
+	cfg.Engines.Lint.Enabled = config.BoolPtr(true)
+	cfg.Engines.Policy.Enabled = config.BoolPtr(false)
 
 	tests := []struct {
 		name   string
@@ -71,31 +71,6 @@ func TestIsEngineEnabled(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			assert.Equal(t, tt.want, isEngineEnabled(tt.cfg, tt.engine))
-		})
-	}
-}
-
-func TestGetEngineConfig(t *testing.T) {
-	cfg := &config.Config{}
-	cfg.Engines.Fmt.Config = map[string]any{"indent": 2}
-	cfg.Engines.Style.Config = map[string]any{"fix": true}
-
-	tests := []struct {
-		name   string
-		cfg    *config.Config
-		engine string
-		want   map[string]any
-	}{
-		{"nil config", nil, "fmt", nil},
-		{"fmt config", cfg, "fmt", map[string]any{"indent": 2}},
-		{"style config", cfg, "style", map[string]any{"fix": true}},
-		{"lint nil config", cfg, "lint", nil},
-		{"unknown engine", cfg, "unknown", nil},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.want, getEngineConfig(tt.cfg, tt.engine))
 		})
 	}
 }

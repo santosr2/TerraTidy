@@ -1,6 +1,9 @@
 package main
 
 import (
+	"context"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -52,9 +55,7 @@ func TestBuildStyleConfig(t *testing.T) {
 
 	t.Run("fix from config when CLI flag is false", func(t *testing.T) {
 		appCfg := &config.Config{}
-		appCfg.Engines.Style.Config = map[string]any{
-			"fix": true,
-		}
+		appCfg.Engines.Style.Fix = true
 
 		cfg := buildStyleConfig(appCfg, false)
 		assert.True(t, cfg.Fix, "fix should be enabled from config")
@@ -62,9 +63,7 @@ func TestBuildStyleConfig(t *testing.T) {
 
 	t.Run("CLI fix flag overrides config", func(t *testing.T) {
 		appCfg := &config.Config{}
-		appCfg.Engines.Style.Config = map[string]any{
-			"fix": false,
-		}
+		appCfg.Engines.Style.Fix = false
 
 		cfg := buildStyleConfig(appCfg, true)
 		assert.True(t, cfg.Fix, "CLI flag should override config")
@@ -72,12 +71,10 @@ func TestBuildStyleConfig(t *testing.T) {
 
 	t.Run("with engine config rules", func(t *testing.T) {
 		appCfg := &config.Config{}
-		appCfg.Engines.Style.Config = map[string]any{
-			"rules": map[string]any{
-				"blank-line-between-blocks": map[string]any{
-					"enabled":  true,
-					"severity": "warning",
-				},
+		appCfg.Engines.Style.Rules = map[string]config.RuleConfig{
+			"blank-line-between-blocks": {
+				Enabled:  true,
+				Severity: "warning",
 			},
 		}
 
@@ -89,8 +86,6 @@ func TestBuildStyleConfig(t *testing.T) {
 
 	t.Run("with overrides", func(t *testing.T) {
 		appCfg := config.DefaultConfig()
-		// Engine config must be non-nil for buildStyleConfig to reach the overrides loop
-		appCfg.Engines.Style.Config = map[string]any{}
 		appCfg.Overrides.Rules = map[string]config.RuleConfig{
 			"my-rule": {Enabled: true, Severity: "error", Config: map[string]any{"key": "val"}},
 		}
@@ -112,10 +107,8 @@ func TestBuildLintConfig(t *testing.T) {
 
 	t.Run("with engine config", func(t *testing.T) {
 		appCfg := &config.Config{}
-		appCfg.Engines.Lint.Config = map[string]any{
-			"config_file": "custom.hcl",
-			"plugins":     []any{"aws", "google"},
-		}
+		appCfg.Engines.Lint.ConfigFile = "custom.hcl"
+		appCfg.Engines.Lint.Plugins = []string{"aws", "google"}
 
 		cfg := buildLintConfig(appCfg)
 		assert.Equal(t, "custom.hcl", cfg.ConfigFile)
@@ -124,9 +117,7 @@ func TestBuildLintConfig(t *testing.T) {
 
 	t.Run("with extra args", func(t *testing.T) {
 		appCfg := &config.Config{}
-		appCfg.Engines.Lint.Config = map[string]any{
-			"args": []any{"--minimum-tf-version=1.0.0", "--no-color"},
-		}
+		appCfg.Engines.Lint.Args = []string{"--minimum-tf-version=1.0.0", "--no-color"}
 
 		cfg := buildLintConfig(appCfg)
 		assert.Equal(t, []string{"--minimum-tf-version=1.0.0", "--no-color"}, cfg.Args)
@@ -150,13 +141,11 @@ func TestBuildStyleConfig_EmptyEngineConfig(t *testing.T) {
 
 func TestBuildStyleConfig_RuleConfigTypes(t *testing.T) {
 	appCfg := &config.Config{}
-	appCfg.Engines.Style.Config = map[string]any{
-		"rules": map[string]any{
-			"rule-with-options": map[string]any{
-				"enabled":  true,
-				"severity": "error",
-				"options":  map[string]any{"max_lines": 100},
-			},
+	appCfg.Engines.Style.Rules = map[string]config.RuleConfig{
+		"rule-with-options": {
+			Enabled:  true,
+			Severity: "error",
+			Config:   map[string]any{"max_lines": 100},
 		},
 	}
 
@@ -169,3 +158,41 @@ func TestBuildStyleConfig_RuleConfigTypes(t *testing.T) {
 
 // Verify the style.RuleConfig type is properly imported
 var _ style.RuleConfig
+
+func TestRunAllChecksSequentialWithConfig(t *testing.T) {
+	dir := t.TempDir()
+	tfFile := filepath.Join(dir, "main.tf")
+	require.NoError(t, os.WriteFile(tfFile, []byte(`resource "aws_instance" "example" {
+  ami           = "ami-123"
+  instance_type = "t2.micro"
+}
+`), 0o644))
+
+	ctx := context.Background()
+
+	t.Run("sequential mode with default config runs all enabled engines", func(t *testing.T) {
+		cfg := config.DefaultConfig()
+		// Policy is opt-in and disabled by default, which avoids loading rego files.
+		cfg.Engines.Policy.Enabled = config.BoolPtr(false)
+
+		oldParallel := checkParallel
+		checkParallel = false
+		defer func() { checkParallel = oldParallel }()
+
+		findings, err := runAllChecksSequentialWithConfig(ctx, cfg, []string{tfFile}, true)
+		require.NoError(t, err)
+		assert.NotNil(t, findings)
+	})
+
+	t.Run("sequential mode skips disabled engines", func(t *testing.T) {
+		cfg := config.DefaultConfig()
+		cfg.Engines.Fmt.Enabled = config.BoolPtr(false)
+		cfg.Engines.Style.Enabled = config.BoolPtr(false)
+		cfg.Engines.Lint.Enabled = config.BoolPtr(false)
+		cfg.Engines.Policy.Enabled = config.BoolPtr(false)
+
+		findings, err := runAllChecksSequentialWithConfig(ctx, cfg, []string{tfFile}, true)
+		require.NoError(t, err)
+		assert.Empty(t, findings)
+	})
+}

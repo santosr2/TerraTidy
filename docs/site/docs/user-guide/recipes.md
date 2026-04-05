@@ -21,9 +21,8 @@ engines:
   lint: { enabled: true }
   policy:
     enabled: true
-    config:
-      policy_dirs:
-        - ./policies
+    policy_dirs:
+      - ./policies
 
 profiles:
   ci:
@@ -86,10 +85,9 @@ imports:
 engines:
   policy:
     enabled: true
-    config:
-      policy_dirs:
-        - ./org-policies/rego
-        - ./local-policies
+    policy_dirs:
+      - ./org-policies/rego
+      - ./local-policies
 ```
 
 ## Tag Compliance

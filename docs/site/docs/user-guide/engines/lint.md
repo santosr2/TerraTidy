@@ -31,11 +31,10 @@ terratidy lint --plugin aws
 engines:
   lint:
     enabled: true
-    config:
-      config_file: .tflint.hcl  # Path to TFLint config
-      plugins:
-        - aws
-        - google
+    config_file: .tflint.hcl  # Path to TFLint config
+    plugins:
+      - aws
+      - google
 ```
 
 ## Rule Categories

@@ -10,6 +10,7 @@ import (
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/hclparse"
 	"github.com/pmezard/go-difflib/difflib"
+	"github.com/santosr2/TerraTidy/internal/config"
 	"github.com/santosr2/TerraTidy/internal/engines/style/rules"
 	"github.com/santosr2/TerraTidy/pkg/sdk"
 )
@@ -32,6 +33,28 @@ type RuleConfig struct {
 	Enabled  bool
 	Severity string
 	Options  map[string]any
+}
+
+// ConfigFromEngine creates a style.Config from the config package's StyleEngineConfig.
+// This converts the typed config struct used for YAML parsing into the engine's
+// internal Config type. CLI flag overrides and global rule overrides should be
+// applied by the caller after this conversion.
+func ConfigFromEngine(engineCfg config.StyleEngineConfig) *Config {
+	cfg := &Config{
+		Fix:   engineCfg.Fix,
+		Diff:  engineCfg.Diff,
+		Rules: make(map[string]RuleConfig),
+	}
+
+	for ruleName, ruleCfg := range engineCfg.Rules {
+		cfg.Rules[ruleName] = RuleConfig{
+			Enabled:  ruleCfg.Enabled,
+			Severity: ruleCfg.Severity,
+			Options:  ruleCfg.Config,
+		}
+	}
+
+	return cfg
 }
 
 // New creates a new style engine

@@ -77,5 +77,5 @@ func TestLoad_EmptyPath_ReturnsDefaults(t *testing.T) {
 	cfg, err := Load("")
 	require.NoError(t, err)
 	assert.Equal(t, 1, cfg.Version)
-	assert.True(t, cfg.Engines.Fmt.Enabled)
+	assert.True(t, cfg.Engines.Fmt.IsEnabled())
 }

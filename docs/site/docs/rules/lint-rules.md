@@ -334,10 +334,9 @@ provider-specific rules. TFLint is **not embedded or linked** as a library.
 engines:
   lint:
     enabled: true
-    config:
-      config_file: .tflint.hcl  # Path to TFLint config
-      plugins:                    # TFLint provider plugins
-        - aws
+    config_file: .tflint.hcl  # Path to TFLint config
+    plugins:                    # TFLint provider plugins
+      - aws
 ```
 
 ### TFLint Rules

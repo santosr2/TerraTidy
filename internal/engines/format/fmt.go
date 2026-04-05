@@ -12,6 +12,7 @@ import (
 	"github.com/hashicorp/hcl/v2/hclwrite"
 	"github.com/pmezard/go-difflib/difflib"
 	"github.com/santosr2/TerraTidy/internal/cache"
+	"github.com/santosr2/TerraTidy/internal/config"
 	"github.com/santosr2/TerraTidy/pkg/sdk"
 )
 
@@ -24,6 +25,16 @@ type Engine struct {
 type Config struct {
 	Check bool // Check mode (don't modify files)
 	Diff  bool // Show diff of changes
+}
+
+// ConfigFromEngine creates a format.Config from the config package's FmtEngineConfig.
+// This converts the typed config struct used for YAML parsing into the engine's
+// internal Config type.
+func ConfigFromEngine(engineCfg config.FmtEngineConfig) *Config {
+	return &Config{
+		Check: engineCfg.Check,
+		Diff:  engineCfg.Diff,
+	}
 }
 
 // New creates a new formatter engine

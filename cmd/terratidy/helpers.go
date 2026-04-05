@@ -343,23 +343,3 @@ func isEngineEnabled(cfg *config.Config, engine string) bool {
 		return true
 	}
 }
-
-// getEngineConfig returns the engine-specific config map.
-func getEngineConfig(cfg *config.Config, engine string) map[string]any {
-	if cfg == nil {
-		return nil
-	}
-
-	switch engine {
-	case "fmt":
-		return cfg.Engines.Fmt.Config
-	case "style":
-		return cfg.Engines.Style.Config
-	case "lint":
-		return cfg.Engines.Lint.Config
-	case "policy":
-		return cfg.Engines.Policy.Config
-	default:
-		return nil
-	}
-}

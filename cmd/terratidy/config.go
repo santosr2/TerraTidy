@@ -388,10 +388,10 @@ func runConfigInitProfile(_ *cobra.Command, args []string) error {
 		Name:        profileName,
 		Description: fmt.Sprintf("%s profile", profileName),
 		Engines: config.Engines{
-			Fmt:    config.EngineConfig{Enabled: config.BoolPtr(true)},
-			Style:  config.EngineConfig{Enabled: config.BoolPtr(true)},
-			Lint:   config.EngineConfig{Enabled: config.BoolPtr(true)},
-			Policy: config.EngineConfig{Enabled: config.BoolPtr(false)},
+			Fmt:    config.FmtEngineConfig{Enabled: config.BoolPtr(true)},
+			Style:  config.StyleEngineConfig{Enabled: config.BoolPtr(true)},
+			Lint:   config.LintEngineConfig{Enabled: config.BoolPtr(true)},
+			Policy: config.PolicyEngineConfig{Enabled: config.BoolPtr(false)},
 		},
 	}
 

@@ -80,12 +80,10 @@ in `.terratidy.yaml`:
 # Good: reference env var
 engines:
   policy:
-    config:
-      api_key: ${API_KEY}
+    api_key: ${API_KEY}
 
 # Bad: hardcoded secret
 engines:
   policy:
-    config:
-      api_key: sk-1234567890
+    api_key: sk-1234567890  # gitleaks:allow
 ```

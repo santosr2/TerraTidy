@@ -26,15 +26,13 @@ engines:
   # Lint engine - 11 built-in AST rules, optional TFLint integration (subprocess)
   lint:
     enabled: true
-    config:
-      config_file: .tflint.hcl  # Path to .tflint.hcl (optional, for TFLint integration)
+    config_file: .tflint.hcl  # Path to .tflint.hcl (optional, for TFLint integration)
 
   # Policy engine - OPA/Conftest
   policy:
     enabled: false
-    config:
-      policy_dirs:
-        - ./policies
+    policy_dirs:
+      - ./policies
 
 # Profiles - different configurations for different contexts
 profiles:

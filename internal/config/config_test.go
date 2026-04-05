@@ -92,6 +92,139 @@ engines:
 	assert.True(t, cfg.CustomRules["my-rule"].Enabled)
 }
 
+func TestLoad_WithImports_EnvVarExpansion(t *testing.T) {
+	// BUG-6: Env vars in imported configs were not expanded
+	tmpDir := t.TempDir()
+
+	// Set environment variable
+	_ = os.Setenv("TT_IMPORT_SEVERITY", "error")
+	defer func() { _ = os.Unsetenv("TT_IMPORT_SEVERITY") }()
+
+	// Create main config file
+	mainConfig := `version: 1
+imports:
+  - "configs/*.yaml"
+
+engines:
+  fmt:
+    enabled: true
+`
+	mainPath := filepath.Join(tmpDir, ".terratidy.yaml")
+	require.NoError(t, os.WriteFile(mainPath, []byte(mainConfig), 0o644))
+
+	// Create configs directory
+	configsDir := filepath.Join(tmpDir, "configs")
+	require.NoError(t, os.MkdirAll(configsDir, 0o755))
+
+	// Create imported config with env var
+	importedConfig := `severity_threshold: ${TT_IMPORT_SEVERITY}
+`
+	importPath := filepath.Join(configsDir, "settings.yaml")
+	require.NoError(t, os.WriteFile(importPath, []byte(importedConfig), 0o644))
+
+	cfg, err := Load(mainPath)
+	require.NoError(t, err)
+
+	// Check that env var was expanded in imported config
+	assert.Equal(t, "error", cfg.SeverityThreshold)
+}
+
+func TestLoad_WithImports_EngineConfigMerged(t *testing.T) {
+	// BUG-7: Engine config from imports was not merged
+	tmpDir := t.TempDir()
+
+	// Create main config file
+	mainConfig := `version: 1
+imports:
+  - "configs/*.yaml"
+
+engines:
+  fmt:
+    enabled: true
+`
+	mainPath := filepath.Join(tmpDir, ".terratidy.yaml")
+	require.NoError(t, os.WriteFile(mainPath, []byte(mainConfig), 0o644))
+
+	// Create configs directory
+	configsDir := filepath.Join(tmpDir, "configs")
+	require.NoError(t, os.MkdirAll(configsDir, 0o755))
+
+	// Create imported config with engine settings
+	importedConfig := `engines:
+  lint:
+    enabled: true
+    config_file: ".tflint.hcl"
+    plugins:
+      - aws
+      - azurerm
+  policy:
+    enabled: true
+    policy_dirs:
+      - policies/
+`
+	importPath := filepath.Join(configsDir, "engines.yaml")
+	require.NoError(t, os.WriteFile(importPath, []byte(importedConfig), 0o644))
+
+	cfg, err := Load(mainPath)
+	require.NoError(t, err)
+
+	// Check that engine configs from import were merged
+	assert.True(t, cfg.Engines.Lint.IsEnabled())
+	assert.Equal(t, ".tflint.hcl", cfg.Engines.Lint.ConfigFile)
+	assert.Equal(t, []string{"aws", "azurerm"}, cfg.Engines.Lint.Plugins)
+	assert.True(t, cfg.Engines.Policy.IsEnabled())
+	assert.Equal(t, []string{"policies/"}, cfg.Engines.Policy.PolicyDirs)
+}
+
+func TestLoad_WithImports_EngineConfigOverride(t *testing.T) {
+	// Test that import config overrides base config correctly
+	tmpDir := t.TempDir()
+
+	// Create main config file with some engine settings
+	mainConfig := `version: 1
+imports:
+  - "configs/*.yaml"
+
+engines:
+  lint:
+    enabled: true
+    config_file: "base.tflint.hcl"
+  style:
+    enabled: true
+    fix: false
+`
+	mainPath := filepath.Join(tmpDir, ".terratidy.yaml")
+	require.NoError(t, os.WriteFile(mainPath, []byte(mainConfig), 0o644))
+
+	// Create configs directory
+	configsDir := filepath.Join(tmpDir, "configs")
+	require.NoError(t, os.MkdirAll(configsDir, 0o755))
+
+	// Create imported config that overrides some settings
+	importedConfig := `engines:
+  lint:
+    config_file: "override.tflint.hcl"
+  style:
+    fix: true
+    rules:
+      naming-convention:
+        enabled: true
+        severity: error
+`
+	importPath := filepath.Join(configsDir, "overrides.yaml")
+	require.NoError(t, os.WriteFile(importPath, []byte(importedConfig), 0o644))
+
+	cfg, err := Load(mainPath)
+	require.NoError(t, err)
+
+	// Check that import overrides base config
+	assert.Equal(t, "override.tflint.hcl", cfg.Engines.Lint.ConfigFile)
+	assert.True(t, cfg.Engines.Style.Fix)
+	assert.Contains(t, cfg.Engines.Style.Rules, "naming-convention")
+	assert.True(t, cfg.Engines.Style.Rules["naming-convention"].Enabled)
+	assert.Equal(t, "error", cfg.Engines.Style.Rules["naming-convention"].Severity)
+}
+
 func TestLoad_InvalidYAML(t *testing.T) {
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, ".terratidy.yaml")
@@ -106,6 +239,63 @@ engines:
 	_, err := Load(configPath)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "parsing config")
+}
+
+func TestLoad_UnknownField_RejectsTypos(t *testing.T) {
+	tests := []struct {
+		name    string
+		content string
+		errMsg  string
+	}{
+		{
+			name: "typo in root field",
+			content: `version: 1
+enginse:  # typo: "enginse" instead of "engines"
+  fmt:
+    enabled: true
+`,
+			errMsg: "enginse",
+		},
+		{
+			name: "typo in engine config field",
+			content: `version: 1
+engines:
+  fmt:
+    enabeld: true  # typo: "enabeld" instead of "enabled"
+`,
+			errMsg: "enabeld",
+		},
+		{
+			name: "typo in lint engine field",
+			content: `version: 1
+engines:
+  lint:
+    config_flie: ".tflint.hcl"  # typo: "config_flie" instead of "config_file"
+`,
+			errMsg: "config_flie",
+		},
+		{
+			name: "unknown nested field in style",
+			content: `version: 1
+engines:
+  style:
+    unknownfield: value
+`,
+			errMsg: "unknownfield",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tmpDir := t.TempDir()
+			configPath := filepath.Join(tmpDir, ".terratidy.yaml")
+			require.NoError(t, os.WriteFile(configPath, []byte(tt.content), 0o644))
+
+			_, err := Load(configPath)
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), tt.errMsg, "error should mention the unknown field")
+		})
+	}
 }
 
 func TestLoad_InvalidVersion(t *testing.T) {
@@ -531,10 +721,10 @@ func TestGetProfile_NoInheritance(t *testing.T) {
 				Name:        "base",
 				Description: "Base profile",
 				Engines: Engines{
-					Fmt:    EngineConfig{Enabled: BoolPtr(true)},
-					Style:  EngineConfig{Enabled: BoolPtr(true)},
-					Lint:   EngineConfig{Enabled: BoolPtr(false)},
-					Policy: EngineConfig{Enabled: BoolPtr(false)},
+					Fmt:    FmtEngineConfig{Enabled: BoolPtr(true)},
+					Style:  StyleEngineConfig{Enabled: BoolPtr(true)},
+					Lint:   LintEngineConfig{Enabled: BoolPtr(false)},
+					Policy: PolicyEngineConfig{Enabled: BoolPtr(false)},
 				},
 			},
 		},
@@ -556,17 +746,17 @@ func TestGetProfile_WithInheritance(t *testing.T) {
 				Name:        "base",
 				Description: "Base profile",
 				Engines: Engines{
-					Fmt:    EngineConfig{Enabled: BoolPtr(true)},
-					Style:  EngineConfig{Enabled: BoolPtr(true)},
-					Lint:   EngineConfig{Enabled: BoolPtr(true)},
-					Policy: EngineConfig{Enabled: BoolPtr(true)},
+					Fmt:    FmtEngineConfig{Enabled: BoolPtr(true)},
+					Style:  StyleEngineConfig{Enabled: BoolPtr(true)},
+					Lint:   LintEngineConfig{Enabled: BoolPtr(true)},
+					Policy: PolicyEngineConfig{Enabled: BoolPtr(true)},
 				},
 			},
 			"dev": {
 				Name:     "dev",
 				Inherits: "base",
 				Engines: Engines{
-					Policy: EngineConfig{Enabled: BoolPtr(false)}, // Explicitly disable policy
+					Policy: PolicyEngineConfig{Enabled: BoolPtr(false)}, // Explicitly disable policy
 				},
 			},
 		},
@@ -590,10 +780,10 @@ func TestGetProfile_MultiLevelInheritance(t *testing.T) {
 			"base": {
 				Name: "base",
 				Engines: Engines{
-					Fmt:    EngineConfig{Enabled: BoolPtr(true)},
-					Style:  EngineConfig{Enabled: BoolPtr(true)},
-					Lint:   EngineConfig{Enabled: BoolPtr(true)},
-					Policy: EngineConfig{Enabled: BoolPtr(true)},
+					Fmt:    FmtEngineConfig{Enabled: BoolPtr(true)},
+					Style:  StyleEngineConfig{Enabled: BoolPtr(true)},
+					Lint:   LintEngineConfig{Enabled: BoolPtr(true)},
+					Policy: PolicyEngineConfig{Enabled: BoolPtr(true)},
 				},
 				Overrides: OverridesConfig{
 					Rules: map[string]RuleConfig{
@@ -614,7 +804,7 @@ func TestGetProfile_MultiLevelInheritance(t *testing.T) {
 				Name:     "staging",
 				Inherits: "ci",
 				Engines: Engines{
-					Policy: EngineConfig{Enabled: BoolPtr(false)}, // Explicitly disable policy
+					Policy: PolicyEngineConfig{Enabled: BoolPtr(false)}, // Explicitly disable policy
 				},
 				Overrides: OverridesConfig{
 					Rules: map[string]RuleConfig{
@@ -653,19 +843,19 @@ func TestApplyProfile(t *testing.T) {
 	cfg := &Config{
 		Version: 1,
 		Engines: Engines{
-			Fmt:    EngineConfig{Enabled: BoolPtr(true)},
-			Style:  EngineConfig{Enabled: BoolPtr(true)},
-			Lint:   EngineConfig{Enabled: BoolPtr(true)},
-			Policy: EngineConfig{Enabled: BoolPtr(true)},
+			Fmt:    FmtEngineConfig{Enabled: BoolPtr(true)},
+			Style:  StyleEngineConfig{Enabled: BoolPtr(true)},
+			Lint:   LintEngineConfig{Enabled: BoolPtr(true)},
+			Policy: PolicyEngineConfig{Enabled: BoolPtr(true)},
 		},
 		Profiles: map[string]Profile{
 			"minimal": {
 				Name: "minimal",
 				Engines: Engines{
-					Fmt:    EngineConfig{Enabled: BoolPtr(true)},
-					Style:  EngineConfig{Enabled: BoolPtr(false)},
-					Lint:   EngineConfig{Enabled: BoolPtr(false)},
-					Policy: EngineConfig{Enabled: BoolPtr(false)},
+					Fmt:    FmtEngineConfig{Enabled: BoolPtr(true)},
+					Style:  StyleEngineConfig{Enabled: BoolPtr(false)},
+					Lint:   LintEngineConfig{Enabled: BoolPtr(false)},
+					Policy: PolicyEngineConfig{Enabled: BoolPtr(false)},
 				},
 			},
 		},
@@ -689,17 +879,17 @@ func TestEngineConfig_EnabledPointer(t *testing.T) {
 				"base": {
 					Name: "base",
 					Engines: Engines{
-						Fmt:    EngineConfig{Enabled: BoolPtr(true)},
-						Style:  EngineConfig{Enabled: BoolPtr(true)},
-						Lint:   EngineConfig{Enabled: BoolPtr(true)},
-						Policy: EngineConfig{Enabled: BoolPtr(true)},
+						Fmt:    FmtEngineConfig{Enabled: BoolPtr(true)},
+						Style:  StyleEngineConfig{Enabled: BoolPtr(true)},
+						Lint:   LintEngineConfig{Enabled: BoolPtr(true)},
+						Policy: PolicyEngineConfig{Enabled: BoolPtr(true)},
 					},
 				},
 				"child": {
 					Name:     "child",
 					Inherits: "base",
 					Engines: Engines{
-						Lint: EngineConfig{Enabled: BoolPtr(false)}, // Explicitly disable
+						Lint: LintEngineConfig{Enabled: BoolPtr(false)}, // Explicitly disable
 					},
 				},
 			},
@@ -724,10 +914,10 @@ func TestEngineConfig_EnabledPointer(t *testing.T) {
 				"base": {
 					Name: "base",
 					Engines: Engines{
-						Fmt:    EngineConfig{Enabled: BoolPtr(true)},
-						Style:  EngineConfig{Enabled: BoolPtr(false)}, // Parent disables style
-						Lint:   EngineConfig{Enabled: BoolPtr(true)},
-						Policy: EngineConfig{Enabled: BoolPtr(false)}, // Parent disables policy
+						Fmt:    FmtEngineConfig{Enabled: BoolPtr(true)},
+						Style:  StyleEngineConfig{Enabled: BoolPtr(false)}, // Parent disables style
+						Lint:   LintEngineConfig{Enabled: BoolPtr(true)},
+						Policy: PolicyEngineConfig{Enabled: BoolPtr(false)}, // Parent disables policy
 					},
 				},
 				"child": {
@@ -906,6 +1096,94 @@ func TestIsSensitiveVar(t *testing.T) {
 			assert.Equal(t, tt.sensitive, result, "isSensitiveVar(%q)", tt.varName)
 		})
 	}
+}
+
+func TestLoad_TypedEngineConfigs(t *testing.T) {
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, ".terratidy.yaml")
+
+	// YAML config with all typed engine config fields
+	content := `version: 1
+
+engines:
+  fmt:
+    enabled: true
+    check: true
+    diff: true
+  style:
+    enabled: true
+    fix: true
+    diff: true
+    rules:
+      blank-line-between-blocks:
+        enabled: true
+        severity: warning
+  lint:
+    enabled: true
+    config_file: ".tflint.hcl"
+    plugins:
+      - aws
+      - google
+    args:
+      - "--minimum-tf-version=1.0.0"
+      - "--no-color"
+    use_tflint: true
+    tflint_path: "/usr/local/bin/tflint"
+    fallback_builtin: true
+    rules:
+      empty-block:
+        enabled: false
+  policy:
+    enabled: true
+    policy_dirs:
+      - policies
+      - custom-policies
+    policy_files:
+      - special.rego
+    data_files:
+      - data.json
+    rules:
+      require-tags:
+        enabled: true
+        severity: error
+`
+	require.NoError(t, os.WriteFile(configPath, []byte(content), 0o644))
+
+	cfg, err := Load(configPath)
+	require.NoError(t, err)
+
+	// Verify FmtEngineConfig
+	assert.True(t, cfg.Engines.Fmt.IsEnabled())
+	assert.True(t, cfg.Engines.Fmt.Check)
+	assert.True(t, cfg.Engines.Fmt.Diff)
+
+	// Verify StyleEngineConfig
+	assert.True(t, cfg.Engines.Style.IsEnabled())
+	assert.True(t, cfg.Engines.Style.Fix)
+	assert.True(t, cfg.Engines.Style.Diff)
+	assert.Contains(t, cfg.Engines.Style.Rules, "blank-line-between-blocks")
+	assert.True(t, cfg.Engines.Style.Rules["blank-line-between-blocks"].Enabled)
+	assert.Equal(t, "warning", cfg.Engines.Style.Rules["blank-line-between-blocks"].Severity)
+
+	// Verify LintEngineConfig
+	assert.True(t, cfg.Engines.Lint.IsEnabled())
+	assert.Equal(t, ".tflint.hcl", cfg.Engines.Lint.ConfigFile)
+	assert.Equal(t, []string{"aws", "google"}, cfg.Engines.Lint.Plugins)
+	assert.Equal(t, []string{"--minimum-tf-version=1.0.0", "--no-color"}, cfg.Engines.Lint.Args)
+	assert.True(t, cfg.Engines.Lint.UseTFLint)
+	assert.Equal(t, "/usr/local/bin/tflint", cfg.Engines.Lint.TFLintPath)
+	assert.True(t, cfg.Engines.Lint.FallbackBuiltin)
+	assert.Contains(t, cfg.Engines.Lint.Rules, "empty-block")
+	assert.False(t, cfg.Engines.Lint.Rules["empty-block"].Enabled)
+
+	// Verify PolicyEngineConfig
+	assert.True(t, cfg.Engines.Policy.IsEnabled())
+	assert.Equal(t, []string{"policies", "custom-policies"}, cfg.Engines.Policy.PolicyDirs)
+	assert.Equal(t, []string{"special.rego"}, cfg.Engines.Policy.PolicyFiles)
+	assert.Equal(t, []string{"data.json"}, cfg.Engines.Policy.DataFiles)
+	assert.Contains(t, cfg.Engines.Policy.Rules, "require-tags")
+	assert.True(t, cfg.Engines.Policy.Rules["require-tags"].Enabled)
+	assert.Equal(t, "error", cfg.Engines.Policy.Rules["require-tags"].Severity)
 }
 
 func TestExpandEnvVars_SensitiveWarning(t *testing.T) {

@@ -52,9 +52,7 @@ func TestBuildStyleConfig(t *testing.T) {
 
 	t.Run("fix from config when CLI flag is false", func(t *testing.T) {
 		appCfg := &config.Config{}
-		appCfg.Engines.Style.Config = map[string]any{
-			"fix": true,
-		}
+		appCfg.Engines.Style.Fix = true
 
 		cfg := buildStyleConfig(appCfg, false)
 		assert.True(t, cfg.Fix, "fix should be enabled from config")
@@ -62,9 +60,7 @@ func TestBuildStyleConfig(t *testing.T) {
 
 	t.Run("CLI fix flag overrides config", func(t *testing.T) {
 		appCfg := &config.Config{}
-		appCfg.Engines.Style.Config = map[string]any{
-			"fix": false,
-		}
+		appCfg.Engines.Style.Fix = false
 
 		cfg := buildStyleConfig(appCfg, true)
 		assert.True(t, cfg.Fix, "CLI flag should override config")
@@ -72,12 +68,10 @@ func TestBuildStyleConfig(t *testing.T) {
 
 	t.Run("with engine config rules", func(t *testing.T) {
 		appCfg := &config.Config{}
-		appCfg.Engines.Style.Config = map[string]any{
-			"rules": map[string]any{
-				"blank-line-between-blocks": map[string]any{
-					"enabled":  true,
-					"severity": "warning",
-				},
+		appCfg.Engines.Style.Rules = map[string]config.RuleConfig{
+			"blank-line-between-blocks": {
+				Enabled:  true,
+				Severity: "warning",
 			},
 		}
 
@@ -89,8 +83,6 @@ func TestBuildStyleConfig(t *testing.T) {
 
 	t.Run("with overrides", func(t *testing.T) {
 		appCfg := config.DefaultConfig()
-		// Engine config must be non-nil for buildStyleConfig to reach the overrides loop
-		appCfg.Engines.Style.Config = map[string]any{}
 		appCfg.Overrides.Rules = map[string]config.RuleConfig{
 			"my-rule": {Enabled: true, Severity: "error", Config: map[string]any{"key": "val"}},
 		}
@@ -112,10 +104,8 @@ func TestBuildLintConfig(t *testing.T) {
 
 	t.Run("with engine config", func(t *testing.T) {
 		appCfg := &config.Config{}
-		appCfg.Engines.Lint.Config = map[string]any{
-			"config_file": "custom.hcl",
-			"plugins":     []any{"aws", "google"},
-		}
+		appCfg.Engines.Lint.ConfigFile = "custom.hcl"
+		appCfg.Engines.Lint.Plugins = []string{"aws", "google"}
 
 		cfg := buildLintConfig(appCfg)
 		assert.Equal(t, "custom.hcl", cfg.ConfigFile)
@@ -124,9 +114,7 @@ func TestBuildLintConfig(t *testing.T) {
 
 	t.Run("with extra args", func(t *testing.T) {
 		appCfg := &config.Config{}
-		appCfg.Engines.Lint.Config = map[string]any{
-			"args": []any{"--minimum-tf-version=1.0.0", "--no-color"},
-		}
+		appCfg.Engines.Lint.Args = []string{"--minimum-tf-version=1.0.0", "--no-color"}
 
 		cfg := buildLintConfig(appCfg)
 		assert.Equal(t, []string{"--minimum-tf-version=1.0.0", "--no-color"}, cfg.Args)
@@ -150,13 +138,11 @@ func TestBuildStyleConfig_EmptyEngineConfig(t *testing.T) {
 
 func TestBuildStyleConfig_RuleConfigTypes(t *testing.T) {
 	appCfg := &config.Config{}
-	appCfg.Engines.Style.Config = map[string]any{
-		"rules": map[string]any{
-			"rule-with-options": map[string]any{
-				"enabled":  true,
-				"severity": "error",
-				"options":  map[string]any{"max_lines": 100},
-			},
+	appCfg.Engines.Style.Rules = map[string]config.RuleConfig{
+		"rule-with-options": {
+			Enabled:  true,
+			Severity: "error",
+			Config:   map[string]any{"max_lines": 100},
 		},
 	}
 

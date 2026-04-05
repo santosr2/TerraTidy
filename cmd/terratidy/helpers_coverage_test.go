@@ -74,28 +74,3 @@ func TestIsEngineEnabled(t *testing.T) {
 		})
 	}
 }
-
-func TestGetEngineConfig(t *testing.T) {
-	cfg := &config.Config{}
-	cfg.Engines.Fmt.Config = map[string]any{"indent": 2}
-	cfg.Engines.Style.Config = map[string]any{"fix": true}
-
-	tests := []struct {
-		name   string
-		cfg    *config.Config
-		engine string
-		want   map[string]any
-	}{
-		{"nil config", nil, "fmt", nil},
-		{"fmt config", cfg, "fmt", map[string]any{"indent": 2}},
-		{"style config", cfg, "style", map[string]any{"fix": true}},
-		{"lint nil config", cfg, "lint", nil},
-		{"unknown engine", cfg, "unknown", nil},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.want, getEngineConfig(tt.cfg, tt.engine))
-		})
-	}
-}

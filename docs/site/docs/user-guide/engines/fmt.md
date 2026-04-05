@@ -47,8 +47,7 @@ TerraTidy provides different commands for different formatting needs:
 engines:
   fmt:
     enabled: true
-    config:
-      # No additional config needed - uses HCL defaults
+    # No additional config needed - uses HCL defaults
 ```
 
 ## What Gets Formatted

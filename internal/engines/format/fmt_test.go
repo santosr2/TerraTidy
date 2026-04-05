@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/santosr2/TerraTidy/internal/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -149,4 +150,46 @@ func TestIsHCLFile(t *testing.T) {
 			assert.Equal(t, tt.want, isHCLFile(tt.path))
 		})
 	}
+}
+
+func TestConfigFromEngine(t *testing.T) {
+	t.Run("empty config", func(t *testing.T) {
+		engineCfg := config.FmtEngineConfig{}
+		cfg := ConfigFromEngine(engineCfg)
+
+		require.NotNil(t, cfg)
+		assert.False(t, cfg.Check)
+		assert.False(t, cfg.Diff)
+	})
+
+	t.Run("check mode enabled", func(t *testing.T) {
+		engineCfg := config.FmtEngineConfig{
+			Check: true,
+		}
+		cfg := ConfigFromEngine(engineCfg)
+
+		assert.True(t, cfg.Check)
+		assert.False(t, cfg.Diff)
+	})
+
+	t.Run("diff mode enabled", func(t *testing.T) {
+		engineCfg := config.FmtEngineConfig{
+			Diff: true,
+		}
+		cfg := ConfigFromEngine(engineCfg)
+
+		assert.False(t, cfg.Check)
+		assert.True(t, cfg.Diff)
+	})
+
+	t.Run("both modes enabled", func(t *testing.T) {
+		engineCfg := config.FmtEngineConfig{
+			Check: true,
+			Diff:  true,
+		}
+		cfg := ConfigFromEngine(engineCfg)
+
+		assert.True(t, cfg.Check)
+		assert.True(t, cfg.Diff)
+	})
 }

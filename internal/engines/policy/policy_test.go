@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/santosr2/TerraTidy/internal/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -557,4 +558,77 @@ func TestParseFileIntoModule_InvalidHCL(t *testing.T) {
 
 	// File should not be added since parsing failed
 	assert.Empty(t, moduleData["_files"].([]string))
+}
+
+func TestConfigFromEngine(t *testing.T) {
+	t.Run("empty config", func(t *testing.T) {
+		engineCfg := config.PolicyEngineConfig{}
+		cfg := ConfigFromEngine(engineCfg)
+
+		require.NotNil(t, cfg)
+		assert.Empty(t, cfg.PolicyDirs)
+		assert.Empty(t, cfg.PolicyFiles)
+		assert.Empty(t, cfg.DataFiles)
+		assert.Empty(t, cfg.Rules)
+	})
+
+	t.Run("all fields copied", func(t *testing.T) {
+		engineCfg := config.PolicyEngineConfig{
+			PolicyDirs:  []string{"./policies", "./extra-policies"},
+			PolicyFiles: []string{"main.rego", "helpers.rego"},
+			DataFiles:   []string{"data.json"},
+		}
+		cfg := ConfigFromEngine(engineCfg)
+
+		assert.Equal(t, []string{"./policies", "./extra-policies"}, cfg.PolicyDirs)
+		assert.Equal(t, []string{"main.rego", "helpers.rego"}, cfg.PolicyFiles)
+		assert.Equal(t, []string{"data.json"}, cfg.DataFiles)
+	})
+
+	t.Run("with rules", func(t *testing.T) {
+		engineCfg := config.PolicyEngineConfig{
+			Rules: map[string]config.RuleConfig{
+				"require-tags": {
+					Enabled:  true,
+					Severity: "error",
+					Config:   map[string]any{"required_tags": []string{"env", "team"}},
+				},
+				"no-public-s3": {
+					Enabled:  false,
+					Severity: "warning",
+				},
+			},
+		}
+		cfg := ConfigFromEngine(engineCfg)
+
+		require.Len(t, cfg.Rules, 2)
+
+		tagsRule := cfg.Rules["require-tags"]
+		assert.True(t, tagsRule.Enabled)
+		assert.Equal(t, "error", tagsRule.Severity)
+		assert.NotNil(t, tagsRule.Options["required_tags"])
+
+		s3Rule := cfg.Rules["no-public-s3"]
+		assert.False(t, s3Rule.Enabled)
+		assert.Equal(t, "warning", s3Rule.Severity)
+	})
+
+	t.Run("nil slices become empty", func(t *testing.T) {
+		engineCfg := config.PolicyEngineConfig{
+			PolicyDirs:  nil,
+			PolicyFiles: nil,
+			DataFiles:   nil,
+			Rules:       nil,
+		}
+		cfg := ConfigFromEngine(engineCfg)
+
+		require.NotNil(t, cfg.PolicyDirs)
+		require.NotNil(t, cfg.PolicyFiles)
+		require.NotNil(t, cfg.DataFiles)
+		require.NotNil(t, cfg.Rules)
+		assert.Empty(t, cfg.PolicyDirs)
+		assert.Empty(t, cfg.PolicyFiles)
+		assert.Empty(t, cfg.DataFiles)
+		assert.Empty(t, cfg.Rules)
+	})
 }

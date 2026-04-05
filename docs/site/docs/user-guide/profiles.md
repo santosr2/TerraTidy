@@ -200,9 +200,8 @@ profiles:
         enabled: true
       policy:
         enabled: true
-        config:
-          policy_dirs:
-            - ./policies/security
+        policy_dirs:
+          - ./policies/security
     overrides:
       rules:
         security-group-unrestricted:
@@ -226,9 +225,8 @@ profiles:
     inherits: ci
     engines:
       policy:
-        config:
-          policy_dirs:
-            - ./policies/team-a
+        policy_dirs:
+          - ./policies/team-a
 ```
 
 ## Viewing Profile Configuration

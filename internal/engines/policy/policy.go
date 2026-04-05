@@ -13,6 +13,7 @@ import (
 	"github.com/hashicorp/hcl/v2/hclparse"
 	"github.com/hashicorp/hcl/v2/hclsyntax"
 	"github.com/open-policy-agent/opa/v1/rego"
+	"github.com/santosr2/TerraTidy/internal/config"
 	"github.com/santosr2/TerraTidy/pkg/sdk"
 )
 
@@ -36,6 +37,39 @@ type RuleConfig struct {
 	Enabled  bool
 	Severity string
 	Options  map[string]any
+}
+
+// ConfigFromEngine creates a policy.Config from the config package's PolicyEngineConfig.
+// This converts the typed config struct used for YAML parsing into the engine's
+// internal Config type.
+func ConfigFromEngine(engineCfg config.PolicyEngineConfig) *Config {
+	cfg := &Config{
+		PolicyDirs:  engineCfg.PolicyDirs,
+		PolicyFiles: engineCfg.PolicyFiles,
+		DataFiles:   engineCfg.DataFiles,
+		Rules:       make(map[string]RuleConfig),
+	}
+
+	// Ensure slices are non-nil
+	if cfg.PolicyDirs == nil {
+		cfg.PolicyDirs = []string{}
+	}
+	if cfg.PolicyFiles == nil {
+		cfg.PolicyFiles = []string{}
+	}
+	if cfg.DataFiles == nil {
+		cfg.DataFiles = []string{}
+	}
+
+	for ruleName, ruleCfg := range engineCfg.Rules {
+		cfg.Rules[ruleName] = RuleConfig{
+			Enabled:  ruleCfg.Enabled,
+			Severity: ruleCfg.Severity,
+			Options:  ruleCfg.Config,
+		}
+	}
+
+	return cfg
 }
 
 // New creates a new policy engine

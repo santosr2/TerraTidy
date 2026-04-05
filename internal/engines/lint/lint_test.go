@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/santosr2/TerraTidy/internal/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -856,5 +857,79 @@ func TestEngine_Run_TFLintPathError(t *testing.T) {
 		// Should not error - falls back to built-in rules
 		_, err := engine.Run(context.Background(), []string{tmpFile})
 		require.NoError(t, err)
+	})
+}
+
+func TestConfigFromEngine(t *testing.T) {
+	t.Run("empty config uses defaults", func(t *testing.T) {
+		engineCfg := config.LintEngineConfig{}
+		cfg := ConfigFromEngine(engineCfg)
+
+		require.NotNil(t, cfg)
+		assert.Equal(t, ".tflint.hcl", cfg.ConfigFile)
+		assert.Empty(t, cfg.Plugins)
+		assert.Empty(t, cfg.Args)
+		assert.False(t, cfg.UseTFLint)
+		assert.Empty(t, cfg.TFLintPath)
+		assert.False(t, cfg.FallbackBuiltin)
+		assert.Empty(t, cfg.Rules)
+	})
+
+	t.Run("all fields copied", func(t *testing.T) {
+		engineCfg := config.LintEngineConfig{
+			ConfigFile:      "/custom/.tflint.hcl",
+			Plugins:         []string{"aws", "google"},
+			Args:            []string{"--force", "--no-color"},
+			UseTFLint:       true,
+			TFLintPath:      "/usr/local/bin/tflint",
+			FallbackBuiltin: true,
+		}
+		cfg := ConfigFromEngine(engineCfg)
+
+		assert.Equal(t, "/custom/.tflint.hcl", cfg.ConfigFile)
+		assert.Equal(t, []string{"aws", "google"}, cfg.Plugins)
+		assert.Equal(t, []string{"--force", "--no-color"}, cfg.Args)
+		assert.True(t, cfg.UseTFLint)
+		assert.Equal(t, "/usr/local/bin/tflint", cfg.TFLintPath)
+		assert.True(t, cfg.FallbackBuiltin)
+	})
+
+	t.Run("with rules", func(t *testing.T) {
+		engineCfg := config.LintEngineConfig{
+			Rules: map[string]config.RuleConfig{
+				"terraform-required-version": {
+					Enabled:  true,
+					Severity: "error",
+				},
+				"terraform-required-providers": {
+					Enabled:  false,
+					Severity: "warning",
+					Config:   map[string]any{"source_required": true},
+				},
+			},
+		}
+		cfg := ConfigFromEngine(engineCfg)
+
+		require.Len(t, cfg.Rules, 2)
+
+		versionRule := cfg.Rules["terraform-required-version"]
+		assert.True(t, versionRule.Enabled)
+		assert.Equal(t, "error", versionRule.Severity)
+
+		providersRule := cfg.Rules["terraform-required-providers"]
+		assert.False(t, providersRule.Enabled)
+		assert.Equal(t, "warning", providersRule.Severity)
+		assert.Equal(t, true, providersRule.Options["source_required"])
+	})
+
+	t.Run("nil rules map", func(t *testing.T) {
+		engineCfg := config.LintEngineConfig{
+			UseTFLint: true,
+			Rules:     nil,
+		}
+		cfg := ConfigFromEngine(engineCfg)
+
+		require.NotNil(t, cfg.Rules)
+		assert.Empty(t, cfg.Rules)
 	})
 }

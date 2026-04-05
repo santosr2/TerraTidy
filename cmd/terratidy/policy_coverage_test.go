@@ -31,10 +31,8 @@ func TestRunPolicyCheckWithConfig(t *testing.T) {
 
 func TestBuildPolicyConfig_WithEngineConfig(t *testing.T) {
 	cfg := config.DefaultConfig()
-	cfg.Engines.Policy.Config = map[string]any{
-		"policy_dirs":  []any{"./policies"},
-		"policy_files": []any{"custom.rego"},
-	}
+	cfg.Engines.Policy.PolicyDirs = []string{"./policies"}
+	cfg.Engines.Policy.PolicyFiles = []string{"custom.rego"}
 
 	policyCfg := buildPolicyConfig(cfg)
 	assert.Equal(t, []string{"./policies"}, policyCfg.PolicyDirs)

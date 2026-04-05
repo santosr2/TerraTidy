@@ -4,6 +4,7 @@
 package config
 
 import (
+	"bytes"
 	"fmt"
 	"log"
 	"os"
@@ -63,6 +64,14 @@ func warnIfSensitive(varName string) {
 	}
 }
 
+// unmarshalStrict unmarshals YAML data into the target with strict validation.
+// It rejects unknown fields to catch typos in config keys.
+func unmarshalStrict(data []byte, target any) error {
+	decoder := yaml.NewDecoder(bytes.NewReader(data))
+	decoder.KnownFields(true)
+	return decoder.Decode(target)
+}
+
 // Config represents the complete TerraTidy configuration
 type Config struct {
 	Version  int                `yaml:"version"`
@@ -85,12 +94,13 @@ type Config struct {
 	CustomRules map[string]RuleConfig `yaml:"custom_rules,omitempty"`
 }
 
-// Engines configuration for each engine
+// Engines holds typed configuration for all engines.
+// Each engine has its own strongly-typed config struct for better validation.
 type Engines struct {
-	Fmt    EngineConfig `yaml:"fmt"`
-	Style  EngineConfig `yaml:"style"`
-	Lint   EngineConfig `yaml:"lint"`
-	Policy EngineConfig `yaml:"policy"`
+	Fmt    FmtEngineConfig    `yaml:"fmt"`
+	Style  StyleEngineConfig  `yaml:"style"`
+	Lint   LintEngineConfig   `yaml:"lint"`
+	Policy PolicyEngineConfig `yaml:"policy"`
 }
 
 // EngineConfig represents configuration for a single engine
@@ -106,6 +116,173 @@ func (e EngineConfig) IsEnabled() bool {
 		return false
 	}
 	return *e.Enabled
+}
+
+// FmtEngineConfig holds typed configuration for the format engine.
+// This mirrors format.Config but with YAML tags for config parsing.
+type FmtEngineConfig struct {
+	Enabled *bool `yaml:"enabled,omitempty"`
+	Check   bool  `yaml:"check,omitempty"` // Check mode (don't modify files)
+	Diff    bool  `yaml:"diff,omitempty"`  // Show diff of changes
+}
+
+// IsEnabled returns whether the format engine is enabled.
+func (c FmtEngineConfig) IsEnabled() bool {
+	if c.Enabled == nil {
+		return false
+	}
+	return *c.Enabled
+}
+
+// mergeFrom merges settings from another FmtEngineConfig.
+// Only non-zero values from other are applied.
+func (c *FmtEngineConfig) mergeFrom(other *FmtEngineConfig) {
+	if other.Enabled != nil {
+		c.Enabled = other.Enabled
+	}
+	if other.Check {
+		c.Check = other.Check
+	}
+	if other.Diff {
+		c.Diff = other.Diff
+	}
+}
+
+// StyleEngineConfig holds typed configuration for the style engine.
+// This mirrors style.Config but with YAML tags for config parsing.
+type StyleEngineConfig struct {
+	Enabled *bool                 `yaml:"enabled,omitempty"`
+	Fix     bool                  `yaml:"fix,omitempty"`   // Auto-fix mode
+	Diff    bool                  `yaml:"diff,omitempty"`  // Show diff of changes
+	Rules   map[string]RuleConfig `yaml:"rules,omitempty"` // Rule-specific configuration
+}
+
+// IsEnabled returns whether the style engine is enabled.
+func (c StyleEngineConfig) IsEnabled() bool {
+	if c.Enabled == nil {
+		return false
+	}
+	return *c.Enabled
+}
+
+// mergeFrom merges settings from another StyleEngineConfig.
+// Only non-zero values from other are applied.
+func (c *StyleEngineConfig) mergeFrom(other *StyleEngineConfig) {
+	if other.Enabled != nil {
+		c.Enabled = other.Enabled
+	}
+	if other.Fix {
+		c.Fix = other.Fix
+	}
+	if other.Diff {
+		c.Diff = other.Diff
+	}
+	if len(other.Rules) > 0 {
+		if c.Rules == nil {
+			c.Rules = make(map[string]RuleConfig)
+		}
+		for k, v := range other.Rules {
+			c.Rules[k] = v
+		}
+	}
+}
+
+// LintEngineConfig holds typed configuration for the lint engine.
+// This mirrors lint.Config but with YAML tags for config parsing.
+type LintEngineConfig struct {
+	Enabled         *bool                 `yaml:"enabled,omitempty"`
+	ConfigFile      string                `yaml:"config_file,omitempty"`      // Path to TFLint configuration file
+	Plugins         []string              `yaml:"plugins,omitempty"`          // List of TFLint plugins to enable
+	Args            []string              `yaml:"args,omitempty"`             // Extra arguments to pass to TFLint
+	UseTFLint       bool                  `yaml:"use_tflint,omitempty"`       // Enable TFLint integration
+	TFLintPath      string                `yaml:"tflint_path,omitempty"`      // Custom path to TFLint binary
+	FallbackBuiltin bool                  `yaml:"fallback_builtin,omitempty"` // Use built-in rules if TFLint unavailable
+	Rules           map[string]RuleConfig `yaml:"rules,omitempty"`            // Rule-specific configuration
+}
+
+// IsEnabled returns whether the lint engine is enabled.
+func (c LintEngineConfig) IsEnabled() bool {
+	if c.Enabled == nil {
+		return false
+	}
+	return *c.Enabled
+}
+
+// mergeFrom merges settings from another LintEngineConfig.
+// Only non-zero values from other are applied.
+func (c *LintEngineConfig) mergeFrom(other *LintEngineConfig) {
+	if other.Enabled != nil {
+		c.Enabled = other.Enabled
+	}
+	if other.ConfigFile != "" {
+		c.ConfigFile = other.ConfigFile
+	}
+	if len(other.Plugins) > 0 {
+		c.Plugins = other.Plugins
+	}
+	if len(other.Args) > 0 {
+		c.Args = other.Args
+	}
+	if other.UseTFLint {
+		c.UseTFLint = other.UseTFLint
+	}
+	if other.TFLintPath != "" {
+		c.TFLintPath = other.TFLintPath
+	}
+	if other.FallbackBuiltin {
+		c.FallbackBuiltin = other.FallbackBuiltin
+	}
+	if len(other.Rules) > 0 {
+		if c.Rules == nil {
+			c.Rules = make(map[string]RuleConfig)
+		}
+		for k, v := range other.Rules {
+			c.Rules[k] = v
+		}
+	}
+}
+
+// PolicyEngineConfig holds typed configuration for the policy engine.
+// This mirrors policy.Config but with YAML tags for config parsing.
+type PolicyEngineConfig struct {
+	Enabled     *bool                 `yaml:"enabled,omitempty"`
+	PolicyDirs  []string              `yaml:"policy_dirs,omitempty"`  // Directories containing Rego policy files
+	PolicyFiles []string              `yaml:"policy_files,omitempty"` // Individual policy files
+	DataFiles   []string              `yaml:"data_files,omitempty"`   // Additional data files for policies
+	Rules       map[string]RuleConfig `yaml:"rules,omitempty"`        // Rule-specific configuration
+}
+
+// IsEnabled returns whether the policy engine is enabled.
+func (c PolicyEngineConfig) IsEnabled() bool {
+	if c.Enabled == nil {
+		return false
+	}
+	return *c.Enabled
+}
+
+// mergeFrom merges settings from another PolicyEngineConfig.
+// Only non-zero values from other are applied.
+func (c *PolicyEngineConfig) mergeFrom(other *PolicyEngineConfig) {
+	if other.Enabled != nil {
+		c.Enabled = other.Enabled
+	}
+	if len(other.PolicyDirs) > 0 {
+		c.PolicyDirs = other.PolicyDirs
+	}
+	if len(other.PolicyFiles) > 0 {
+		c.PolicyFiles = other.PolicyFiles
+	}
+	if len(other.DataFiles) > 0 {
+		c.DataFiles = other.DataFiles
+	}
+	if len(other.Rules) > 0 {
+		if c.Rules == nil {
+			c.Rules = make(map[string]RuleConfig)
+		}
+		for k, v := range other.Rules {
+			c.Rules[k] = v
+		}
+	}
 }
 
 // BoolPtr returns a pointer to the given bool value.
@@ -171,7 +348,7 @@ func Load(path string) (*Config, error) {
 	expandedData := expandEnvVars(string(data))
 
 	var cfg Config
-	if err := yaml.Unmarshal([]byte(expandedData), &cfg); err != nil {
+	if err := unmarshalStrict([]byte(expandedData), &cfg); err != nil {
 		return nil, fmt.Errorf("parsing config: %w", err)
 	}
 
@@ -307,16 +484,26 @@ func loadPartialConfig(path string) (*Config, error) {
 		return nil, err
 	}
 
+	// Expand environment variables (BUG-6: was missing in imported configs)
+	expandedData := expandEnvVars(string(data))
+
 	var cfg Config
-	if err := yaml.Unmarshal(data, &cfg); err != nil {
+	if err := unmarshalStrict([]byte(expandedData), &cfg); err != nil {
 		return nil, err
 	}
 
 	return &cfg, nil
 }
 
-// merge merges another config into this one
+// merge merges another config into this one.
+// Import config values override base config values (last import wins).
 func (c *Config) merge(other *Config) {
+	// Merge engine configs (BUG-7: was missing, causing import engine settings to be lost)
+	c.Engines.Fmt.mergeFrom(&other.Engines.Fmt)
+	c.Engines.Style.mergeFrom(&other.Engines.Style)
+	c.Engines.Lint.mergeFrom(&other.Engines.Lint)
+	c.Engines.Policy.mergeFrom(&other.Engines.Policy)
+
 	// Merge custom rules
 	if c.CustomRules == nil {
 		c.CustomRules = make(map[string]RuleConfig)
@@ -339,6 +526,28 @@ func (c *Config) merge(other *Config) {
 	}
 	for k := range other.Profiles {
 		c.Profiles[k] = other.Profiles[k]
+	}
+
+	// Merge global settings (import overrides base if set)
+	if other.SeverityThreshold != "" {
+		c.SeverityThreshold = other.SeverityThreshold
+	}
+	if other.FailFast {
+		c.FailFast = other.FailFast
+	}
+	if other.Parallel {
+		c.Parallel = other.Parallel
+	}
+
+	// Merge plugin config
+	if other.Plugins.Enabled {
+		c.Plugins.Enabled = other.Plugins.Enabled
+	}
+	if len(other.Plugins.Directories) > 0 {
+		c.Plugins.Directories = append(c.Plugins.Directories, other.Plugins.Directories...)
+	}
+	if other.Plugins.VerifyIntegrity != nil {
+		c.Plugins.VerifyIntegrity = other.Plugins.VerifyIntegrity
 	}
 }
 
@@ -546,17 +755,17 @@ func (c *Config) mergeProfiles(parent, child *Profile) *Profile {
 		result.Engines = parent.Engines
 	}
 
-	// Child engines override parent if explicitly set (Enabled != nil or Config present)
-	if child.Engines.Fmt.Enabled != nil || len(child.Engines.Fmt.Config) > 0 {
+	// Child engines override parent if explicitly set (Enabled != nil or has config)
+	if child.Engines.Fmt.Enabled != nil || child.Engines.Fmt.Check || child.Engines.Fmt.Diff {
 		result.Engines.Fmt = child.Engines.Fmt
 	}
-	if child.Engines.Style.Enabled != nil || len(child.Engines.Style.Config) > 0 {
+	if child.Engines.Style.Enabled != nil || child.Engines.Style.Fix || child.Engines.Style.Diff || len(child.Engines.Style.Rules) > 0 {
 		result.Engines.Style = child.Engines.Style
 	}
-	if child.Engines.Lint.Enabled != nil || len(child.Engines.Lint.Config) > 0 {
+	if child.Engines.Lint.Enabled != nil || child.Engines.Lint.ConfigFile != "" || len(child.Engines.Lint.Plugins) > 0 || len(child.Engines.Lint.Args) > 0 || len(child.Engines.Lint.Rules) > 0 {
 		result.Engines.Lint = child.Engines.Lint
 	}
-	if child.Engines.Policy.Enabled != nil || len(child.Engines.Policy.Config) > 0 {
+	if child.Engines.Policy.Enabled != nil || len(child.Engines.Policy.PolicyDirs) > 0 || len(child.Engines.Policy.PolicyFiles) > 0 || len(child.Engines.Policy.Rules) > 0 {
 		result.Engines.Policy = child.Engines.Policy
 	}
 
@@ -600,10 +809,10 @@ func DefaultConfig() *Config {
 	return &Config{
 		Version: 1,
 		Engines: Engines{
-			Fmt:    EngineConfig{Enabled: BoolPtr(true)},
-			Style:  EngineConfig{Enabled: BoolPtr(true)},
-			Lint:   EngineConfig{Enabled: BoolPtr(true)},
-			Policy: EngineConfig{Enabled: BoolPtr(false)}, // Opt-in
+			Fmt:    FmtEngineConfig{Enabled: BoolPtr(true)},
+			Style:  StyleEngineConfig{Enabled: BoolPtr(true)},
+			Lint:   LintEngineConfig{Enabled: BoolPtr(true)},
+			Policy: PolicyEngineConfig{Enabled: BoolPtr(false)}, // Opt-in
 		},
 		SeverityThreshold: "warning",
 		FailFast:          false,

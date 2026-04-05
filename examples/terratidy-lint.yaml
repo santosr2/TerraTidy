@@ -16,16 +16,15 @@ engines:
 
   lint:
     enabled: true
-    config:
-      config_file: .tflint.hcl
-      # Enable specific plugins (optional)
-      plugins:
-        - aws
-        # - google
-        # - azurerm
-      # Extra arguments to pass to TFLint (new in v0.2.0)
-      # args:
-      #   - --minimum-tf-version=1.0.0
+    config_file: .tflint.hcl
+    # Enable specific plugins (optional)
+    plugins:
+      - aws
+      # - google
+      # - azurerm
+    # Extra arguments to pass to TFLint (new in v0.2.0)
+    # args:
+    #   - --minimum-tf-version=1.0.0
 
   policy:
     enabled: false

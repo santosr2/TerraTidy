@@ -281,62 +281,34 @@ func runPolicyCheckWithConfig(ctx context.Context, cfg *config.Config, files []s
 }
 
 // buildStyleConfig creates a style.Config from the terratidy config.
+// CLI flags (fix, diff) take precedence over config file values.
 func buildStyleConfig(cfg *config.Config, fix bool, diff ...bool) *style.Config {
-	styleCfg := &style.Config{
-		Fix:   fix,
-		Diff:  len(diff) > 0 && diff[0],
-		Rules: make(map[string]style.RuleConfig),
-	}
-
 	if cfg == nil {
-		return styleCfg
-	}
-
-	// Get style-specific config from engines section
-	engineCfg := getEngineConfig(cfg, "style")
-	if engineCfg == nil {
-		return styleCfg
-	}
-
-	// Extract fix from config if CLI flag is not set
-	// CLI flag takes precedence over config
-	if !styleCfg.Fix {
-		if fixVal, ok := engineCfg["fix"].(bool); ok {
-			styleCfg.Fix = fixVal
+		return &style.Config{
+			Fix:   fix,
+			Diff:  len(diff) > 0 && diff[0],
+			Rules: make(map[string]style.RuleConfig),
 		}
 	}
 
-	// Extract rules config if present
-	if rulesRaw, ok := engineCfg["rules"]; ok {
-		if rulesMap, ok := rulesRaw.(map[string]any); ok {
-			for ruleName, ruleCfgRaw := range rulesMap {
-				if ruleCfgMap, ok := ruleCfgRaw.(map[string]any); ok {
-					rc := style.RuleConfig{}
-					if enabled, ok := ruleCfgMap["enabled"].(bool); ok {
-						rc.Enabled = enabled
-					}
-					if severity, ok := ruleCfgMap["severity"].(string); ok {
-						rc.Severity = severity
-					}
-					if options, ok := ruleCfgMap["options"].(map[string]any); ok {
-						rc.Options = options
-					}
-					styleCfg.Rules[ruleName] = rc
-				}
-			}
-		}
+	// Use engine's ConfigFromEngine for base conversion
+	styleCfg := style.ConfigFromEngine(cfg.Engines.Style)
+
+	// Apply CLI flag overrides (CLI takes precedence)
+	if fix {
+		styleCfg.Fix = true
+	}
+	if len(diff) > 0 && diff[0] {
+		styleCfg.Diff = true
 	}
 
-	// Also merge override rules
+	// Merge override rules (overrides take precedence over engine config)
 	for ruleName, ruleCfg := range cfg.Overrides.Rules {
-		rc := style.RuleConfig{
+		styleCfg.Rules[ruleName] = style.RuleConfig{
 			Enabled:  ruleCfg.Enabled,
 			Severity: ruleCfg.Severity,
+			Options:  ruleCfg.Config,
 		}
-		if ruleCfg.Config != nil {
-			rc.Options = ruleCfg.Config
-		}
-		styleCfg.Rules[ruleName] = rc
 	}
 
 	return styleCfg
@@ -344,73 +316,29 @@ func buildStyleConfig(cfg *config.Config, fix bool, diff ...bool) *style.Config 
 
 // buildLintConfig creates a lint.Config from the terratidy config.
 func buildLintConfig(cfg *config.Config) *lint.Config {
-	lintCfg := &lint.Config{
-		ConfigFile: ".tflint.hcl",
-	}
-
 	if cfg == nil {
-		return lintCfg
-	}
-
-	engineCfg := getEngineConfig(cfg, "lint")
-	if engineCfg == nil {
-		return lintCfg
-	}
-
-	// Extract lint-specific settings
-	if configFile, ok := engineCfg["config_file"].(string); ok {
-		lintCfg.ConfigFile = configFile
-	}
-	if plugins, ok := engineCfg["plugins"].([]any); ok {
-		for _, p := range plugins {
-			if ps, ok := p.(string); ok {
-				lintCfg.Plugins = append(lintCfg.Plugins, ps)
-			}
+		return &lint.Config{
+			ConfigFile: ".tflint.hcl",
+			Rules:      make(map[string]lint.RuleConfig),
 		}
 	}
 
-	// Extract extra args to pass to TFLint
-	if args, ok := engineCfg["args"].([]any); ok {
-		for _, a := range args {
-			if as, ok := a.(string); ok {
-				lintCfg.Args = append(lintCfg.Args, as)
-			}
-		}
-	}
-
-	return lintCfg
+	// Use engine's ConfigFromEngine for conversion
+	return lint.ConfigFromEngine(cfg.Engines.Lint)
 }
 
 // buildPolicyConfig creates a policy.Config from the terratidy config.
 func buildPolicyConfig(cfg *config.Config) *policy.Config {
-	policyCfg := &policy.Config{}
-
 	if cfg == nil {
-		return policyCfg
-	}
-
-	engineCfg := getEngineConfig(cfg, "policy")
-	if engineCfg == nil {
-		return policyCfg
-	}
-
-	// Extract policy-specific settings
-	if dirs, ok := engineCfg["policy_dirs"].([]any); ok {
-		for _, d := range dirs {
-			if ds, ok := d.(string); ok {
-				policyCfg.PolicyDirs = append(policyCfg.PolicyDirs, ds)
-			}
-		}
-	}
-	if files, ok := engineCfg["policy_files"].([]any); ok {
-		for _, f := range files {
-			if fs, ok := f.(string); ok {
-				policyCfg.PolicyFiles = append(policyCfg.PolicyFiles, fs)
-			}
+		return &policy.Config{
+			PolicyDirs:  []string{},
+			PolicyFiles: []string{},
+			Rules:       make(map[string]policy.RuleConfig),
 		}
 	}
 
-	return policyCfg
+	// Use engine's ConfigFromEngine for conversion
+	return policy.ConfigFromEngine(cfg.Engines.Policy)
 }
 
 func outputCheckResults(allFindings []sdk.Finding, _ bool) error {

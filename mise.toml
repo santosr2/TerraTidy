@@ -164,13 +164,6 @@ LDFLAGS="-X main.version=${VERSION} -X main.commit=${COMMIT} -X main.date=${DATE
 go run -ldflags "${LDFLAGS}" ./cmd/terratidy dev
 """
 
-[tasks."deps:graph"]
-description = "Generate dependency graph SVG"
-run = """
-go mod graph | bash tools/scripts/mod-graph.sh > docs/dependencies.svg
-echo "Dependency graph saved to docs/dependencies.svg"
-"""
-
 # =============================================================================
 # Cleanup
 # =============================================================================
@@ -193,14 +186,6 @@ rm -f *.test *.prof
 go clean -cache -testcache -modcache
 echo "All generated files cleaned"
 """
-
-[tasks.uninstall]
-description = "Uninstall all development tools"
-run = "bash tools/scripts/uninstall.sh"
-
-[tasks."uninstall:force"]
-description = "Force uninstall tools without confirmation"
-run = "bash tools/scripts/uninstall.sh --force"
 
 # =============================================================================
 # Release & Versioning

@@ -48,8 +48,9 @@ test_fixtures/
 # Release artifacts (generated during CI)
 RELEASE_NOTES.md
 
-# Benchmark results
-benchmarks/
+# Benchmark results (except baseline for regression tracking)
+benchmarks/*
+!benchmarks/baseline.txt
 
 # AI assistant configs (local, not tracked)
 .claude

@@ -7,7 +7,6 @@ Single-binary Terraform/Terragrunt quality platform. Go 1.25+ (dev: 1.26), libra
 ```text
 cmd/terratidy/          # CLI (Cobra)
 internal/
-  benchmark/            # Benchmarking utilities
   buildinfo/            # Build information and versioning
   cache/                # Caching layer
   config/               # YAML config with imports, profiles, glob patterns
@@ -304,6 +303,8 @@ FILE="$1"
 | `fuzz.yml` | push/PR + weekly | Fuzz tests (30s CI, 5m scheduled) |
 | `docs.yml` | push main | MkDocs build + GitHub Pages deploy |
 | `action-test.yml` | push/PR | GitHub Action self-test on 3 OSes |
+| `benchmark.yml` | push/PR (Go files) | Performance benchmarks with regression detection |
+| `examples-test.yml` | push/PR (examples/) | Test example rules (Go, YAML, Bash) |
 | `scorecard.yml` | weekly | OpenSSF security scorecard |
 
 PR requirements: conventional commit title, all tests pass on 3 OSes, coverage maintained.

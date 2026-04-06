@@ -1,0 +1,344 @@
+PASS
+ok  	github.com/santosr2/TerraTidy/internal/buildinfo	0.346s
+goos: darwin
+goarch: arm64
+pkg: github.com/santosr2/TerraTidy/internal/cache
+cpu: Apple M2 Pro
+BenchmarkCacheHit-12           	   65263	     17975 ns/op	    3040 B/op	      20 allocs/op
+BenchmarkCacheHit-12           	   75354	     15980 ns/op	    3040 B/op	      20 allocs/op
+BenchmarkCacheHit-12           	   74660	     16164 ns/op	    3040 B/op	      20 allocs/op
+BenchmarkCacheHit-12           	   75398	     16132 ns/op	    3040 B/op	      20 allocs/op
+BenchmarkCacheHit-12           	   75088	     15864 ns/op	    3040 B/op	      20 allocs/op
+BenchmarkCacheMiss-12          	    2060	    574731 ns/op	  513594 B/op	    2536 allocs/op
+BenchmarkCacheMiss-12          	    2102	    576643 ns/op	  513594 B/op	    2536 allocs/op
+BenchmarkCacheMiss-12          	    2083	    566290 ns/op	  513594 B/op	    2536 allocs/op
+BenchmarkCacheMiss-12          	    2198	    709542 ns/op	  513594 B/op	    2536 allocs/op
+BenchmarkCacheMiss-12          	    2019	    613749 ns/op	  513594 B/op	    2536 allocs/op
+BenchmarkCacheGetOrParse-12    	   64285	     16793 ns/op	    3207 B/op	      20 allocs/op
+BenchmarkCacheGetOrParse-12    	   73362	     16073 ns/op	    3206 B/op	      20 allocs/op
+BenchmarkCacheGetOrParse-12    	   74324	     16147 ns/op	    3206 B/op	      20 allocs/op
+BenchmarkCacheGetOrParse-12    	   74758	     16056 ns/op	    3206 B/op	      20 allocs/op
+BenchmarkCacheGetOrParse-12    	   73306	     16214 ns/op	    3206 B/op	      20 allocs/op
+PASS
+ok  	github.com/santosr2/TerraTidy/internal/cache	20.652s
+goos: darwin
+goarch: arm64
+pkg: github.com/santosr2/TerraTidy/internal/config
+cpu: Apple M2 Pro
+BenchmarkLoadConfig-12                	   36063	     32322 ns/op	   15380 B/op	     177 allocs/op
+BenchmarkLoadConfig-12                	   37251	     32262 ns/op	   15381 B/op	     177 allocs/op
+BenchmarkLoadConfig-12                	   37300	     33249 ns/op	   15382 B/op	     177 allocs/op
+BenchmarkLoadConfig-12                	   35449	     32150 ns/op	   15376 B/op	     177 allocs/op
+BenchmarkLoadConfig-12                	   36400	     32174 ns/op	   15384 B/op	     177 allocs/op
+BenchmarkLoadConfigWithProfiles-12    	   21183	     54476 ns/op	   30944 B/op	     429 allocs/op
+BenchmarkLoadConfigWithProfiles-12    	   21279	     55574 ns/op	   30947 B/op	     429 allocs/op
+BenchmarkLoadConfigWithProfiles-12    	   21810	     54506 ns/op	   30927 B/op	     429 allocs/op
+BenchmarkLoadConfigWithProfiles-12    	   21698	     55918 ns/op	   30932 B/op	     429 allocs/op
+BenchmarkLoadConfigWithProfiles-12    	   22022	     55201 ns/op	   30954 B/op	     429 allocs/op
+BenchmarkLoadConfigWithImports-12     	   17252	     67916 ns/op	   28258 B/op	     291 allocs/op
+BenchmarkLoadConfigWithImports-12     	   17394	     70208 ns/op	   28254 B/op	     291 allocs/op
+BenchmarkLoadConfigWithImports-12     	   17902	     66878 ns/op	   28227 B/op	     291 allocs/op
+BenchmarkLoadConfigWithImports-12     	   17838	     66076 ns/op	   28232 B/op	     291 allocs/op
+BenchmarkLoadConfigWithImports-12     	   17680	     66154 ns/op	   28229 B/op	     291 allocs/op
+BenchmarkApplyProfile-12              	15702738	        77.40 ns/op	     320 B/op	       1 allocs/op
+BenchmarkApplyProfile-12              	14726680	        79.58 ns/op	     320 B/op	       1 allocs/op
+BenchmarkApplyProfile-12              	14910775	        77.43 ns/op	     320 B/op	       1 allocs/op
+BenchmarkApplyProfile-12              	15184498	        77.28 ns/op	     320 B/op	       1 allocs/op
+BenchmarkApplyProfile-12              	15586734	        78.30 ns/op	     320 B/op	       1 allocs/op
+PASS
+ok  	github.com/santosr2/TerraTidy/internal/config	32.533s
+goos: darwin
+goarch: arm64
+pkg: github.com/santosr2/TerraTidy/internal/engines/format
+cpu: Apple M2 Pro
+BenchmarkFormatEngine-12             	    1464	    846372 ns/op	 2221921 B/op	    2813 allocs/op
+BenchmarkFormatEngine-12             	    1305	    925794 ns/op	 2222002 B/op	    2813 allocs/op
+BenchmarkFormatEngine-12             	    1326	    896708 ns/op	 2221988 B/op	    2813 allocs/op
+BenchmarkFormatEngine-12             	    1340	    878308 ns/op	 2221979 B/op	    2813 allocs/op
+BenchmarkFormatEngine-12             	    1365	    870010 ns/op	 2221959 B/op	    2813 allocs/op
+BenchmarkFormatEngineWithWrite-12    	    1353	    882132 ns/op	 2222125 B/op	    2813 allocs/op
+BenchmarkFormatEngineWithWrite-12    	    1364	    860064 ns/op	 2222119 B/op	    2813 allocs/op
+BenchmarkFormatEngineWithWrite-12    	    1398	    848687 ns/op	 2222100 B/op	    2813 allocs/op
+BenchmarkFormatEngineWithWrite-12    	    1402	    838480 ns/op	 2222097 B/op	    2813 allocs/op
+BenchmarkFormatEngineWithWrite-12    	    1428	    830792 ns/op	 2222084 B/op	    2813 allocs/op
+BenchmarkFormatFileCount/files=01-12 	   14516	     82442 ns/op	  222143 B/op	     281 allocs/op
+BenchmarkFormatFileCount/files=01-12 	   14848	     80022 ns/op	  222143 B/op	     281 allocs/op
+BenchmarkFormatFileCount/files=01-12 	   14530	     84700 ns/op	  222143 B/op	     281 allocs/op
+BenchmarkFormatFileCount/files=01-12 	   14556	     82505 ns/op	  222143 B/op	     281 allocs/op
+BenchmarkFormatFileCount/files=01-12 	   14529	     82879 ns/op	  222143 B/op	     281 allocs/op
+BenchmarkFormatFileCount/files=05-12 	    2835	    411775 ns/op	 1110863 B/op	    1405 allocs/op
+BenchmarkFormatFileCount/files=05-12 	    2809	    411219 ns/op	 1110864 B/op	    1405 allocs/op
+BenchmarkFormatFileCount/files=05-12 	    2914	    409550 ns/op	 1110857 B/op	    1405 allocs/op
+BenchmarkFormatFileCount/files=05-12 	    2910	    405353 ns/op	 1110858 B/op	    1405 allocs/op
+BenchmarkFormatFileCount/files=05-12 	    2869	    410564 ns/op	 1110860 B/op	    1405 allocs/op
+BenchmarkFormatFileCount/files=10-12 	    1441	    814724 ns/op	 2222077 B/op	    2813 allocs/op
+BenchmarkFormatFileCount/files=10-12 	    1452	    815432 ns/op	 2222090 B/op	    2813 allocs/op
+BenchmarkFormatFileCount/files=10-12 	    1464	    811340 ns/op	 2222065 B/op	    2813 allocs/op
+BenchmarkFormatFileCount/files=10-12 	    1472	    806018 ns/op	 2222061 B/op	    2813 allocs/op
+BenchmarkFormatFileCount/files=10-12 	    1478	    802333 ns/op	 2222059 B/op	    2813 allocs/op
+BenchmarkFormatFileCount/files=25-12 	     589	   2040406 ns/op	 5557779 B/op	    7046 allocs/op
+BenchmarkFormatFileCount/files=25-12 	     585	   1975309 ns/op	 5557808 B/op	    7046 allocs/op
+BenchmarkFormatFileCount/files=25-12 	     591	   1980694 ns/op	 5557763 B/op	    7046 allocs/op
+BenchmarkFormatFileCount/files=25-12 	     603	   1958543 ns/op	 5557676 B/op	    7045 allocs/op
+BenchmarkFormatFileCount/files=25-12 	     602	   2021069 ns/op	 5557775 B/op	    7045 allocs/op
+BenchmarkFormatFileCount/files=50-12 	     289	   4235710 ns/op	11124638 B/op	   14136 allocs/op
+BenchmarkFormatFileCount/files=50-12 	     272	   4018111 ns/op	11125752 B/op	   14142 allocs/op
+BenchmarkFormatFileCount/files=50-12 	     294	   4030862 ns/op	11124332 B/op	   14135 allocs/op
+BenchmarkFormatFileCount/files=50-12 	     295	   4000789 ns/op	11124272 B/op	   14135 allocs/op
+BenchmarkFormatFileCount/files=50-12 	     277	   4053535 ns/op	11125409 B/op	   14140 allocs/op
+PASS
+ok  	github.com/santosr2/TerraTidy/internal/engines/format	51.272s
+goos: darwin
+goarch: arm64
+pkg: github.com/santosr2/TerraTidy/internal/engines/lint
+cpu: Apple M2 Pro
+BenchmarkLintLargeModule-12    	     306	   4843963 ns/op	17128662 B/op	    6225 allocs/op
+BenchmarkLintLargeModule-12    	     295	   3960911 ns/op	17020944 B/op	    6181 allocs/op
+BenchmarkLintLargeModule-12    	     307	   3809837 ns/op	16944965 B/op	    6150 allocs/op
+BenchmarkLintLargeModule-12    	     322	   3634624 ns/op	16923668 B/op	    6138 allocs/op
+BenchmarkLintLargeModule-12    	     333	   3556936 ns/op	16888070 B/op	    6124 allocs/op
+BenchmarkLintModule-12         	   42018	     28076 ns/op	    9760 B/op	      82 allocs/op
+BenchmarkLintModule-12         	   42666	     28205 ns/op	    9750 B/op	      82 allocs/op
+BenchmarkLintModule-12         	   42338	     28464 ns/op	    9754 B/op	      82 allocs/op
+BenchmarkLintModule-12         	   41319	     29399 ns/op	    9762 B/op	      82 allocs/op
+BenchmarkLintModule-12         	   43098	     28238 ns/op	    9750 B/op	      82 allocs/op
+PASS
+ok  	github.com/santosr2/TerraTidy/internal/engines/lint	16.194s
+goos: darwin
+goarch: arm64
+pkg: github.com/santosr2/TerraTidy/internal/engines/policy
+cpu: Apple M2 Pro
+BenchmarkPolicyMultiFile-12    	     562	   2025313 ns/op	 1653656 B/op	   26514 allocs/op
+BenchmarkPolicyMultiFile-12    	     597	   2312054 ns/op	 1648637 B/op	   26516 allocs/op
+BenchmarkPolicyMultiFile-12    	     579	   2039229 ns/op	 1654976 B/op	   26516 allocs/op
+BenchmarkPolicyMultiFile-12    	     592	   2025788 ns/op	 1654759 B/op	   26516 allocs/op
+BenchmarkPolicyMultiFile-12    	     584	   2043752 ns/op	 1655001 B/op	   26516 allocs/op
+BenchmarkPolicyEval-12         	     373	   3204247 ns/op	 2205368 B/op	   45998 allocs/op
+BenchmarkPolicyEval-12         	     378	   3205287 ns/op	 2205256 B/op	   45996 allocs/op
+BenchmarkPolicyEval-12         	     375	   3217810 ns/op	 2205092 B/op	   45993 allocs/op
+BenchmarkPolicyEval-12         	     364	   3234063 ns/op	 2205163 B/op	   45994 allocs/op
+BenchmarkPolicyEval-12         	     374	   3371300 ns/op	 2205038 B/op	   45993 allocs/op
+PASS
+ok  	github.com/santosr2/TerraTidy/internal/engines/policy	15.511s
+goos: darwin
+goarch: arm64
+pkg: github.com/santosr2/TerraTidy/internal/engines/style
+cpu: Apple M2 Pro
+BenchmarkStyleEngine_SimpleConfig-12         	    3346	    368826 ns/op	  192296 B/op	     990 allocs/op
+BenchmarkStyleEngine_SimpleConfig-12         	    3357	    326357 ns/op	  192297 B/op	     990 allocs/op
+BenchmarkStyleEngine_SimpleConfig-12         	    4200	    290754 ns/op	  192296 B/op	     990 allocs/op
+BenchmarkStyleEngine_SimpleConfig-12         	    4174	    295388 ns/op	  192296 B/op	     990 allocs/op
+BenchmarkStyleEngine_SimpleConfig-12         	    4171	    298806 ns/op	  192296 B/op	     990 allocs/op
+BenchmarkStyleEngine_MediumConfig-12         	     393	   2947527 ns/op	 3024033 B/op	   15062 allocs/op
+BenchmarkStyleEngine_MediumConfig-12         	     398	   3023372 ns/op	 3024040 B/op	   15062 allocs/op
+BenchmarkStyleEngine_MediumConfig-12         	     400	   3035727 ns/op	 3024019 B/op	   15062 allocs/op
+BenchmarkStyleEngine_MediumConfig-12         	     375	   3171452 ns/op	 3024070 B/op	   15062 allocs/op
+BenchmarkStyleEngine_MediumConfig-12         	     351	   3149196 ns/op	 3024074 B/op	   15062 allocs/op
+BenchmarkStyleEngine_ComplexConfig-12        	       6	 174373028 ns/op	173869865 B/op	  942584 allocs/op
+BenchmarkStyleEngine_ComplexConfig-12        	       7	 162126577 ns/op	173870217 B/op	  942583 allocs/op
+BenchmarkStyleEngine_ComplexConfig-12        	       6	 176233951 ns/op	173869440 B/op	  942583 allocs/op
+BenchmarkStyleEngine_ComplexConfig-12        	       7	 161759595 ns/op	173869488 B/op	  942583 allocs/op
+BenchmarkStyleEngine_ComplexConfig-12        	       7	 166917417 ns/op	173869594 B/op	  942584 allocs/op
+BenchmarkStyleEngine_MultipleFiles-12        	       6	 167850618 ns/op	175261701 B/op	  949507 allocs/op
+BenchmarkStyleEngine_MultipleFiles-12        	       6	 178871986 ns/op	175261770 B/op	  949507 allocs/op
+BenchmarkStyleEngine_MultipleFiles-12        	       6	 193475368 ns/op	175261885 B/op	  949510 allocs/op
+BenchmarkStyleEngine_MultipleFiles-12        	       7	 160756417 ns/op	175261480 B/op	  949507 allocs/op
+BenchmarkStyleEngine_MultipleFiles-12        	       7	 165842232 ns/op	175261650 B/op	  949508 allocs/op
+BenchmarkStyleEngine_WithFixMode-12          	     526	   2041476 ns/op	  808607 B/op	    5160 allocs/op
+BenchmarkStyleEngine_WithFixMode-12          	     612	   2340038 ns/op	  808605 B/op	    5160 allocs/op
+BenchmarkStyleEngine_WithFixMode-12          	     578	   2188560 ns/op	  808603 B/op	    5160 allocs/op
+BenchmarkStyleEngine_WithFixMode-12          	     630	   2105624 ns/op	  808600 B/op	    5160 allocs/op
+BenchmarkStyleEngine_WithFixMode-12          	     603	   2191827 ns/op	  808594 B/op	    5160 allocs/op
+BenchmarkStyleEngine_SingleRuleEnabled-12    	       7	 163331702 ns/op	173868507 B/op	  942579 allocs/op
+BenchmarkStyleEngine_SingleRuleEnabled-12    	       7	 169935006 ns/op	173868473 B/op	  942579 allocs/op
+BenchmarkStyleEngine_SingleRuleEnabled-12    	       7	 166013220 ns/op	173868578 B/op	  942579 allocs/op
+BenchmarkStyleEngine_SingleRuleEnabled-12    	       6	 182119576 ns/op	173868408 B/op	  942578 allocs/op
+BenchmarkStyleEngine_SingleRuleEnabled-12    	       6	 171526278 ns/op	173868573 B/op	  942579 allocs/op
+BenchmarkStyleEngine_AllRulesEnabled-12      	       7	 170105607 ns/op	174109578 B/op	  944069 allocs/op
+BenchmarkStyleEngine_AllRulesEnabled-12      	       7	 167248548 ns/op	174109508 B/op	  944068 allocs/op
+BenchmarkStyleEngine_AllRulesEnabled-12      	       6	 171981264 ns/op	174109677 B/op	  944068 allocs/op
+BenchmarkStyleEngine_AllRulesEnabled-12      	       7	 160929429 ns/op	174109197 B/op	  944068 allocs/op
+BenchmarkStyleEngine_AllRulesEnabled-12      	       7	 164168589 ns/op	174109114 B/op	  944068 allocs/op
+PASS
+ok  	github.com/santosr2/TerraTidy/internal/engines/style	51.117s
+goos: darwin
+goarch: arm64
+pkg: github.com/santosr2/TerraTidy/internal/engines/style/rules
+cpu: Apple M2 Pro
+BenchmarkBlockLabelCaseRule-12            	 2749029	       437.4 ns/op	       0 B/op	       0 allocs/op
+BenchmarkBlockLabelCaseRule-12            	 2744427	       437.4 ns/op	       0 B/op	       0 allocs/op
+BenchmarkBlockLabelCaseRule-12            	 2749212	       448.4 ns/op	       0 B/op	       0 allocs/op
+BenchmarkBlockLabelCaseRule-12            	 2732834	       437.6 ns/op	       0 B/op	       0 allocs/op
+BenchmarkBlockLabelCaseRule-12            	 2745877	       436.0 ns/op	       0 B/op	       0 allocs/op
+BenchmarkBlankLineBetweenBlocksRule-12    	 2073681	       581.4 ns/op	      64 B/op	       2 allocs/op
+BenchmarkBlankLineBetweenBlocksRule-12    	 2110929	       598.2 ns/op	      64 B/op	       2 allocs/op
+BenchmarkBlankLineBetweenBlocksRule-12    	 2057599	       581.6 ns/op	      64 B/op	       2 allocs/op
+BenchmarkBlankLineBetweenBlocksRule-12    	 2038875	       582.4 ns/op	      64 B/op	       2 allocs/op
+BenchmarkBlankLineBetweenBlocksRule-12    	 2030401	       584.2 ns/op	      64 B/op	       2 allocs/op
+BenchmarkMetaArgumentsOrderRule-12        	 4906612	       250.4 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMetaArgumentsOrderRule-12        	 4891676	       243.5 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMetaArgumentsOrderRule-12        	 4896409	       243.3 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMetaArgumentsOrderRule-12        	 4929915	       243.2 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMetaArgumentsOrderRule-12        	 4940455	       242.3 ns/op	       0 B/op	       0 allocs/op
+BenchmarkForEachCountFirstRule-12         	 7771976	       154.7 ns/op	       0 B/op	       0 allocs/op
+BenchmarkForEachCountFirstRule-12         	 7716078	       154.1 ns/op	       0 B/op	       0 allocs/op
+BenchmarkForEachCountFirstRule-12         	 7737217	       155.0 ns/op	       0 B/op	       0 allocs/op
+BenchmarkForEachCountFirstRule-12         	 7835582	       154.3 ns/op	       0 B/op	       0 allocs/op
+BenchmarkForEachCountFirstRule-12         	 7874247	       154.4 ns/op	       0 B/op	       0 allocs/op
+BenchmarkNestedBlockOrderRule-12          	51589881	        22.40 ns/op	       0 B/op	       0 allocs/op
+BenchmarkNestedBlockOrderRule-12          	53810049	        22.43 ns/op	       0 B/op	       0 allocs/op
+BenchmarkNestedBlockOrderRule-12          	54152234	        22.49 ns/op	       0 B/op	       0 allocs/op
+BenchmarkNestedBlockOrderRule-12          	53195516	        22.50 ns/op	       0 B/op	       0 allocs/op
+BenchmarkNestedBlockOrderRule-12          	53509417	        22.54 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCommentSyntaxRule-12             	 2065245	       589.2 ns/op	      64 B/op	       2 allocs/op
+BenchmarkCommentSyntaxRule-12             	 2011312	       579.3 ns/op	      64 B/op	       2 allocs/op
+BenchmarkCommentSyntaxRule-12             	 2081437	       583.2 ns/op	      64 B/op	       2 allocs/op
+BenchmarkCommentSyntaxRule-12             	 2064429	       582.2 ns/op	      64 B/op	       2 allocs/op
+BenchmarkCommentSyntaxRule-12             	 1934110	       575.1 ns/op	      64 B/op	       2 allocs/op
+BenchmarkScopedFileOrganizationRule-12    	 3175653	       380.4 ns/op	       0 B/op	       0 allocs/op
+BenchmarkScopedFileOrganizationRule-12    	 3158730	       378.2 ns/op	       0 B/op	       0 allocs/op
+BenchmarkScopedFileOrganizationRule-12    	 3161106	       380.8 ns/op	       0 B/op	       0 allocs/op
+BenchmarkScopedFileOrganizationRule-12    	 3175761	       377.5 ns/op	       0 B/op	       0 allocs/op
+BenchmarkScopedFileOrganizationRule-12    	 3173083	       378.8 ns/op	       0 B/op	       0 allocs/op
+BenchmarkVariablesInFileRule-12           	 7488560	       159.6 ns/op	     496 B/op	       4 allocs/op
+BenchmarkVariablesInFileRule-12           	 7402298	       165.2 ns/op	     496 B/op	       4 allocs/op
+BenchmarkVariablesInFileRule-12           	 7425451	       161.8 ns/op	     496 B/op	       4 allocs/op
+BenchmarkVariablesInFileRule-12           	 7435195	       159.7 ns/op	     496 B/op	       4 allocs/op
+BenchmarkVariablesInFileRule-12           	 7489578	       162.3 ns/op	     496 B/op	       4 allocs/op
+BenchmarkAllRules_SmallConfig-12          	  448923	      2706 ns/op	     624 B/op	       8 allocs/op
+BenchmarkAllRules_SmallConfig-12          	  446377	      2699 ns/op	     624 B/op	       8 allocs/op
+BenchmarkAllRules_SmallConfig-12          	  446820	      2699 ns/op	     624 B/op	       8 allocs/op
+BenchmarkAllRules_SmallConfig-12          	  446930	      2680 ns/op	     624 B/op	       8 allocs/op
+BenchmarkAllRules_SmallConfig-12          	  448851	      2691 ns/op	     624 B/op	       8 allocs/op
+BenchmarkAllRules_LargeConfig-12          	  284068	      4291 ns/op	    2241 B/op	      13 allocs/op
+BenchmarkAllRules_LargeConfig-12          	  277858	      4280 ns/op	    2241 B/op	      13 allocs/op
+BenchmarkAllRules_LargeConfig-12          	  284458	      4251 ns/op	    2241 B/op	      13 allocs/op
+BenchmarkAllRules_LargeConfig-12          	  280161	      4249 ns/op	    2241 B/op	      13 allocs/op
+BenchmarkAllRules_LargeConfig-12          	  280584	      4238 ns/op	    2241 B/op	      13 allocs/op
+PASS
+ok  	github.com/santosr2/TerraTidy/internal/engines/style/rules	73.980s
+goos: darwin
+goarch: arm64
+pkg: github.com/santosr2/TerraTidy/internal/lsp
+cpu: Apple M2 Pro
+BenchmarkGetDiagnostics-12              	     120	  10407992 ns/op	10112602 B/op	   48866 allocs/op
+BenchmarkGetDiagnostics-12              	     100	  10737556 ns/op	10112031 B/op	   48866 allocs/op
+BenchmarkGetDiagnostics-12              	     100	  10422757 ns/op	10112516 B/op	   48866 allocs/op
+BenchmarkGetDiagnostics-12              	     100	  11058158 ns/op	10112530 B/op	   48866 allocs/op
+BenchmarkGetDiagnostics-12              	     100	  10291056 ns/op	10112822 B/op	   48866 allocs/op
+BenchmarkGetDiagnostics_StyleOnly-12    	     100	  10483042 ns/op	 9942100 B/op	   48129 allocs/op
+BenchmarkGetDiagnostics_StyleOnly-12    	     100	  10925546 ns/op	 9941949 B/op	   48129 allocs/op
+BenchmarkGetDiagnostics_StyleOnly-12    	     100	  10329843 ns/op	 9941878 B/op	   48129 allocs/op
+BenchmarkGetDiagnostics_StyleOnly-12    	     100	  10650800 ns/op	 9942111 B/op	   48130 allocs/op
+BenchmarkGetDiagnostics_StyleOnly-12    	     100	  10615542 ns/op	 9942235 B/op	   48130 allocs/op
+BenchmarkGetDiagnostics_LintOnly-12     	    4280	    290596 ns/op	  139410 B/op	     808 allocs/op
+BenchmarkGetDiagnostics_LintOnly-12     	    4311	    298305 ns/op	  139328 B/op	     808 allocs/op
+BenchmarkGetDiagnostics_LintOnly-12     	    4156	    308336 ns/op	  139555 B/op	     808 allocs/op
+BenchmarkGetDiagnostics_LintOnly-12     	    3925	    289106 ns/op	  139838 B/op	     809 allocs/op
+BenchmarkGetDiagnostics_LintOnly-12     	    4246	    304413 ns/op	  139987 B/op	     809 allocs/op
+BenchmarkGetDiagnostics_NoEngines-12    	   14847	     80939 ns/op	    8568 B/op	      85 allocs/op
+BenchmarkGetDiagnostics_NoEngines-12    	   15270	     79603 ns/op	    8552 B/op	      85 allocs/op
+BenchmarkGetDiagnostics_NoEngines-12    	   15350	     85272 ns/op	    8568 B/op	      85 allocs/op
+BenchmarkGetDiagnostics_NoEngines-12    	   16176	     77642 ns/op	    8568 B/op	      85 allocs/op
+BenchmarkGetDiagnostics_NoEngines-12    	   15404	     74019 ns/op	    8568 B/op	      85 allocs/op
+PASS
+ok  	github.com/santosr2/TerraTidy/internal/lsp	28.713s
+goos: darwin
+goarch: arm64
+pkg: github.com/santosr2/TerraTidy/internal/output
+cpu: Apple M2 Pro
+BenchmarkSARIFOutput-12    	     495	   2386191 ns/op	 3571682 B/op	    1066 allocs/op
+BenchmarkSARIFOutput-12    	     513	   2357394 ns/op	 3562722 B/op	    1066 allocs/op
+BenchmarkSARIFOutput-12    	     504	   2350855 ns/op	 3585918 B/op	    1067 allocs/op
+BenchmarkSARIFOutput-12    	     507	   2339902 ns/op	 3564965 B/op	    1066 allocs/op
+BenchmarkSARIFOutput-12    	     507	   2329553 ns/op	 3554562 B/op	    1066 allocs/op
+BenchmarkHTMLOutput-12     	     134	   8711720 ns/op	70633860 B/op	   25069 allocs/op
+BenchmarkHTMLOutput-12     	     136	   8884143 ns/op	70634792 B/op	   25074 allocs/op
+BenchmarkHTMLOutput-12     	     139	   8984025 ns/op	70633742 B/op	   25071 allocs/op
+BenchmarkHTMLOutput-12     	     138	   8619190 ns/op	70635042 B/op	   25074 allocs/op
+BenchmarkHTMLOutput-12     	     132	   8372172 ns/op	70621132 B/op	   25043 allocs/op
+BenchmarkJSONOutput-12     	     780	   1527774 ns/op	 2095857 B/op	      35 allocs/op
+BenchmarkJSONOutput-12     	     786	   1544249 ns/op	 2097155 B/op	      35 allocs/op
+BenchmarkJSONOutput-12     	     792	   1539344 ns/op	 2095128 B/op	      35 allocs/op
+BenchmarkJSONOutput-12     	     747	   1557312 ns/op	 2097462 B/op	      35 allocs/op
+BenchmarkJSONOutput-12     	     786	   1552886 ns/op	 2099162 B/op	      35 allocs/op
+BenchmarkTextOutput-12     	    6348	    188302 ns/op	   70035 B/op	    4745 allocs/op
+BenchmarkTextOutput-12     	    6339	    188615 ns/op	   70035 B/op	    4745 allocs/op
+BenchmarkTextOutput-12     	    6391	    185438 ns/op	   70035 B/op	    4745 allocs/op
+BenchmarkTextOutput-12     	    6588	    189173 ns/op	   70037 B/op	    4745 allocs/op
+BenchmarkTextOutput-12     	    6343	    187406 ns/op	   70036 B/op	    4745 allocs/op
+PASS
+ok  	github.com/santosr2/TerraTidy/internal/output	30.798s
+goos: darwin
+goarch: arm64
+pkg: github.com/santosr2/TerraTidy/internal/plugins
+cpu: Apple M2 Pro
+BenchmarkLoadYAMLRule-12                            	   46146	     25634 ns/op	   12000 B/op	     126 allocs/op
+BenchmarkLoadYAMLRule-12                            	   46880	     25771 ns/op	   12000 B/op	     126 allocs/op
+BenchmarkLoadYAMLRule-12                            	   46232	     26267 ns/op	   12000 B/op	     126 allocs/op
+BenchmarkLoadYAMLRule-12                            	   45584	     26807 ns/op	   12000 B/op	     126 allocs/op
+BenchmarkLoadYAMLRule-12                            	   45609	     26296 ns/op	   12000 B/op	     126 allocs/op
+BenchmarkLoadYAMLRuleComplex-12                     	   20557	     56034 ns/op	   27640 B/op	     429 allocs/op
+BenchmarkLoadYAMLRuleComplex-12                     	   22378	     48614 ns/op	   27640 B/op	     429 allocs/op
+BenchmarkLoadYAMLRuleComplex-12                     	   24446	     47848 ns/op	   27640 B/op	     429 allocs/op
+BenchmarkLoadYAMLRuleComplex-12                     	   25232	     48780 ns/op	   27640 B/op	     429 allocs/op
+BenchmarkLoadYAMLRuleComplex-12                     	   23340	     60190 ns/op	   27640 B/op	     429 allocs/op
+BenchmarkPluginManagerLoadDirectory-12              	    7099	    164487 ns/op	   63568 B/op	     652 allocs/op
+BenchmarkPluginManagerLoadDirectory-12              	    7374	    161115 ns/op	   63568 B/op	     652 allocs/op
+BenchmarkPluginManagerLoadDirectory-12              	    7801	    235719 ns/op	   63568 B/op	     652 allocs/op
+BenchmarkPluginManagerLoadDirectory-12              	    7639	    157964 ns/op	   63568 B/op	     652 allocs/op
+BenchmarkPluginManagerLoadDirectory-12              	    7692	    158605 ns/op	   63568 B/op	     652 allocs/op
+BenchmarkPluginManagerLoadMultipleDirectories-12    	    3694	    336746 ns/op	  117072 B/op	    1182 allocs/op
+BenchmarkPluginManagerLoadMultipleDirectories-12    	    3680	    339581 ns/op	  117072 B/op	    1182 allocs/op
+BenchmarkPluginManagerLoadMultipleDirectories-12    	    3729	    368666 ns/op	  117072 B/op	    1182 allocs/op
+BenchmarkPluginManagerLoadMultipleDirectories-12    	    3766	    413143 ns/op	  117072 B/op	    1182 allocs/op
+BenchmarkPluginManagerLoadMultipleDirectories-12    	    3612	    335759 ns/op	  117072 B/op	    1182 allocs/op
+PASS
+ok  	github.com/santosr2/TerraTidy/internal/plugins	32.582s
+goos: darwin
+goarch: arm64
+pkg: github.com/santosr2/TerraTidy/internal/runner
+cpu: Apple M2 Pro
+BenchmarkRunnerSequential-12         	      79	  16064501 ns/op	17361447 B/op	   71027 allocs/op
+BenchmarkRunnerSequential-12         	      76	  16777405 ns/op	17362451 B/op	   71029 allocs/op
+BenchmarkRunnerSequential-12         	      61	  18687283 ns/op	17363623 B/op	   71031 allocs/op
+BenchmarkRunnerSequential-12         	      70	  17139972 ns/op	17365175 B/op	   71033 allocs/op
+BenchmarkRunnerSequential-12         	      74	  16950358 ns/op	17367033 B/op	   71036 allocs/op
+BenchmarkRunnerParallel-12           	      74	  16859690 ns/op	17369015 B/op	   71046 allocs/op
+BenchmarkRunnerParallel-12           	      69	  15668857 ns/op	17364738 B/op	   71044 allocs/op
+BenchmarkRunnerParallel-12           	      76	  15682344 ns/op	17366208 B/op	   71042 allocs/op
+BenchmarkRunnerParallel-12           	      79	  16058820 ns/op	17364865 B/op	   71040 allocs/op
+BenchmarkRunnerParallel-12           	      73	  16459990 ns/op	17363904 B/op	   71039 allocs/op
+BenchmarkRunnerSingleEngine-12       	    2372	    487854 ns/op	 1155208 B/op	    1544 allocs/op
+BenchmarkRunnerSingleEngine-12       	    2372	    496876 ns/op	 1155207 B/op	    1544 allocs/op
+BenchmarkRunnerSingleEngine-12       	    2403	    493209 ns/op	 1155205 B/op	    1544 allocs/op
+BenchmarkRunnerSingleEngine-12       	    2443	    495037 ns/op	 1155201 B/op	    1544 allocs/op
+BenchmarkRunnerSingleEngine-12       	    2413	    480837 ns/op	 1155203 B/op	    1544 allocs/op
+BenchmarkRunnerMultipleEngines-12    	      73	  15699034 ns/op	17358745 B/op	   71031 allocs/op
+BenchmarkRunnerMultipleEngines-12    	      76	  14852191 ns/op	17358350 B/op	   71030 allocs/op
+BenchmarkRunnerMultipleEngines-12    	      80	  15017798 ns/op	17357998 B/op	   71030 allocs/op
+BenchmarkRunnerMultipleEngines-12    	      74	  15774317 ns/op	17357644 B/op	   71029 allocs/op
+BenchmarkRunnerMultipleEngines-12    	      76	  15421498 ns/op	17357248 B/op	   71028 allocs/op
+PASS
+ok  	github.com/santosr2/TerraTidy/internal/runner	25.715s
+goos: darwin
+goarch: arm64
+pkg: github.com/santosr2/TerraTidy/internal/vcs
+cpu: Apple M2 Pro
+BenchmarkGitIsGitRepo-12          	     138	   8784439 ns/op	   26390 B/op	     129 allocs/op
+BenchmarkGitIsGitRepo-12          	     136	   8706765 ns/op	   26352 B/op	     129 allocs/op
+BenchmarkGitIsGitRepo-12          	     138	   8809665 ns/op	   26352 B/op	     129 allocs/op
+BenchmarkGitIsGitRepo-12          	     133	   8609550 ns/op	   26352 B/op	     129 allocs/op
+BenchmarkGitIsGitRepo-12          	     141	   8742754 ns/op	   26352 B/op	     129 allocs/op
+BenchmarkGitGetChangedFiles-12    	      39	  28949733 ns/op	  187854 B/op	     445 allocs/op
+BenchmarkGitGetChangedFiles-12    	      39	  29283584 ns/op	  187562 B/op	     445 allocs/op
+BenchmarkGitGetChangedFiles-12    	      40	  29289443 ns/op	  187356 B/op	     444 allocs/op
+BenchmarkGitGetChangedFiles-12    	      42	  32286959 ns/op	  187319 B/op	     444 allocs/op
+BenchmarkGitGetChangedFiles-12    	      33	  33273997 ns/op	  187509 B/op	     444 allocs/op
+BenchmarkGitGetStagedFiles-12     	      60	  19938556 ns/op	  126904 B/op	     300 allocs/op
+BenchmarkGitGetStagedFiles-12     	      63	  20644821 ns/op	  126933 B/op	     300 allocs/op
+BenchmarkGitGetStagedFiles-12     	      58	  20604435 ns/op	  126913 B/op	     300 allocs/op
+BenchmarkGitGetStagedFiles-12     	      52	  20143046 ns/op	  126898 B/op	     300 allocs/op
+BenchmarkGitGetStagedFiles-12     	      57	  20380488 ns/op	  126907 B/op	     300 allocs/op
+PASS
+ok  	github.com/santosr2/TerraTidy/internal/vcs	28.214s

@@ -80,24 +80,37 @@ terratidy check ./modules/compute
 Run the built-in benchmarks to measure performance on your hardware:
 
 ```bash
-go test -bench=. -benchmem ./internal/benchmark/
+# Run all benchmarks
+go test -bench=. -benchmem ./internal/...
+
+# Or use mise task
+mise run benchmark
 ```
 
-Available benchmarks:
+Benchmarks are located in their respective packages:
 
-- `BenchmarkFmtEngine` - Format engine throughput
-- `BenchmarkStyleEngine` - Style checking throughput
-- `BenchmarkRunnerSequential` vs `BenchmarkRunnerParallel` - Runner comparison
-- `BenchmarkCacheHit` vs `BenchmarkCacheMiss` - Cache effectiveness
-- `BenchmarkFileCount` - Scalability with 1, 5, 10, 25, 50 files
+| Package | Benchmarks |
+| ------- | ---------- |
+| `internal/cache` | Cache hit/miss, GetOrParse |
+| `internal/config` | Config loading, profiles, imports |
+| `internal/engines/format` | Format engine, file count scaling |
+| `internal/engines/lint` | Lint module, large module |
+| `internal/engines/policy` | Policy evaluation, multi-file |
+| `internal/engines/style` | Style engine configurations |
+| `internal/engines/style/rules` | Individual rule performance |
+| `internal/lsp` | Diagnostic computation |
+| `internal/output` | SARIF, HTML, JSON, text output |
+| `internal/plugins` | YAML rule loading, plugin manager |
+| `internal/runner` | Sequential vs parallel, single vs multi-engine |
+| `internal/vcs` | Git operations |
 
 Compare results across runs:
 
 ```bash
 # Save baseline
-go test -bench=. -benchmem ./internal/benchmark/ > bench-before.txt
+go test -bench=. -benchmem ./internal/... > bench-before.txt
 
 # Make changes, then compare
-go test -bench=. -benchmem ./internal/benchmark/ > bench-after.txt
+go test -bench=. -benchmem ./internal/... > bench-after.txt
 benchstat bench-before.txt bench-after.txt
 ```

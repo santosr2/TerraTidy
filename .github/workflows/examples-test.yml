@@ -42,15 +42,14 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      - name: Build TerraTidy
-        run: go build -o bin/terratidy ./cmd/terratidy
-
-      - name: Build Go plugin
+      - name: Build TerraTidy and Go plugin
         run: |
+          # Build main binary and plugin with identical flags for compatibility
+          # Go plugins require exact same build environment
+          go build -trimpath -o bin/terratidy ./cmd/terratidy
           cd examples/go-rule
           go mod tidy
-          go build -buildmode=plugin -o require-tags.so
-          # Update manifest with fresh hash
+          go build -trimpath -buildmode=plugin -o require-tags.so
           shasum -a 256 require-tags.so > .terratidy-plugins.sha256
 
       - name: Test YAML rules

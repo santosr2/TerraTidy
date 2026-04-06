@@ -1,21 +1,15 @@
 name: Benchmark
 
 on:
+  # Run on main pushes to update baseline
   push:
     branches: [main]
     paths:
-      - '**/*.go'
-      - 'go.mod'
-      - 'go.sum'
       - 'benchmarks/baseline.txt'
-      - '.github/workflows/benchmark.yml'
+  # Run on PRs only when labeled (benchmarks take >5 min)
   pull_request:
+    types: [labeled]
     branches: [main]
-    paths:
-      - '**/*.go'
-      - 'go.mod'
-      - 'go.sum'
-      - '.github/workflows/benchmark.yml'
 
 permissions:
   contents: read
@@ -27,6 +21,8 @@ concurrency:
 
 jobs:
   benchmark:
+    # Only run on label trigger if PR, always run on push
+    if: github.event_name == 'push' || github.event.label.name == 'benchmark'
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -47,7 +43,7 @@ jobs:
 
       - name: Run benchmarks
         run: |
-          go test -bench=. -benchmem -count=5 -run=^$ ./internal/... \
+          go test -bench=. -benchmem -count=6 -run=^$ ./internal/... \
             | tee benchmarks/current.txt
 
       - name: Compare with baseline
@@ -73,11 +69,13 @@ jobs:
       - name: Comment on PR
         if: github.event_name == 'pull_request'
         uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+        env:
+          REGRESSION: ${{ steps.compare.outputs.regression }}
         with:
           script: |
             const fs = require('fs');
             const comparison = fs.readFileSync('comparison.txt', 'utf8');
-            const regression = '${{ steps.compare.outputs.regression }}' === 'true';
+            const regression = process.env.REGRESSION === 'true';
 
             const body = `## Benchmark Results
 

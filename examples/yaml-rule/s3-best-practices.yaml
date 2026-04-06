@@ -1,0 +1,34 @@
+name: s3-best-practices
+description: Comprehensive S3 bucket best practices rule
+severity: warning
+enabled: true
+tags:
+  - aws
+  - s3
+  - security
+  - best-practice
+patterns:
+  # Only check resource and data blocks (not variables, outputs, etc.)
+  block_types:
+    - resource
+    - data
+  # Only apply to S3 bucket resources
+  resource_types:
+    - aws_s3_bucket
+  # Require these attributes to be present
+  required_attributes:
+    - tags
+  # Forbid these deprecated inline arguments
+  forbidden_attributes:
+    - acl
+    - website
+    - cors_rule
+    - logging
+    - lifecycle_rule
+    - replication_configuration
+    - server_side_encryption_configuration
+  # Validate attribute values match patterns
+  attribute_patterns:
+    - attribute: bucket
+      pattern: "^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$"
+      message: "Bucket name must be 3-63 characters, lowercase alphanumeric, dots, or hyphens"

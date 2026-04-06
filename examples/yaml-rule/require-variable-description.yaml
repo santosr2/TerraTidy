@@ -1,0 +1,13 @@
+name: require-variable-description
+description: All variables must have a description attribute
+severity: warning
+enabled: true
+message: "Variable is missing a 'description' attribute"
+tags:
+  - documentation
+  - best-practice
+patterns:
+  block_types:
+    - variable
+  required_attributes:
+    - description

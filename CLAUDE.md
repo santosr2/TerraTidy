@@ -253,10 +253,20 @@ name: require-description
 description: Resources must have a description
 severity: warning
 enabled: true
-pattern:
-  type: resource
-  missing_attribute: description
 message: "Resource is missing a description attribute"
+patterns:
+  block_types:
+    - resource          # resource, data, variable, output, locals, module
+  resource_types:
+    - aws_instance      # Optional: filter by resource type
+  required_attributes:
+    - description
+  forbidden_attributes:
+    - deprecated_field  # Optional: attributes that must NOT be present
+  attribute_patterns:   # Optional: regex validation
+    - attribute: name
+      pattern: "^[a-z][a-z0-9-]+$"
+      message: "Name must be lowercase with hyphens"
 ```
 
 ### Bash Rule

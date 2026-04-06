@@ -65,6 +65,31 @@ Copy to `.github/workflows/terratidy.yml` in your project.
 - ✅ Auto-fix on develop branch
 - ✅ Caching for faster runs
 
+## Custom Rules
+
+### YAML Rules
+
+**Directory:** [yaml-rule/](yaml-rule/)
+
+Declarative rules for checking Terraform/HCL files without writing Go code.
+
+| File | Description |
+|------|-------------|
+| `require-description.yaml` | Require description on resources |
+| `require-variable-description.yaml` | Require description on variables |
+| `no-deprecated-s3-args.yaml` | Forbid deprecated S3 arguments |
+| `bucket-naming-convention.yaml` | Enforce bucket naming pattern |
+| `s3-best-practices.yaml` | Combined example using all features |
+
+**Usage:**
+
+```bash
+# Copy to plugins directory
+cp examples/yaml-rule/*.yaml ~/.terratidy/plugins/
+```
+
+For more information, see the [Plugin Development Guide](../docs/site/docs/development/plugins.md#yaml-rules).
+
 ## Quick Start
 
 ### 1. Initialize Configuration

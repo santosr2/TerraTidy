@@ -1,0 +1,17 @@
+name: no-deprecated-s3-args
+description: S3 buckets should not use deprecated inline arguments
+severity: error
+enabled: true
+message: "Use dedicated resources (aws_s3_bucket_acl, aws_s3_bucket_website_configuration) instead of inline arguments"
+tags:
+  - aws
+  - s3
+  - deprecation
+patterns:
+  resource_types:
+    - aws_s3_bucket
+  forbidden_attributes:
+    - acl
+    - website
+    - cors_rule
+    - logging

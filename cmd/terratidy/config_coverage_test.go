@@ -68,6 +68,65 @@ func TestRunConfigShow(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+func TestRunConfigShow_WithProfile(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, ".terratidy.yaml")
+	content := `version: 1
+engines:
+  fmt:
+    enabled: true
+  style:
+    enabled: true
+profiles:
+  minimal:
+    engines:
+      style:
+        enabled: false
+`
+	require.NoError(t, os.WriteFile(cfgPath, []byte(content), 0o644))
+
+	oldCfgFile := cfgFile
+	oldProfile := profile
+	cfgFile = cfgPath
+	profile = "minimal"
+	defer func() {
+		cfgFile = oldCfgFile
+		profile = oldProfile
+	}()
+
+	err := runConfigShow(nil, nil)
+	assert.NoError(t, err)
+}
+
+func TestRunConfigShow_WithProfile_InvalidProfile(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, ".terratidy.yaml")
+	content := `version: 1
+engines:
+  fmt:
+    enabled: true
+profiles:
+  ci:
+    engines:
+      fmt:
+        enabled: false
+`
+	require.NoError(t, os.WriteFile(cfgPath, []byte(content), 0o644))
+
+	oldCfgFile := cfgFile
+	oldProfile := profile
+	cfgFile = cfgPath
+	profile = "nonexistent"
+	defer func() {
+		cfgFile = oldCfgFile
+		profile = oldProfile
+	}()
+
+	err := runConfigShow(nil, nil)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "applying profile")
+}
+
 func TestRunConfigValidate(t *testing.T) {
 	t.Run("valid config", func(t *testing.T) {
 		dir := t.TempDir()

@@ -26,12 +26,26 @@ terratidy policy --show-input
 engines:
   policy:
     enabled: true
-    policy_dirs:
+    policy_dirs:                    # Directories containing Rego policy files
       - ./policies
       - ~/.terratidy/policies
-    policy_files:
+    policy_files:                   # Individual policy files
       - ./custom-policy.rego
+    data_files:                     # Additional data files for policies
+      - ./policy-data.json
+    rules:                          # Rule-specific configuration
+      required-tags:
+        enabled: true
+        severity: error
 ```
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `enabled` | bool | `false` | Enable/disable the policy engine (opt-in) |
+| `policy_dirs` | list | `[]` | Directories containing Rego policy files |
+| `policy_files` | list | `[]` | Individual policy files to load |
+| `data_files` | list | `[]` | Additional JSON/YAML data files for policies |
+| `rules` | map | `{}` | Rule-specific configuration |
 
 ## Writing Policies
 

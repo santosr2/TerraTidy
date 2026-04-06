@@ -11,3 +11,19 @@ engines:
     enabled: false
 
 severity_threshold: warning
+
+# Profile for testing profile selection
+profiles:
+  strict:
+    engines:
+      lint:
+        enabled: true
+      policy:
+        enabled: true
+
+# Override example for testing rule configuration
+overrides:
+  rules:
+    style.block-label-case:
+      enabled: true
+      severity: warning

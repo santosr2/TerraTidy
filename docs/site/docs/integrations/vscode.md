@@ -101,7 +101,10 @@ Configure in VS Code settings (`Ctrl+,` / `Cmd+,`):
   "terratidy.engines.policy": false,
 
   // Minimum severity to show
-  "terratidy.severityThreshold": "warning"
+  "terratidy.severityThreshold": "warning",
+
+  // LSP server trace level (for debugging)
+  "terratidy.trace.server": "off"
 }
 ```
 
@@ -185,11 +188,16 @@ Run checks manually when needed.
 ### Engine Selection for Diagnostics
 
 Document formatting (`Format Document` command, `Ctrl+Shift+F`) works
-regardless of engine settings. However, for real-time diagnostics
-(squiggly underlines), the LSP server only runs the lint and style
-engines. The `engines.fmt` and `engines.policy` toggles are accepted
-but do not yet control which engines produce diagnostics. Policy
-engine diagnostics are planned for a future release.
+regardless of engine settings. For real-time diagnostics (squiggly
+underlines), the `engines.style` and `engines.lint` toggles control
+which engines run. Disabling an engine prevents its diagnostics from
+appearing.
+
+The `engines.fmt` toggle does not affect diagnostics since formatting
+is handled separately via the `Format Document` command. The
+`engines.policy` toggle is accepted but policy diagnostics are not
+yet implemented in the LSP server; policy engine diagnostics are
+planned for a future release.
 
 ### Multi-root Workspaces
 

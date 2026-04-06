@@ -47,8 +47,15 @@ TerraTidy provides different commands for different formatting needs:
 engines:
   fmt:
     enabled: true
-    # No additional config needed - uses HCL defaults
+    check: false  # Check mode - report but don't modify files
+    diff: false   # Show diff of changes
 ```
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `enabled` | bool | `true` | Enable/disable the format engine |
+| `check` | bool | `false` | Check mode - report formatting issues without modifying files |
+| `diff` | bool | `false` | Show unified diff of changes |
 
 ## What Gets Formatted
 

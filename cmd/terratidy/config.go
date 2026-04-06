@@ -116,6 +116,13 @@ func runConfigShow(_ *cobra.Command, _ []string) error {
 		return fmt.Errorf("loading config: %w", err)
 	}
 
+	// Apply profile if specified via --profile flag
+	if profile != "" {
+		if profileErr := cfg.ApplyProfile(profile); profileErr != nil {
+			return fmt.Errorf("applying profile %q: %w", profile, profileErr)
+		}
+	}
+
 	var output []byte
 	switch strings.ToLower(configOutputFormat) {
 	case "json":

@@ -1,6 +1,7 @@
 package cache
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
@@ -166,4 +167,105 @@ func TestHashContent(t *testing.T) {
 	assert.Equal(t, hash1, hash2, "same content should produce same hash")
 	assert.NotEqual(t, hash1, hash3, "different content should produce different hash")
 	assert.Len(t, hash1, 64, "SHA256 hex should be 64 chars")
+}
+
+func TestConfigureDefault(t *testing.T) {
+	// Reset to ensure clean state
+	ResetDefault()
+
+	// Verify default settings
+	stats := Default().Stats()
+	assert.Equal(t, 5*time.Minute, stats.MaxAge)
+	assert.Equal(t, 1000, stats.MaxSize)
+	assert.False(t, stats.Disabled)
+
+	// Configure with custom options
+	ConfigureDefault(Options{
+		MaxAge:   10 * time.Minute,
+		MaxSize:  500,
+		Disabled: false,
+	})
+
+	stats = Default().Stats()
+	assert.Equal(t, 10*time.Minute, stats.MaxAge)
+	assert.Equal(t, 500, stats.MaxSize)
+	assert.False(t, stats.Disabled)
+
+	// Configure as disabled
+	ConfigureDefault(Options{Disabled: true})
+	assert.True(t, Default().Stats().Disabled)
+
+	// Reset back to defaults for other tests
+	ResetDefault()
+}
+
+func TestConfigureDefault_MaxAgeAffectsTTL(t *testing.T) {
+	clk := newFakeClock(time.Now())
+
+	// Configure with 10 minute TTL
+	ConfigureDefault(Options{
+		MaxAge:  10 * time.Minute,
+		MaxSize: 100,
+		Clock:   clk,
+	})
+	defer ResetDefault()
+
+	tmpFile := writeTempTF(t, t.TempDir(), "test.tf", `resource "test" "a" {}`)
+
+	// Cache the file
+	_, err := Default().GetOrParse(tmpFile)
+	require.NoError(t, err)
+
+	// Should still be cached at 9 minutes
+	clk.Advance(9 * time.Minute)
+	_, ok := Default().Get(tmpFile)
+	assert.True(t, ok, "entry should still be cached before TTL")
+
+	// Should be expired at 11 minutes
+	clk.Advance(2 * time.Minute)
+	_, ok = Default().Get(tmpFile)
+	assert.False(t, ok, "entry should be expired after TTL")
+}
+
+func TestConfigureDefault_MaxSizeLimitsEntries(t *testing.T) {
+	// Configure with max 3 entries
+	ConfigureDefault(Options{
+		MaxAge:  time.Hour,
+		MaxSize: 3,
+	})
+	defer ResetDefault()
+
+	dir := t.TempDir()
+	files := make([]string, 5)
+	for i := range files {
+		files[i] = writeTempTF(t, dir, fmt.Sprintf("test%d.tf", i), fmt.Sprintf(`resource "r" "r%d" {}`, i))
+	}
+
+	// Cache all 5 files
+	for _, f := range files {
+		_, err := Default().GetOrParse(f)
+		require.NoError(t, err)
+	}
+
+	// Cache should have at most 3 entries
+	assert.LessOrEqual(t, Default().Size(), 3, "cache should not exceed max size")
+}
+
+func TestConfigureDefault_DisabledBypassesCache(t *testing.T) {
+	ConfigureDefault(Options{Disabled: true})
+	defer ResetDefault()
+
+	tmpFile := writeTempTF(t, t.TempDir(), "test.tf", `variable "x" {}`)
+
+	// GetOrParse should work but not cache
+	entry, err := Default().GetOrParse(tmpFile)
+	require.NoError(t, err)
+	assert.NotNil(t, entry)
+
+	// Get should return false (not cached)
+	_, ok := Default().Get(tmpFile)
+	assert.False(t, ok, "disabled cache should not store entries")
+
+	// Size should be 0
+	assert.Equal(t, 0, Default().Size(), "disabled cache should have no entries")
 }

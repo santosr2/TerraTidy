@@ -795,18 +795,18 @@ func (s *Server) getDiagnostics(uri string) []Diagnostic {
 		return []Diagnostic{}
 	}
 
-	// Run lint and style checks
+	// Run lint and style checks based on engine toggles from InitializationOptions
 	ctx := context.Background()
 	var findings []sdk.Finding
 
-	if s.lintEngine != nil {
+	if s.lintEngine != nil && s.isEngineEnabled("lint") {
 		lintFindings, err := s.lintEngine.Run(ctx, []string{doc.tempFile})
 		if err == nil {
 			findings = append(findings, lintFindings...)
 		}
 	}
 
-	if s.styleEngine != nil {
+	if s.styleEngine != nil && s.isEngineEnabled("style") {
 		styleFindings, err := s.styleEngine.Run(ctx, []string{doc.tempFile})
 		if err == nil {
 			findings = append(findings, styleFindings...)
@@ -973,6 +973,29 @@ func (s *Server) getSeverityThreshold() sdk.Severity {
 		return sdk.ParseSeverity(s.config.SeverityThreshold, sdk.SeverityInfo)
 	}
 	return sdk.SeverityInfo // Default: show all
+}
+
+// isEngineEnabled checks if an engine should run based on InitializationOptions.
+// If no InitializationOptions are set, engines default to enabled (except policy).
+// This respects the VSCode terratidy.engines.* settings.
+func (s *Server) isEngineEnabled(engine string) bool {
+	if s.initOptions == nil {
+		// No client options - use defaults (all enabled except policy)
+		return engine != "policy"
+	}
+
+	switch engine {
+	case "fmt":
+		return s.initOptions.Engines.Fmt
+	case "style":
+		return s.initOptions.Engines.Style
+	case "lint":
+		return s.initOptions.Engines.Lint
+	case "policy":
+		return s.initOptions.Engines.Policy
+	default:
+		return true
+	}
 }
 
 // meetsThreshold returns true if the finding severity meets or exceeds the threshold

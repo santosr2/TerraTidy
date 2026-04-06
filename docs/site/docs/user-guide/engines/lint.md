@@ -31,11 +31,32 @@ terratidy lint --plugin aws
 engines:
   lint:
     enabled: true
-    config_file: .tflint.hcl  # Path to TFLint config
-    plugins:
+    config_file: .tflint.hcl      # Path to TFLint config
+    plugins:                       # TFLint plugins to enable
       - aws
       - google
+    args:                          # Extra arguments to pass to TFLint
+      - --force
+      - --no-color
+    use_tflint: true               # Enable TFLint subprocess integration
+    tflint_path: /usr/local/bin/tflint  # Custom TFLint binary path
+    fallback_builtin: true         # Use built-in rules if TFLint unavailable
+    rules:                         # Rule-specific configuration
+      terraform_deprecated_interpolation:
+        enabled: true
+        severity: error
 ```
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `enabled` | bool | `true` | Enable/disable the lint engine |
+| `config_file` | string | `.tflint.hcl` | Path to TFLint configuration file |
+| `plugins` | list | `[]` | TFLint plugins to enable |
+| `args` | list | `[]` | Extra arguments to pass to TFLint |
+| `use_tflint` | bool | `false` | Enable TFLint subprocess integration |
+| `tflint_path` | string | `tflint` | Custom path to TFLint binary |
+| `fallback_builtin` | bool | `false` | Use built-in rules if TFLint is unavailable |
+| `rules` | map | `{}` | Rule-specific configuration |
 
 ## Rule Categories
 

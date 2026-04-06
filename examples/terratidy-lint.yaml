@@ -16,15 +16,25 @@ engines:
 
   lint:
     enabled: true
-    config_file: .tflint.hcl
+    config_file: .tflint.hcl    # Path to TFLint config file
     # Enable specific plugins (optional)
     plugins:
       - aws
       # - google
       # - azurerm
-    # Extra arguments to pass to TFLint (new in v0.2.0)
+    # Extra arguments to pass to TFLint
     # args:
     #   - --minimum-tf-version=1.0.0
+    #   - --force
+    # TFLint integration options
+    # use_tflint: true          # Enable TFLint subprocess integration
+    # tflint_path: tflint       # Custom TFLint binary path
+    # fallback_builtin: true    # Use built-in rules if TFLint unavailable
+    # Engine-level rule configuration
+    # rules:
+    #   terraform_deprecated_interpolation:
+    #     enabled: true
+    #     severity: error
 
   policy:
     enabled: false

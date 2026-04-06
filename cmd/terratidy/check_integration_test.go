@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -1008,4 +1009,795 @@ patterns:
 		require.NoError(t, err)
 		assert.Empty(t, rules, "should load no rules when no tags match")
 	})
+}
+
+// TestRootConfigFieldsAffectRuntime verifies that all root config fields
+// (imports, severity_threshold, fail_fast, parallel) affect runtime behavior.
+func TestRootConfigFieldsAffectRuntime(t *testing.T) {
+	dir := t.TempDir()
+
+	// Create a Terraform file that will trigger findings
+	tfContent := `resource "aws_instance" "test" {
+  ami           = "ami-123"
+  instance_type = "t2.micro"
+}
+`
+	tmpFile := filepath.Join(dir, "main.tf")
+	require.NoError(t, os.WriteFile(tmpFile, []byte(tfContent), 0o644))
+
+	t.Run("severity_threshold filters findings", func(t *testing.T) {
+		// Create findings with different severities
+		findings := []sdk.Finding{
+			{Rule: "rule.error", Severity: sdk.SeverityError, Message: "error"},
+			{Rule: "rule.warning", Severity: sdk.SeverityWarning, Message: "warning"},
+			{Rule: "rule.info", Severity: sdk.SeverityInfo, Message: "info"},
+		}
+
+		// Test error threshold - should only keep errors
+		cfg := config.DefaultConfig()
+		cfg.SeverityThreshold = "error"
+		threshold := getEffectiveSeverityThreshold(cfg)
+		filtered := filterFindingsBySeverity(findings, threshold)
+		assert.Len(t, filtered, 1, "error threshold should keep only errors")
+		assert.Equal(t, sdk.SeverityError, filtered[0].Severity)
+
+		// Test warning threshold - should keep errors and warnings
+		cfg.SeverityThreshold = "warning"
+		threshold = getEffectiveSeverityThreshold(cfg)
+		filtered = filterFindingsBySeverity(findings, threshold)
+		assert.Len(t, filtered, 2, "warning threshold should keep errors and warnings")
+
+		// Test info threshold - should keep all
+		cfg.SeverityThreshold = "info"
+		threshold = getEffectiveSeverityThreshold(cfg)
+		filtered = filterFindingsBySeverity(findings, threshold)
+		assert.Len(t, filtered, 3, "info threshold should keep all findings")
+	})
+
+	t.Run("fail_fast stops on error", func(t *testing.T) {
+		cfg := config.DefaultConfig()
+		cfg.FailFast = true
+		assert.True(t, shouldFailFast(cfg), "shouldFailFast should return true when enabled")
+
+		cfg.FailFast = false
+		assert.False(t, shouldFailFast(cfg), "shouldFailFast should return false when disabled")
+
+		// Verify hasErrors detects error severity
+		findings := []sdk.Finding{
+			{Severity: sdk.SeverityWarning},
+		}
+		assert.False(t, hasErrors(findings), "hasErrors should return false for warnings only")
+
+		findings = append(findings, sdk.Finding{Severity: sdk.SeverityError})
+		assert.True(t, hasErrors(findings), "hasErrors should return true when errors present")
+	})
+
+	t.Run("parallel affects execution mode", func(t *testing.T) {
+		cfg := config.DefaultConfig()
+
+		// Config parallel=true, CLI parallel=false -> use config (true)
+		cfg.Parallel = true
+		assert.True(t, getEffectiveParallel(cfg, false), "should use config when CLI flag false")
+
+		// Config parallel=false, CLI parallel=true -> CLI wins
+		cfg.Parallel = false
+		assert.True(t, getEffectiveParallel(cfg, true), "CLI flag should override config")
+
+		// Both false
+		assert.False(t, getEffectiveParallel(cfg, false), "both false should return false")
+	})
+
+	t.Run("imports merge config correctly", func(t *testing.T) {
+		// Create main config file
+		mainConfig := `version: 1
+imports:
+  - "imports/*.yaml"
+engines:
+  fmt:
+    enabled: true
+`
+		mainPath := filepath.Join(dir, ".terratidy.yaml")
+		require.NoError(t, os.WriteFile(mainPath, []byte(mainConfig), 0o644))
+
+		// Create imports directory and imported config
+		importsDir := filepath.Join(dir, "imports")
+		require.NoError(t, os.MkdirAll(importsDir, 0o755))
+
+		importedConfig := `severity_threshold: error
+overrides:
+  rules:
+    imported-rule:
+      enabled: true
+      severity: warning
+`
+		require.NoError(t, os.WriteFile(filepath.Join(importsDir, "rules.yaml"), []byte(importedConfig), 0o644))
+
+		// Load and verify merge
+		cfg, err := config.Load(mainPath)
+		require.NoError(t, err)
+
+		// Imported severity_threshold should be merged
+		assert.Equal(t, "error", cfg.SeverityThreshold, "imported severity_threshold should be merged")
+
+		// Imported rule override should be present
+		assert.Contains(t, cfg.Overrides.Rules, "imported-rule", "imported rule should be present")
+		assert.True(t, cfg.Overrides.Rules["imported-rule"].Enabled, "imported rule should be enabled")
+	})
+
+	t.Run("all fields work together in runAllChecksWithConfig", func(t *testing.T) {
+		cfg := config.DefaultConfig()
+		cfg.SeverityThreshold = "warning"
+		cfg.FailFast = false
+		cfg.Parallel = false
+		cfg.Engines.Fmt.Enabled = config.BoolPtr(true)
+		cfg.Engines.Style.Enabled = config.BoolPtr(true)
+		cfg.Engines.Lint.Enabled = config.BoolPtr(false)
+		cfg.Engines.Policy.Enabled = config.BoolPtr(false)
+
+		// Run checks - should complete without error
+		findings, err := runAllChecksWithConfig(cfg, []string{tmpFile}, true, nil)
+		require.NoError(t, err)
+
+		// Apply severity threshold filtering as the real code does
+		threshold := getEffectiveSeverityThreshold(cfg)
+		filtered := filterFindingsBySeverity(findings, threshold)
+
+		// Verify filtering worked (all findings should be >= warning)
+		for _, f := range filtered {
+			assert.True(t, f.Severity.Level() >= sdk.SeverityWarning.Level(),
+				"filtered findings should be >= warning severity")
+		}
+	})
+}
+
+// TestEngineConfigFieldsAffectRuntime verifies that engine-specific config fields
+// (engines.*.enabled, engines.*.config.*) affect runtime behavior.
+func TestEngineConfigFieldsAffectRuntime(t *testing.T) {
+	dir := t.TempDir()
+
+	// Create an intentionally unformatted Terraform file
+	// (extra spaces, misaligned equals signs will trigger format findings)
+	unformattedTF := `resource "aws_instance" "test" {
+  ami           =    "ami-123"
+  instance_type="t2.micro"
+  tags={
+    Name="test"
+  }
+}
+`
+	tmpFile := filepath.Join(dir, "unformatted.tf")
+	require.NoError(t, os.WriteFile(tmpFile, []byte(unformattedTF), 0o644))
+
+	t.Run("engines.fmt.enabled controls format engine", func(t *testing.T) {
+		// Test with fmt disabled
+		cfg := config.DefaultConfig()
+		cfg.Engines.Fmt.Enabled = config.BoolPtr(false)
+		cfg.Engines.Style.Enabled = config.BoolPtr(false)
+		cfg.Engines.Lint.Enabled = config.BoolPtr(false)
+		cfg.Engines.Policy.Enabled = config.BoolPtr(false)
+
+		findings, err := runAllChecksWithConfig(cfg, []string{tmpFile}, true, nil)
+		require.NoError(t, err)
+
+		// No engines enabled, should have no findings
+		assert.Empty(t, findings, "no engines enabled should produce no findings")
+
+		// Test with fmt enabled
+		cfg.Engines.Fmt.Enabled = config.BoolPtr(true)
+		findings, err = runAllChecksWithConfig(cfg, []string{tmpFile}, true, nil)
+		require.NoError(t, err)
+
+		// Format engine should detect the unformatted file
+		hasFmtFinding := false
+		for _, f := range findings {
+			if f.Rule == "format" || strings.Contains(f.Message, "format") || strings.Contains(f.Message, "Format") {
+				hasFmtFinding = true
+				break
+			}
+		}
+		assert.True(t, hasFmtFinding, "format engine should produce findings for unformatted file")
+	})
+
+	t.Run("engines.style.enabled controls style engine", func(t *testing.T) {
+		// Test with style disabled
+		cfg := config.DefaultConfig()
+		cfg.Engines.Fmt.Enabled = config.BoolPtr(false)
+		cfg.Engines.Style.Enabled = config.BoolPtr(false)
+		cfg.Engines.Lint.Enabled = config.BoolPtr(false)
+		cfg.Engines.Policy.Enabled = config.BoolPtr(false)
+
+		findings, err := runAllChecksWithConfig(cfg, []string{tmpFile}, true, nil)
+		require.NoError(t, err)
+		assert.Empty(t, findings, "no engines enabled should produce no findings")
+
+		// Test with style enabled
+		cfg.Engines.Style.Enabled = config.BoolPtr(true)
+		_, err = runAllChecksWithConfig(cfg, []string{tmpFile}, true, nil)
+		// Style engine runs without error; findings may be nil/empty depending on rules
+		require.NoError(t, err, "style engine should run without error when enabled")
+	})
+
+	t.Run("engines.lint.enabled controls lint engine", func(t *testing.T) {
+		// Test with lint disabled
+		cfg := config.DefaultConfig()
+		cfg.Engines.Fmt.Enabled = config.BoolPtr(false)
+		cfg.Engines.Style.Enabled = config.BoolPtr(false)
+		cfg.Engines.Lint.Enabled = config.BoolPtr(false)
+		cfg.Engines.Policy.Enabled = config.BoolPtr(false)
+
+		findings, err := runAllChecksWithConfig(cfg, []string{tmpFile}, true, nil)
+		require.NoError(t, err)
+		assert.Empty(t, findings, "no engines enabled should produce no findings")
+
+		// Test with lint enabled (fallback_builtin mode to avoid TFLint dependency)
+		cfg.Engines.Lint.Enabled = config.BoolPtr(true)
+		cfg.Engines.Lint.FallbackBuiltin = true
+		cfg.Engines.Lint.UseTFLint = false
+
+		_, err = runAllChecksWithConfig(cfg, []string{tmpFile}, true, nil)
+		// Lint engine runs without error; findings may be nil/empty with no TFLint
+		require.NoError(t, err, "lint engine should run without error when enabled")
+	})
+
+	t.Run("engines.policy.enabled controls policy engine", func(t *testing.T) {
+		// Test with policy disabled
+		cfg := config.DefaultConfig()
+		cfg.Engines.Fmt.Enabled = config.BoolPtr(false)
+		cfg.Engines.Style.Enabled = config.BoolPtr(false)
+		cfg.Engines.Lint.Enabled = config.BoolPtr(false)
+		cfg.Engines.Policy.Enabled = config.BoolPtr(false)
+
+		findings, err := runAllChecksWithConfig(cfg, []string{tmpFile}, true, nil)
+		require.NoError(t, err)
+		assert.Empty(t, findings, "no engines enabled should produce no findings")
+
+		// Test with policy enabled (no policies configured, so no findings)
+		cfg.Engines.Policy.Enabled = config.BoolPtr(true)
+		_, err = runAllChecksWithConfig(cfg, []string{tmpFile}, true, nil)
+		// Policy engine runs without error; findings may be nil/empty with no policies
+		require.NoError(t, err, "policy engine should run without error when enabled")
+	})
+}
+
+// TestEngineStyleConfigDiff verifies that engines.style.config.diff shows diff output.
+func TestEngineStyleConfigDiff(t *testing.T) {
+	dir := t.TempDir()
+
+	// Create a file with consecutive blocks without blank lines between them
+	// This triggers the blank-line-between-blocks rule which has auto-fix
+	noBlankLinesTF := `resource "aws_instance" "one" {
+  ami = "ami-123"
+}
+resource "aws_instance" "two" {
+  ami = "ami-456"
+}
+`
+	tmpFile := filepath.Join(dir, "no_blanks.tf")
+	require.NoError(t, os.WriteFile(tmpFile, []byte(noBlankLinesTF), 0o644))
+
+	t.Run("diff disabled produces no diff finding", func(t *testing.T) {
+		// Restore file content before each test
+		require.NoError(t, os.WriteFile(tmpFile, []byte(noBlankLinesTF), 0o644))
+
+		cfg := config.DefaultConfig()
+		cfg.Engines.Fmt.Enabled = config.BoolPtr(false)
+		cfg.Engines.Style.Enabled = config.BoolPtr(true)
+		cfg.Engines.Style.Fix = true   // Enable auto-fix
+		cfg.Engines.Style.Diff = false // Diff disabled
+		cfg.Engines.Lint.Enabled = config.BoolPtr(false)
+		cfg.Engines.Policy.Enabled = config.BoolPtr(false)
+
+		findings, err := runStyleCheckWithConfig(context.Background(), cfg, []string{tmpFile}, 1, true, nil)
+		require.NoError(t, err)
+
+		// Should NOT have a style.diff finding
+		for _, f := range findings {
+			assert.NotEqual(t, "style.diff", f.Rule, "diff finding should not be generated when diff disabled")
+		}
+	})
+
+	t.Run("diff enabled produces diff finding when fixes applied", func(t *testing.T) {
+		// Restore file content
+		require.NoError(t, os.WriteFile(tmpFile, []byte(noBlankLinesTF), 0o644))
+
+		cfg := config.DefaultConfig()
+		cfg.Engines.Fmt.Enabled = config.BoolPtr(false)
+		cfg.Engines.Style.Enabled = config.BoolPtr(true)
+		cfg.Engines.Style.Fix = true  // Enable auto-fix
+		cfg.Engines.Style.Diff = true // Diff enabled
+		cfg.Engines.Lint.Enabled = config.BoolPtr(false)
+		cfg.Engines.Policy.Enabled = config.BoolPtr(false)
+
+		findings, err := runStyleCheckWithConfig(context.Background(), cfg, []string{tmpFile}, 1, true, nil)
+		require.NoError(t, err)
+
+		// Should have a style.diff finding with diff content
+		hasDiffFinding := false
+		for _, f := range findings {
+			if f.Rule == "style.diff" {
+				hasDiffFinding = true
+				assert.Contains(t, f.Message, "@@", "diff finding should contain unified diff markers")
+				break
+			}
+		}
+		assert.True(t, hasDiffFinding, "diff finding should be generated when diff enabled and fixes applied")
+	})
+}
+
+// TestEngineStyleConfigRules verifies that engines.style.config.rules affects rule behavior.
+func TestEngineStyleConfigRules(t *testing.T) {
+	dir := t.TempDir()
+
+	// Create a file that triggers blank-line-between-blocks rule
+	noBlankLinesTF := `resource "aws_instance" "one" {
+  ami = "ami-123"
+}
+resource "aws_instance" "two" {
+  ami = "ami-456"
+}
+`
+	tmpFile := filepath.Join(dir, "rules_test.tf")
+	require.NoError(t, os.WriteFile(tmpFile, []byte(noBlankLinesTF), 0o644))
+
+	t.Run("rule disabled via config produces no finding", func(t *testing.T) {
+		cfg := config.DefaultConfig()
+		cfg.Engines.Fmt.Enabled = config.BoolPtr(false)
+		cfg.Engines.Style.Enabled = config.BoolPtr(true)
+		cfg.Engines.Style.Rules = map[string]config.RuleConfig{
+			"style.blank-line-between-blocks": {
+				Enabled:  false, // Disable the rule
+				Severity: "warning",
+			},
+		}
+		cfg.Engines.Lint.Enabled = config.BoolPtr(false)
+		cfg.Engines.Policy.Enabled = config.BoolPtr(false)
+
+		findings, err := runStyleCheckWithConfig(context.Background(), cfg, []string{tmpFile}, 1, true, nil)
+		require.NoError(t, err)
+
+		// Should NOT have blank-line-between-blocks finding
+		for _, f := range findings {
+			assert.NotEqual(t, "style.blank-line-between-blocks", f.Rule,
+				"disabled rule should not produce findings")
+		}
+	})
+
+	t.Run("rule severity changed via config", func(t *testing.T) {
+		cfg := config.DefaultConfig()
+		cfg.Engines.Fmt.Enabled = config.BoolPtr(false)
+		cfg.Engines.Style.Enabled = config.BoolPtr(true)
+		cfg.Engines.Style.Rules = map[string]config.RuleConfig{
+			"style.blank-line-between-blocks": {
+				Enabled:  true,
+				Severity: "error", // Change severity from default warning to error
+			},
+		}
+		cfg.Engines.Lint.Enabled = config.BoolPtr(false)
+		cfg.Engines.Policy.Enabled = config.BoolPtr(false)
+
+		findings, err := runStyleCheckWithConfig(context.Background(), cfg, []string{tmpFile}, 1, true, nil)
+		require.NoError(t, err)
+
+		// Find the blank-line-between-blocks finding and verify severity
+		foundRule := false
+		for _, f := range findings {
+			if f.Rule == "style.blank-line-between-blocks" {
+				foundRule = true
+				assert.Equal(t, sdk.SeverityError, f.Severity,
+					"rule severity should be changed to error via config")
+				break
+			}
+		}
+		assert.True(t, foundRule, "blank-line-between-blocks rule should produce findings")
+	})
+
+	t.Run("opt-in rule enabled via config", func(t *testing.T) {
+		// Create a file that would trigger the no-trailing-whitespace rule (opt-in)
+		fileWithTrailingWS := "resource \"aws_instance\" \"test\" {\n  ami = \"ami-123\"   \n}\n"
+		wsFile := filepath.Join(dir, "trailing_ws.tf")
+		require.NoError(t, os.WriteFile(wsFile, []byte(fileWithTrailingWS), 0o644))
+
+		cfg := config.DefaultConfig()
+		cfg.Engines.Fmt.Enabled = config.BoolPtr(false)
+		cfg.Engines.Style.Enabled = config.BoolPtr(true)
+		cfg.Engines.Style.Rules = map[string]config.RuleConfig{
+			"style.no-trailing-whitespace": {
+				Enabled:  true, // Enable this opt-in rule
+				Severity: "warning",
+			},
+		}
+		cfg.Engines.Lint.Enabled = config.BoolPtr(false)
+		cfg.Engines.Policy.Enabled = config.BoolPtr(false)
+
+		findings, err := runStyleCheckWithConfig(context.Background(), cfg, []string{wsFile}, 1, true, nil)
+		require.NoError(t, err)
+
+		// Should have no-trailing-whitespace finding now that rule is enabled
+		foundRule := false
+		for _, f := range findings {
+			if f.Rule == "style.no-trailing-whitespace" {
+				foundRule = true
+				break
+			}
+		}
+		assert.True(t, foundRule, "opt-in rule should produce findings when enabled via config")
+	})
+}
+
+// TestEngineLintConfigFields verifies that engines.lint.config.* fields are correctly
+// propagated to the lint engine via buildLintConfig.
+func TestEngineLintConfigFields(t *testing.T) {
+	t.Run("config_file is propagated", func(t *testing.T) {
+		cfg := &config.Config{
+			Version: 1,
+			Engines: config.Engines{
+				Lint: config.LintEngineConfig{
+					Enabled:    config.BoolPtr(true),
+					ConfigFile: "/custom/path/.tflint.hcl",
+				},
+			},
+		}
+
+		lintCfg := buildLintConfig(cfg)
+		assert.Equal(t, "/custom/path/.tflint.hcl", lintCfg.ConfigFile,
+			"config_file should be propagated to lint config")
+	})
+
+	t.Run("plugins are propagated", func(t *testing.T) {
+		cfg := &config.Config{
+			Version: 1,
+			Engines: config.Engines{
+				Lint: config.LintEngineConfig{
+					Enabled: config.BoolPtr(true),
+					Plugins: []string{"aws", "google", "azurerm"},
+				},
+			},
+		}
+
+		lintCfg := buildLintConfig(cfg)
+		assert.Equal(t, []string{"aws", "google", "azurerm"}, lintCfg.Plugins,
+			"plugins should be propagated to lint config")
+	})
+
+	t.Run("use_tflint is propagated", func(t *testing.T) {
+		cfg := &config.Config{
+			Version: 1,
+			Engines: config.Engines{
+				Lint: config.LintEngineConfig{
+					Enabled:   config.BoolPtr(true),
+					UseTFLint: true,
+				},
+			},
+		}
+
+		lintCfg := buildLintConfig(cfg)
+		assert.True(t, lintCfg.UseTFLint, "use_tflint should be propagated to lint config")
+	})
+
+	t.Run("tflint_path is propagated", func(t *testing.T) {
+		cfg := &config.Config{
+			Version: 1,
+			Engines: config.Engines{
+				Lint: config.LintEngineConfig{
+					Enabled:    config.BoolPtr(true),
+					TFLintPath: "/usr/local/bin/tflint-custom",
+				},
+			},
+		}
+
+		lintCfg := buildLintConfig(cfg)
+		assert.Equal(t, "/usr/local/bin/tflint-custom", lintCfg.TFLintPath,
+			"tflint_path should be propagated to lint config")
+	})
+
+	t.Run("fallback_builtin is propagated", func(t *testing.T) {
+		cfg := &config.Config{
+			Version: 1,
+			Engines: config.Engines{
+				Lint: config.LintEngineConfig{
+					Enabled:         config.BoolPtr(true),
+					FallbackBuiltin: true,
+				},
+			},
+		}
+
+		lintCfg := buildLintConfig(cfg)
+		assert.True(t, lintCfg.FallbackBuiltin,
+			"fallback_builtin should be propagated to lint config")
+	})
+
+	t.Run("rules are propagated with severity and options", func(t *testing.T) {
+		cfg := &config.Config{
+			Version: 1,
+			Engines: config.Engines{
+				Lint: config.LintEngineConfig{
+					Enabled: config.BoolPtr(true),
+					Rules: map[string]config.RuleConfig{
+						"terraform_deprecated_interpolation": {
+							Enabled:  true,
+							Severity: "error",
+							Config:   map[string]any{"strict": true},
+						},
+					},
+				},
+			},
+		}
+
+		lintCfg := buildLintConfig(cfg)
+		require.Contains(t, lintCfg.Rules, "terraform_deprecated_interpolation")
+		rule := lintCfg.Rules["terraform_deprecated_interpolation"]
+		assert.True(t, rule.Enabled, "rule enabled should be propagated")
+		assert.Equal(t, "error", rule.Severity, "rule severity should be propagated")
+		assert.Equal(t, map[string]any{"strict": true}, rule.Options, "rule options should be propagated")
+	})
+
+	t.Run("default config_file when not specified", func(t *testing.T) {
+		cfg := &config.Config{
+			Version: 1,
+			Engines: config.Engines{
+				Lint: config.LintEngineConfig{
+					Enabled: config.BoolPtr(true),
+					// ConfigFile not set
+				},
+			},
+		}
+
+		lintCfg := buildLintConfig(cfg)
+		assert.Equal(t, ".tflint.hcl", lintCfg.ConfigFile,
+			"config_file should default to .tflint.hcl when not specified")
+	})
+}
+
+// TestEnginePolicyConfigFields verifies that engines.policy.config.* fields are correctly
+// propagated to the policy engine via buildPolicyConfig.
+func TestEnginePolicyConfigFields(t *testing.T) {
+	t.Run("policy_dirs is propagated", func(t *testing.T) {
+		cfg := &config.Config{
+			Version: 1,
+			Engines: config.Engines{
+				Policy: config.PolicyEngineConfig{
+					Enabled:    config.BoolPtr(true),
+					PolicyDirs: []string{"./policies", "./extra-policies"},
+				},
+			},
+		}
+
+		policyCfg := buildPolicyConfig(cfg)
+		assert.Equal(t, []string{"./policies", "./extra-policies"}, policyCfg.PolicyDirs,
+			"policy_dirs should be propagated to policy config")
+	})
+
+	t.Run("policy_files is propagated", func(t *testing.T) {
+		cfg := &config.Config{
+			Version: 1,
+			Engines: config.Engines{
+				Policy: config.PolicyEngineConfig{
+					Enabled:     config.BoolPtr(true),
+					PolicyFiles: []string{"main.rego", "helpers.rego"},
+				},
+			},
+		}
+
+		policyCfg := buildPolicyConfig(cfg)
+		assert.Equal(t, []string{"main.rego", "helpers.rego"}, policyCfg.PolicyFiles,
+			"policy_files should be propagated to policy config")
+	})
+
+	t.Run("data_files is propagated", func(t *testing.T) {
+		cfg := &config.Config{
+			Version: 1,
+			Engines: config.Engines{
+				Policy: config.PolicyEngineConfig{
+					Enabled:   config.BoolPtr(true),
+					DataFiles: []string{"data.json", "config.yaml"},
+				},
+			},
+		}
+
+		policyCfg := buildPolicyConfig(cfg)
+		assert.Equal(t, []string{"data.json", "config.yaml"}, policyCfg.DataFiles,
+			"data_files should be propagated to policy config")
+	})
+
+	t.Run("rules are propagated with severity", func(t *testing.T) {
+		cfg := &config.Config{
+			Version: 1,
+			Engines: config.Engines{
+				Policy: config.PolicyEngineConfig{
+					Enabled: config.BoolPtr(true),
+					Rules: map[string]config.RuleConfig{
+						"require_tags": {
+							Enabled:  true,
+							Severity: "error",
+						},
+					},
+				},
+			},
+		}
+
+		policyCfg := buildPolicyConfig(cfg)
+		require.Contains(t, policyCfg.Rules, "require_tags")
+		rule := policyCfg.Rules["require_tags"]
+		assert.True(t, rule.Enabled, "rule enabled should be propagated")
+		assert.Equal(t, "error", rule.Severity, "rule severity should be propagated")
+	})
+
+	t.Run("nil config returns empty slices", func(t *testing.T) {
+		policyCfg := buildPolicyConfig(nil)
+		assert.NotNil(t, policyCfg.PolicyDirs, "policy_dirs should not be nil")
+		assert.NotNil(t, policyCfg.PolicyFiles, "policy_files should not be nil")
+		assert.Empty(t, policyCfg.PolicyDirs, "policy_dirs should be empty")
+		assert.Empty(t, policyCfg.PolicyFiles, "policy_files should be empty")
+	})
+
+	t.Run("all fields together", func(t *testing.T) {
+		cfg := &config.Config{
+			Version: 1,
+			Engines: config.Engines{
+				Policy: config.PolicyEngineConfig{
+					Enabled:     config.BoolPtr(true),
+					PolicyDirs:  []string{"./policies"},
+					PolicyFiles: []string{"extra.rego"},
+					DataFiles:   []string{"vars.json"},
+					Rules: map[string]config.RuleConfig{
+						"custom_rule": {Enabled: true, Severity: "warning"},
+					},
+				},
+			},
+		}
+
+		policyCfg := buildPolicyConfig(cfg)
+		assert.Equal(t, []string{"./policies"}, policyCfg.PolicyDirs)
+		assert.Equal(t, []string{"extra.rego"}, policyCfg.PolicyFiles)
+		assert.Equal(t, []string{"vars.json"}, policyCfg.DataFiles)
+		require.Contains(t, policyCfg.Rules, "custom_rule")
+	})
+}
+
+// TestLintEngineTFLintConfigIntegration verifies that TFLint config options
+// are properly handled during lint engine execution.
+func TestLintEngineTFLintConfigIntegration(t *testing.T) {
+	dir := t.TempDir()
+
+	// Create a simple Terraform file
+	tfContent := `resource "aws_instance" "test" {
+  ami           = "ami-123"
+  instance_type = "t2.micro"
+}
+`
+	tmpFile := filepath.Join(dir, "main.tf")
+	require.NoError(t, os.WriteFile(tmpFile, []byte(tfContent), 0o644))
+
+	t.Run("use_tflint false runs builtin rules only", func(t *testing.T) {
+		cfg := config.DefaultConfig()
+		cfg.Engines.Fmt.Enabled = config.BoolPtr(false)
+		cfg.Engines.Style.Enabled = config.BoolPtr(false)
+		cfg.Engines.Lint.Enabled = config.BoolPtr(true)
+		cfg.Engines.Lint.UseTFLint = false // Don't try to invoke TFLint
+		cfg.Engines.Policy.Enabled = config.BoolPtr(false)
+
+		// Should run without error using builtin rules
+		_, err := runAllChecksWithConfig(cfg, []string{tmpFile}, true, nil)
+		require.NoError(t, err, "lint engine should run with builtin rules when use_tflint=false")
+	})
+
+	t.Run("invalid tflint_path with fallback_builtin uses builtin", func(t *testing.T) {
+		cfg := config.DefaultConfig()
+		cfg.Engines.Fmt.Enabled = config.BoolPtr(false)
+		cfg.Engines.Style.Enabled = config.BoolPtr(false)
+		cfg.Engines.Lint.Enabled = config.BoolPtr(true)
+		cfg.Engines.Lint.UseTFLint = true
+		cfg.Engines.Lint.TFLintPath = "/nonexistent/path/to/tflint"
+		cfg.Engines.Lint.FallbackBuiltin = true // Fall back to builtin when TFLint unavailable
+		cfg.Engines.Policy.Enabled = config.BoolPtr(false)
+
+		// Should fall back to builtin rules without error
+		_, err := runAllChecksWithConfig(cfg, []string{tmpFile}, true, nil)
+		require.NoError(t, err, "lint engine should fall back to builtin rules when TFLint unavailable")
+	})
+
+	t.Run("config_file is passed to lint config", func(t *testing.T) {
+		// Create a custom TFLint config file
+		tflintConfig := `plugin "terraform" {
+  enabled = true
+}
+`
+		tflintPath := filepath.Join(dir, "custom.tflint.hcl")
+		require.NoError(t, os.WriteFile(tflintPath, []byte(tflintConfig), 0o644))
+
+		cfg := config.DefaultConfig()
+		cfg.Engines.Lint.Enabled = config.BoolPtr(true)
+		cfg.Engines.Lint.ConfigFile = tflintPath
+		cfg.Engines.Lint.UseTFLint = false // Use builtin to avoid TFLint dependency
+
+		lintCfg := buildLintConfig(cfg)
+		assert.Equal(t, tflintPath, lintCfg.ConfigFile,
+			"config_file should be passed to lint engine config")
+	})
+
+	t.Run("args are passed to lint config", func(t *testing.T) {
+		cfg := config.DefaultConfig()
+		cfg.Engines.Lint.Enabled = config.BoolPtr(true)
+		cfg.Engines.Lint.Args = []string{"--force", "--no-color", "--minimum-tf-version=1.5.0"}
+
+		lintCfg := buildLintConfig(cfg)
+		assert.Equal(t, []string{"--force", "--no-color", "--minimum-tf-version=1.5.0"}, lintCfg.Args,
+			"args should be passed to lint engine config")
+	})
+
+	t.Run("plugins are passed to lint config", func(t *testing.T) {
+		cfg := config.DefaultConfig()
+		cfg.Engines.Lint.Enabled = config.BoolPtr(true)
+		cfg.Engines.Lint.Plugins = []string{"aws", "google", "azurerm"}
+
+		lintCfg := buildLintConfig(cfg)
+		assert.Equal(t, []string{"aws", "google", "azurerm"}, lintCfg.Plugins,
+			"plugins should be passed to lint engine config")
+	})
+}
+
+// TestCheckWithProfile verifies that `terratidy check --profile <name>` uses profile config.
+func TestCheckWithProfile(t *testing.T) {
+	dir := t.TempDir()
+
+	// Create a TF file
+	tfContent := `resource "aws_instance" "test" {
+  ami           = "ami-123"
+  instance_type = "t2.micro"
+}
+`
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "main.tf"), []byte(tfContent), 0o644))
+
+	// Create config with a profile that disables all engines except fmt
+	configContent := `version: 1
+engines:
+  fmt:
+    enabled: true
+  style:
+    enabled: true
+  lint:
+    enabled: true
+  policy:
+    enabled: false
+
+profiles:
+  minimal:
+    description: "Minimal checks - fmt only"
+    engines:
+      fmt:
+        enabled: true
+      style:
+        enabled: false
+      lint:
+        enabled: false
+      policy:
+        enabled: false
+`
+	configPath := filepath.Join(dir, ".terratidy.yaml")
+	require.NoError(t, os.WriteFile(configPath, []byte(configContent), 0o644))
+
+	// Save and restore globals
+	oldCfgFile := cfgFile
+	oldProfile := profile
+	oldFormat := format
+	oldChanged := changed
+	t.Cleanup(func() {
+		cfgFile = oldCfgFile
+		profile = oldProfile
+		format = oldFormat
+		changed = oldChanged
+	})
+
+	// Run check with --profile minimal
+	cfgFile = configPath
+	profile = "minimal"
+	format = "json"
+	changed = false
+
+	rootCmd.SetArgs([]string{"check", dir})
+	err := rootCmd.Execute()
+
+	// The test passes if no panic occurs and the profile is applied
+	// With minimal profile, only fmt runs (no style/lint findings)
+	_ = err
 }

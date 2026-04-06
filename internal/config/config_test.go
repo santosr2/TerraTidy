@@ -370,6 +370,124 @@ func TestDefaultConfig(t *testing.T) {
 	assert.True(t, cfg.Parallel)
 }
 
+func TestCacheConfig_Parsing(t *testing.T) {
+	tests := []struct {
+		name        string
+		yaml        string
+		wantMaxAge  time.Duration
+		wantMaxSize int
+		wantDisable bool
+		wantErr     bool
+	}{
+		{
+			name: "all fields set",
+			yaml: `
+version: 1
+cache:
+  max_age: 10m
+  max_size: 500
+  disabled: true
+`,
+			wantMaxAge:  10 * time.Minute,
+			wantMaxSize: 500,
+			wantDisable: true,
+		},
+		{
+			name: "duration with seconds",
+			yaml: `
+version: 1
+cache:
+  max_age: 30s
+`,
+			wantMaxAge: 30 * time.Second,
+		},
+		{
+			name: "duration with hours",
+			yaml: `
+version: 1
+cache:
+  max_age: 1h
+`,
+			wantMaxAge: time.Hour,
+		},
+		{
+			name: "zero values (defaults)",
+			yaml: `
+version: 1
+`,
+			wantMaxAge:  0,
+			wantMaxSize: 0,
+			wantDisable: false,
+		},
+		{
+			name: "invalid duration",
+			yaml: `
+version: 1
+cache:
+  max_age: invalid
+`,
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			configPath := filepath.Join(dir, ".terratidy.yaml")
+			err := os.WriteFile(configPath, []byte(tt.yaml), 0o600)
+			require.NoError(t, err)
+
+			cfg, err := Load(configPath)
+			if tt.wantErr {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+
+			assert.Equal(t, tt.wantMaxAge, cfg.Cache.MaxAge.Duration())
+			assert.Equal(t, tt.wantMaxSize, cfg.Cache.MaxSize)
+			assert.Equal(t, tt.wantDisable, cfg.Cache.Disabled)
+		})
+	}
+}
+
+func TestDuration_UnmarshalYAML_DecodeError(t *testing.T) {
+	// A YAML mapping node cannot be decoded into a string, triggering the
+	// value.Decode(&s) error path in UnmarshalYAML.
+	yaml := `
+version: 1
+cache:
+  max_age:
+    not: a string
+`
+	dir := t.TempDir()
+	configPath := filepath.Join(dir, ".terratidy.yaml")
+	err := os.WriteFile(configPath, []byte(yaml), 0o600)
+	require.NoError(t, err)
+
+	_, err = Load(configPath)
+	require.Error(t, err)
+}
+
+func TestCacheConfig_IsConfigured(t *testing.T) {
+	tests := []struct {
+		name string
+		cfg  CacheConfig
+		want bool
+	}{
+		{"zero value is not configured", CacheConfig{}, false},
+		{"max_age set", CacheConfig{MaxAge: Duration(5 * 60 * 1e9)}, true},
+		{"max_size set", CacheConfig{MaxSize: 100}, true},
+		{"disabled set", CacheConfig{Disabled: true}, true},
+		{"all set", CacheConfig{MaxAge: Duration(1e9), MaxSize: 50, Disabled: true}, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, tt.cfg.IsConfigured())
+		})
+	}
+}
+
 func TestConfig_merge(t *testing.T) {
 	cfg := &Config{
 		Overrides: OverridesConfig{
@@ -990,7 +1108,7 @@ func TestGlobWithTimeout(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Create a few test files
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		filePath := filepath.Join(tmpDir, "file"+string(rune('a'+i))+".yaml")
 		require.NoError(t, os.WriteFile(filePath, []byte("test"), 0o644))
 	}
@@ -1037,7 +1155,7 @@ imports:
 		require.NoError(t, os.WriteFile(mainPath, []byte(mainConfig), 0o644))
 
 		// Create a few config files (not exceeding limit, just testing normal case)
-		for i := 0; i < 3; i++ {
+		for i := range 3 {
 			content := "version: 1\n"
 			filePath := filepath.Join(configsDir, "config"+string(rune('a'+i))+".yaml")
 			require.NoError(t, os.WriteFile(filePath, []byte(content), 0o644))

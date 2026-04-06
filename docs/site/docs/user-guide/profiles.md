@@ -31,6 +31,7 @@ engines:
 # Profile definitions
 profiles:
   ci:
+    description: "Full checks for CI pipelines"
     engines:
       fmt:
         enabled: true
@@ -42,6 +43,7 @@ profiles:
         enabled: true
 
   development:
+    description: "Fast feedback for local development"
     engines:
       fmt:
         enabled: true
@@ -98,7 +100,9 @@ Configure in settings:
 
 ## Profile Inheritance
 
-Profiles inherit from the base configuration and override specific settings:
+### Implicit Inheritance (from base config)
+
+All profiles implicitly inherit from the base configuration. When you apply a profile, its settings override the base:
 
 ```yaml
 version: 1
@@ -111,22 +115,45 @@ engines:
     enabled: true
 
 profiles:
-  # Inherits fmt and style from base, adds lint
+  # Overrides base config: adds lint, keeps fmt and style from base
   ci:
     engines:
       lint:
         enabled: true
+```
 
-  # Overrides rules from base
-  strict:
+### Explicit Inheritance (from another profile)
+
+Use the `inherits` field to inherit from another profile:
+
+```yaml
+version: 1
+
+profiles:
+  base:
+    description: "Base profile with standard checks"
     engines:
+      fmt:
+        enabled: true
+      style:
+        enabled: true
       lint:
+        enabled: true
+
+  # Inherits all settings from 'base', overrides policy
+  strict:
+    description: "Strict profile for production"
+    inherits: base
+    engines:
+      policy:
         enabled: true
     overrides:
       rules:
         style.block-label-case:
           severity: error
 ```
+
+Child profile settings take precedence over parent profile settings.
 
 ## Common Profile Patterns
 

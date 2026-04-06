@@ -258,3 +258,9 @@ func Default() *FileCache {
 func ResetDefault() {
 	defaultCache = NewDefault()
 }
+
+// ConfigureDefault configures the global default cache with custom options.
+// Call this early in CLI startup after loading config.
+func ConfigureDefault(opts Options) {
+	defaultCache = New(opts)
+}

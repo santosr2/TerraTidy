@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/santosr2/TerraTidy/internal/cache"
 	"github.com/santosr2/TerraTidy/internal/config"
 	"github.com/santosr2/TerraTidy/internal/output"
 	"github.com/santosr2/TerraTidy/internal/vcs"
@@ -269,7 +270,30 @@ func loadConfig() (*config.Config, error) {
 		}
 	}
 
+	// Configure cache from config (uses defaults for unset values)
+	configureCacheFromConfig(cfg)
+
 	return cfg, nil
+}
+
+// configureCacheFromConfig configures the global cache based on config settings.
+// Uses cache defaults (5m TTL, 1000 entries) for any unset values.
+func configureCacheFromConfig(cfg *config.Config) {
+	if cfg == nil || !cfg.Cache.IsConfigured() {
+		return // Use default cache settings
+	}
+
+	opts := cache.DefaultOptions()
+	if cfg.Cache.MaxAge != 0 {
+		opts.MaxAge = cfg.Cache.MaxAge.Duration()
+	}
+	if cfg.Cache.MaxSize != 0 {
+		opts.MaxSize = cfg.Cache.MaxSize
+	}
+	if cfg.Cache.Disabled {
+		opts.Disabled = true
+	}
+	cache.ConfigureDefault(opts)
 }
 
 // filterFindingsBySeverity filters findings based on the severity threshold.

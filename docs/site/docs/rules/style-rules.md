@@ -51,8 +51,9 @@ overrides:
     style.blank-line-between-blocks:
       enabled: true
       config:
-        min_lines: 1
-        max_lines: 2  # Allow up to 2 blank lines
+        options:
+          min_lines: 1
+          max_lines: 2  # Allow up to 2 blank lines
 ```
 
 ### no-empty-blocks
@@ -116,7 +117,7 @@ resource "aws_instance" "web_server" { }
 
 ### variable-naming
 
-Ensures variable names follow snake_case convention.
+Ensures variable names follow naming conventions.
 
 | Property | Value |
 |----------|-------|
@@ -125,16 +126,35 @@ Ensures variable names follow snake_case convention.
 | Fixable | No |
 | Default | Enabled |
 
+**Configuration Options:**
+
+| Option    | Type   | Default      | Description                                              |
+|-----------|--------|--------------|----------------------------------------------------------|
+| `case`    | string | `snake_case` | Naming convention: `snake_case`, `camelCase`, `kebab-case`, `PascalCase`, `custom` |
+| `pattern` | string | ""           | Custom regex pattern (only used when case is `custom`)   |
+
 **Example:**
 
 ```hcl
-# Bad
+# Bad (with default snake_case)
 variable "instanceType" { }
 variable "MyVariable" { }
 
 # Good
 variable "instance_type" { }
 variable "my_variable" { }
+```
+
+**Configuration Example:**
+
+```yaml
+overrides:
+  rules:
+    style.variable-naming:
+      enabled: true
+      config:
+        options:
+          case: camelCase  # Allow camelCase instead of snake_case
 ```
 
 ### output-naming

@@ -341,10 +341,10 @@ mise run build      # Build binary
 ### Run Tests
 
 ```bash
-mise run test           # Unit tests
+mise run test              # Unit tests
 mise run test:integration  # Integration tests
-mise run lint           # Run linters
-mise run check          # All quality checks (fmt, vet, lint, test)
+mise run lint              # Run linters
+mise run check             # All quality checks (fmt, vet, lint, test)
 ```
 
 ## Contributing

@@ -67,6 +67,7 @@ This extension contributes the following settings:
 | `terratidy.engines.lint` | `true` | Enable lint engine |
 | `terratidy.engines.policy` | `false` | Enable policy engine |
 | `terratidy.severityThreshold` | `warning` | Minimum severity to show |
+| `terratidy.trace.server` | `off` | LSP server trace level (off/messages/verbose) |
 
 ## Commands
 

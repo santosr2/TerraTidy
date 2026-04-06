@@ -27,6 +27,28 @@ const (
 	globTimeout = 5 * time.Second
 )
 
+// Duration wraps time.Duration to support YAML unmarshaling from strings like "5m".
+type Duration time.Duration
+
+// UnmarshalYAML implements yaml.Unmarshaler for Duration.
+func (d *Duration) UnmarshalYAML(value *yaml.Node) error {
+	var s string
+	if err := value.Decode(&s); err != nil {
+		return err
+	}
+	parsed, err := time.ParseDuration(s)
+	if err != nil {
+		return fmt.Errorf("invalid duration %q: %w", s, err)
+	}
+	*d = Duration(parsed)
+	return nil
+}
+
+// Duration returns the underlying time.Duration value.
+func (d Duration) Duration() time.Duration {
+	return time.Duration(d)
+}
+
 // envVarPattern matches ${VAR} or ${VAR:-default} patterns
 var envVarPattern = regexp.MustCompile(`\$\{([^}]+)\}`)
 
@@ -72,6 +94,18 @@ func unmarshalStrict(data []byte, target any) error {
 	return decoder.Decode(target)
 }
 
+// CacheConfig holds configuration for the file cache.
+type CacheConfig struct {
+	MaxAge   Duration `yaml:"max_age,omitempty"`  // Maximum age of cache entries (e.g., "5m")
+	MaxSize  int      `yaml:"max_size,omitempty"` // Maximum number of entries (LRU eviction)
+	Disabled bool     `yaml:"disabled,omitempty"` // Disable caching entirely
+}
+
+// IsConfigured returns true if any cache option was explicitly set.
+func (c CacheConfig) IsConfigured() bool {
+	return c.MaxAge != 0 || c.MaxSize != 0 || c.Disabled
+}
+
 // Config represents the complete TerraTidy configuration
 type Config struct {
 	Version  int                `yaml:"version"`
@@ -80,9 +114,10 @@ type Config struct {
 	Profiles map[string]Profile `yaml:"profiles,omitempty"`
 
 	// Global settings
-	SeverityThreshold string `yaml:"severity_threshold,omitempty"`
-	FailFast          bool   `yaml:"fail_fast,omitempty"`
-	Parallel          bool   `yaml:"parallel,omitempty"`
+	SeverityThreshold string      `yaml:"severity_threshold,omitempty"`
+	FailFast          bool        `yaml:"fail_fast,omitempty"`
+	Parallel          bool        `yaml:"parallel,omitempty"`
+	Cache             CacheConfig `yaml:"cache,omitempty"`
 
 	// Overrides
 	Overrides OverridesConfig `yaml:"overrides,omitempty"`

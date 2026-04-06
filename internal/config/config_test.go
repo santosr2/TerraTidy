@@ -370,6 +370,87 @@ func TestDefaultConfig(t *testing.T) {
 	assert.True(t, cfg.Parallel)
 }
 
+func TestCacheConfig_Parsing(t *testing.T) {
+	tests := []struct {
+		name        string
+		yaml        string
+		wantMaxAge  time.Duration
+		wantMaxSize int
+		wantDisable bool
+		wantErr     bool
+	}{
+		{
+			name: "all fields set",
+			yaml: `
+version: 1
+cache:
+  max_age: 10m
+  max_size: 500
+  disabled: true
+`,
+			wantMaxAge:  10 * time.Minute,
+			wantMaxSize: 500,
+			wantDisable: true,
+		},
+		{
+			name: "duration with seconds",
+			yaml: `
+version: 1
+cache:
+  max_age: 30s
+`,
+			wantMaxAge: 30 * time.Second,
+		},
+		{
+			name: "duration with hours",
+			yaml: `
+version: 1
+cache:
+  max_age: 1h
+`,
+			wantMaxAge: time.Hour,
+		},
+		{
+			name: "zero values (defaults)",
+			yaml: `
+version: 1
+`,
+			wantMaxAge:  0,
+			wantMaxSize: 0,
+			wantDisable: false,
+		},
+		{
+			name: "invalid duration",
+			yaml: `
+version: 1
+cache:
+  max_age: invalid
+`,
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			configPath := filepath.Join(dir, ".terratidy.yaml")
+			err := os.WriteFile(configPath, []byte(tt.yaml), 0o600)
+			require.NoError(t, err)
+
+			cfg, err := Load(configPath)
+			if tt.wantErr {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+
+			assert.Equal(t, tt.wantMaxAge, cfg.Cache.MaxAge.Duration())
+			assert.Equal(t, tt.wantMaxSize, cfg.Cache.MaxSize)
+			assert.Equal(t, tt.wantDisable, cfg.Cache.Disabled)
+		})
+	}
+}
+
 func TestConfig_merge(t *testing.T) {
 	cfg := &Config{
 		Overrides: OverridesConfig{

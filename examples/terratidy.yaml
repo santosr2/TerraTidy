@@ -13,26 +13,60 @@ severity_threshold: warning  # Filter diagnostics (info|warning|error)
 fail_fast: false             # Stop on first error
 parallel: true               # Run engines in parallel
 
+# Cache configuration (optional, defaults shown)
+# cache:
+#   max_age: 5m      # Maximum age of cache entries
+#   max_size: 1000   # Maximum number of entries (LRU eviction)
+#   disabled: false  # Disable caching entirely
+
 # Engine configuration
 engines:
   # Format engine - uses hclwrite.Format()
   fmt:
     enabled: true
+    # check: false   # Check mode - report but don't modify files
+    # diff: false    # Show diff of changes
 
   # Style engine - custom layout and spacing rules
   style:
     enabled: true
+    # fix: false     # Auto-fix mode - apply fixes automatically
+    # diff: false    # Show diff when fixing
+    # rules:         # Engine-level rule configuration
+    #   style.blank-line-between-blocks:
+    #     enabled: true
+    #     severity: warning
 
   # Lint engine - 11 built-in AST rules, optional TFLint integration (subprocess)
   lint:
     enabled: true
-    config_file: .tflint.hcl  # Path to .tflint.hcl (optional, for TFLint integration)
+    config_file: .tflint.hcl   # Path to TFLint config file
+    # plugins:                  # TFLint plugins to enable
+    #   - aws
+    #   - google
+    # args:                     # Extra arguments for TFLint
+    #   - --force
+    # use_tflint: false         # Enable TFLint subprocess integration
+    # tflint_path: tflint       # Custom TFLint binary path
+    # fallback_builtin: false   # Use built-in rules if TFLint unavailable
+    # rules:                    # Rule-specific configuration
+    #   terraform_deprecated_interpolation:
+    #     enabled: true
+    #     severity: error
 
-  # Policy engine - OPA/Conftest
+  # Policy engine - OPA/Rego
   policy:
     enabled: false
     policy_dirs:
       - ./policies
+    # policy_files:             # Individual policy files
+    #   - ./custom-policy.rego
+    # data_files:               # Additional data files for policies
+    #   - ./policy-data.json
+    # rules:                    # Rule-specific configuration
+    #   required-tags:
+    #     enabled: true
+    #     severity: error
 
 # Profiles - different configurations for different contexts
 profiles:
@@ -86,12 +120,20 @@ overrides:
     style.no-empty-blocks:
       enabled: false
 
-    # Rule with custom config options
+    # Rule with custom config options (note the nested 'options' key)
     style.variable-naming:
       enabled: true
       severity: warning
       config:
-        convention: snake_case
+        options:
+          case: snake_case  # Options: snake_case, camelCase, kebab-case, PascalCase
+
+    # Rule with numeric config options
+    # style.blank-line-between-blocks:
+    #   config:
+    #     options:
+    #       min_lines: 1
+    #       max_lines: 2
 
 # Plugin configuration
 plugins:

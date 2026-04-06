@@ -646,6 +646,523 @@ func TestServer_HandleInitialize_WithOptions(t *testing.T) {
 	assert.Equal(t, "error", server.config.SeverityThreshold)
 }
 
+func TestServer_HandleInitialize_WithConfigPath(t *testing.T) {
+	// Create a temp directory with a custom config file
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "custom-config.yaml")
+
+	// Write a config file with custom settings
+	configContent := `
+version: 1
+severity_threshold: error
+engines:
+  fmt:
+    enabled: true
+  style:
+    enabled: true
+profiles:
+  strict:
+    engines:
+      policy:
+        enabled: true
+`
+	err := os.WriteFile(configPath, []byte(configContent), 0o644)
+	require.NoError(t, err)
+
+	out := &bytes.Buffer{}
+	server := NewServer(strings.NewReader(""), out)
+
+	params := InitializeParams{
+		RootURI: pathToFileURI(tmpDir),
+		InitializationOptions: &InitializationOptions{
+			ConfigPath: configPath,
+		},
+	}
+	paramsJSON, _ := json.Marshal(params)
+
+	msg := RequestMessage{
+		JSONRPC: "2.0",
+		ID:      json.RawMessage(`1`),
+		Method:  "initialize",
+		Params:  paramsJSON,
+	}
+
+	err = server.handleInitialize(msg)
+	require.NoError(t, err)
+
+	// Verify config was loaded from the custom path
+	require.NotNil(t, server.config)
+	assert.Equal(t, "error", server.config.SeverityThreshold)
+	assert.Equal(t, configPath, server.initOptions.ConfigPath)
+}
+
+func TestServer_HandleInitialize_WithProfile(t *testing.T) {
+	// Create a temp directory with a config file containing profiles
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, ".terratidy.yaml")
+
+	// Write a config file with profiles
+	// Note: Profile can override engine settings but not severity_threshold
+	// (Profile struct has Engines and Overrides fields only)
+	configContent := `
+version: 1
+severity_threshold: info
+engines:
+  fmt:
+    enabled: true
+  style:
+    enabled: true
+  lint:
+    enabled: true
+  policy:
+    enabled: false
+profiles:
+  production:
+    engines:
+      policy:
+        enabled: true
+      lint:
+        enabled: false
+`
+	err := os.WriteFile(configPath, []byte(configContent), 0o644)
+	require.NoError(t, err)
+
+	out := &bytes.Buffer{}
+	server := NewServer(strings.NewReader(""), out)
+
+	params := InitializeParams{
+		RootURI: pathToFileURI(tmpDir),
+		InitializationOptions: &InitializationOptions{
+			Profile: "production",
+		},
+	}
+	paramsJSON, _ := json.Marshal(params)
+
+	msg := RequestMessage{
+		JSONRPC: "2.0",
+		ID:      json.RawMessage(`1`),
+		Method:  "initialize",
+		Params:  paramsJSON,
+	}
+
+	err = server.handleInitialize(msg)
+	require.NoError(t, err)
+
+	// Verify profile was applied to config
+	require.NotNil(t, server.config)
+	// Base severity_threshold remains unchanged (profiles can't override this)
+	assert.Equal(t, "info", server.config.SeverityThreshold)
+	// Profile "production" enables policy engine (was false in base config)
+	assert.True(t, server.config.Engines.Policy.IsEnabled())
+	// Profile "production" disables lint engine (was true in base config)
+	assert.False(t, server.config.Engines.Lint.IsEnabled())
+}
+
+func TestServer_HandleInitialize_ProfileNotFound(t *testing.T) {
+	// Create a temp directory with a config file without the requested profile
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, ".terratidy.yaml")
+
+	configContent := `
+version: 1
+severity_threshold: info
+`
+	err := os.WriteFile(configPath, []byte(configContent), 0o644)
+	require.NoError(t, err)
+
+	out := &bytes.Buffer{}
+	server := NewServer(strings.NewReader(""), out)
+
+	params := InitializeParams{
+		RootURI: pathToFileURI(tmpDir),
+		InitializationOptions: &InitializationOptions{
+			Profile: "nonexistent",
+		},
+	}
+	paramsJSON, _ := json.Marshal(params)
+
+	msg := RequestMessage{
+		JSONRPC: "2.0",
+		ID:      json.RawMessage(`1`),
+		Method:  "initialize",
+		Params:  paramsJSON,
+	}
+
+	// Profile not found should not fail initialization
+	err = server.handleInitialize(msg)
+	require.NoError(t, err)
+
+	// Config should still be loaded with defaults
+	require.NotNil(t, server.config)
+	assert.Equal(t, "info", server.config.SeverityThreshold)
+}
+
+func TestServer_HandleInitialize_SeverityThresholdOverridesConfig(t *testing.T) {
+	// Create a temp directory with a config file
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, ".terratidy.yaml")
+
+	// Config file says "info" but client will override to "error"
+	configContent := `
+version: 1
+severity_threshold: info
+`
+	err := os.WriteFile(configPath, []byte(configContent), 0o644)
+	require.NoError(t, err)
+
+	out := &bytes.Buffer{}
+	server := NewServer(strings.NewReader(""), out)
+
+	params := InitializeParams{
+		RootURI: pathToFileURI(tmpDir),
+		InitializationOptions: &InitializationOptions{
+			SeverityThreshold: "warning",
+		},
+	}
+	paramsJSON, _ := json.Marshal(params)
+
+	msg := RequestMessage{
+		JSONRPC: "2.0",
+		ID:      json.RawMessage(`1`),
+		Method:  "initialize",
+		Params:  paramsJSON,
+	}
+
+	err = server.handleInitialize(msg)
+	require.NoError(t, err)
+
+	// Client-provided severity threshold should override config file
+	require.NotNil(t, server.config)
+	assert.Equal(t, "warning", server.config.SeverityThreshold)
+}
+
+func TestServer_HandleInitialize_EngineToggles_Stored(t *testing.T) {
+	out := &bytes.Buffer{}
+	server := NewServer(strings.NewReader(""), out)
+
+	params := InitializeParams{
+		RootURI: "file:///tmp/test-project",
+		InitializationOptions: &InitializationOptions{
+			Engines: EngineToggles{
+				Fmt:    false,
+				Style:  true,
+				Lint:   false,
+				Policy: true,
+			},
+		},
+	}
+	paramsJSON, _ := json.Marshal(params)
+
+	msg := RequestMessage{
+		JSONRPC: "2.0",
+		ID:      json.RawMessage(`1`),
+		Method:  "initialize",
+		Params:  paramsJSON,
+	}
+
+	err := server.handleInitialize(msg)
+	require.NoError(t, err)
+
+	// Verify toggles are stored
+	require.NotNil(t, server.initOptions)
+	assert.False(t, server.initOptions.Engines.Fmt)
+	assert.True(t, server.initOptions.Engines.Style)
+	assert.False(t, server.initOptions.Engines.Lint)
+	assert.True(t, server.initOptions.Engines.Policy)
+
+	// Verify isEngineEnabled respects toggles
+	assert.False(t, server.isEngineEnabled("fmt"))
+	assert.True(t, server.isEngineEnabled("style"))
+	assert.False(t, server.isEngineEnabled("lint"))
+	assert.True(t, server.isEngineEnabled("policy"))
+}
+
+func TestServer_IsEngineEnabled_Defaults(t *testing.T) {
+	// When no InitializationOptions are set, default behavior applies
+	server := NewServer(strings.NewReader(""), &bytes.Buffer{})
+
+	// With nil initOptions, all engines except policy default to enabled
+	assert.True(t, server.isEngineEnabled("fmt"))
+	assert.True(t, server.isEngineEnabled("style"))
+	assert.True(t, server.isEngineEnabled("lint"))
+	assert.False(t, server.isEngineEnabled("policy")) // policy is opt-in
+	assert.True(t, server.isEngineEnabled("unknown")) // unknown engines enabled by default
+}
+
+func TestServer_IsEngineEnabled_WithOptions(t *testing.T) {
+	server := NewServer(strings.NewReader(""), &bytes.Buffer{})
+	server.initOptions = &InitializationOptions{
+		Engines: EngineToggles{
+			Fmt:    true,
+			Style:  false,
+			Lint:   true,
+			Policy: false,
+		},
+	}
+
+	assert.True(t, server.isEngineEnabled("fmt"))
+	assert.False(t, server.isEngineEnabled("style"))
+	assert.True(t, server.isEngineEnabled("lint"))
+	assert.False(t, server.isEngineEnabled("policy"))
+}
+
+func TestServer_HandleInitialize_OverridesRulesFromConfig(t *testing.T) {
+	// Create a temp directory with a config file that has overrides.rules
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, ".terratidy.yaml")
+
+	// Config file with overrides.rules to disable a style rule
+	configContent := `
+version: 1
+overrides:
+  rules:
+    style.block-label-case:
+      enabled: false
+      severity: info
+    style.blank-lines-between-blocks:
+      enabled: true
+      severity: error
+      config:
+        min_lines: 2
+`
+	err := os.WriteFile(configPath, []byte(configContent), 0o644)
+	require.NoError(t, err)
+
+	out := &bytes.Buffer{}
+	server := NewServer(strings.NewReader(""), out)
+
+	params := InitializeParams{
+		RootURI: pathToFileURI(tmpDir),
+	}
+	paramsJSON, _ := json.Marshal(params)
+
+	msg := RequestMessage{
+		JSONRPC: "2.0",
+		ID:      json.RawMessage(`1`),
+		Method:  "initialize",
+		Params:  paramsJSON,
+	}
+
+	err = server.handleInitialize(msg)
+	require.NoError(t, err)
+
+	// Verify overrides were loaded into config
+	require.NotNil(t, server.config)
+	assert.Len(t, server.config.Overrides.Rules, 2)
+
+	// Verify block-label-case is disabled
+	blockLabelRule := server.config.Overrides.Rules["style.block-label-case"]
+	assert.False(t, blockLabelRule.Enabled)
+	assert.Equal(t, "info", blockLabelRule.Severity)
+
+	// Verify blank-lines-between-blocks is enabled with error severity
+	blankLinesRule := server.config.Overrides.Rules["style.blank-lines-between-blocks"]
+	assert.True(t, blankLinesRule.Enabled)
+	assert.Equal(t, "error", blankLinesRule.Severity)
+	assert.Equal(t, 2, blankLinesRule.Config["min_lines"])
+
+	// Verify style engine was configured with overrides
+	require.NotNil(t, server.styleEngine)
+	// The style engine should have been initialized with buildStyleConfig() which uses overrides
+}
+
+func TestServer_HandleInitialize_OverridesRulesAffectStyleEngine(t *testing.T) {
+	// This test verifies that overrides.rules from config are passed to the style engine
+	// through buildStyleConfig()
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, ".terratidy.yaml")
+
+	configContent := `
+version: 1
+overrides:
+  rules:
+    style.resource-name-matches-type:
+      enabled: false
+`
+	err := os.WriteFile(configPath, []byte(configContent), 0o644)
+	require.NoError(t, err)
+
+	out := &bytes.Buffer{}
+	server := NewServer(strings.NewReader(""), out)
+
+	params := InitializeParams{
+		RootURI: pathToFileURI(tmpDir),
+	}
+	paramsJSON, _ := json.Marshal(params)
+
+	msg := RequestMessage{
+		JSONRPC: "2.0",
+		ID:      json.RawMessage(`1`),
+		Method:  "initialize",
+		Params:  paramsJSON,
+	}
+
+	err = server.handleInitialize(msg)
+	require.NoError(t, err)
+
+	// Verify the style config was built with overrides
+	styleCfg := server.buildStyleConfig()
+	require.NotNil(t, styleCfg)
+
+	// The disabled rule should be in the style config
+	ruleConfig, exists := styleCfg.Rules["style.resource-name-matches-type"]
+	require.True(t, exists, "rule should be in style config")
+	assert.False(t, ruleConfig.Enabled, "rule should be disabled")
+}
+
+// TestVSCodeSettings_MapsToLSPOptions verifies that the JSON field names in
+// InitializationOptions match what the VSCode extension sends in
+// vscode/src/extension.ts:getInitializationOptions().
+//
+// VSCode settings (package.json) -> InitializationOptions:
+//
+//	terratidy.profile           -> profile
+//	terratidy.configPath        -> configPath
+//	terratidy.engines.fmt       -> engines.fmt
+//	terratidy.engines.style     -> engines.style
+//	terratidy.engines.lint      -> engines.lint
+//	terratidy.engines.policy    -> engines.policy
+//	terratidy.severityThreshold -> severityThreshold
+//	terratidy.formatOnSave      -> formatOnSave
+//	terratidy.runOnSave         -> runOnSave
+//	terratidy.fixOnSave         -> fixOnSave
+//
+// Settings NOT sent to LSP:
+//
+//	terratidy.executablePath    -> used by extension to locate binary
+//	terratidy.trace.server      -> standard LSP tracing, not custom option
+func TestVSCodeSettings_MapsToLSPOptions(t *testing.T) {
+	// Simulate what VSCode extension sends (from getInitializationOptions)
+	vsCodePayload := `{
+		"profile": "production",
+		"configPath": "/path/to/config.yaml",
+		"engines": {
+			"fmt": true,
+			"style": true,
+			"lint": false,
+			"policy": true
+		},
+		"severityThreshold": "warning",
+		"formatOnSave": true,
+		"runOnSave": false,
+		"fixOnSave": true
+	}`
+
+	var opts InitializationOptions
+	err := json.Unmarshal([]byte(vsCodePayload), &opts)
+	require.NoError(t, err, "VSCode payload should unmarshal to InitializationOptions")
+
+	// Verify all fields were correctly parsed
+	assert.Equal(t, "production", opts.Profile)
+	assert.Equal(t, "/path/to/config.yaml", opts.ConfigPath)
+	assert.True(t, opts.Engines.Fmt)
+	assert.True(t, opts.Engines.Style)
+	assert.False(t, opts.Engines.Lint)
+	assert.True(t, opts.Engines.Policy)
+	assert.Equal(t, "warning", opts.SeverityThreshold)
+	assert.True(t, opts.FormatOnSave)
+	assert.False(t, opts.RunOnSave)
+	assert.True(t, opts.FixOnSave)
+}
+
+// TestServer_ConfigChangesOnRestart verifies that when the LSP server is
+// restarted, it picks up config file changes. This tests the "restart server
+// to apply changes" workflow that VSCode uses.
+func TestServer_ConfigChangesOnRestart(t *testing.T) {
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, ".terratidy.yaml")
+
+	// Initial config
+	initialConfig := `
+version: 1
+severity_threshold: info
+engines:
+  fmt:
+    enabled: true
+  style:
+    enabled: true
+  policy:
+    enabled: false
+`
+	err := os.WriteFile(configPath, []byte(initialConfig), 0o644)
+	require.NoError(t, err)
+
+	// First server instance
+	server1 := NewServer(strings.NewReader(""), &bytes.Buffer{})
+	params := InitializeParams{RootURI: pathToFileURI(tmpDir)}
+	paramsJSON, _ := json.Marshal(params)
+	msg := RequestMessage{
+		JSONRPC: "2.0",
+		ID:      json.RawMessage(`1`),
+		Method:  "initialize",
+		Params:  paramsJSON,
+	}
+
+	err = server1.handleInitialize(msg)
+	require.NoError(t, err)
+
+	// Verify initial config
+	assert.Equal(t, "info", server1.config.SeverityThreshold)
+	assert.False(t, server1.config.Engines.Policy.IsEnabled())
+
+	// Modify config file (simulating user editing config)
+	updatedConfig := `
+version: 1
+severity_threshold: error
+engines:
+  fmt:
+    enabled: true
+  style:
+    enabled: true
+  policy:
+    enabled: true
+`
+	err = os.WriteFile(configPath, []byte(updatedConfig), 0o644)
+	require.NoError(t, err)
+
+	// "Restart" server - create new instance (simulates VSCode "Restart Server" command)
+	server2 := NewServer(strings.NewReader(""), &bytes.Buffer{})
+
+	err = server2.handleInitialize(msg)
+	require.NoError(t, err)
+
+	// Verify new config values are loaded
+	assert.Equal(t, "error", server2.config.SeverityThreshold)
+	assert.True(t, server2.config.Engines.Policy.IsEnabled())
+}
+
+// TestVSCodeSettings_EmptyValues verifies that empty/default VSCode settings
+// are handled correctly (matching VSCode behavior of sending undefined).
+func TestVSCodeSettings_EmptyValues(t *testing.T) {
+	// VSCode sends undefined (omitted) for empty strings and default booleans
+	vsCodePayload := `{
+		"engines": {
+			"fmt": true,
+			"style": true,
+			"lint": true,
+			"policy": false
+		},
+		"formatOnSave": false,
+		"runOnSave": false,
+		"fixOnSave": false
+	}`
+
+	var opts InitializationOptions
+	err := json.Unmarshal([]byte(vsCodePayload), &opts)
+	require.NoError(t, err)
+
+	// Empty optional strings should be empty
+	assert.Empty(t, opts.Profile)
+	assert.Empty(t, opts.ConfigPath)
+	assert.Empty(t, opts.SeverityThreshold)
+
+	// Default engine toggles
+	assert.True(t, opts.Engines.Fmt)
+	assert.True(t, opts.Engines.Style)
+	assert.True(t, opts.Engines.Lint)
+	assert.False(t, opts.Engines.Policy)
+}
+
 func TestServer_HandleInitialize_NilOptions(t *testing.T) {
 	out := &bytes.Buffer{}
 	server := NewServer(strings.NewReader(""), out)

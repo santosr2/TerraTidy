@@ -158,13 +158,28 @@ Override specific rule configurations:
 ```yaml
 overrides:
   rules:
+    # Disable a rule
     style.blank-line-between-blocks:
       enabled: false
 
+    # Change severity
     lint.terraform-required-version:
       severity: error
+
+    # Style rule with options (note the nested 'options' key)
+    style.variable-naming:
+      enabled: true
       config:
-        min_version: "1.5.0"
+        options:
+          case: camelCase  # Options: snake_case, camelCase, kebab-case, PascalCase
+
+    # Style rule with numeric options
+    style.blank-line-between-blocks:
+      enabled: true
+      config:
+        options:
+          min_lines: 1
+          max_lines: 2
 ```
 
 ## Plugins
@@ -301,6 +316,37 @@ plugins:
 
 ## Global Settings
 
+### severity_threshold
+
+Filters findings to only report those at or above the specified severity level.
+Valid values: `info`, `warning`, `error`. Default: `warning`.
+
+```yaml
+severity_threshold: error  # Only report errors, hide warnings and info
+```
+
+| Value     | Shows                           |
+| --------- | ------------------------------- |
+| `info`    | All findings                    |
+| `warning` | Warnings and errors (default)   |
+| `error`   | Errors only                     |
+
+Can be overridden with `--severity-threshold` CLI flag.
+
+### parallel
+
+Run engines in parallel for faster execution. Default: `true`.
+
+```yaml
+parallel: true   # Run engines concurrently
+parallel: false  # Run engines sequentially (fmt -> style -> lint -> policy)
+```
+
+Parallel mode is faster but output order is non-deterministic. Sequential mode is useful
+for debugging or when `fail_fast` is enabled (fail_fast only works in sequential mode).
+
+Can be overridden with `--parallel` CLI flag.
+
 ### fail_fast
 
 When enabled, stops processing after the first engine that reports error-severity findings.
@@ -316,11 +362,18 @@ fail_fast: true  # Stop after first engine with errors
 TerraTidy caches parsed HCL files to avoid redundant reads. The cache is managed automatically
 and rarely needs configuration.
 
+```yaml
+cache:
+  max_age: 10m    # Maximum age of cache entries (default: 5m)
+  max_size: 500   # Maximum number of entries, LRU eviction (default: 1000)
+  disabled: false # Disable caching entirely (default: false)
+```
+
 | Option     | Type     | Default | Description                          |
 | ---------- | -------- | ------- | ------------------------------------ |
-| `MaxAge`   | duration | 5m      | Maximum age of cache entries         |
-| `MaxSize`  | int      | 1000    | Maximum number of entries (LRU)      |
-| `Disabled` | bool     | false   | Disable caching entirely             |
+| `max_age`  | duration | `5m`    | Maximum age of cache entries         |
+| `max_size` | int      | `1000`  | Maximum number of entries (LRU)      |
+| `disabled` | bool     | `false` | Disable caching entirely             |
 
 Cache is invalidated when a file's modification time changes.
 

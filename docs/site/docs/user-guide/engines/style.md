@@ -39,8 +39,14 @@ Use `fmt --all` or `terratidy fix` when you want both HCL formatting and style f
 engines:
   style:
     enabled: true
+    fix: false   # Auto-fix mode - apply fixes automatically
+    diff: false  # Show diff of changes when fixing
+    rules:       # Engine-level rule configuration
+      style.blank-line-between-blocks:
+        enabled: true
+        severity: warning
 
-# Override individual style rules
+# Override individual style rules (alternative location)
 overrides:
   rules:
     style.block-label-case:
@@ -51,6 +57,13 @@ overrides:
     style.variable-naming:
       enabled: true
 ```
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `enabled` | bool | `true` | Enable/disable the style engine |
+| `fix` | bool | `false` | Auto-fix mode - apply fixes automatically |
+| `diff` | bool | `false` | Show unified diff when fixes are applied |
+| `rules` | map | `{}` | Engine-level rule configuration (same as `overrides.rules`) |
 
 ## Rules
 

@@ -2,6 +2,7 @@ package lint
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -1198,4 +1199,116 @@ func TestNew_PluginRulesAppendedAfterBuiltIn(t *testing.T) {
 	lastRule := rules[len(rules)-1]
 
 	assert.Equal(t, "plugin.test-rule", lastRule.Name(), "plugin rule should be appended after built-in rules")
+}
+
+// mockErrorRule is a rule that always returns an error from Check.
+type mockErrorRule struct {
+	name string
+}
+
+func (r *mockErrorRule) Name() string        { return r.name }
+func (r *mockErrorRule) Description() string { return "always errors" }
+func (r *mockErrorRule) Check(_ *sdk.Context, _ *hcl.File) ([]sdk.Finding, error) {
+	return nil, fmt.Errorf("rule check failed intentionally")
+}
+
+// mockFindingRule is a rule that always returns a fixed warning finding.
+type mockFindingRule struct {
+	name string
+}
+
+func (r *mockFindingRule) Name() string        { return r.name }
+func (r *mockFindingRule) Description() string { return "always finds something" }
+func (r *mockFindingRule) Check(ctx *sdk.Context, _ *hcl.File) ([]sdk.Finding, error) {
+	return []sdk.Finding{
+		{
+			Rule:     r.name,
+			Message:  "test finding",
+			File:     ctx.File,
+			Severity: sdk.SeverityWarning,
+		},
+	}, nil
+}
+
+func TestLintModule_UnreadableFile(t *testing.T) {
+	// Pass a path that doesn't exist so os.ReadFile fails in the cache-miss fallback.
+	// The engine should silently skip unreadable files and return no findings.
+	engine := New(nil)
+	findings, err := engine.Run(context.Background(), []string{"/nonexistent/path/main.tf"})
+	require.NoError(t, err)
+	assert.Empty(t, findings)
+}
+
+func TestLintModule_InvalidHCL(t *testing.T) {
+	dir := t.TempDir()
+	tfFile := filepath.Join(dir, "bad.tf")
+	require.NoError(t, os.WriteFile(tfFile, []byte(`this is not valid hcl {{{`), 0o644))
+
+	engine := New(nil)
+	findings, err := engine.Run(context.Background(), []string{tfFile})
+	require.NoError(t, err)
+	// Should produce a parse-error finding rather than crashing.
+	var found bool
+	for _, f := range findings {
+		if f.Rule == "lint.parse-error" {
+			found = true
+			break
+		}
+	}
+	assert.True(t, found, "invalid HCL should produce a parse-error finding")
+}
+
+func TestLintModule_RuleError(t *testing.T) {
+	dir := t.TempDir()
+	tfFile := filepath.Join(dir, "main.tf")
+	require.NoError(t, os.WriteFile(tfFile, []byte(`resource "aws_instance" "x" {}`), 0o644))
+
+	errRule := &mockErrorRule{name: "plugin.error-rule"}
+	engine := New(nil, errRule)
+	// Disable all built-in rules so only our error rule runs.
+	for _, r := range engine.GetAllRules() {
+		if r.Name() != errRule.Name() {
+			engine.config.Rules[r.Name()] = RuleConfig{Enabled: false}
+		}
+	}
+
+	_, err := engine.Run(context.Background(), []string{tfFile})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "rule check failed intentionally")
+}
+
+func TestLintModule_SeverityOverride(t *testing.T) {
+	dir := t.TempDir()
+	tfFile := filepath.Join(dir, "main.tf")
+	require.NoError(t, os.WriteFile(tfFile, []byte(`resource "aws_instance" "x" {}`), 0o644))
+
+	findingRule := &mockFindingRule{name: "plugin.finding-rule"}
+	engine := New(&Config{
+		Rules: map[string]RuleConfig{
+			"plugin.finding-rule": {
+				Enabled:  true,
+				Severity: "error", // Override the warning severity from the rule
+			},
+		},
+	}, findingRule)
+	// Disable all built-in rules so only our finding rule runs.
+	for name := range engine.config.Rules {
+		if name != "plugin.finding-rule" {
+			rc := engine.config.Rules[name]
+			rc.Enabled = false
+			engine.config.Rules[name] = rc
+		}
+	}
+	for _, r := range engine.GetAllRules() {
+		if r.Name() != findingRule.Name() {
+			if _, exists := engine.config.Rules[r.Name()]; !exists {
+				engine.config.Rules[r.Name()] = RuleConfig{Enabled: false}
+			}
+		}
+	}
+
+	findings, err := engine.Run(context.Background(), []string{tfFile})
+	require.NoError(t, err)
+	require.Len(t, findings, 1)
+	assert.Equal(t, sdk.SeverityError, findings[0].Severity, "severity should be overridden to error")
 }

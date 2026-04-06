@@ -23,7 +23,6 @@ concurrency:
 
 jobs:
   test-example-rules:
-    # Go plugins only work on Linux/macOS
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest]
@@ -42,14 +41,14 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      - name: Build TerraTidy and Go plugin
+      - name: Build TerraTidy
+        run: go build -o bin/terratidy ./cmd/terratidy
+
+      - name: Build Go plugin
         run: |
-          # Build main binary and plugin with identical flags for compatibility
-          # Go plugins require exact same build environment
-          go build -trimpath -o bin/terratidy ./cmd/terratidy
           cd examples/go-rule
           go mod tidy
-          go build -trimpath -buildmode=plugin -o require-tags.so
+          go build -buildmode=plugin -o require-tags.so
           shasum -a 256 require-tags.so > .terratidy-plugins.sha256
 
       - name: Test YAML rules
@@ -71,7 +70,6 @@ jobs:
       - name: Test all rules together
         run: |
           ./bin/terratidy style --config examples/all-rules-test.yaml examples/rule-test-files/*.tf --format json 2>&1 | tee output.json
-          # Verify JSON contains expected rule names
           grep -q '"rule": "require-tags"' output.json
           grep -q '"rule": "require-description"' output.json
           grep -q '"rule": "no-hardcoded-account-id"' output.json

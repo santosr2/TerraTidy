@@ -262,6 +262,8 @@ tags:
   - documentation
   - best-practice
 patterns:
+  block_types:
+    - resource
   resource_types:
     - aws_instance
     - aws_s3_bucket
@@ -279,15 +281,118 @@ patterns:
 | `enabled`                      | bool   | No       | Whether the rule is active (default: `false`)       |
 | `message`                      | string | No       | Custom message for findings                         |
 | `tags`                         | list   | No       | Tags for categorization                             |
-| `patterns.resource_types`      | list   | No       | Resource types to check (empty = all resources)     |
-| `patterns.required_attributes` | list   | No       | Attributes that must be present                     |
+| `patterns.block_types`          | list   | No       | HCL block types to check (empty = all block types)  |
+| `patterns.resource_types`       | list   | No       | Resource types to check (empty = all of block type) |
+| `patterns.required_attributes`  | list   | No       | Attributes that must be present                     |
+| `patterns.forbidden_attributes` | list   | No       | Attributes that must NOT be present                 |
+| `patterns.attribute_patterns`   | list   | No       | Regex patterns to validate attribute values         |
+
+### Block Types
+
+The `block_types` field filters which HCL blocks the rule examines. Valid values:
+
+- `resource` - Terraform resource blocks
+- `data` - Data source blocks
+- `variable` - Input variable blocks
+- `output` - Output value blocks
+- `locals` - Local value blocks
+- `module` - Module call blocks
+
+If `block_types` is not specified, the rule checks all block types.
+
+Check variables have descriptions:
+
+```yaml
+name: require-variable-description
+description: Variables must have a description
+severity: warning
+enabled: true
+patterns:
+  block_types:
+    - variable
+  required_attributes:
+    - description
+```
+
+Check both resources and data sources:
+
+```yaml
+name: require-tags-everywhere
+description: Resources and data sources must have tags
+severity: warning
+enabled: true
+patterns:
+  block_types:
+    - resource
+    - data
+  required_attributes:
+    - tags
+```
+
+### Forbidden Attributes
+
+The `forbidden_attributes` field lists attributes that should NOT be present. This is useful for deprecating old patterns or enforcing security policies.
+
+Forbid deprecated S3 bucket arguments:
+
+```yaml
+name: no-deprecated-s3-args
+description: S3 buckets should not use deprecated arguments
+severity: error
+enabled: true
+message: "Use dedicated resources instead of inline arguments"
+patterns:
+  resource_types:
+    - aws_s3_bucket
+  forbidden_attributes:
+    - acl
+    - website
+    - cors_rule
+    - logging
+```
+
+The finding location points to the forbidden attribute itself, not the block.
+
+### Attribute Patterns
+
+The `attribute_patterns` field validates attribute values against regex patterns. Each pattern has:
+
+- `attribute` (required): The attribute name to check
+- `pattern` (required): A regex pattern the value must match
+- `message` (optional): Custom message for findings
+
+Validate S3 bucket naming conventions:
+
+```yaml
+name: bucket-naming-convention
+description: S3 bucket names must follow naming convention
+severity: warning
+enabled: true
+patterns:
+  resource_types:
+    - aws_s3_bucket
+  attribute_patterns:
+    - attribute: bucket
+      pattern: "^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$"
+      message: "Bucket name must be 3-63 lowercase alphanumeric characters or hyphens"
+```
+
+Notes:
+
+- Patterns are compiled once during rule loading for performance
+- If the attribute is missing, the check is skipped (use `required_attributes` to enforce presence)
+- Only simple string literals can be validated; complex expressions are skipped
+- Invalid regex patterns cause the rule to fail loading
 
 ### How YAML Rules Work
 
-YAML rules iterate over HCL blocks in the file. For each `resource` block
-that matches the configured `resource_types` (or all resource blocks if none
-are specified), the rule checks that all `required_attributes` are present.
-Missing attributes generate a finding.
+YAML rules iterate over HCL blocks in the file. For each block that matches
+the configured `block_types` (or all blocks if not specified) and
+`resource_types` (or all blocks of that type if none specified), the rule:
+
+1. Checks that all `required_attributes` are present (missing ones generate findings)
+2. Checks that no `forbidden_attributes` are present (found ones generate findings)
+3. Validates `attribute_patterns` against attribute values (non-matching values generate findings)
 
 ### Installation
 

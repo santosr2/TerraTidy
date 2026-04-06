@@ -1,13 +1,23 @@
-# YAML Rule Example
+# YAML Rule Examples
 
-A declarative rule that checks resources for a `description` attribute.
+Declarative rules for checking Terraform/HCL files without writing Go code.
+
+## Examples
+
+| File | Description |
+|------|-------------|
+| `require-description.yaml` | Require description on resources |
+| `require-variable-description.yaml` | Require description on variables (block_types) |
+| `no-deprecated-s3-args.yaml` | Forbid deprecated S3 arguments (forbidden_attributes) |
+| `bucket-naming-convention.yaml` | Enforce bucket naming pattern (attribute_patterns) |
+| `s3-best-practices.yaml` | Combined example using all features |
 
 ## Usage
 
-Place the YAML file in your plugins directory:
+Place YAML files in your plugins directory:
 
 ```bash
-cp require-description.yaml ~/.terratidy/plugins/
+cp *.yaml ~/.terratidy/plugins/
 ```
 
 ## YAML Rule Fields
@@ -24,5 +34,24 @@ cp require-description.yaml ~/.terratidy/plugins/
 
 ### Patterns
 
-- `resource_types` - List of resource types to check (empty = all)
-- `required_attributes` - Attributes that must be present
+| Field | Description |
+|-------|-------------|
+| `block_types` | HCL block types to check: `resource`, `variable`, `data`, `output`, `locals`, `module` (empty = all) |
+| `resource_types` | Resource types to match (empty = all) |
+| `required_attributes` | Attributes that must be present |
+| `forbidden_attributes` | Attributes that must NOT be present |
+| `attribute_patterns` | Regex validation for attribute values |
+
+### Attribute Patterns
+
+Each entry in `attribute_patterns` has:
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `attribute` | Yes | Attribute name to validate |
+| `pattern` | Yes | Regex pattern the value must match |
+| `message` | No | Custom message when pattern fails |
+
+## See Also
+
+- [Plugins Documentation](../../docs/site/docs/development/plugins.md) for complete reference

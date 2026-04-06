@@ -37,11 +37,6 @@ func TestRootCmd(t *testing.T) {
 		assert.Equal(t, "false", flag.DefValue)
 	})
 
-	t.Run("has paths flag", func(t *testing.T) {
-		flag := rootCmd.PersistentFlags().Lookup("paths")
-		assert.NotNil(t, flag)
-	})
-
 	t.Run("has severity-threshold flag", func(t *testing.T) {
 		flag := rootCmd.PersistentFlags().Lookup("severity-threshold")
 		assert.NotNil(t, flag)

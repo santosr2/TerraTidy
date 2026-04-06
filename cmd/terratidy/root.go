@@ -9,7 +9,6 @@ var (
 	profile           string
 	format            string
 	changed           bool
-	paths             []string
 	severityThreshold string
 	color             bool
 )
@@ -30,7 +29,6 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&profile, "profile", "", "profile to use from config")
 	rootCmd.PersistentFlags().StringVar(&format, "format", "text", "output format (text|table|json|json-compact|sarif|html|junit|markdown|github)")
 	rootCmd.PersistentFlags().BoolVar(&changed, "changed", false, "only check changed files")
-	rootCmd.PersistentFlags().StringSliceVar(&paths, "paths", []string{}, "paths to check")
 	rootCmd.PersistentFlags().StringVar(
 		&severityThreshold, "severity-threshold", "",
 		"minimum severity level to fail (info|warning|error)",

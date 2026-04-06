@@ -847,3 +847,177 @@ output "result" {
 	assert.Equal(t, "require-variable-desc", findings[0].Rule)
 	assert.Contains(t, findings[0].Message, "description")
 }
+
+// matchesResourceType: block with resource types configured but no labels (e.g., a "locals" block)
+func TestYAMLRule_matchesResourceType_NoLabels(t *testing.T) {
+	rule := &YAMLRule{config: YAMLRuleConfig{
+		Name:    "test",
+		Enabled: true,
+		Patterns: YAMLPatterns{
+			ResourceTypes:      []string{"aws_s3_bucket"},
+			RequiredAttributes: []string{"tags"},
+		},
+	}}
+
+	// "locals" blocks have no labels; when resource_types is set they should still pass through
+	src := []byte(`locals {
+  env = "prod"
+}
+`)
+	file, diags := hclsyntax.ParseConfig(src, "test.tf", hcl.Pos{Line: 1, Column: 1})
+	require.False(t, diags.HasErrors())
+
+	ctx := &sdk.Context{File: "test.tf"}
+	findings, err := rule.Check(ctx, file)
+	require.NoError(t, err)
+	// locals has no labels, so matchesResourceType returns true; it then fails the required attr check
+	assert.Len(t, findings, 1)
+}
+
+// getBlockAttribute: block.Body == nil guard
+func TestGetBlockAttribute_NilBody(t *testing.T) {
+	block := &hclsyntax.Block{Type: "resource", Body: nil}
+	result := getBlockAttribute(block, "tags")
+	assert.Nil(t, result)
+}
+
+// getAttributeStringValue: nil attr input
+func TestGetAttributeStringValue_NilAttr(t *testing.T) {
+	result := getAttributeStringValue(nil)
+	assert.Equal(t, "", result)
+}
+
+// getAttributeStringValue: TemplateExpr with multiple parts (interpolation like "${var.foo}-bar")
+func TestGetAttributeStringValue_MultiPartTemplate(t *testing.T) {
+	// Parse an attribute with an interpolation — HCL represents "prefix-${var.x}" as a
+	// TemplateExpr with multiple parts (LiteralValueExpr + ScopeTraversalExpr).
+	src := []byte(`resource "r" "x" { name = "prefix-${var.foo}" }`)
+	file, diags := hclsyntax.ParseConfig(src, "t.tf", hcl.Pos{Line: 1, Column: 1})
+	require.False(t, diags.HasErrors())
+
+	body := file.Body.(*hclsyntax.Body)
+	attr := body.Blocks[0].Body.Attributes["name"]
+	require.NotNil(t, attr)
+
+	// Multi-part template cannot be resolved to a simple string
+	result := getAttributeStringValue(attr)
+	assert.Equal(t, "", result)
+}
+
+// getAttributeStringValue: non-string LiteralValueExpr (e.g., a boolean)
+func TestGetAttributeStringValue_BoolLiteral(t *testing.T) {
+	src := []byte(`resource "r" "x" { enabled = true }`)
+	file, diags := hclsyntax.ParseConfig(src, "t.tf", hcl.Pos{Line: 1, Column: 1})
+	require.False(t, diags.HasErrors())
+
+	body := file.Body.(*hclsyntax.Body)
+	attr := body.Blocks[0].Body.Attributes["enabled"]
+	require.NotNil(t, attr)
+
+	result := getAttributeStringValue(attr)
+	assert.Equal(t, "", result)
+}
+
+// getAttributeStringValue: expression that is neither TemplateExpr nor LiteralValueExpr
+// (e.g., a reference like var.foo)
+func TestGetAttributeStringValue_ReferenceExpr(t *testing.T) {
+	src := []byte(`resource "r" "x" { name = var.foo }`)
+	file, diags := hclsyntax.ParseConfig(src, "t.tf", hcl.Pos{Line: 1, Column: 1})
+	require.False(t, diags.HasErrors())
+
+	body := file.Body.(*hclsyntax.Body)
+	attr := body.Blocks[0].Body.Attributes["name"]
+	require.NotNil(t, attr)
+
+	result := getAttributeStringValue(attr)
+	assert.Equal(t, "", result)
+}
+
+// Check: attribute present but value can't be extracted (non-string) — the value == "" skip path
+func TestYAMLRule_Check_AttributePattern_NonStringValue(t *testing.T) {
+	rule := &YAMLRule{
+		config: YAMLRuleConfig{
+			Name:     "bucket-naming",
+			Enabled:  true,
+			Severity: "warning",
+			Patterns: YAMLPatterns{},
+		},
+		compiledPatterns: []compiledPattern{
+			{
+				AttributePattern: AttributePattern{
+					Attribute: "enabled",
+					Pattern:   "^true$",
+				},
+				regex: regexp.MustCompile("^true$"),
+			},
+		},
+	}
+
+	// "enabled" is a boolean — getAttributeStringValue returns "" so the check is skipped
+	src := []byte(`resource "r" "x" { enabled = true }`)
+	file, diags := hclsyntax.ParseConfig(src, "test.tf", hcl.Pos{Line: 1, Column: 1})
+	require.False(t, diags.HasErrors())
+
+	ctx := &sdk.Context{File: "test.tf"}
+	findings, err := rule.Check(ctx, file)
+	require.NoError(t, err)
+	assert.Empty(t, findings, "non-string attribute value should be skipped gracefully")
+}
+
+// compileAttributePatterns: missing 'attribute' field
+func TestCompileAttributePatterns_MissingAttribute(t *testing.T) {
+	patterns := []AttributePattern{
+		{Attribute: "", Pattern: "^[a-z]+$"},
+	}
+	_, err := compileAttributePatterns(patterns)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "missing required 'attribute' field")
+}
+
+// compileAttributePatterns: missing 'pattern' field
+func TestCompileAttributePatterns_MissingPattern(t *testing.T) {
+	patterns := []AttributePattern{
+		{Attribute: "bucket", Pattern: ""},
+	}
+	_, err := compileAttributePatterns(patterns)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "missing required 'pattern' field")
+}
+
+// loadYAMLRule: attribute_pattern missing 'attribute' field propagates error
+func TestLoadYAMLRule_MissingAttributeField(t *testing.T) {
+	content := `name: bad-pattern
+description: Missing attribute field
+severity: warning
+enabled: true
+patterns:
+  attribute_patterns:
+    - pattern: "^[a-z]+$"
+`
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, "bad-pattern.yaml")
+	require.NoError(t, os.WriteFile(path, []byte(content), 0o644))
+
+	_, err := loadYAMLRule(path)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "missing required 'attribute' field")
+}
+
+// loadYAMLRule: attribute_pattern missing 'pattern' field propagates error
+func TestLoadYAMLRule_MissingPatternField(t *testing.T) {
+	content := `name: bad-pattern
+description: Missing pattern field
+severity: warning
+enabled: true
+patterns:
+  attribute_patterns:
+    - attribute: bucket
+`
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, "bad-pattern.yaml")
+	require.NoError(t, os.WriteFile(path, []byte(content), 0o644))
+
+	_, err := loadYAMLRule(path)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "missing required 'pattern' field")
+}

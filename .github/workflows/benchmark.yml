@@ -6,9 +6,9 @@ on:
     branches: [main]
     paths:
       - 'benchmarks/baseline.txt'
-  # Run on PRs only when labeled (benchmarks take >5 min)
+  # Run on PRs when labeled, opened with label, or new commits to labeled PR
   pull_request:
-    types: [labeled]
+    types: [opened, labeled, synchronize]
     branches: [main]
 
 permissions:
@@ -21,8 +21,10 @@ concurrency:
 
 jobs:
   benchmark:
-    # Only run on label trigger if PR, always run on push
-    if: github.event_name == 'push' || github.event.label.name == 'benchmark'
+    # Run on push, or on PR if 'benchmark' label exists
+    if: |
+      github.event_name == 'push' ||
+      (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'benchmark'))
     runs-on: ubuntu-latest
     timeout-minutes: 20
 

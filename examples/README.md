@@ -8,6 +8,7 @@ This directory contains example configurations and integrations for TerraTidy.
 
 - **[terratidy-minimal.yaml](terratidy-minimal.yaml)** - Minimal configuration with defaults
 - **[terratidy.yaml](terratidy.yaml)** - Complete configuration with all options
+- **[terratidy-lint.yaml](terratidy-lint.yaml)** - Lint-focused configuration with TFLint integration options
 
 **Usage:**
 
@@ -66,6 +67,58 @@ Copy to `.github/workflows/terratidy.yml` in your project.
 - ✅ Caching for faster runs
 
 ## Custom Rules
+
+TerraTidy supports three types of custom rules: Go plugins, YAML rules, and Bash scripts.
+
+### Go Rules
+
+**Directory:** [go-rule/](go-rule/)
+
+Compiled Go plugins for advanced rule logic with full access to the HCL AST.
+
+| File | Description |
+|------|-------------|
+| `main.go` | Example rule requiring tags on resources |
+
+**Usage:**
+
+```bash
+# Build the plugin (Linux/macOS only)
+cd examples/go-rule && go build -buildmode=plugin -o require-tags.so
+
+# Configure plugin directory in .terratidy.yaml
+plugins:
+  enabled: true
+  directories:
+    - examples/go-rule
+```
+
+For more information, see the [Plugin Development Guide](../docs/site/docs/development/plugins.md#go-plugins).
+
+### Bash Rules
+
+**Directory:** [bash-rule/](bash-rule/)
+
+Shell scripts for simple pattern matching and external tool integration.
+
+| File | Description |
+|------|-------------|
+| `no-hardcoded-account-id.sh` | Detect hardcoded AWS account IDs |
+
+**Usage:**
+
+```bash
+# Make script executable
+chmod +x examples/bash-rule/no-hardcoded-account-id.sh
+
+# Configure plugin directory in .terratidy.yaml
+plugins:
+  enabled: true
+  directories:
+    - examples/bash-rule
+```
+
+For more information, see the [Plugin Development Guide](../docs/site/docs/development/plugins.md#bash-rules).
 
 ### YAML Rules
 

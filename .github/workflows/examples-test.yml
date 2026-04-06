@@ -1,0 +1,83 @@
+name: Test Example Rules
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'examples/**'
+      - 'internal/plugins/**'
+      - '.github/workflows/examples-test.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'examples/**'
+      - 'internal/plugins/**'
+      - '.github/workflows/examples-test.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-examples-test-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test-example-rules:
+    # Go plugins only work on Linux/macOS
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v6.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Build TerraTidy
+        run: go build -o bin/terratidy ./cmd/terratidy
+
+      - name: Build Go plugin
+        run: |
+          cd examples/go-rule
+          go mod tidy
+          go build -buildmode=plugin -o require-tags.so
+          # Update manifest with fresh hash
+          shasum -a 256 require-tags.so > .terratidy-plugins.sha256
+
+      - name: Test YAML rules
+        run: |
+          ./bin/terratidy style --config examples/yaml-rule-test.yaml examples/rule-test-files/missing-description.tf 2>&1 | tee output.txt
+          grep -q "require-description" output.txt
+
+      - name: Test Bash rules
+        run: |
+          chmod +x examples/bash-rule/no-hardcoded-account-id.sh
+          ./bin/terratidy style --config examples/bash-rule-test.yaml examples/rule-test-files/hardcoded-account.tf 2>&1 | tee output.txt
+          grep -q "no-hardcoded-account-id" output.txt
+
+      - name: Test Go plugin rules
+        run: |
+          ./bin/terratidy style --config examples/go-rule-test.yaml examples/rule-test-files/missing-tags.tf 2>&1 | tee output.txt
+          grep -q "require-tags" output.txt
+
+      - name: Test all rules together
+        run: |
+          ./bin/terratidy style --config examples/all-rules-test.yaml examples/rule-test-files/*.tf --format json 2>&1 | tee output.json
+          # Verify JSON contains expected rule names
+          grep -q '"rule": "require-tags"' output.json
+          grep -q '"rule": "require-description"' output.json
+          grep -q '"rule": "no-hardcoded-account-id"' output.json
+
+      - name: Test valid file has no findings
+        run: |
+          ./bin/terratidy style --config examples/all-rules-test.yaml examples/rule-test-files/valid.tf 2>&1 | tee output.txt
+          grep -q "No issues found" output.txt

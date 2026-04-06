@@ -2666,3 +2666,51 @@ patterns:
 	}
 	assert.True(t, foundPluginDiagnostic, "should have diagnostic from plugin rule requiring tags")
 }
+
+// TestServer_GetDiagnostics_EnginesDisabledViaToggles verifies that when both lint
+// and style engines are initialized but disabled via InitializationOptions, the
+// engine Run methods are not called and no diagnostics are returned.
+func TestServer_GetDiagnostics_EnginesDisabledViaToggles(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	tfContent := `resource "aws_instance" "test" {
+  ami = "ami-123"
+}
+`
+	testFile := filepath.Join(tmpDir, "main.tf")
+	require.NoError(t, os.WriteFile(testFile, []byte(tfContent), 0o644))
+
+	out := &bytes.Buffer{}
+	server := NewServer(strings.NewReader(""), out)
+	server.initialized = true
+	server.workspaceRoot = tmpDir
+
+	// Initialize both engines (non-nil) so they would normally produce diagnostics.
+	server.lintEngine = lint.New(nil)
+	server.styleEngine = style.New(nil)
+
+	// Disable both engines via initOptions.
+	server.initOptions = &InitializationOptions{
+		Engines: EngineToggles{
+			Fmt:    false,
+			Style:  false,
+			Lint:   false,
+			Policy: false,
+		},
+	}
+
+	uri := pathToFileURI(testFile)
+	server.docMu.Lock()
+	server.documents[uri] = &Document{
+		URI:     uri,
+		Content: tfContent,
+		Version: 1,
+	}
+	server.docMu.Unlock()
+
+	diagnostics := server.getDiagnostics(uri)
+
+	// Both engines are disabled, so no diagnostics should be produced even
+	// though the engines are initialized and the file would otherwise trigger findings.
+	assert.Empty(t, diagnostics, "disabled engines should produce no diagnostics")
+}

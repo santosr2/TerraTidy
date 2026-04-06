@@ -90,10 +90,7 @@ suite('Configuration', () => {
         const profile = options.profile;
         const configPath = options.configPath;
 
-        assert.ok(
-            profile === undefined || typeof profile === 'string',
-            'profile should be undefined or string'
-        );
+        assert.ok(profile === undefined || typeof profile === 'string', 'profile should be undefined or string');
         assert.ok(
             configPath === undefined || typeof configPath === 'string',
             'configPath should be undefined or string'

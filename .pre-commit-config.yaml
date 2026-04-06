@@ -42,6 +42,17 @@ repos:
       - id: golangci-lint
         args: [--timeout=5m]
 
+  # =============================================================================
+  # VSCode Extension (TypeScript/Biome)
+  # =============================================================================
+  - repo: local
+    hooks:
+      - id: biome-check
+        name: biome check (vscode)
+        entry: mise exec -- bash -c 'cd vscode && bun run lint'
+        language: system
+        files: ^vscode/src/
+        pass_filenames: false
 
   # =============================================================================
   # Security

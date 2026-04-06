@@ -189,6 +189,9 @@ func blockHasAttribute(block *hclsyntax.Block, name string) bool {
 
 // getBlockAttribute returns the attribute with the given name, or nil if not found.
 func getBlockAttribute(block *hclsyntax.Block, name string) *hclsyntax.Attribute {
+	if block.Body == nil {
+		return nil
+	}
 	for _, attr := range block.Body.Attributes {
 		if attr.Name == name {
 			return attr

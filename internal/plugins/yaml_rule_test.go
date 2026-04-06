@@ -351,24 +351,26 @@ func TestYAMLRule_Check_NonHclsyntaxBody(t *testing.T) {
 	assert.Nil(t, findings)
 }
 
-func TestYAMLRule_Check_NonResourceBlock(t *testing.T) {
+func TestYAMLRule_Check_BlockTypeFiltering(t *testing.T) {
+	// With explicit block_types, only matching blocks are checked
 	rule := &YAMLRule{config: YAMLRuleConfig{
 		Name:    "test",
 		Enabled: true,
 		Patterns: YAMLPatterns{
+			BlockTypes:         []string{"resource"}, // Only check resources
 			RequiredAttributes: []string{"tags"},
 		},
 	}}
 	body := &hclsyntax.Body{
 		Blocks: []*hclsyntax.Block{
-			{Type: "variable", Labels: []string{"name"}},
+			{Type: "variable", Labels: []string{"name"}}, // Should be skipped
 		},
 	}
 	file := &hcl.File{Body: body}
 	ctx := &sdk.Context{File: "test.tf"}
 	findings, err := rule.Check(ctx, file)
 	assert.NoError(t, err)
-	assert.Empty(t, findings)
+	assert.Empty(t, findings) // Variable block skipped because block_types = ["resource"]
 }
 
 func TestYAMLRule_Check_BlockTypes_VariableOnly(t *testing.T) {

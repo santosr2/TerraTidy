@@ -180,6 +180,25 @@ plugins:
   verify_integrity: true  # Verify plugin checksums (default: true)
 ```
 
+### Plugin Rule Configuration
+
+Override specific plugin rule settings (enable/disable, severity):
+
+```yaml
+plugins:
+  enabled: true
+  directories:
+    - ./plugins
+  rules:
+    require-description:
+      enabled: true
+      severity: error  # Override plugin's default severity
+    deprecated-resource:
+      enabled: false   # Disable this plugin rule
+```
+
+Plugin rules not listed in `plugins.rules` use their defaults (enabled with their defined severity).
+
 ### Plugin Integrity Verification
 
 When `verify_integrity` is enabled (default), TerraTidy verifies Go plugin checksums
@@ -274,6 +293,10 @@ plugins:
   enabled: true
   directories:
     - ~/.terratidy/plugins
+  rules:
+    require-description:
+      enabled: true
+      severity: warning
 ```
 
 ## Global Settings

@@ -99,3 +99,10 @@ plugins:
   directories:
     - .terratidy/plugins
     - ~/.terratidy/plugins
+  # Per-plugin rule configuration (enable/disable, severity override)
+  rules:
+    require-description:
+      enabled: true
+      severity: warning
+    # deprecated-resource:
+    #   enabled: false  # Disable a plugin rule

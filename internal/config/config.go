@@ -311,9 +311,11 @@ type RuleConfig struct {
 
 // PluginsConfig represents plugin settings
 type PluginsConfig struct {
-	Enabled         bool     `yaml:"enabled"`
-	Directories     []string `yaml:"directories,omitempty"`
-	VerifyIntegrity *bool    `yaml:"verify_integrity,omitempty"`
+	Enabled         bool                  `yaml:"enabled"`
+	Directories     []string              `yaml:"directories,omitempty"`
+	VerifyIntegrity *bool                 `yaml:"verify_integrity,omitempty"`
+	Rules           map[string]RuleConfig `yaml:"rules,omitempty"` // Per-rule enable/disable/severity
+	Tags            []string              `yaml:"tags,omitempty"`  // Only load rules with these tags (empty = all)
 }
 
 // ShouldVerifyIntegrity returns whether plugin integrity verification is enabled.
@@ -538,6 +540,14 @@ func (c *Config) merge(other *Config) {
 	if other.Plugins.VerifyIntegrity != nil {
 		c.Plugins.VerifyIntegrity = other.Plugins.VerifyIntegrity
 	}
+	if len(other.Plugins.Rules) > 0 {
+		if c.Plugins.Rules == nil {
+			c.Plugins.Rules = make(map[string]RuleConfig)
+		}
+		for k, v := range other.Plugins.Rules {
+			c.Plugins.Rules[k] = v
+		}
+	}
 }
 
 // SetDefaults fills in default values for unset fields.
@@ -659,6 +669,24 @@ func (c *Config) validatePlugins() error {
 
 		// Check if directory exists (optional - warn only if enabled but directory missing)
 		// We don't fail here as plugins might be optional
+	}
+
+	// Validate plugin rule configurations
+	validSeverities := map[string]bool{
+		"error":   true,
+		"warning": true,
+		"info":    true,
+		"":        true, // Allow empty (default)
+	}
+
+	for name, rule := range c.Plugins.Rules {
+		if name == "" {
+			return fmt.Errorf("plugin rule name cannot be empty")
+		}
+
+		if !validSeverities[rule.Severity] {
+			return fmt.Errorf("plugin rule %q has invalid severity: %s", name, rule.Severity)
+		}
 	}
 
 	return nil

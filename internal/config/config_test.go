@@ -1660,3 +1660,166 @@ func TestLoad_ReadError(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "reading config file")
 }
+
+func TestLoad_PluginRules(t *testing.T) {
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, ".terratidy.yaml")
+
+	content := `version: 1
+plugins:
+  enabled: true
+  directories:
+    - .terratidy/plugins
+  rules:
+    require-description:
+      enabled: true
+      severity: error
+    my-custom-rule:
+      enabled: false
+      severity: warning
+`
+	require.NoError(t, os.WriteFile(configPath, []byte(content), 0o644))
+
+	cfg, err := Load(configPath)
+	require.NoError(t, err)
+
+	// Verify plugin rules were parsed
+	assert.Len(t, cfg.Plugins.Rules, 2)
+	assert.Contains(t, cfg.Plugins.Rules, "require-description")
+	assert.Contains(t, cfg.Plugins.Rules, "my-custom-rule")
+
+	// Verify rule settings
+	assert.True(t, cfg.Plugins.Rules["require-description"].Enabled)
+	assert.Equal(t, "error", cfg.Plugins.Rules["require-description"].Severity)
+	assert.False(t, cfg.Plugins.Rules["my-custom-rule"].Enabled)
+	assert.Equal(t, "warning", cfg.Plugins.Rules["my-custom-rule"].Severity)
+}
+
+func TestConfig_merge_PluginRules(t *testing.T) {
+	t.Run("merges plugin rules from other config", func(t *testing.T) {
+		base := &Config{
+			Plugins: PluginsConfig{
+				Enabled: true,
+				Rules: map[string]RuleConfig{
+					"base-rule": {Enabled: true, Severity: "warning"},
+				},
+			},
+		}
+		other := &Config{
+			Plugins: PluginsConfig{
+				Rules: map[string]RuleConfig{
+					"other-rule": {Enabled: false, Severity: "error"},
+				},
+			},
+		}
+
+		base.merge(other)
+
+		assert.Len(t, base.Plugins.Rules, 2)
+		assert.Contains(t, base.Plugins.Rules, "base-rule")
+		assert.Contains(t, base.Plugins.Rules, "other-rule")
+	})
+
+	t.Run("other config rules override base rules", func(t *testing.T) {
+		base := &Config{
+			Plugins: PluginsConfig{
+				Enabled: true,
+				Rules: map[string]RuleConfig{
+					"shared-rule": {Enabled: true, Severity: "warning"},
+				},
+			},
+		}
+		other := &Config{
+			Plugins: PluginsConfig{
+				Rules: map[string]RuleConfig{
+					"shared-rule": {Enabled: false, Severity: "error"},
+				},
+			},
+		}
+
+		base.merge(other)
+
+		assert.Len(t, base.Plugins.Rules, 1)
+		assert.False(t, base.Plugins.Rules["shared-rule"].Enabled)
+		assert.Equal(t, "error", base.Plugins.Rules["shared-rule"].Severity)
+	})
+
+	t.Run("initializes base rules map if nil", func(t *testing.T) {
+		base := &Config{
+			Plugins: PluginsConfig{
+				Enabled: true,
+				Rules:   nil,
+			},
+		}
+		other := &Config{
+			Plugins: PluginsConfig{
+				Rules: map[string]RuleConfig{
+					"new-rule": {Enabled: true},
+				},
+			},
+		}
+
+		base.merge(other)
+
+		require.NotNil(t, base.Plugins.Rules)
+		assert.Contains(t, base.Plugins.Rules, "new-rule")
+	})
+}
+
+func TestValidatePlugins_InvalidRuleSeverity(t *testing.T) {
+	cfg := &Config{
+		Version: 1,
+		Plugins: PluginsConfig{
+			Enabled: true,
+			Rules: map[string]RuleConfig{
+				"my-rule": {Enabled: true, Severity: "invalid"},
+			},
+		},
+	}
+	err := cfg.Validate()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "plugin rule \"my-rule\" has invalid severity: invalid")
+}
+
+func TestValidatePlugins_EmptyRuleName(t *testing.T) {
+	cfg := &Config{
+		Version: 1,
+		Plugins: PluginsConfig{
+			Enabled: true,
+			Rules: map[string]RuleConfig{
+				"": {Enabled: true},
+			},
+		},
+	}
+	err := cfg.Validate()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "plugin rule name cannot be empty")
+}
+
+func TestValidatePlugins_ValidSeverities(t *testing.T) {
+	testCases := []struct {
+		name     string
+		severity string
+	}{
+		{"error severity", "error"},
+		{"warning severity", "warning"},
+		{"info severity", "info"},
+		{"empty severity (default)", ""},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := &Config{
+				Version: 1,
+				Plugins: PluginsConfig{
+					Enabled: true,
+					Rules: map[string]RuleConfig{
+						"my-rule": {Enabled: true, Severity: tc.severity},
+					},
+				},
+			}
+			err := cfg.Validate()
+			require.NoError(t, err)
+		})
+	}
+}

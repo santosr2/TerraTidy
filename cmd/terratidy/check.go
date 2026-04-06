@@ -12,6 +12,7 @@ import (
 	"github.com/santosr2/TerraTidy/internal/engines/policy"
 	"github.com/santosr2/TerraTidy/internal/engines/style"
 	"github.com/santosr2/TerraTidy/internal/output"
+	"github.com/santosr2/TerraTidy/internal/plugins"
 	"github.com/santosr2/TerraTidy/internal/runner"
 	"github.com/santosr2/TerraTidy/pkg/sdk"
 	"github.com/spf13/cobra"
@@ -65,6 +66,12 @@ func runCheck(_ *cobra.Command, args []string) error {
 		return err
 	}
 
+	// Load plugin rules if plugins are enabled
+	pluginRules, err := loadPluginRules(cfg)
+	if err != nil {
+		return fmt.Errorf("loading plugins: %w", err)
+	}
+
 	files, err := getTargetFiles(args, changed)
 	if err != nil {
 		return fmt.Errorf("finding files: %w", err)
@@ -82,7 +89,7 @@ func runCheck(_ *cobra.Command, args []string) error {
 		printCheckHeader(len(files))
 	}
 
-	allFindings, err := runAllChecksWithConfig(cfg, files, useStructuredOutput)
+	allFindings, err := runAllChecksWithConfig(cfg, files, useStructuredOutput, pluginRules)
 	if err != nil {
 		return err
 	}
@@ -94,6 +101,66 @@ func runCheck(_ *cobra.Command, args []string) error {
 	return outputCheckResults(allFindings, useStructuredOutput)
 }
 
+// loadPluginRules loads plugin rules from the configured plugin directories.
+// Returns an empty slice if plugins are not enabled.
+// Filters rules based on plugins.rules config (enabled/disabled).
+// Severity overrides are applied by the style engine via buildStyleConfig.
+// TaggedRule is an optional interface for rules that have tags.
+type TaggedRule interface {
+	Tags() []string
+}
+
+func loadPluginRules(cfg *config.Config) ([]sdk.Rule, error) {
+	if cfg == nil || !cfg.Plugins.Enabled {
+		return nil, nil
+	}
+
+	mgr := plugins.NewManager(cfg.Plugins.Directories, cfg.Plugins.ShouldVerifyIntegrity())
+	if err := mgr.LoadAll(); err != nil {
+		return nil, err
+	}
+
+	// Convert map to slice, filtering disabled rules and by tags
+	rulesMap := mgr.GetRules()
+	rules := make([]sdk.Rule, 0, len(rulesMap))
+	for _, rule := range rulesMap {
+		// Check if rule is disabled in config
+		if ruleConfig, exists := cfg.Plugins.Rules[rule.Name()]; exists {
+			if !ruleConfig.Enabled {
+				continue // Skip disabled rules
+			}
+		}
+
+		// Filter by tags if configured
+		if len(cfg.Plugins.Tags) > 0 {
+			if taggedRule, ok := rule.(TaggedRule); ok {
+				if !hasMatchingTag(taggedRule.Tags(), cfg.Plugins.Tags) {
+					continue // Skip rules that don't have any of the required tags
+				}
+			} else {
+				// Rule doesn't support tags, skip it when tag filter is active
+				continue
+			}
+		}
+
+		rules = append(rules, rule)
+	}
+
+	return rules, nil
+}
+
+// hasMatchingTag returns true if any tag in ruleTags matches any tag in filterTags.
+func hasMatchingTag(ruleTags, filterTags []string) bool {
+	for _, rt := range ruleTags {
+		for _, ft := range filterTags {
+			if rt == ft {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func printCheckHeader(fileCount int) {
 	modeMsg := ""
 	if changed {
@@ -102,19 +169,19 @@ func printCheckHeader(fileCount int) {
 	fmt.Printf("Checking %s%s...\n\n", formatFileCount(fileCount), modeMsg)
 }
 
-func runAllChecksWithConfig(cfg *config.Config, files []string, quiet bool) ([]sdk.Finding, error) {
+func runAllChecksWithConfig(cfg *config.Config, files []string, quiet bool, pluginRules []sdk.Rule) ([]sdk.Finding, error) {
 	ctx := context.Background()
 
 	// Determine if parallel execution should be used
 	useParallel := getEffectiveParallel(cfg, checkParallel)
 
 	if useParallel {
-		return runAllChecksParallelWithConfig(ctx, cfg, files, quiet)
+		return runAllChecksParallelWithConfig(ctx, cfg, files, quiet, pluginRules)
 	}
-	return runAllChecksSequentialWithConfig(ctx, cfg, files, quiet)
+	return runAllChecksSequentialWithConfig(ctx, cfg, files, quiet, pluginRules)
 }
 
-func runAllChecksParallelWithConfig(ctx context.Context, cfg *config.Config, files []string, quiet bool) ([]sdk.Finding, error) {
+func runAllChecksParallelWithConfig(ctx context.Context, cfg *config.Config, files []string, quiet bool, pluginRules []sdk.Rule) ([]sdk.Finding, error) {
 	if !quiet {
 		fmt.Println("Running checks in parallel mode...")
 	}
@@ -126,10 +193,10 @@ func runAllChecksParallelWithConfig(ctx context.Context, cfg *config.Config, fil
 		r.AddEngine(fmtengine.New(&fmtengine.Config{Check: true}))
 	}
 	if !checkSkipStyle && isEngineEnabled(cfg, "style") {
-		r.AddEngine(style.New(buildStyleConfig(cfg, false)))
+		r.AddEngine(style.New(buildStyleConfig(cfg, false), pluginRules...))
 	}
 	if !checkSkipLint && isEngineEnabled(cfg, "lint") {
-		r.AddEngine(lint.New(buildLintConfig(cfg)))
+		r.AddEngine(lint.New(buildLintConfig(cfg), pluginRules...))
 	}
 	if !checkSkipPolicy && isEngineEnabled(cfg, "policy") {
 		r.AddEngine(policy.New(buildPolicyConfig(cfg)))
@@ -154,7 +221,7 @@ func runAllChecksParallelWithConfig(ctx context.Context, cfg *config.Config, fil
 	return allFindings, nil
 }
 
-func runAllChecksSequentialWithConfig(ctx context.Context, cfg *config.Config, files []string, quiet bool) ([]sdk.Finding, error) {
+func runAllChecksSequentialWithConfig(ctx context.Context, cfg *config.Config, files []string, quiet bool, pluginRules []sdk.Rule) ([]sdk.Finding, error) {
 	var allFindings []sdk.Finding
 	step := 1
 	failFast := shouldFailFast(cfg)
@@ -174,7 +241,7 @@ func runAllChecksSequentialWithConfig(ctx context.Context, cfg *config.Config, f
 	}
 
 	if !checkSkipStyle && isEngineEnabled(cfg, "style") {
-		findings, err := runStyleCheckWithConfig(ctx, cfg, files, step, quiet)
+		findings, err := runStyleCheckWithConfig(ctx, cfg, files, step, quiet, pluginRules)
 		if err != nil {
 			return nil, err
 		}
@@ -187,7 +254,7 @@ func runAllChecksSequentialWithConfig(ctx context.Context, cfg *config.Config, f
 	}
 
 	if !checkSkipLint && isEngineEnabled(cfg, "lint") {
-		findings, err := runLintCheckWithConfig(ctx, cfg, files, step, quiet)
+		findings, err := runLintCheckWithConfig(ctx, cfg, files, step, quiet, pluginRules)
 		if err != nil {
 			return nil, err
 		}
@@ -235,11 +302,11 @@ func runFmtCheckWithConfig(ctx context.Context, _ *config.Config, files []string
 	return findings, nil
 }
 
-func runStyleCheckWithConfig(ctx context.Context, cfg *config.Config, files []string, step int, quiet bool) ([]sdk.Finding, error) {
+func runStyleCheckWithConfig(ctx context.Context, cfg *config.Config, files []string, step int, quiet bool, pluginRules []sdk.Rule) ([]sdk.Finding, error) {
 	if !quiet {
 		fmt.Printf("%d. Checking style...\n", step)
 	}
-	styleEngine := style.New(buildStyleConfig(cfg, false))
+	styleEngine := style.New(buildStyleConfig(cfg, false), pluginRules...)
 	findings, err := styleEngine.Run(ctx, files)
 	if err != nil {
 		return nil, fmt.Errorf("style check failed: %w", err)
@@ -250,11 +317,11 @@ func runStyleCheckWithConfig(ctx context.Context, cfg *config.Config, files []st
 	return findings, nil
 }
 
-func runLintCheckWithConfig(ctx context.Context, cfg *config.Config, files []string, step int, quiet bool) ([]sdk.Finding, error) {
+func runLintCheckWithConfig(ctx context.Context, cfg *config.Config, files []string, step int, quiet bool, pluginRules []sdk.Rule) ([]sdk.Finding, error) {
 	if !quiet {
 		fmt.Printf("%d. Running linter...\n", step)
 	}
-	lintEngine := lint.New(buildLintConfig(cfg))
+	lintEngine := lint.New(buildLintConfig(cfg), pluginRules...)
 	findings, err := lintEngine.Run(ctx, files)
 	if err != nil {
 		return nil, fmt.Errorf("lint check failed: %w", err)
@@ -311,6 +378,15 @@ func buildStyleConfig(cfg *config.Config, fix bool, diff ...bool) *style.Config 
 		}
 	}
 
+	// Merge plugin rule configs (plugins.rules takes precedence for plugin rules)
+	for ruleName, ruleCfg := range cfg.Plugins.Rules {
+		styleCfg.Rules[ruleName] = style.RuleConfig{
+			Enabled:  ruleCfg.Enabled,
+			Severity: ruleCfg.Severity,
+			Options:  ruleCfg.Config,
+		}
+	}
+
 	return styleCfg
 }
 
@@ -323,8 +399,28 @@ func buildLintConfig(cfg *config.Config) *lint.Config {
 		}
 	}
 
-	// Use engine's ConfigFromEngine for conversion
-	return lint.ConfigFromEngine(cfg.Engines.Lint)
+	// Use engine's ConfigFromEngine for base conversion
+	lintCfg := lint.ConfigFromEngine(cfg.Engines.Lint)
+
+	// Merge override rules (overrides take precedence over engine config)
+	for ruleName, ruleCfg := range cfg.Overrides.Rules {
+		lintCfg.Rules[ruleName] = lint.RuleConfig{
+			Enabled:  ruleCfg.Enabled,
+			Severity: ruleCfg.Severity,
+			Options:  ruleCfg.Config,
+		}
+	}
+
+	// Merge plugin rule configs (plugins.rules takes precedence for plugin rules)
+	for ruleName, ruleCfg := range cfg.Plugins.Rules {
+		lintCfg.Rules[ruleName] = lint.RuleConfig{
+			Enabled:  ruleCfg.Enabled,
+			Severity: ruleCfg.Severity,
+			Options:  ruleCfg.Config,
+		}
+	}
+
+	return lintCfg
 }
 
 // buildPolicyConfig creates a policy.Config from the terratidy config.

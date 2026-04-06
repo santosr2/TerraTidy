@@ -198,6 +198,21 @@ func TestLoadYAMLRule_FileNotFound(t *testing.T) {
 	assert.Contains(t, err.Error(), "reading YAML rule")
 }
 
+func TestYAMLRule_Tags(t *testing.T) {
+	t.Run("returns configured tags", func(t *testing.T) {
+		rule := &YAMLRule{config: YAMLRuleConfig{
+			Name: "tagged-rule",
+			Tags: []string{"security", "compliance"},
+		}}
+		assert.Equal(t, []string{"security", "compliance"}, rule.Tags())
+	})
+
+	t.Run("returns nil for rule with no tags", func(t *testing.T) {
+		rule := &YAMLRule{config: YAMLRuleConfig{Name: "no-tags"}}
+		assert.Nil(t, rule.Tags())
+	})
+}
+
 func TestParseSeverity(t *testing.T) {
 	tests := []struct {
 		input    string

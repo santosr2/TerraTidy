@@ -8,7 +8,7 @@ import (
 
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/hclsyntax"
-	"github.com/santosr2/TerraTidy/internal/plugins"
+	"github.com/santosr2/TerraTidy/pkg/plugins"
 	"github.com/santosr2/TerraTidy/pkg/sdk"
 )
 

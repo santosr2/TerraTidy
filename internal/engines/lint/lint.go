@@ -26,7 +26,7 @@ import (
 // Engine represents the linting engine with AST-based analysis
 type Engine struct {
 	config *Config
-	rules  []Rule
+	rules  []sdk.Rule
 	parser *hclparse.Parser
 }
 
@@ -80,26 +80,9 @@ func ConfigFromEngine(engineCfg config.LintEngineConfig) *Config {
 	return cfg
 }
 
-// Rule defines the interface for lint rules
-type Rule interface {
-	Name() string
-	Description() string
-	Check(ctx *RuleContext) []sdk.Finding
-}
-
-// RuleContext provides context for rule execution
-type RuleContext struct {
-	File     string
-	Content  []byte
-	HCLFile  *hcl.File
-	Body     *hclsyntax.Body
-	Config   RuleConfig
-	WorkDir  string
-	AllFiles map[string]*hcl.File // All files in the module
-}
-
-// New creates a new linting engine
-func New(config *Config) *Engine {
+// New creates a new linting engine.
+// Plugin rules can be passed as optional additional arguments; they are appended after built-in rules.
+func New(config *Config, pluginRules ...sdk.Rule) *Engine {
 	if config == nil {
 		config = &Config{
 			ConfigFile: ".tflint.hcl",
@@ -113,11 +96,14 @@ func New(config *Config) *Engine {
 	engine := &Engine{
 		config: config,
 		parser: hclparse.NewParser(),
-		rules:  []Rule{},
+		rules:  []sdk.Rule{},
 	}
 
 	// Register built-in rules
 	engine.registerRules()
+
+	// Append plugin rules after built-in rules
+	engine.rules = append(engine.rules, pluginRules...)
 
 	return engine
 }
@@ -222,23 +208,13 @@ func (e *Engine) lintModule(ctx context.Context, dir string, files []string) ([]
 			continue
 		}
 
-		content, ok := moduleContents[file]
-		if !ok {
-			continue
-		}
-
-		body, ok := hclFile.Body.(*hclsyntax.Body)
-		if !ok {
-			continue
-		}
-
-		ruleCtx := &RuleContext{
-			File:     file,
-			Content:  content,
-			HCLFile:  hclFile,
-			Body:     body,
+		// Create sdk.Context for rule execution
+		sdkCtx := &sdk.Context{
+			Context:  ctx,
+			Options:  nil, // Will be set per-rule
 			WorkDir:  dir,
-			AllFiles: moduleFiles,
+			File:     file,
+			AllFiles: moduleContents,
 		}
 
 		// Run all enabled rules
@@ -248,8 +224,19 @@ func (e *Engine) lintModule(ctx context.Context, dir string, files []string) ([]
 				continue
 			}
 
-			ruleCtx.Config = ruleConfig
-			ruleFindings := rule.Check(ruleCtx)
+			// Set rule-specific options
+			sdkCtx.Options = ruleConfig.Options
+
+			ruleFindings, err := rule.Check(sdkCtx, hclFile)
+			if err != nil {
+				return nil, fmt.Errorf("rule %s: %w", rule.Name(), err)
+			}
+			// Apply severity override from config
+			for i := range ruleFindings {
+				if ruleConfig.Severity != "" {
+					ruleFindings[i].Severity = parseSeverity(ruleConfig.Severity)
+				}
+			}
 			findings = append(findings, ruleFindings...)
 		}
 	}
@@ -289,7 +276,7 @@ func (e *Engine) registerRules() {
 }
 
 // GetAllRules returns all registered rules
-func (e *Engine) GetAllRules() []Rule {
+func (e *Engine) GetAllRules() []sdk.Rule {
 	return e.rules
 }
 
@@ -321,16 +308,21 @@ func (r *TerraformRequiredVersionRule) Description() string {
 }
 
 // Check examines files for required_version constraints.
-func (r *TerraformRequiredVersionRule) Check(ctx *RuleContext) []sdk.Finding {
+func (r *TerraformRequiredVersionRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Finding, error) {
 	var findings []sdk.Finding
 
+	body, ok := file.Body.(*hclsyntax.Body)
+	if !ok {
+		return findings, nil
+	}
+
 	// Look for terraform block
-	for _, block := range ctx.Body.Blocks {
+	for _, block := range body.Blocks {
 		if block.Type == "terraform" {
 			// Check for required_version attribute
 			for name := range block.Body.Attributes {
 				if name == "required_version" {
-					return findings // Found it
+					return findings, nil // Found it
 				}
 			}
 		}
@@ -344,11 +336,11 @@ func (r *TerraformRequiredVersionRule) Check(ctx *RuleContext) []sdk.Finding {
 			Message:  "Missing terraform required_version constraint",
 			File:     ctx.File,
 			Location: sdk.Location{Filename: ctx.File, StartLine: 1, StartColumn: 1, EndLine: 1, EndColumn: 1},
-			Severity: parseSeverity(ctx.Config.Severity),
+			Severity: sdk.SeverityWarning,
 		})
 	}
 
-	return findings
+	return findings, nil
 }
 
 // TerraformRequiredProvidersRule checks for required_providers block.
@@ -365,15 +357,20 @@ func (r *TerraformRequiredProvidersRule) Description() string {
 }
 
 // Check examines files for required_providers configuration.
-func (r *TerraformRequiredProvidersRule) Check(ctx *RuleContext) []sdk.Finding {
+func (r *TerraformRequiredProvidersRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Finding, error) {
 	var findings []sdk.Finding
 
+	body, ok := file.Body.(*hclsyntax.Body)
+	if !ok {
+		return findings, nil
+	}
+
 	// Look for terraform block with required_providers
-	for _, block := range ctx.Body.Blocks {
+	for _, block := range body.Blocks {
 		if block.Type == "terraform" {
 			for _, nested := range block.Body.Blocks {
 				if nested.Type == "required_providers" {
-					return findings // Found it
+					return findings, nil // Found it
 				}
 			}
 		}
@@ -391,7 +388,7 @@ func (r *TerraformRequiredProvidersRule) Check(ctx *RuleContext) []sdk.Finding {
 		})
 	}
 
-	return findings
+	return findings, nil
 }
 
 // TerraformDeprecatedSyntaxRule checks for deprecated interpolation syntax.
@@ -411,9 +408,16 @@ func (r *TerraformDeprecatedSyntaxRule) Description() string {
 var deprecatedInterpolationRegex = regexp.MustCompile(`"\$\{([^}]+)\}"`)
 
 // Check examines files for deprecated syntax patterns.
-func (r *TerraformDeprecatedSyntaxRule) Check(ctx *RuleContext) []sdk.Finding {
+// Note: This rule uses raw content from ctx.AllFiles for regex matching rather than the parsed AST.
+func (r *TerraformDeprecatedSyntaxRule) Check(ctx *sdk.Context, _ *hcl.File) ([]sdk.Finding, error) {
 	var findings []sdk.Finding
-	lines := strings.Split(string(ctx.Content), "\n")
+
+	// Get file content from AllFiles (we use raw content for regex matching)
+	content, ok := ctx.AllFiles[ctx.File]
+	if !ok {
+		return findings, nil
+	}
+	lines := strings.Split(string(content), "\n")
 
 	for i, line := range lines {
 		matches := deprecatedInterpolationRegex.FindAllStringSubmatchIndex(line, -1)
@@ -444,7 +448,7 @@ func (r *TerraformDeprecatedSyntaxRule) Check(ctx *RuleContext) []sdk.Finding {
 		}
 	}
 
-	return findings
+	return findings, nil
 }
 
 // isSimpleReference checks if the string is a simple variable/local reference.
@@ -475,10 +479,15 @@ func (r *TerraformDocumentedVariablesRule) Description() string {
 }
 
 // Check examines variable blocks for description attributes.
-func (r *TerraformDocumentedVariablesRule) Check(ctx *RuleContext) []sdk.Finding {
+func (r *TerraformDocumentedVariablesRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Finding, error) {
 	var findings []sdk.Finding
 
-	for _, block := range ctx.Body.Blocks {
+	body, ok := file.Body.(*hclsyntax.Body)
+	if !ok {
+		return findings, nil
+	}
+
+	for _, block := range body.Blocks {
 		if block.Type != "variable" {
 			continue
 		}
@@ -502,12 +511,12 @@ func (r *TerraformDocumentedVariablesRule) Check(ctx *RuleContext) []sdk.Finding
 				Message:  fmt.Sprintf("Variable '%s' is missing a description", varName),
 				File:     ctx.File,
 				Location: sdk.LocationFromRange(block.Range()),
-				Severity: parseSeverity(ctx.Config.Severity),
+				Severity: sdk.SeverityWarning,
 			})
 		}
 	}
 
-	return findings
+	return findings, nil
 }
 
 // TerraformTypedVariablesRule ensures variables have type constraints.
@@ -524,10 +533,15 @@ func (r *TerraformTypedVariablesRule) Description() string {
 }
 
 // Check examines variable blocks for type constraints.
-func (r *TerraformTypedVariablesRule) Check(ctx *RuleContext) []sdk.Finding {
+func (r *TerraformTypedVariablesRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Finding, error) {
 	var findings []sdk.Finding
 
-	for _, block := range ctx.Body.Blocks {
+	body, ok := file.Body.(*hclsyntax.Body)
+	if !ok {
+		return findings, nil
+	}
+
+	for _, block := range body.Blocks {
 		if block.Type != "variable" {
 			continue
 		}
@@ -556,7 +570,7 @@ func (r *TerraformTypedVariablesRule) Check(ctx *RuleContext) []sdk.Finding {
 		}
 	}
 
-	return findings
+	return findings, nil
 }
 
 // TerraformDocumentedOutputsRule ensures outputs have descriptions.
@@ -573,10 +587,15 @@ func (r *TerraformDocumentedOutputsRule) Description() string {
 }
 
 // Check examines output blocks for description attributes.
-func (r *TerraformDocumentedOutputsRule) Check(ctx *RuleContext) []sdk.Finding {
+func (r *TerraformDocumentedOutputsRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Finding, error) {
 	var findings []sdk.Finding
 
-	for _, block := range ctx.Body.Blocks {
+	body, ok := file.Body.(*hclsyntax.Body)
+	if !ok {
+		return findings, nil
+	}
+
+	for _, block := range body.Blocks {
 		if block.Type != "output" {
 			continue
 		}
@@ -605,7 +624,7 @@ func (r *TerraformDocumentedOutputsRule) Check(ctx *RuleContext) []sdk.Finding {
 		}
 	}
 
-	return findings
+	return findings, nil
 }
 
 // TerraformModulePinnedSourceRule ensures module sources are pinned to versions.
@@ -622,10 +641,21 @@ func (r *TerraformModulePinnedSourceRule) Description() string {
 }
 
 // Check examines module blocks for version pinning.
-func (r *TerraformModulePinnedSourceRule) Check(ctx *RuleContext) []sdk.Finding {
+func (r *TerraformModulePinnedSourceRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Finding, error) {
 	var findings []sdk.Finding
 
-	for _, block := range ctx.Body.Blocks {
+	body, ok := file.Body.(*hclsyntax.Body)
+	if !ok {
+		return findings, nil
+	}
+
+	// Get file content from AllFiles
+	content, ok := ctx.AllFiles[ctx.File]
+	if !ok {
+		return findings, nil
+	}
+
+	for _, block := range body.Blocks {
 		if block.Type != "module" {
 			continue
 		}
@@ -652,7 +682,7 @@ func (r *TerraformModulePinnedSourceRule) Check(ctx *RuleContext) []sdk.Finding 
 		}
 
 		// Get source value - this is simplified, real implementation would evaluate
-		sourceExpr := string(ctx.Content[sourceAttr.Expr.Range().Start.Byte:sourceAttr.Expr.Range().End.Byte])
+		sourceExpr := string(content[sourceAttr.Expr.Range().Start.Byte:sourceAttr.Expr.Range().End.Byte])
 
 		// Check if it's a registry module (needs version)
 		isRegistryModule := !strings.HasPrefix(sourceExpr, "\"./") &&
@@ -690,7 +720,7 @@ func (r *TerraformModulePinnedSourceRule) Check(ctx *RuleContext) []sdk.Finding 
 		}
 	}
 
-	return findings
+	return findings, nil
 }
 
 // TerraformNamingConventionRule checks resource naming conventions.
@@ -710,10 +740,15 @@ func (r *TerraformNamingConventionRule) Description() string {
 var snakeCasePattern = regexp.MustCompile(`^[a-z][a-z0-9_]*$`)
 
 // Check examines resource names for naming convention compliance.
-func (r *TerraformNamingConventionRule) Check(ctx *RuleContext) []sdk.Finding {
+func (r *TerraformNamingConventionRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Finding, error) {
 	var findings []sdk.Finding
 
-	for _, block := range ctx.Body.Blocks {
+	body, ok := file.Body.(*hclsyntax.Body)
+	if !ok {
+		return findings, nil
+	}
+
+	for _, block := range body.Blocks {
 		if block.Type != "resource" && block.Type != "data" && block.Type != "module" {
 			continue
 		}
@@ -739,7 +774,7 @@ func (r *TerraformNamingConventionRule) Check(ctx *RuleContext) []sdk.Finding {
 		}
 	}
 
-	return findings
+	return findings, nil
 }
 
 // TerraformUnusedDeclarationsRule checks for unused variables and locals.
@@ -756,12 +791,17 @@ func (r *TerraformUnusedDeclarationsRule) Description() string {
 }
 
 // Check examines variables and locals for usage.
-func (r *TerraformUnusedDeclarationsRule) Check(ctx *RuleContext) []sdk.Finding {
+func (r *TerraformUnusedDeclarationsRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Finding, error) {
 	var findings []sdk.Finding
+
+	body, ok := file.Body.(*hclsyntax.Body)
+	if !ok {
+		return findings, nil
+	}
 
 	// Collect all declared variables
 	declaredVars := make(map[string]hcl.Range)
-	for _, block := range ctx.Body.Blocks {
+	for _, block := range body.Blocks {
 		if block.Type == "variable" && len(block.Labels) > 0 {
 			declaredVars[block.Labels[0]] = block.Range()
 		}
@@ -770,10 +810,8 @@ func (r *TerraformUnusedDeclarationsRule) Check(ctx *RuleContext) []sdk.Finding 
 	// Search for var.X references in all module files
 	// Get content from all files for usage detection
 	contentStr := ""
-	for path := range ctx.AllFiles {
-		if content, err := os.ReadFile(path); err == nil {
-			contentStr += string(content) + "\n"
-		}
+	for _, content := range ctx.AllFiles {
+		contentStr += string(content) + "\n"
 	}
 
 	// Check each variable
@@ -795,7 +833,7 @@ func (r *TerraformUnusedDeclarationsRule) Check(ctx *RuleContext) []sdk.Finding 
 		}
 	}
 
-	return findings
+	return findings, nil
 }
 
 // TerraformResourceCountRule checks for high resource counts.
@@ -812,11 +850,16 @@ func (r *TerraformResourceCountRule) Description() string {
 }
 
 // Check counts resources in a file and warns if above threshold.
-func (r *TerraformResourceCountRule) Check(ctx *RuleContext) []sdk.Finding {
+func (r *TerraformResourceCountRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Finding, error) {
 	var findings []sdk.Finding
 
+	body, ok := file.Body.(*hclsyntax.Body)
+	if !ok {
+		return findings, nil
+	}
+
 	resourceCount := 0
-	for _, block := range ctx.Body.Blocks {
+	for _, block := range body.Blocks {
 		if block.Type == "resource" {
 			resourceCount++
 		}
@@ -824,7 +867,7 @@ func (r *TerraformResourceCountRule) Check(ctx *RuleContext) []sdk.Finding {
 
 	// Default threshold of 15 resources per file
 	threshold := 15
-	if t, ok := ctx.Config.Options["threshold"].(int); ok && t > 0 {
+	if t, ok := ctx.Options["threshold"].(int); ok && t > 0 {
 		threshold = t
 	}
 
@@ -848,7 +891,7 @@ func (r *TerraformResourceCountRule) Check(ctx *RuleContext) []sdk.Finding {
 		})
 	}
 
-	return findings
+	return findings, nil
 }
 
 // TerraformHardcodedSecretsRule detects potential hardcoded secrets.
@@ -884,9 +927,20 @@ var sensitiveAttributes = []string{
 }
 
 // Check examines files for hardcoded secrets.
-func (r *TerraformHardcodedSecretsRule) Check(ctx *RuleContext) []sdk.Finding {
+func (r *TerraformHardcodedSecretsRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Finding, error) {
 	var findings []sdk.Finding
-	lines := strings.Split(string(ctx.Content), "\n")
+
+	body, ok := file.Body.(*hclsyntax.Body)
+	if !ok {
+		return findings, nil
+	}
+
+	// Get file content from AllFiles
+	content, ok := ctx.AllFiles[ctx.File]
+	if !ok {
+		return findings, nil
+	}
+	lines := strings.Split(string(content), "\n")
 
 	// Check for secret patterns in file content
 	for i, line := range lines {
@@ -916,16 +970,17 @@ func (r *TerraformHardcodedSecretsRule) Check(ctx *RuleContext) []sdk.Finding {
 	}
 
 	// Check for sensitive attributes with literal string values
-	for _, block := range ctx.Body.Blocks {
-		r.checkBlockForSecrets(ctx, block, &findings)
+	for _, block := range body.Blocks {
+		r.checkBlockForSecrets(ctx.File, content, block, &findings)
 	}
 
-	return findings
+	return findings, nil
 }
 
 // checkBlockForSecrets recursively checks blocks for hardcoded secrets.
 func (r *TerraformHardcodedSecretsRule) checkBlockForSecrets(
-	ctx *RuleContext,
+	filePath string,
+	content []byte,
 	block *hclsyntax.Block,
 	findings *[]sdk.Finding,
 ) {
@@ -955,7 +1010,7 @@ func (r *TerraformHardcodedSecretsRule) checkBlockForSecrets(
 			}
 			if allLiteral && len(templateExpr.Parts) > 0 {
 				// Get the string value to check if it's not empty/placeholder
-				exprBytes := ctx.Content[attr.Expr.Range().Start.Byte:attr.Expr.Range().End.Byte]
+				exprBytes := content[attr.Expr.Range().Start.Byte:attr.Expr.Range().End.Byte]
 				exprStr := string(exprBytes)
 
 				// Skip if it looks like a placeholder
@@ -974,7 +1029,7 @@ func (r *TerraformHardcodedSecretsRule) checkBlockForSecrets(
 				*findings = append(*findings, sdk.Finding{
 					Rule:     r.Name(),
 					Message:  msg,
-					File:     ctx.File,
+					File:     filePath,
 					Location: sdk.LocationFromRange(attr.Range()),
 					Severity: sdk.SeverityWarning,
 				})
@@ -984,7 +1039,7 @@ func (r *TerraformHardcodedSecretsRule) checkBlockForSecrets(
 
 	// Recursively check nested blocks
 	for _, nested := range block.Body.Blocks {
-		r.checkBlockForSecrets(ctx, nested, findings)
+		r.checkBlockForSecrets(filePath, content, nested, findings)
 	}
 }
 

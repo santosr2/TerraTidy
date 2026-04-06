@@ -2,13 +2,17 @@ package lint
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
 
+	"github.com/hashicorp/hcl/v2"
+	"github.com/hashicorp/hcl/v2/hclparse"
 	"github.com/santosr2/TerraTidy/internal/config"
+	"github.com/santosr2/TerraTidy/pkg/sdk"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -932,4 +936,379 @@ func TestConfigFromEngine(t *testing.T) {
 		require.NotNil(t, cfg.Rules)
 		assert.Empty(t, cfg.Rules)
 	})
+}
+
+func TestTerraformRequiredProvidersRule(t *testing.T) {
+	rule := &TerraformRequiredProvidersRule{}
+
+	t.Run("name and description", func(t *testing.T) {
+		assert.Equal(t, "lint.terraform-required-providers", rule.Name())
+		assert.Contains(t, rule.Description(), "required_providers")
+	})
+
+	t.Run("no finding when required_providers exists", func(t *testing.T) {
+		content := `
+terraform {
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+    }
+  }
+}
+`
+		dir := t.TempDir()
+		file := filepath.Join(dir, "versions.tf")
+		require.NoError(t, os.WriteFile(file, []byte(content), 0o644))
+
+		parser := hclparse.NewParser()
+		hclFile, diags := parser.ParseHCLFile(file)
+		require.False(t, diags.HasErrors())
+
+		ctx := &sdk.Context{
+			File:     file,
+			AllFiles: map[string][]byte{file: []byte(content)},
+		}
+
+		findings, err := rule.Check(ctx, hclFile)
+		require.NoError(t, err)
+		assert.Empty(t, findings)
+	})
+
+	t.Run("finding when required_providers missing in versions.tf", func(t *testing.T) {
+		content := `
+terraform {
+  required_version = ">= 1.0"
+}
+`
+		dir := t.TempDir()
+		file := filepath.Join(dir, "versions.tf")
+		require.NoError(t, os.WriteFile(file, []byte(content), 0o644))
+
+		parser := hclparse.NewParser()
+		hclFile, diags := parser.ParseHCLFile(file)
+		require.False(t, diags.HasErrors())
+
+		ctx := &sdk.Context{
+			File:     file,
+			AllFiles: map[string][]byte{file: []byte(content)},
+		}
+
+		findings, err := rule.Check(ctx, hclFile)
+		require.NoError(t, err)
+		require.Len(t, findings, 1)
+		assert.Contains(t, findings[0].Message, "Missing required_providers")
+		assert.Equal(t, sdk.SeverityInfo, findings[0].Severity)
+	})
+
+	t.Run("no finding for non-main/versions files", func(t *testing.T) {
+		content := `
+resource "aws_instance" "test" {
+  ami = "ami-123"
+}
+`
+		dir := t.TempDir()
+		file := filepath.Join(dir, "instance.tf")
+		require.NoError(t, os.WriteFile(file, []byte(content), 0o644))
+
+		parser := hclparse.NewParser()
+		hclFile, diags := parser.ParseHCLFile(file)
+		require.False(t, diags.HasErrors())
+
+		ctx := &sdk.Context{
+			File:     file,
+			AllFiles: map[string][]byte{file: []byte(content)},
+		}
+
+		findings, err := rule.Check(ctx, hclFile)
+		require.NoError(t, err)
+		assert.Empty(t, findings, "should not report for non-main/versions files")
+	})
+}
+
+func TestTerraformHardcodedSecretsRule(t *testing.T) {
+	rule := &TerraformHardcodedSecretsRule{}
+
+	t.Run("name and description", func(t *testing.T) {
+		assert.Equal(t, "lint.terraform-hardcoded-secrets", rule.Name())
+		assert.Contains(t, rule.Description(), "secrets")
+	})
+
+	t.Run("detects AWS access key", func(t *testing.T) {
+		content := `
+variable "aws_access_key" {
+  default = "AKIAIOSFODNN7EXAMPLE"
+}
+`
+		dir := t.TempDir()
+		file := filepath.Join(dir, "main.tf")
+		require.NoError(t, os.WriteFile(file, []byte(content), 0o644))
+
+		parser := hclparse.NewParser()
+		hclFile, diags := parser.ParseHCLFile(file)
+		require.False(t, diags.HasErrors())
+
+		ctx := &sdk.Context{
+			File:     file,
+			AllFiles: map[string][]byte{file: []byte(content)},
+		}
+
+		findings, err := rule.Check(ctx, hclFile)
+		require.NoError(t, err)
+		require.NotEmpty(t, findings)
+		assert.Contains(t, findings[0].Message, "AWS Access Key")
+		assert.Equal(t, sdk.SeverityError, findings[0].Severity)
+	})
+
+	t.Run("no finding for variable references", func(t *testing.T) {
+		content := `
+resource "aws_instance" "test" {
+  ami = var.ami_id
+  tags = {
+    secret = var.my_secret
+  }
+}
+`
+		dir := t.TempDir()
+		file := filepath.Join(dir, "main.tf")
+		require.NoError(t, os.WriteFile(file, []byte(content), 0o644))
+
+		parser := hclparse.NewParser()
+		hclFile, diags := parser.ParseHCLFile(file)
+		require.False(t, diags.HasErrors())
+
+		ctx := &sdk.Context{
+			File:     file,
+			AllFiles: map[string][]byte{file: []byte(content)},
+		}
+
+		findings, err := rule.Check(ctx, hclFile)
+		require.NoError(t, err)
+		assert.Empty(t, findings, "should not flag variable references")
+	})
+
+	t.Run("detects hardcoded password", func(t *testing.T) {
+		content := `
+resource "aws_db_instance" "test" {
+  password = "mysecretpassword123"
+}
+`
+		dir := t.TempDir()
+		file := filepath.Join(dir, "main.tf")
+		require.NoError(t, os.WriteFile(file, []byte(content), 0o644))
+
+		parser := hclparse.NewParser()
+		hclFile, diags := parser.ParseHCLFile(file)
+		require.False(t, diags.HasErrors())
+
+		ctx := &sdk.Context{
+			File:     file,
+			AllFiles: map[string][]byte{file: []byte(content)},
+		}
+
+		findings, err := rule.Check(ctx, hclFile)
+		require.NoError(t, err)
+		require.NotEmpty(t, findings)
+	})
+
+	t.Run("no finding for clean config", func(t *testing.T) {
+		content := `
+resource "aws_instance" "test" {
+  ami           = "ami-12345678"
+  instance_type = "t2.micro"
+}
+`
+		dir := t.TempDir()
+		file := filepath.Join(dir, "main.tf")
+		require.NoError(t, os.WriteFile(file, []byte(content), 0o644))
+
+		parser := hclparse.NewParser()
+		hclFile, diags := parser.ParseHCLFile(file)
+		require.False(t, diags.HasErrors())
+
+		ctx := &sdk.Context{
+			File:     file,
+			AllFiles: map[string][]byte{file: []byte(content)},
+		}
+
+		findings, err := rule.Check(ctx, hclFile)
+		require.NoError(t, err)
+		assert.Empty(t, findings)
+	})
+}
+
+// mockPluginRule is a simple rule implementation for testing plugin integration
+type mockPluginRule struct {
+	name string
+}
+
+func (r *mockPluginRule) Name() string        { return r.name }
+func (r *mockPluginRule) Description() string { return "Mock plugin rule for testing" }
+func (r *mockPluginRule) Check(_ *sdk.Context, _ *hcl.File) ([]sdk.Finding, error) {
+	return nil, nil
+}
+
+func TestNew_AcceptsPluginRules(t *testing.T) {
+	t.Run("no plugin rules", func(t *testing.T) {
+		engine := New(nil)
+
+		rules := engine.GetAllRules()
+		// Should have 11 built-in rules
+		assert.Equal(t, 11, len(rules))
+	})
+
+	t.Run("with single plugin rule", func(t *testing.T) {
+		pluginRule := &mockPluginRule{name: "plugin.test-rule"}
+		engine := New(nil, pluginRule)
+
+		rules := engine.GetAllRules()
+		// Should have 11 built-in + 1 plugin = 12 rules
+		assert.Equal(t, 12, len(rules))
+
+		// Plugin rule should be present
+		var found bool
+		for _, r := range rules {
+			if r.Name() == "plugin.test-rule" {
+				found = true
+				break
+			}
+		}
+		assert.True(t, found, "plugin rule should be registered")
+	})
+
+	t.Run("with multiple plugin rules", func(t *testing.T) {
+		plugin1 := &mockPluginRule{name: "plugin.rule-one"}
+		plugin2 := &mockPluginRule{name: "plugin.rule-two"}
+		plugin3 := &mockPluginRule{name: "plugin.rule-three"}
+
+		engine := New(nil, plugin1, plugin2, plugin3)
+
+		rules := engine.GetAllRules()
+		// Should have 11 built-in + 3 plugin = 14 rules
+		assert.Equal(t, 14, len(rules))
+	})
+}
+
+func TestNew_PluginRulesAppendedAfterBuiltIn(t *testing.T) {
+	pluginRule := &mockPluginRule{name: "plugin.test-rule"}
+	engine := New(nil, pluginRule)
+
+	rules := engine.GetAllRules()
+
+	// Plugin rules should be at the end of the slice
+	lastRule := rules[len(rules)-1]
+
+	assert.Equal(t, "plugin.test-rule", lastRule.Name(), "plugin rule should be appended after built-in rules")
+}
+
+// mockErrorRule is a rule that always returns an error from Check.
+type mockErrorRule struct {
+	name string
+}
+
+func (r *mockErrorRule) Name() string        { return r.name }
+func (r *mockErrorRule) Description() string { return "always errors" }
+func (r *mockErrorRule) Check(_ *sdk.Context, _ *hcl.File) ([]sdk.Finding, error) {
+	return nil, fmt.Errorf("rule check failed intentionally")
+}
+
+// mockFindingRule is a rule that always returns a fixed warning finding.
+type mockFindingRule struct {
+	name string
+}
+
+func (r *mockFindingRule) Name() string        { return r.name }
+func (r *mockFindingRule) Description() string { return "always finds something" }
+func (r *mockFindingRule) Check(ctx *sdk.Context, _ *hcl.File) ([]sdk.Finding, error) {
+	return []sdk.Finding{
+		{
+			Rule:     r.name,
+			Message:  "test finding",
+			File:     ctx.File,
+			Severity: sdk.SeverityWarning,
+		},
+	}, nil
+}
+
+func TestLintModule_UnreadableFile(t *testing.T) {
+	// Pass a path that doesn't exist so os.ReadFile fails in the cache-miss fallback.
+	// The engine should silently skip unreadable files and return no findings.
+	engine := New(nil)
+	findings, err := engine.Run(context.Background(), []string{"/nonexistent/path/main.tf"})
+	require.NoError(t, err)
+	assert.Empty(t, findings)
+}
+
+func TestLintModule_InvalidHCL(t *testing.T) {
+	dir := t.TempDir()
+	tfFile := filepath.Join(dir, "bad.tf")
+	require.NoError(t, os.WriteFile(tfFile, []byte(`this is not valid hcl {{{`), 0o644))
+
+	engine := New(nil)
+	findings, err := engine.Run(context.Background(), []string{tfFile})
+	require.NoError(t, err)
+	// Should produce a parse-error finding rather than crashing.
+	var found bool
+	for _, f := range findings {
+		if f.Rule == "lint.parse-error" {
+			found = true
+			break
+		}
+	}
+	assert.True(t, found, "invalid HCL should produce a parse-error finding")
+}
+
+func TestLintModule_RuleError(t *testing.T) {
+	dir := t.TempDir()
+	tfFile := filepath.Join(dir, "main.tf")
+	require.NoError(t, os.WriteFile(tfFile, []byte(`resource "aws_instance" "x" {}`), 0o644))
+
+	errRule := &mockErrorRule{name: "plugin.error-rule"}
+	engine := New(nil, errRule)
+	// Disable all built-in rules so only our error rule runs.
+	for _, r := range engine.GetAllRules() {
+		if r.Name() != errRule.Name() {
+			engine.config.Rules[r.Name()] = RuleConfig{Enabled: false}
+		}
+	}
+
+	_, err := engine.Run(context.Background(), []string{tfFile})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "rule check failed intentionally")
+}
+
+func TestLintModule_SeverityOverride(t *testing.T) {
+	dir := t.TempDir()
+	tfFile := filepath.Join(dir, "main.tf")
+	require.NoError(t, os.WriteFile(tfFile, []byte(`resource "aws_instance" "x" {}`), 0o644))
+
+	findingRule := &mockFindingRule{name: "plugin.finding-rule"}
+	engine := New(&Config{
+		Rules: map[string]RuleConfig{
+			"plugin.finding-rule": {
+				Enabled:  true,
+				Severity: "error", // Override the warning severity from the rule
+			},
+		},
+	}, findingRule)
+	// Disable all built-in rules so only our finding rule runs.
+	for name := range engine.config.Rules {
+		if name != "plugin.finding-rule" {
+			rc := engine.config.Rules[name]
+			rc.Enabled = false
+			engine.config.Rules[name] = rc
+		}
+	}
+	for _, r := range engine.GetAllRules() {
+		if r.Name() != findingRule.Name() {
+			if _, exists := engine.config.Rules[r.Name()]; !exists {
+				engine.config.Rules[r.Name()] = RuleConfig{Enabled: false}
+			}
+		}
+	}
+
+	findings, err := engine.Run(context.Background(), []string{tfFile})
+	require.NoError(t, err)
+	require.Len(t, findings, 1)
+	assert.Equal(t, sdk.SeverityError, findings[0].Severity, "severity should be overridden to error")
 }

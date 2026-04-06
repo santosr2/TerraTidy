@@ -14,6 +14,69 @@ import (
 	"github.com/santosr2/TerraTidy/pkg/sdk"
 )
 
+// TestOutputStyleResults_CheckMode verifies that outputStyleResults returns an
+// error in check mode when findings are present.
+func TestOutputStyleResults_CheckMode(t *testing.T) {
+	old := format
+	format = "text"
+	defer func() { format = old }()
+
+	findings := []sdk.Finding{
+		{Rule: "style.blank-lines", Message: "test", Severity: sdk.SeverityWarning, File: "main.tf"},
+	}
+
+	err := outputStyleResults(findings, true)
+	assert.Error(t, err, "check mode with findings should return error")
+	assert.Contains(t, err.Error(), "style issue")
+}
+
+func TestOutputStyleResults_NoCheckMode(t *testing.T) {
+	old := format
+	format = "text"
+	defer func() { format = old }()
+
+	findings := []sdk.Finding{
+		{Rule: "style.blank-lines", Message: "test", Severity: sdk.SeverityWarning, File: "main.tf"},
+	}
+
+	err := outputStyleResults(findings, false)
+	assert.NoError(t, err, "non-check mode should not return error for warnings")
+}
+
+func TestOutputStyleResults_NoFindings(t *testing.T) {
+	old := format
+	format = "text"
+	defer func() { format = old }()
+
+	err := outputStyleResults(nil, true)
+	assert.NoError(t, err, "check mode with no findings should not error")
+}
+
+// TestOutputLintResults_WithFindings verifies that outputLintResults writes
+// findings without returning an error (it delegates to outputResults which
+// handles exit codes separately).
+func TestOutputLintResults_WithFindings(t *testing.T) {
+	old := format
+	format = "text"
+	defer func() { format = old }()
+
+	findings := []sdk.Finding{
+		{Rule: "lint.terraform-required-version", Message: "missing", Severity: sdk.SeverityWarning, File: "main.tf"},
+	}
+
+	err := outputLintResults(findings)
+	assert.NoError(t, err)
+}
+
+func TestOutputLintResults_NoFindings(t *testing.T) {
+	old := format
+	format = "text"
+	defer func() { format = old }()
+
+	err := outputLintResults(nil)
+	assert.NoError(t, err)
+}
+
 func TestHasErrors(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -179,7 +242,7 @@ func TestRunAllChecksSequentialWithConfig(t *testing.T) {
 		checkParallel = false
 		defer func() { checkParallel = oldParallel }()
 
-		findings, err := runAllChecksSequentialWithConfig(ctx, cfg, []string{tfFile}, true)
+		findings, err := runAllChecksSequentialWithConfig(ctx, cfg, []string{tfFile}, true, nil)
 		require.NoError(t, err)
 		assert.NotNil(t, findings)
 	})
@@ -191,8 +254,178 @@ func TestRunAllChecksSequentialWithConfig(t *testing.T) {
 		cfg.Engines.Lint.Enabled = config.BoolPtr(false)
 		cfg.Engines.Policy.Enabled = config.BoolPtr(false)
 
-		findings, err := runAllChecksSequentialWithConfig(ctx, cfg, []string{tfFile}, true)
+		findings, err := runAllChecksSequentialWithConfig(ctx, cfg, []string{tfFile}, true, nil)
 		require.NoError(t, err)
 		assert.Empty(t, findings)
 	})
+}
+
+func TestHasMatchingTag(t *testing.T) {
+	tests := []struct {
+		name       string
+		ruleTags   []string
+		filterTags []string
+		want       bool
+	}{
+		{"exact match", []string{"security"}, []string{"security"}, true},
+		{"one of many matches", []string{"security", "compliance"}, []string{"compliance"}, true},
+		{"no match", []string{"security"}, []string{"lint"}, false},
+		{"empty rule tags", []string{}, []string{"security"}, false},
+		{"empty filter tags", []string{"security"}, []string{}, false},
+		{"both empty", []string{}, []string{}, false},
+		{"multiple filter tags one matches", []string{"security"}, []string{"lint", "security"}, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := hasMatchingTag(tt.ruleTags, tt.filterTags)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestLoadPluginRules_NilConfig(t *testing.T) {
+	rules, err := loadPluginRules(nil)
+	require.NoError(t, err)
+	assert.Nil(t, rules)
+}
+
+func TestLoadPluginRules_PluginsDisabled(t *testing.T) {
+	cfg := config.DefaultConfig()
+	cfg.Plugins.Enabled = false
+
+	rules, err := loadPluginRules(cfg)
+	require.NoError(t, err)
+	assert.Nil(t, rules)
+}
+
+func TestLoadPluginRules_DisabledRule(t *testing.T) {
+	dir := t.TempDir()
+	pluginDir := filepath.Join(dir, "plugins")
+	require.NoError(t, os.MkdirAll(pluginDir, 0o755))
+
+	yamlRule := `name: disabled-rule
+description: Should be filtered out
+severity: warning
+enabled: true
+`
+	require.NoError(t, os.WriteFile(filepath.Join(pluginDir, "disabled-rule.yaml"), []byte(yamlRule), 0o644))
+
+	cfg := config.DefaultConfig()
+	cfg.Plugins.Enabled = true
+	cfg.Plugins.Directories = []string{pluginDir}
+	cfg.Plugins.Rules = map[string]config.RuleConfig{
+		"disabled-rule": {Enabled: false},
+	}
+
+	rules, err := loadPluginRules(cfg)
+	require.NoError(t, err)
+	assert.Empty(t, rules, "disabled plugin rule should be filtered out")
+}
+
+func TestLoadPluginRules_TagFilter_MatchingTag(t *testing.T) {
+	dir := t.TempDir()
+	pluginDir := filepath.Join(dir, "plugins")
+	require.NoError(t, os.MkdirAll(pluginDir, 0o755))
+
+	yamlRule := `name: tagged-rule
+description: Has matching tag
+severity: warning
+enabled: true
+tags:
+  - security
+`
+	require.NoError(t, os.WriteFile(filepath.Join(pluginDir, "tagged-rule.yaml"), []byte(yamlRule), 0o644))
+
+	cfg := config.DefaultConfig()
+	cfg.Plugins.Enabled = true
+	cfg.Plugins.Directories = []string{pluginDir}
+	cfg.Plugins.Tags = []string{"security"}
+
+	rules, err := loadPluginRules(cfg)
+	require.NoError(t, err)
+	assert.Len(t, rules, 1, "rule with matching tag should be included")
+}
+
+func TestLoadPluginRules_TagFilter_NoMatch(t *testing.T) {
+	dir := t.TempDir()
+	pluginDir := filepath.Join(dir, "plugins")
+	require.NoError(t, os.MkdirAll(pluginDir, 0o755))
+
+	yamlRule := `name: untagged-rule
+description: Does not match tag filter
+severity: warning
+enabled: true
+tags:
+  - compliance
+`
+	require.NoError(t, os.WriteFile(filepath.Join(pluginDir, "untagged-rule.yaml"), []byte(yamlRule), 0o644))
+
+	cfg := config.DefaultConfig()
+	cfg.Plugins.Enabled = true
+	cfg.Plugins.Directories = []string{pluginDir}
+	cfg.Plugins.Tags = []string{"security"}
+
+	rules, err := loadPluginRules(cfg)
+	require.NoError(t, err)
+	assert.Empty(t, rules, "rule with non-matching tag should be excluded")
+}
+
+func TestLoadPluginRules_TagFilter_RuleWithoutTagsSkipped(t *testing.T) {
+	dir := t.TempDir()
+	pluginDir := filepath.Join(dir, "plugins")
+	require.NoError(t, os.MkdirAll(pluginDir, 0o755))
+
+	// YAML rule with no tags field — implements TaggedRule but returns nil
+	yamlRule := `name: no-tags-rule
+description: Rule with no tags
+severity: warning
+enabled: true
+`
+	require.NoError(t, os.WriteFile(filepath.Join(pluginDir, "no-tags-rule.yaml"), []byte(yamlRule), 0o644))
+
+	cfg := config.DefaultConfig()
+	cfg.Plugins.Enabled = true
+	cfg.Plugins.Directories = []string{pluginDir}
+	cfg.Plugins.Tags = []string{"security"}
+
+	rules, err := loadPluginRules(cfg)
+	require.NoError(t, err)
+	assert.Empty(t, rules, "rule with no tags should be excluded when tag filter is active")
+}
+
+func TestBuildStyleConfig_WithPluginRules(t *testing.T) {
+	cfg := config.DefaultConfig()
+	cfg.Plugins.Rules = map[string]config.RuleConfig{
+		"my-plugin-rule": {
+			Enabled:  true,
+			Severity: "error",
+			Config:   map[string]any{"threshold": 5},
+		},
+	}
+
+	styleCfg := buildStyleConfig(cfg, false)
+	require.Contains(t, styleCfg.Rules, "my-plugin-rule")
+	rc := styleCfg.Rules["my-plugin-rule"]
+	assert.True(t, rc.Enabled)
+	assert.Equal(t, "error", rc.Severity)
+	assert.Equal(t, 5, rc.Options["threshold"])
+}
+
+func TestBuildLintConfig_WithOverridesAndPluginRules(t *testing.T) {
+	cfg := config.DefaultConfig()
+	cfg.Overrides.Rules = map[string]config.RuleConfig{
+		"override-rule": {Enabled: true, Severity: "warning"},
+	}
+	cfg.Plugins.Rules = map[string]config.RuleConfig{
+		"plugin-rule": {Enabled: true, Severity: "error", Config: map[string]any{"key": "val"}},
+	}
+
+	lintCfg := buildLintConfig(cfg)
+	require.Contains(t, lintCfg.Rules, "override-rule")
+	assert.Equal(t, "warning", lintCfg.Rules["override-rule"].Severity)
+
+	require.Contains(t, lintCfg.Rules, "plugin-rule")
+	assert.Equal(t, "error", lintCfg.Rules["plugin-rule"].Severity)
+	assert.Equal(t, "val", lintCfg.Rules["plugin-rule"].Options["key"])
 }

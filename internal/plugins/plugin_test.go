@@ -698,6 +698,82 @@ func TestManager_RegisterMultipleFormattersWithSameName(t *testing.T) {
 	assert.Equal(t, formatter2, formatters["duplicate"])
 }
 
+// MockFixableRule is a rule that returns actual fix bytes.
+type MockFixableRule struct {
+	name     string
+	findings []sdk.Finding
+	fixBytes []byte
+}
+
+func (r *MockFixableRule) Name() string        { return r.name }
+func (r *MockFixableRule) Description() string { return "Fixable rule for testing" }
+func (r *MockFixableRule) Check(_ *sdk.Context, _ *hcl.File) ([]sdk.Finding, error) {
+	return r.findings, nil
+}
+
+func (r *MockFixableRule) Fix(_ *sdk.Context, _ *hcl.File) ([]byte, error) {
+	return r.fixBytes, nil
+}
+
+// TestGoPluginRuleFixApplied verifies that when a rule implements Fix()
+// and returns non-nil bytes, those bytes are available for applying.
+func TestGoPluginRuleFixApplied(t *testing.T) {
+	t.Run("rule with fix implementation returns fix bytes", func(t *testing.T) {
+		fixedContent := []byte(`resource "aws_instance" "test" {
+  ami           = "ami-123"
+  instance_type = "t2.micro"
+  tags = {
+    Name = "test"
+  }
+}
+`)
+		rule := &MockFixableRule{
+			name: "fixable-rule",
+			findings: []sdk.Finding{
+				{Rule: "fixable-rule", Message: "Missing tags"},
+			},
+			fixBytes: fixedContent,
+		}
+
+		// Verify Fix() returns the expected bytes
+		ctx := &sdk.Context{File: "test.tf"}
+		result, err := rule.Fix(ctx, nil)
+		require.NoError(t, err)
+		assert.Equal(t, fixedContent, result)
+	})
+
+	t.Run("rule without fix returns nil", func(t *testing.T) {
+		rule := &MockRule{name: "non-fixable-rule"}
+
+		ctx := &sdk.Context{File: "test.tf"}
+		result, err := rule.Fix(ctx, nil)
+		require.NoError(t, err)
+		assert.Nil(t, result, "rule without fix implementation returns nil")
+	})
+
+	t.Run("fixable rule registered with manager", func(t *testing.T) {
+		manager := NewManager(nil, false)
+		fixedContent := []byte("fixed content")
+		rule := &MockFixableRule{
+			name:     "managed-fixable-rule",
+			fixBytes: fixedContent,
+		}
+
+		manager.RegisterRule(rule)
+
+		// Retrieve and verify - need to type assert to Fixer interface
+		retrieved, ok := manager.GetRule("managed-fixable-rule")
+		require.True(t, ok)
+
+		fixer, isFixer := retrieved.(sdk.Fixer)
+		require.True(t, isFixer, "rule should implement sdk.Fixer")
+
+		result, err := fixer.Fix(&sdk.Context{}, nil)
+		require.NoError(t, err)
+		assert.Equal(t, fixedContent, result)
+	})
+}
+
 func TestRelativePath(t *testing.T) {
 	cwd, err := os.Getwd()
 	require.NoError(t, err)

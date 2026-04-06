@@ -22,6 +22,7 @@ import (
 	"github.com/santosr2/TerraTidy/internal/engines/format"
 	"github.com/santosr2/TerraTidy/internal/engines/lint"
 	"github.com/santosr2/TerraTidy/internal/engines/style"
+	"github.com/santosr2/TerraTidy/internal/plugins"
 	"github.com/santosr2/TerraTidy/pkg/sdk"
 )
 
@@ -90,6 +91,7 @@ type Server struct {
 	docMu          sync.RWMutex
 	lintEngine     *lint.Engine
 	styleEngine    *style.Engine
+	pluginRules    []sdk.Rule // plugin rules loaded from configured directories
 	workspaceRoot  string
 	initialized    bool
 	shutdown       bool
@@ -433,9 +435,24 @@ func (s *Server) handleInitialize(msg RequestMessage) error {
 		// Not fatal - will fall back to system temp
 	}
 
-	// Initialize engines with config
-	s.lintEngine = lint.New(nil)
-	s.styleEngine = style.New(s.buildStyleConfig())
+	// Load plugin rules if plugins are enabled
+	if cfg.Plugins.Enabled {
+		mgr := plugins.NewManager(cfg.Plugins.Directories, cfg.Plugins.ShouldVerifyIntegrity())
+		if err := mgr.LoadAll(); err != nil {
+			s.logWarn("failed to load plugins: %v", err)
+			// Not fatal - continue without plugin rules
+		} else {
+			rulesMap := mgr.GetRules()
+			s.pluginRules = make([]sdk.Rule, 0, len(rulesMap))
+			for _, rule := range rulesMap {
+				s.pluginRules = append(s.pluginRules, rule)
+			}
+		}
+	}
+
+	// Initialize engines with config and plugin rules
+	s.lintEngine = lint.New(nil, s.pluginRules...)
+	s.styleEngine = style.New(s.buildStyleConfig(), s.pluginRules...)
 
 	result := InitializeResult{
 		Capabilities: ServerCapabilities{

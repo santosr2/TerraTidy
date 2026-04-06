@@ -167,3 +167,78 @@ output "instance_id" {
 		_, _ = engine.Run(ctx, []string{tmpFile})
 	}
 }
+
+// TestRun_TFLintEnabled_NotAvailable_FallbackFalse verifies that when
+// UseTFLint is true, TFLint is not in PATH, and FallbackBuiltin is false,
+// Run returns an error instead of silently falling back.
+func TestRun_TFLintEnabled_NotAvailable_FallbackFalse(t *testing.T) {
+	if _, err := exec.LookPath("tflint"); err == nil {
+		t.Skip("tflint is available on this system; this test requires it to be absent")
+	}
+
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "main.tf"), []byte(`resource "aws_instance" "x" {}`), 0o644))
+
+	engine := New(&Config{
+		UseTFLint:       true,
+		FallbackBuiltin: false,
+	})
+
+	_, err := engine.Run(context.Background(), []string{filepath.Join(dir, "main.tf")})
+	assert.Error(t, err, "should error when TFLint requested but unavailable and FallbackBuiltin is false")
+	assert.Contains(t, err.Error(), "tflint")
+}
+
+// TestRun_TFLintEnabled_NotAvailable_FallbackTrue verifies that when
+// UseTFLint is true, TFLint is not in PATH, but FallbackBuiltin is true,
+// the engine falls through to built-in rules without error.
+func TestRun_TFLintEnabled_NotAvailable_FallbackTrue(t *testing.T) {
+	if _, err := exec.LookPath("tflint"); err == nil {
+		t.Skip("tflint is available on this system; this test requires it to be absent")
+	}
+
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "main.tf"), []byte(`resource "aws_instance" "x" {
+  ami           = "ami-123"
+  instance_type = "t2.micro"
+}`+"\n"), 0o644))
+
+	engine := New(&Config{
+		UseTFLint:       true,
+		FallbackBuiltin: true,
+	})
+
+	findings, err := engine.Run(context.Background(), []string{filepath.Join(dir, "main.tf")})
+	assert.NoError(t, err, "should fall back to built-in rules when TFLint unavailable")
+	assert.NotNil(t, findings)
+}
+
+// TestRun_TFLintEnabled_CustomPath_NotFound verifies that a non-existent
+// custom TFLintPath with FallbackBuiltin=false produces an error.
+func TestRun_TFLintEnabled_CustomPath_NotFound(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "main.tf"), []byte(`resource "aws_instance" "x" {}`), 0o644))
+
+	engine := New(&Config{
+		UseTFLint:       true,
+		FallbackBuiltin: false,
+		TFLintPath:      "/nonexistent/path/to/tflint",
+	})
+
+	_, err := engine.Run(context.Background(), []string{filepath.Join(dir, "main.tf")})
+	assert.Error(t, err, "should error when custom TFLintPath does not exist")
+}
+
+// TestValidateTFLintPath_CustomPath_IsDir verifies that a directory path is
+// rejected with a clear error message.
+func TestValidateTFLintPath_CustomPath_IsDir(t *testing.T) {
+	dir := t.TempDir()
+
+	engine := New(&Config{
+		TFLintPath: dir, // a directory, not an executable
+	})
+
+	err := engine.validateTFLintPath()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "directory")
+}

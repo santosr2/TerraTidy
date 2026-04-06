@@ -40,6 +40,12 @@ func runFix(_ *cobra.Command, args []string) error {
 		return err
 	}
 
+	// Load plugin rules if plugins are enabled
+	pluginRules, err := loadPluginRules(cfg)
+	if err != nil {
+		return fmt.Errorf("loading plugins: %w", err)
+	}
+
 	files, err := getTargetFiles(args, changed)
 	if err != nil {
 		return fmt.Errorf("finding files: %w", err)
@@ -52,7 +58,7 @@ func runFix(_ *cobra.Command, args []string) error {
 
 	printFixHeader(len(files))
 
-	allFindings, totalFixed, err := runAllFixesWithConfig(cfg, files)
+	allFindings, totalFixed, err := runAllFixesWithConfig(cfg, files, pluginRules)
 	if err != nil {
 		return err
 	}
@@ -69,7 +75,7 @@ func printFixHeader(fileCount int) {
 	fmt.Printf("Fixing %s%s...\n\n", formatFileCount(fileCount), modeMsg)
 }
 
-func runAllFixesWithConfig(cfg *config.Config, files []string) ([]sdk.Finding, int, error) {
+func runAllFixesWithConfig(cfg *config.Config, files []string, pluginRules []sdk.Rule) ([]sdk.Finding, int, error) {
 	ctx := context.Background()
 	var allFindings []sdk.Finding
 	totalFixed := 0
@@ -81,7 +87,7 @@ func runAllFixesWithConfig(cfg *config.Config, files []string) ([]sdk.Finding, i
 	allFindings = append(allFindings, fmtFindings...)
 	totalFixed += formatted
 
-	styleFindings, styleFixed, err := runStyleFixWithConfig(ctx, cfg, files)
+	styleFindings, styleFixed, err := runStyleFixWithConfig(ctx, cfg, files, pluginRules)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -126,10 +132,10 @@ func countFormattedFiles(findings []sdk.Finding) int {
 	return count
 }
 
-func runStyleFixWithConfig(ctx context.Context, cfg *config.Config, files []string) ([]sdk.Finding, int, error) {
+func runStyleFixWithConfig(ctx context.Context, cfg *config.Config, files []string, pluginRules []sdk.Rule) ([]sdk.Finding, int, error) {
 	fmt.Println("2. Fixing style issues...")
 	styleCfg := buildStyleConfig(cfg, true)
-	styleEngine := style.New(styleCfg)
+	styleEngine := style.New(styleCfg, pluginRules...)
 	findings, err := styleEngine.Run(ctx, files)
 	if err != nil {
 		return nil, 0, fmt.Errorf("style fixes failed: %w", err)

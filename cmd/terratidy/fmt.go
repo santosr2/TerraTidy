@@ -110,8 +110,14 @@ Use --all to also apply style fixes (equivalent to running fmt + style --fix).`,
 			fmt.Println("Applying style fixes...")
 			fmt.Println()
 
-			// Use config-based style engine
-			styleEngine := style.New(buildStyleConfig(cfg, true))
+			// Load plugin rules if plugins are enabled
+			pluginRules, err := loadPluginRules(cfg)
+			if err != nil {
+				return fmt.Errorf("loading plugins: %w", err)
+			}
+
+			// Use config-based style engine with plugin rules
+			styleEngine := style.New(buildStyleConfig(cfg, true), pluginRules...)
 
 			styleFindings, err := styleEngine.Run(context.Background(), files)
 			if err != nil {

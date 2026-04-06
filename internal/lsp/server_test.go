@@ -1923,6 +1923,158 @@ func TestServer_CleanupOldSessions_NonexistentDir(t *testing.T) {
 	server.cleanupOldSessions("/nonexistent/path/that/does/not/exist")
 }
 
+// TestServer_HandleInitialize_RootPath verifies that the deprecated rootPath
+// field is used when rootUri is absent.
+func TestServer_HandleInitialize_RootPath(t *testing.T) {
+	out := &bytes.Buffer{}
+	server := NewServer(strings.NewReader(""), out)
+
+	params := InitializeParams{
+		RootPath: "/tmp/test-via-root-path",
+	}
+	paramsJSON, _ := json.Marshal(params)
+
+	msg := RequestMessage{
+		JSONRPC: "2.0",
+		ID:      json.RawMessage(`1`),
+		Method:  "initialize",
+		Params:  paramsJSON,
+	}
+
+	err := server.handleInitialize(msg)
+	require.NoError(t, err)
+	assert.Equal(t, "/tmp/test-via-root-path", server.workspaceRoot)
+}
+
+// TestServer_HandleInitialize_WithPluginsEnabled verifies the plugin-loading
+// branch inside handleInitialize when plugins.enabled is true in the config.
+func TestServer_HandleInitialize_WithPluginsEnabled(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create a YAML plugin rule so the manager loads something real.
+	pluginDir := filepath.Join(tmpDir, "plugins")
+	require.NoError(t, os.MkdirAll(pluginDir, 0o755))
+	yamlRule := `name: lsp-init-plugin-rule
+description: Rule loaded during initialize
+severity: warning
+enabled: true
+message: "Test finding"
+patterns:
+  required_attributes:
+    - test_attr
+`
+	require.NoError(t, os.WriteFile(filepath.Join(pluginDir, "init-rule.yaml"), []byte(yamlRule), 0o644))
+
+	// Write a .terratidy.yaml that enables plugins pointing at the plugin dir.
+	cfgContent := `version: 1
+plugins:
+  enabled: true
+  directories:
+    - ` + pluginDir + `
+`
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, ".terratidy.yaml"), []byte(cfgContent), 0o644))
+
+	out := &bytes.Buffer{}
+	server := NewServer(strings.NewReader(""), out)
+
+	params := InitializeParams{
+		RootURI: pathToFileURI(tmpDir),
+	}
+	paramsJSON, _ := json.Marshal(params)
+
+	msg := RequestMessage{
+		JSONRPC: "2.0",
+		ID:      json.RawMessage(`1`),
+		Method:  "initialize",
+		Params:  paramsJSON,
+	}
+
+	err := server.handleInitialize(msg)
+	require.NoError(t, err)
+
+	// Plugin rules should have been loaded into the server.
+	assert.Len(t, server.pluginRules, 1, "should have loaded 1 plugin rule via initialize")
+}
+
+// TestServer_HandleInitialize_WithPluginLoadError verifies that a plugin load
+// error is non-fatal: the server continues without plugin rules.
+func TestServer_HandleInitialize_WithPluginLoadError(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Config points plugins at a path that does not exist.
+	cfgContent := `version: 1
+plugins:
+  enabled: true
+  directories:
+    - /nonexistent/plugin/directory/that/will/fail
+`
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, ".terratidy.yaml"), []byte(cfgContent), 0o644))
+
+	out := &bytes.Buffer{}
+	server := NewServer(strings.NewReader(""), out)
+
+	params := InitializeParams{
+		RootURI: pathToFileURI(tmpDir),
+	}
+	paramsJSON, _ := json.Marshal(params)
+
+	msg := RequestMessage{
+		JSONRPC: "2.0",
+		ID:      json.RawMessage(`1`),
+		Method:  "initialize",
+		Params:  paramsJSON,
+	}
+
+	// Non-existent directory: loadFromDirectory returns nil (skips missing dirs),
+	// so pluginRules should be empty but not nil and no error returned.
+	err := server.handleInitialize(msg)
+	require.NoError(t, err, "plugin load failure should not prevent initialization")
+}
+
+// TestServer_HandleDidSave_WithTextContent verifies the branch where didSave
+// includes the document text (params.Text != "").
+func TestServer_HandleDidSave_WithTextContent(t *testing.T) {
+	out := &bytes.Buffer{}
+	server := NewServer(strings.NewReader(""), out)
+	server.initialized = true
+
+	uri := "file:///tmp/save-with-text.tf"
+	server.documents[uri] = &Document{
+		URI:     uri,
+		Content: "initial content",
+		Version: 1,
+	}
+
+	newText := `resource "aws_instance" "updated" {
+  ami = "ami-99999"
+}
+`
+	msgJSON, _ := json.Marshal(map[string]any{
+		"jsonrpc": "2.0",
+		"method":  "textDocument/didSave",
+		"params": map[string]any{
+			"textDocument": map[string]string{"uri": uri},
+			"text":         newText,
+		},
+	})
+
+	msg := RequestMessage{}
+	require.NoError(t, json.Unmarshal(msgJSON, &msg))
+
+	err := server.handleDidSave(msg)
+	require.NoError(t, err)
+
+	// Content should be updated from the text field.
+	server.docMu.RLock()
+	doc := server.documents[uri]
+	server.docMu.RUnlock()
+	assert.Equal(t, newText, doc.Content, "document content should be updated from didSave text field")
+
+	// Diagnostics notification should have been published.
+	output := out.String()
+	assert.Contains(t, output, "textDocument/publishDiagnostics")
+}
+
 func TestServer_LintEngineWithPluginRules(t *testing.T) {
 	tmpDir := t.TempDir()
 

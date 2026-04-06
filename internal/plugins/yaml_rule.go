@@ -39,6 +39,9 @@ func (r *YAMLRule) Name() string { return r.config.Name }
 // Description returns the rule description.
 func (r *YAMLRule) Description() string { return r.config.Description }
 
+// Tags returns the tags associated with this rule.
+func (r *YAMLRule) Tags() []string { return r.config.Tags }
+
 // Check evaluates HCL files against the YAML-defined patterns.
 func (r *YAMLRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Finding, error) {
 	if !r.config.Enabled {

@@ -315,6 +315,7 @@ type PluginsConfig struct {
 	Directories     []string              `yaml:"directories,omitempty"`
 	VerifyIntegrity *bool                 `yaml:"verify_integrity,omitempty"`
 	Rules           map[string]RuleConfig `yaml:"rules,omitempty"` // Per-rule enable/disable/severity
+	Tags            []string              `yaml:"tags,omitempty"`  // Only load rules with these tags (empty = all)
 }
 
 // ShouldVerifyIntegrity returns whether plugin integrity verification is enabled.

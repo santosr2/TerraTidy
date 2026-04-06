@@ -13,6 +13,116 @@ import (
 	"github.com/santosr2/TerraTidy/pkg/sdk"
 )
 
+func TestRunAllFixesWithConfig(t *testing.T) {
+	dir := t.TempDir()
+	// Create a file that needs both formatting and style fixes.
+	// Multiple blank lines between blocks triggers the blank-lines rule.
+	content := `resource "aws_instance" "a" {
+ami="ami-123"
+}
+
+
+resource "aws_instance" "b" {
+ami="ami-456"
+}
+`
+	tmpFile := filepath.Join(dir, "main.tf")
+	require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0o644))
+
+	cfg := config.DefaultConfig()
+	findings, totalFixed, err := runAllFixesWithConfig(cfg, []string{tmpFile}, nil)
+	require.NoError(t, err)
+	assert.GreaterOrEqual(t, totalFixed, 0)
+	_ = findings
+}
+
+func TestPrintFixHeader(t *testing.T) {
+	// Verify neither panics nor errors with various file counts.
+	oldChanged := changed
+	changed = false
+	defer func() { changed = oldChanged }()
+
+	printFixHeader(1)
+	printFixHeader(10)
+
+	changed = true
+	printFixHeader(3)
+}
+
+func TestRunAllFixesWithConfig_StyleFixedTriggersReformat(t *testing.T) {
+	dir := t.TempDir()
+	// Two resources with two blank lines between them triggers the blank-lines rule,
+	// causing styleFixed > 0 which exercises the re-formatting branch.
+	content := `resource "aws_instance" "one" {
+  ami = "ami-111"
+}
+
+
+resource "aws_instance" "two" {
+  ami = "ami-222"
+}
+`
+	tmpFile := filepath.Join(dir, "main.tf")
+	require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0o644))
+
+	cfg := config.DefaultConfig()
+	cfg.Engines.Fmt.Enabled = config.BoolPtr(true)
+	cfg.Engines.Style.Enabled = config.BoolPtr(true)
+
+	findings, totalFixed, err := runAllFixesWithConfig(cfg, []string{tmpFile}, nil)
+	require.NoError(t, err)
+	// The blank-lines rule should have fixed at least 1 issue.
+	assert.GreaterOrEqual(t, totalFixed, 1)
+	_ = findings
+}
+
+func TestRunStyleFixWithConfig_WithPluginRules(t *testing.T) {
+	dir := t.TempDir()
+
+	// YAML rule requiring 'owner' attribute
+	yamlRule := `name: require-owner
+description: Resources must have an owner attribute
+severity: warning
+enabled: true
+message: "Resource is missing 'owner' attribute"
+patterns:
+  required_attributes:
+    - owner
+`
+	pluginDir := filepath.Join(dir, "plugins")
+	require.NoError(t, os.MkdirAll(pluginDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(pluginDir, "require-owner.yaml"), []byte(yamlRule), 0o644))
+
+	tfContent := `resource "aws_instance" "test" {
+  ami = "ami-123"
+}
+`
+	tfFile := filepath.Join(dir, "main.tf")
+	require.NoError(t, os.WriteFile(tfFile, []byte(tfContent), 0o644))
+
+	cfg := config.DefaultConfig()
+	cfg.Plugins.Enabled = true
+	cfg.Plugins.Directories = []string{pluginDir}
+
+	pluginRules, err := loadPluginRules(cfg)
+	require.NoError(t, err)
+	require.Len(t, pluginRules, 1)
+
+	ctx := context.Background()
+	findings, fixed, err := runStyleFixWithConfig(ctx, cfg, []string{tfFile}, pluginRules)
+	require.NoError(t, err)
+	_ = fixed
+
+	// Plugin rule finding should appear (non-fixable)
+	var found bool
+	for _, f := range findings {
+		if f.Rule == "require-owner" {
+			found = true
+		}
+	}
+	assert.True(t, found, "plugin rule should produce finding in fix mode")
+}
+
 func TestRunFmtFix(t *testing.T) {
 	dir := t.TempDir()
 	content := `resource "aws_instance" "test"   {

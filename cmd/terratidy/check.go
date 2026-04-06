@@ -105,6 +105,11 @@ func runCheck(_ *cobra.Command, args []string) error {
 // Returns an empty slice if plugins are not enabled.
 // Filters rules based on plugins.rules config (enabled/disabled).
 // Severity overrides are applied by the style engine via buildStyleConfig.
+// TaggedRule is an optional interface for rules that have tags.
+type TaggedRule interface {
+	Tags() []string
+}
+
 func loadPluginRules(cfg *config.Config) ([]sdk.Rule, error) {
 	if cfg == nil || !cfg.Plugins.Enabled {
 		return nil, nil
@@ -115,7 +120,7 @@ func loadPluginRules(cfg *config.Config) ([]sdk.Rule, error) {
 		return nil, err
 	}
 
-	// Convert map to slice, filtering disabled rules
+	// Convert map to slice, filtering disabled rules and by tags
 	rulesMap := mgr.GetRules()
 	rules := make([]sdk.Rule, 0, len(rulesMap))
 	for _, rule := range rulesMap {
@@ -125,10 +130,35 @@ func loadPluginRules(cfg *config.Config) ([]sdk.Rule, error) {
 				continue // Skip disabled rules
 			}
 		}
+
+		// Filter by tags if configured
+		if len(cfg.Plugins.Tags) > 0 {
+			if taggedRule, ok := rule.(TaggedRule); ok {
+				if !hasMatchingTag(taggedRule.Tags(), cfg.Plugins.Tags) {
+					continue // Skip rules that don't have any of the required tags
+				}
+			} else {
+				// Rule doesn't support tags, skip it when tag filter is active
+				continue
+			}
+		}
+
 		rules = append(rules, rule)
 	}
 
 	return rules, nil
+}
+
+// hasMatchingTag returns true if any tag in ruleTags matches any tag in filterTags.
+func hasMatchingTag(ruleTags, filterTags []string) bool {
+	for _, rt := range ruleTags {
+		for _, ft := range filterTags {
+			if rt == ft {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func printCheckHeader(fileCount int) {

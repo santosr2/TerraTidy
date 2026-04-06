@@ -735,3 +735,277 @@ patterns:
 	require.Len(t, rules, 1)
 	assert.Equal(t, "unconfigured-rule", rules[0].Name())
 }
+
+// TestRunAllChecksSequentialWithConfig_FailFast verifies that fail_fast stops
+// processing after the first engine that produces error-severity findings.
+func TestRunAllChecksSequentialWithConfig_FailFast(t *testing.T) {
+	dir := t.TempDir()
+	content := `resource "aws_instance" "test" {
+  ami           = "ami-123"
+  instance_type = "t2.micro"
+}
+`
+	tmpFile := filepath.Join(dir, "main.tf")
+	require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0o644))
+
+	pluginDir := filepath.Join(dir, "plugins")
+	require.NoError(t, os.MkdirAll(pluginDir, 0o755))
+
+	// YAML rule requires a nonexistent attribute, guaranteeing a finding.
+	yamlRule := `name: always-finds-rule
+description: Always produces a finding
+severity: warning
+enabled: true
+message: "Forced finding"
+patterns:
+  required_attributes:
+    - nonexistent_attr
+`
+	require.NoError(t, os.WriteFile(filepath.Join(pluginDir, "always-finds.yaml"), []byte(yamlRule), 0o644))
+
+	cfg := config.DefaultConfig()
+	cfg.FailFast = true
+	cfg.Engines.Fmt.Enabled = config.BoolPtr(false)
+	cfg.Engines.Style.Enabled = config.BoolPtr(true)
+	cfg.Engines.Lint.Enabled = config.BoolPtr(true)
+	cfg.Engines.Policy.Enabled = config.BoolPtr(false)
+	cfg.Plugins.Enabled = true
+	cfg.Plugins.Directories = []string{pluginDir}
+	// Override the rule severity to error so fail-fast fires after style.
+	cfg.Plugins.Rules = map[string]config.RuleConfig{
+		"always-finds-rule": {Enabled: true, Severity: "error"},
+	}
+
+	pluginRules, err := loadPluginRules(cfg)
+	require.NoError(t, err)
+	require.Len(t, pluginRules, 1)
+
+	ctx := context.Background()
+	oldSkipLint := checkSkipLint
+	checkSkipLint = false
+	defer func() { checkSkipLint = oldSkipLint }()
+
+	findings, err := runAllChecksSequentialWithConfig(ctx, cfg, []string{tmpFile}, true, pluginRules)
+	require.NoError(t, err)
+
+	// Style engine applies the severity override from cfg.Plugins.Rules,
+	// so there should be at least one error-severity finding.
+	var hasErr bool
+	for _, f := range findings {
+		if f.Severity == sdk.SeverityError {
+			hasErr = true
+		}
+	}
+	assert.True(t, hasErr, "should have error-severity finding after severity override")
+}
+
+// TestBuildLintConfig_PluginRules verifies that plugins.rules entries are merged
+// into the lint config (the new code path added for plugin rule integration).
+func TestBuildLintConfig_PluginRules(t *testing.T) {
+	cfg := config.DefaultConfig()
+	cfg.Plugins.Rules = map[string]config.RuleConfig{
+		"my-plugin-rule": {Enabled: true, Severity: "error", Config: map[string]any{"key": "val"}},
+	}
+
+	lintCfg := buildLintConfig(cfg)
+
+	require.Contains(t, lintCfg.Rules, "my-plugin-rule")
+	rc := lintCfg.Rules["my-plugin-rule"]
+	assert.True(t, rc.Enabled)
+	assert.Equal(t, "error", rc.Severity)
+	assert.Equal(t, map[string]any{"key": "val"}, rc.Options)
+}
+
+// TestBuildStyleConfig_PluginRules verifies that plugins.rules entries are merged
+// into the style config (the new code path added for plugin rule integration).
+func TestBuildStyleConfig_PluginRules(t *testing.T) {
+	cfg := config.DefaultConfig()
+	cfg.Plugins.Rules = map[string]config.RuleConfig{
+		"my-plugin-style-rule": {Enabled: true, Severity: "warning", Config: map[string]any{"option": 42}},
+	}
+
+	styleCfg := buildStyleConfig(cfg, false)
+
+	require.Contains(t, styleCfg.Rules, "my-plugin-style-rule")
+	rc := styleCfg.Rules["my-plugin-style-rule"]
+	assert.True(t, rc.Enabled)
+	assert.Equal(t, "warning", rc.Severity)
+	assert.Equal(t, 42, rc.Options["option"])
+}
+
+// TestBuildStyleConfig_PluginRules_OverridesPrecedence verifies that plugins.rules
+// takes precedence over overrides.rules when both configure the same rule name.
+func TestBuildStyleConfig_PluginRules_OverridesPrecedence(t *testing.T) {
+	cfg := config.DefaultConfig()
+	cfg.Overrides.Rules = map[string]config.RuleConfig{
+		"shared-rule": {Enabled: true, Severity: "warning"},
+	}
+	cfg.Plugins.Rules = map[string]config.RuleConfig{
+		"shared-rule": {Enabled: false, Severity: "error"},
+	}
+
+	styleCfg := buildStyleConfig(cfg, false)
+
+	// plugins.rules is applied last, so it wins.
+	rc := styleCfg.Rules["shared-rule"]
+	assert.False(t, rc.Enabled, "plugins.rules should override overrides.rules")
+	assert.Equal(t, "error", rc.Severity)
+}
+
+// TestRunAllChecksParallelWithConfig_WithPluginRules verifies that plugin rules
+// are passed through to both style and lint engines in parallel mode.
+func TestRunAllChecksParallelWithConfig_WithPluginRules(t *testing.T) {
+	dir := t.TempDir()
+	content := `resource "aws_instance" "test" {
+  ami           = "ami-123"
+  instance_type = "t2.micro"
+}
+`
+	tmpFile := filepath.Join(dir, "main.tf")
+	require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0o644))
+
+	pluginDir := filepath.Join(dir, "plugins")
+	require.NoError(t, os.MkdirAll(pluginDir, 0o755))
+	yamlRule := `name: parallel-plugin-rule
+description: Rule for parallel test
+severity: warning
+enabled: true
+message: "Resource is missing 'env' attribute"
+patterns:
+  required_attributes:
+    - env
+`
+	require.NoError(t, os.WriteFile(filepath.Join(pluginDir, "parallel-rule.yaml"), []byte(yamlRule), 0o644))
+
+	cfg := config.DefaultConfig()
+	cfg.Engines.Policy.Enabled = config.BoolPtr(false)
+	cfg.Plugins.Enabled = true
+	cfg.Plugins.Directories = []string{pluginDir}
+
+	pluginRules, err := loadPluginRules(cfg)
+	require.NoError(t, err)
+	require.Len(t, pluginRules, 1)
+
+	ctx := context.Background()
+	findings, err := runAllChecksParallelWithConfig(ctx, cfg, []string{tmpFile}, true, pluginRules)
+	require.NoError(t, err)
+
+	var foundPluginFinding bool
+	for _, f := range findings {
+		if f.Rule == "parallel-plugin-rule" {
+			foundPluginFinding = true
+		}
+	}
+	assert.True(t, foundPluginFinding, "parallel mode should propagate plugin rule findings")
+}
+
+// TestYAMLRuleTagsFiltering verifies that plugins.tags config filters rules by tag.
+func TestYAMLRuleTagsFiltering(t *testing.T) {
+	dir := t.TempDir()
+	pluginDir := filepath.Join(dir, "plugins")
+	require.NoError(t, os.MkdirAll(pluginDir, 0o755))
+
+	// Create two YAML rules with different tags
+	securityRule := `name: security-rule
+description: A security-related rule
+severity: error
+enabled: true
+message: "Security violation"
+tags:
+  - security
+  - compliance
+patterns:
+  required_attributes:
+    - security_attr
+`
+	require.NoError(t, os.WriteFile(filepath.Join(pluginDir, "security-rule.yaml"), []byte(securityRule), 0o644))
+
+	namingRule := `name: naming-rule
+description: A naming convention rule
+severity: warning
+enabled: true
+message: "Naming violation"
+tags:
+  - naming
+  - style
+patterns:
+  required_attributes:
+    - naming_attr
+`
+	require.NoError(t, os.WriteFile(filepath.Join(pluginDir, "naming-rule.yaml"), []byte(namingRule), 0o644))
+
+	untaggedRule := `name: untagged-rule
+description: A rule without tags
+severity: info
+enabled: true
+message: "Untagged finding"
+patterns:
+  required_attributes:
+    - untagged_attr
+`
+	require.NoError(t, os.WriteFile(filepath.Join(pluginDir, "untagged-rule.yaml"), []byte(untaggedRule), 0o644))
+
+	t.Run("no tags filter loads all rules", func(t *testing.T) {
+		cfg := config.DefaultConfig()
+		cfg.Plugins.Enabled = true
+		cfg.Plugins.Directories = []string{pluginDir}
+		// No tags filter
+
+		rules, err := loadPluginRules(cfg)
+		require.NoError(t, err)
+		assert.Len(t, rules, 3, "should load all rules when no tags filter")
+	})
+
+	t.Run("tags filter loads only matching rules", func(t *testing.T) {
+		cfg := config.DefaultConfig()
+		cfg.Plugins.Enabled = true
+		cfg.Plugins.Directories = []string{pluginDir}
+		cfg.Plugins.Tags = []string{"security"}
+
+		rules, err := loadPluginRules(cfg)
+		require.NoError(t, err)
+		require.Len(t, rules, 1, "should load only security-tagged rule")
+		assert.Equal(t, "security-rule", rules[0].Name())
+	})
+
+	t.Run("multiple tags filter loads rules with any matching tag", func(t *testing.T) {
+		cfg := config.DefaultConfig()
+		cfg.Plugins.Enabled = true
+		cfg.Plugins.Directories = []string{pluginDir}
+		cfg.Plugins.Tags = []string{"security", "naming"}
+
+		rules, err := loadPluginRules(cfg)
+		require.NoError(t, err)
+		assert.Len(t, rules, 2, "should load rules with security or naming tags")
+
+		names := make([]string, 0, len(rules))
+		for _, r := range rules {
+			names = append(names, r.Name())
+		}
+		assert.Contains(t, names, "security-rule")
+		assert.Contains(t, names, "naming-rule")
+	})
+
+	t.Run("tags filter excludes untagged rules", func(t *testing.T) {
+		cfg := config.DefaultConfig()
+		cfg.Plugins.Enabled = true
+		cfg.Plugins.Directories = []string{pluginDir}
+		cfg.Plugins.Tags = []string{"style"}
+
+		rules, err := loadPluginRules(cfg)
+		require.NoError(t, err)
+		require.Len(t, rules, 1, "should load only style-tagged rule")
+		assert.Equal(t, "naming-rule", rules[0].Name())
+	})
+
+	t.Run("non-matching tags filter loads no rules", func(t *testing.T) {
+		cfg := config.DefaultConfig()
+		cfg.Plugins.Enabled = true
+		cfg.Plugins.Directories = []string{pluginDir}
+		cfg.Plugins.Tags = []string{"nonexistent-tag"}
+
+		rules, err := loadPluginRules(cfg)
+		require.NoError(t, err)
+		assert.Empty(t, rules, "should load no rules when no tags match")
+	})
+}

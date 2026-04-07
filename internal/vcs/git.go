@@ -102,8 +102,12 @@ func (g *Git) GetRepoRoot() (string, error) {
 	// Normalize the path to ensure consistent formatting across platforms.
 	// On Windows, git returns paths with forward slashes and potentially
 	// different drive letter casing than filepath.Abs, which can cause
-	// path comparison issues.
+	// path comparison issues. Also use EvalSymlinks to resolve Windows
+	// 8.3 short filenames (e.g., RUNNER~1 -> runneradmin) to long form.
 	if absRoot, err := filepath.Abs(root); err == nil {
+		if evalRoot, err := filepath.EvalSymlinks(absRoot); err == nil {
+			return evalRoot, nil
+		}
 		return absRoot, nil
 	}
 	return root, nil

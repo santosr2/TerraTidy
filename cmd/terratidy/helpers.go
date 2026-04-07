@@ -195,6 +195,10 @@ func getChangedFiles(filterPaths []string, recursive bool) ([]string, error) {
 		if err != nil {
 			return nil, fmt.Errorf("getting working directory: %w", err)
 		}
+		// Resolve symlinks and Windows 8.3 short names to canonical form
+		if evalCwd, err := filepath.EvalSymlinks(cwd); err == nil {
+			cwd = evalCwd
+		}
 		var topLevelFiles []string
 		for _, file := range changedFiles {
 			if isFileDirectlyIn(file, cwd) {
@@ -211,6 +215,10 @@ func getChangedFiles(filterPaths []string, recursive bool) ([]string, error) {
 			absFilterPath, err := filepath.Abs(filterPath)
 			if err != nil {
 				continue
+			}
+			// Resolve symlinks and Windows 8.3 short names to canonical form
+			if evalPath, err := filepath.EvalSymlinks(absFilterPath); err == nil {
+				absFilterPath = evalPath
 			}
 
 			// Check if the file is within the filter path (recursive or direct)

@@ -43,7 +43,6 @@ ignore:
   - "**/*_test.go"
   - "**/testdata/**"
   - "cmd/terratidy/main.go"
-  - "internal/benchmark/**"
 
 component_management:
   default_rules:

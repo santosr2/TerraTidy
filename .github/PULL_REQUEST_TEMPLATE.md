@@ -1,6 +1,10 @@
 ## What and why
 
-<!-- What changed and why? Link to an issue if applicable (Fixes #123). -->
+<!-- Describe the change, then explain the motivation. Link to an issue if applicable (Fixes #123). -->
+
+<!-- Describe the what here -->
+
+**Why:**
 
 ## How to test
 

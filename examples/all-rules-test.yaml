@@ -1,0 +1,18 @@
+version: 1
+
+engines:
+  fmt:
+    enabled: false
+  style:
+    enabled: true
+  lint:
+    enabled: false
+  policy:
+    enabled: false
+
+plugins:
+  enabled: true
+  directories:
+    - examples/go-rule
+    - examples/yaml-rule
+    - examples/bash-rule

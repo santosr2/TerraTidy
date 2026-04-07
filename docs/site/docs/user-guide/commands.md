@@ -11,7 +11,6 @@ These flags are available for all commands:
 | `--config`             | Path to configuration file (default: `.terratidy.yaml`)                                                  |
 | `--profile`            | Configuration profile to use                                                                             |
 | `--format`             | Output format: `text`, `json`, `json-compact`, `sarif`, `html`, `github`, `table`, `junit`, `markdown`   |
-| `--paths`              | Paths to check (comma-separated)                                                                         |
 | `--changed`            | Only check files changed in git                                                                          |
 | `--color`              | Enable colored output (default: true)                                                                    |
 | `--severity-threshold` | Minimum severity: `info`, `warning`, `error`                                                             |

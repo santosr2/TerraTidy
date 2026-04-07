@@ -39,8 +39,8 @@ terratidy check
 ### Check Specific Files or Directories
 
 ```bash
-terratidy check --paths ./modules/
-terratidy check --paths main.tf,variables.tf
+terratidy check ./modules/
+terratidy check main.tf variables.tf
 ```
 
 ### Check Only Changed Files (Git)

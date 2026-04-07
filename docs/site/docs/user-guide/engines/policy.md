@@ -147,6 +147,36 @@ TerraTidy includes several built-in policies:
 | `required-tags` | Resources should have tags |
 | `module-version` | External modules should have version constraints |
 
+## Disabling Rules
+
+Suppress specific policy rules using inline annotations:
+
+```hcl
+# Suppress on the next block
+# terratidy:ignore:policy.required-tags
+resource "aws_instance" "temporary" {
+  # ...
+}
+
+# Suppress inline (same line as code)
+resource "aws_s3_bucket" "logs" { } # terratidy:ignore:policy.no-public-s3
+
+# Suppress for the entire file
+# terratidy:ignore-file:policy.required-version
+
+# Suppress all policy rules for the file
+# terratidy:ignore-file:policy.*
+```
+
+Or disable globally in configuration:
+
+```yaml
+overrides:
+  rules:
+    policy.required-tags:
+      enabled: false
+```
+
 ## Example Policies
 
 ### Require Encryption

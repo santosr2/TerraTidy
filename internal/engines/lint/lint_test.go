@@ -1312,3 +1312,103 @@ func TestLintModule_SeverityOverride(t *testing.T) {
 	require.Len(t, findings, 1)
 	assert.Equal(t, sdk.SeverityError, findings[0].Severity, "severity should be overridden to error")
 }
+
+func TestEngine_SuppressionAnnotations(t *testing.T) {
+	tests := []struct {
+		name          string
+		content       string
+		expectedCount int
+		suppressed    bool
+	}{
+		{
+			name: "file-level suppression ignores all matching findings",
+			content: `# terratidy:ignore-file:lint.terraform-required-version
+resource "aws_instance" "example" {
+  ami = "ami-12345678"
+}
+`,
+			expectedCount: 0,
+			suppressed:    true,
+		},
+		{
+			name: "next-block suppression ignores specific block",
+			content: `# terratidy:ignore:lint.terraform-required-version
+resource "aws_instance" "example" {
+  ami = "ami-12345678"
+}
+`,
+			// Note: terraform-required-version is file-level, not block-level
+			// so next-block suppression won't match its line 0 location
+			expectedCount: 1,
+			suppressed:    false,
+		},
+		{
+			name: "wildcard suppression matches all lint rules",
+			content: `# terratidy:ignore-file:lint.*
+resource "aws_instance" "example" {
+  ami = "ami-12345678"
+}
+`,
+			expectedCount: 0,
+			suppressed:    true,
+		},
+		{
+			name: "no suppression returns findings",
+			content: `resource "aws_instance" "example" {
+  ami = "ami-12345678"
+}
+`,
+			expectedCount: 1,
+			suppressed:    false,
+		},
+		{
+			name: "suppression with non-existent rule is ignored",
+			content: `# terratidy:ignore-file:lint.nonexistent-rule
+resource "aws_instance" "example" {
+  ami = "ami-12345678"
+}
+`,
+			expectedCount: 1, // Violation still reported
+			suppressed:    false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create temp file
+			tmpDir := t.TempDir()
+			tmpFile := filepath.Join(tmpDir, "main.tf")
+			err := os.WriteFile(tmpFile, []byte(tt.content), 0o644)
+			require.NoError(t, err)
+
+			// Create engine with only required-version rule enabled
+			engine := New(&Config{
+				Rules: map[string]RuleConfig{
+					"lint.terraform-required-version": {Enabled: true},
+				},
+			})
+
+			// Disable all other rules
+			for _, r := range engine.GetAllRules() {
+				if r.Name() != "lint.terraform-required-version" {
+					engine.config.Rules[r.Name()] = RuleConfig{Enabled: false}
+				}
+			}
+
+			// Run engine
+			findings, err := engine.Run(context.Background(), []string{tmpFile})
+			require.NoError(t, err)
+
+			// Count lint findings
+			var lintCount int
+			for _, f := range findings {
+				if strings.HasPrefix(f.Rule, "lint.") {
+					lintCount++
+				}
+			}
+
+			assert.Equal(t, tt.expectedCount, lintCount,
+				"expected %d lint findings but got %d", tt.expectedCount, lintCount)
+		})
+	}
+}

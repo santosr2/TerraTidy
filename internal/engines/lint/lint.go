@@ -18,6 +18,7 @@ import (
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/hclparse"
 	"github.com/hashicorp/hcl/v2/hclsyntax"
+	"github.com/santosr2/TerraTidy/internal/annotations"
 	"github.com/santosr2/TerraTidy/internal/cache"
 	"github.com/santosr2/TerraTidy/internal/config"
 	"github.com/santosr2/TerraTidy/pkg/sdk"
@@ -157,6 +158,9 @@ func (e *Engine) lintModule(ctx context.Context, dir string, files []string) ([]
 	// Parse all files in the module first for cross-file analysis
 	moduleFiles := make(map[string]*hcl.File)
 	moduleContents := make(map[string][]byte)
+	// Store suppressions per file for filtering
+	fileSuppressions := make(map[string][]annotations.Suppression)
+
 	for _, file := range files {
 		// Try cache first
 		entry, err := fileCache.GetOrParse(file)
@@ -172,6 +176,8 @@ func (e *Engine) lintModule(ctx context.Context, dir string, files []string) ([]
 			}
 			moduleFiles[file] = entry.File
 			moduleContents[file] = entry.Content
+			// Parse suppression annotations
+			fileSuppressions[file] = annotations.Parse(entry.Content)
 			continue
 		}
 
@@ -193,6 +199,8 @@ func (e *Engine) lintModule(ctx context.Context, dir string, files []string) ([]
 		}
 		moduleFiles[file] = hclFile
 		moduleContents[file] = content
+		// Parse suppression annotations
+		fileSuppressions[file] = annotations.Parse(content)
 	}
 
 	// Process each file with module context
@@ -218,6 +226,7 @@ func (e *Engine) lintModule(ctx context.Context, dir string, files []string) ([]
 		}
 
 		// Run all enabled rules
+		var fileFindings []sdk.Finding
 		for _, rule := range e.rules {
 			ruleConfig := e.getRuleConfig(rule.Name())
 			if !ruleConfig.Enabled {
@@ -237,8 +246,12 @@ func (e *Engine) lintModule(ctx context.Context, dir string, files []string) ([]
 					ruleFindings[i].Severity = parseSeverity(ruleConfig.Severity)
 				}
 			}
-			findings = append(findings, ruleFindings...)
+			fileFindings = append(fileFindings, ruleFindings...)
 		}
+
+		// Filter out suppressed findings based on annotations
+		fileFindings = annotations.FilterFindings(fileFindings, fileSuppressions[file])
+		findings = append(findings, fileFindings...)
 	}
 
 	return findings, nil

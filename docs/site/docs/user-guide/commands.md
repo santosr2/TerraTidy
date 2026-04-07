@@ -49,18 +49,27 @@ terratidy style --changed
 
 This means `--changed` catches all local modifications, whether staged, unstaged, or new files.
 
-## Inline Rule Ignoring
+## Inline Rule Suppression
 
-Suppress specific rules on a per-line or per-file basis:
+Suppress specific rules on a per-line or per-file basis using comment annotations.
+Works with style, lint, and policy engines.
 
 ```hcl
-# Ignore a single rule on the next block
+# Suppress a rule on the next block
 # terratidy:ignore:style.block-label-case
 resource "aws_instance" "MyServer" { }
 
-# Ignore all style rules for the file
-# terratidy:ignore-file:style.block-label-case
+# Suppress a rule inline (same line as code)
+resource "aws_s3_bucket" "Test" { } # terratidy:ignore:style.block-label-case
+
+# Suppress a rule for the entire file
+# terratidy:ignore-file:lint.terraform-required-version
+
+# Suppress all rules for an engine using wildcards
+# terratidy:ignore-file:policy.*
 ```
+
+Both `#` and `//` comment styles are supported.
 
 See [Style Rules - Disabling Rules](../rules/style-rules.md#disabling-rules) for configuration-based disabling.
 

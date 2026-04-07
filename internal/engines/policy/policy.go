@@ -13,6 +13,7 @@ import (
 	"github.com/hashicorp/hcl/v2/hclparse"
 	"github.com/hashicorp/hcl/v2/hclsyntax"
 	"github.com/open-policy-agent/opa/v1/rego"
+	"github.com/santosr2/TerraTidy/internal/annotations"
 	"github.com/santosr2/TerraTidy/internal/config"
 	"github.com/santosr2/TerraTidy/pkg/sdk"
 )
@@ -122,7 +123,8 @@ func (e *Engine) Run(ctx context.Context, files []string) ([]sdk.Finding, error)
 		}
 
 		// Parse and convert all files in the module to JSON representation
-		moduleData, err := e.parseModuleToJSON(dirFileList)
+		// Also collect suppression annotations per file
+		moduleData, fileSuppressions, err := e.parseModuleToJSONWithSuppressions(dirFileList)
 		if err != nil {
 			allFindings = append(allFindings, sdk.Finding{
 				Rule:     "policy.parse-error",
@@ -138,6 +140,9 @@ func (e *Engine) Run(ctx context.Context, files []string) ([]sdk.Finding, error)
 		if err != nil {
 			return nil, fmt.Errorf("evaluating policies for %s: %w", dir, err)
 		}
+
+		// Filter findings based on per-file suppression annotations
+		findings = e.filterSuppressedFindings(findings, fileSuppressions)
 
 		allFindings = append(allFindings, findings...)
 	}
@@ -198,6 +203,43 @@ func (e *Engine) parseModuleToJSON(files []string) (map[string]any, error) {
 	}
 
 	return moduleData, nil
+}
+
+// parseModuleToJSONWithSuppressions parses files and also collects suppression annotations
+func (e *Engine) parseModuleToJSONWithSuppressions(files []string) (map[string]any, map[string][]annotations.Suppression, error) {
+	moduleData := newModuleData()
+	fileSuppressions := make(map[string][]annotations.Suppression)
+
+	for _, file := range files {
+		content, err := os.ReadFile(file)
+		if err != nil {
+			continue
+		}
+
+		// Parse suppression annotations
+		fileSuppressions[file] = annotations.Parse(content)
+
+		// Parse file into module data
+		e.parseFileIntoModule(file, moduleData)
+	}
+
+	return moduleData, fileSuppressions, nil
+}
+
+// filterSuppressedFindings filters findings based on per-file suppression annotations
+func (e *Engine) filterSuppressedFindings(findings []sdk.Finding, fileSuppressions map[string][]annotations.Suppression) []sdk.Finding {
+	if len(fileSuppressions) == 0 {
+		return findings
+	}
+
+	var filtered []sdk.Finding
+	for _, f := range findings {
+		suppressions := fileSuppressions[f.File]
+		if !annotations.IsSuppressed(f, suppressions) {
+			filtered = append(filtered, f)
+		}
+	}
+	return filtered
 }
 
 func newModuleData() map[string]any {

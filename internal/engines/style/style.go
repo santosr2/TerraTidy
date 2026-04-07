@@ -10,6 +10,7 @@ import (
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/hclparse"
 	"github.com/pmezard/go-difflib/difflib"
+	"github.com/santosr2/TerraTidy/internal/annotations"
 	"github.com/santosr2/TerraTidy/internal/config"
 	"github.com/santosr2/TerraTidy/internal/engines/style/rules"
 	"github.com/santosr2/TerraTidy/pkg/sdk"
@@ -130,6 +131,7 @@ func (e *Engine) checkFile(parser *hclparse.Parser, path string) ([]sdk.Finding,
 	}
 
 	var allFindings []sdk.Finding
+	var suppressions []annotations.Suppression
 	maxPasses := 3 // Limit passes to prevent infinite loops
 
 	for pass := 0; pass < maxPasses; pass++ {
@@ -139,7 +141,12 @@ func (e *Engine) checkFile(parser *hclparse.Parser, path string) ([]sdk.Finding,
 			return nil, fmt.Errorf("reading file: %w", err)
 		}
 
-		// Parse fresh for each pass
+		// Parse suppression annotations on first pass
+		if pass == 0 {
+			suppressions = annotations.Parse(content)
+		}
+
+		// Parse HCL fresh for each pass
 		file, diags := parser.ParseHCL(content, path)
 		if diags.HasErrors() {
 			// Try as JSON for .tf.json files
@@ -191,7 +198,8 @@ func (e *Engine) checkFile(parser *hclparse.Parser, path string) ([]sdk.Finding,
 
 		// On first pass, collect all findings for reporting
 		if pass == 0 {
-			allFindings = findings
+			// Filter out suppressed findings based on annotations
+			allFindings = annotations.FilterFindings(findings, suppressions)
 		}
 
 		// In fix mode, apply fixes and potentially loop for another pass
@@ -213,35 +221,50 @@ func (e *Engine) checkFile(parser *hclparse.Parser, path string) ([]sdk.Finding,
 
 	// Generate diff if requested and fixes were applied
 	if e.config.Diff && e.config.Fix && originalContent != nil {
-		fixedContent, err := os.ReadFile(path)
+		diffFinding, err := e.generateDiff(path, originalContent)
 		if err != nil {
-			return nil, fmt.Errorf("reading fixed file for diff: %w", err)
+			return nil, err
 		}
-
-		if !bytes.Equal(originalContent, fixedContent) {
-			diff := difflib.UnifiedDiff{
-				A:        difflib.SplitLines(string(originalContent)),
-				B:        difflib.SplitLines(string(fixedContent)),
-				FromFile: path,
-				ToFile:   path,
-				Context:  3,
-			}
-			diffText, err := difflib.GetUnifiedDiffString(diff)
-			if err != nil {
-				return nil, fmt.Errorf("generating diff: %w", err)
-			}
-			if diffText != "" {
-				allFindings = append(allFindings, sdk.Finding{
-					Rule:     "style.diff",
-					Message:  diffText,
-					File:     path,
-					Severity: sdk.SeverityInfo,
-				})
-			}
+		if diffFinding != nil {
+			allFindings = append(allFindings, *diffFinding)
 		}
 	}
 
 	return allFindings, nil
+}
+
+// generateDiff creates a diff finding comparing original content with the current file.
+func (e *Engine) generateDiff(path string, originalContent []byte) (*sdk.Finding, error) {
+	fixedContent, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("reading fixed file for diff: %w", err)
+	}
+
+	if bytes.Equal(originalContent, fixedContent) {
+		return nil, nil
+	}
+
+	diff := difflib.UnifiedDiff{
+		A:        difflib.SplitLines(string(originalContent)),
+		B:        difflib.SplitLines(string(fixedContent)),
+		FromFile: path,
+		ToFile:   path,
+		Context:  3,
+	}
+	diffText, err := difflib.GetUnifiedDiffString(diff)
+	if err != nil {
+		return nil, fmt.Errorf("generating diff: %w", err)
+	}
+	if diffText == "" {
+		return nil, nil
+	}
+
+	return &sdk.Finding{
+		Rule:     "style.diff",
+		Message:  diffText,
+		File:     path,
+		Severity: sdk.SeverityInfo,
+	}, nil
 }
 
 // applyFixes applies auto-fixes to the file in one optimized pass.

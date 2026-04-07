@@ -1110,3 +1110,112 @@ func TestNew_PluginRulesAppendedAfterBuiltIn(t *testing.T) {
 	firstRule := rules[0]
 	assert.Equal(t, "style.blank-line-between-blocks", firstRule.Name(), "first rule should be built-in")
 }
+
+func TestEngine_SuppressionAnnotations(t *testing.T) {
+	tests := []struct {
+		name            string
+		content         string
+		expectedCount   int
+		expectedRules   []string
+		unexpectedRules []string
+	}{
+		{
+			name: "file-level suppression ignores all matching findings",
+			content: `# terratidy:ignore-file:style.block-label-case
+resource "aws_instance" "MyServer" { }
+resource "aws_s3_bucket" "AnotherBad" { }
+`,
+			expectedCount:   0,
+			unexpectedRules: []string{"style.block-label-case"},
+		},
+		{
+			name: "next-block suppression ignores only next block",
+			content: `# terratidy:ignore:style.block-label-case
+resource "aws_instance" "MyServer" { }
+
+resource "aws_s3_bucket" "AnotherBad" { }
+`,
+			expectedCount: 1, // One violation not suppressed
+			expectedRules: []string{"style.block-label-case"},
+		},
+		{
+			name: "inline suppression ignores same line",
+			content: `resource "aws_instance" "MyServer" { } # terratidy:ignore:style.block-label-case
+
+resource "aws_s3_bucket" "AnotherBad" { }
+`,
+			expectedCount: 1, // One violation not suppressed
+			expectedRules: []string{"style.block-label-case"},
+		},
+		{
+			name: "wildcard suppression matches all style rules",
+			content: `# terratidy:ignore-file:style.*
+resource "aws_instance" "MyServer" { }
+`,
+			expectedCount:   0,
+			unexpectedRules: []string{"style.block-label-case"},
+		},
+		{
+			name: "no suppression returns all findings",
+			content: `resource "aws_instance" "MyServer" { }
+resource "aws_s3_bucket" "AnotherBad" { }
+`,
+			expectedCount: 2, // Two violations
+			expectedRules: []string{"style.block-label-case"},
+		},
+		{
+			name: "suppression with non-existent rule is ignored",
+			content: `# terratidy:ignore:style.nonexistent-rule
+resource "aws_instance" "MyServer" { }
+`,
+			expectedCount: 1, // Violation still reported
+			expectedRules: []string{"style.block-label-case"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create temp file
+			tmpDir := t.TempDir()
+			tmpFile := filepath.Join(tmpDir, "test.tf")
+			err := os.WriteFile(tmpFile, []byte(tt.content), 0o644)
+			require.NoError(t, err)
+
+			// Create engine with block-label-case rule enabled
+			engine := New(&Config{
+				Rules: map[string]RuleConfig{
+					"style.block-label-case": {Enabled: true},
+				},
+			})
+
+			// Run engine
+			findings, err := engine.Run(context.Background(), []string{tmpFile})
+			require.NoError(t, err)
+
+			// Count findings matching expectedRules
+			var matchingCount int
+			for _, f := range findings {
+				for _, rule := range tt.expectedRules {
+					if f.Rule == rule {
+						matchingCount++
+						break
+					}
+				}
+			}
+
+			// Check expected count
+			if tt.expectedCount > 0 {
+				assert.Equal(t, tt.expectedCount, matchingCount,
+					"expected %d findings but got %d", tt.expectedCount, matchingCount)
+			}
+
+			// Check that unexpected rules are not present
+			for _, unexpected := range tt.unexpectedRules {
+				for _, f := range findings {
+					assert.NotEqual(t, unexpected, f.Rule,
+						"unexpected finding for rule %s", unexpected)
+				}
+			}
+		})
+	}
+}

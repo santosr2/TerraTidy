@@ -159,16 +159,26 @@ patterns:
 
 ## Disabling Rules
 
-Disable specific rules inline:
+Suppress specific rules using inline annotations:
 
 ```hcl
-# terratidy:ignore:resource-naming
+# Suppress on the next block
+# terratidy:ignore:style.block-label-case
 resource "aws_instance" "MyServer" {
   # ...
 }
+
+# Suppress inline (same line as code)
+resource "aws_s3_bucket" "Test" { } # terratidy:ignore:style.block-label-case
+
+# Suppress for the entire file
+# terratidy:ignore-file:style.variable-naming
+
+# Suppress all style rules for the file
+# terratidy:ignore-file:style.*
 ```
 
-Or globally in configuration:
+Or disable globally in configuration:
 
 ```yaml
 overrides:

@@ -164,6 +164,7 @@ Thresholds: cyclomatic complexity 25, function length 120 lines / 60 statements.
 
 | Package | Tests |
 | --- | --- |
+| `internal/annotations` | Suppression annotation parsing and filtering |
 | `internal/config` | Config loading, imports, profiles, validation |
 | `internal/engines/format` | HCL formatting |
 | `internal/engines/style` | Style rule checks (9 rule files, 9 test files in rules/) |

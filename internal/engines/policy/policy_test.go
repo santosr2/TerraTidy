@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/santosr2/TerraTidy/internal/config"
@@ -631,4 +632,100 @@ func TestConfigFromEngine(t *testing.T) {
 		assert.Empty(t, cfg.DataFiles)
 		assert.Empty(t, cfg.Rules)
 	})
+}
+
+func TestEngine_SuppressionAnnotations(t *testing.T) {
+	// Custom policy that always produces a finding
+	testPolicy := `package terraform
+
+import rego.v1
+
+deny contains msg if {
+    some resource in input.resources
+    resource.type == "aws_instance"
+    msg := {
+        "msg": sprintf("Test finding for %s", [resource.name]),
+        "rule": "test-rule",
+        "severity": "warning",
+        "file": resource._file
+    }
+}
+`
+
+	tests := []struct {
+		name          string
+		content       string
+		expectedCount int
+	}{
+		{
+			name: "file-level suppression ignores all matching findings",
+			content: `# terratidy:ignore-file:policy.test-rule
+resource "aws_instance" "example" {
+  ami = "ami-12345678"
+}
+`,
+			expectedCount: 0,
+		},
+		{
+			name: "wildcard suppression matches all policy rules",
+			content: `# terratidy:ignore-file:policy.*
+resource "aws_instance" "example" {
+  ami = "ami-12345678"
+}
+`,
+			expectedCount: 0,
+		},
+		{
+			name: "no suppression returns findings",
+			content: `resource "aws_instance" "example" {
+  ami = "ami-12345678"
+}
+`,
+			expectedCount: 1,
+		},
+		{
+			name: "suppression with non-existent rule is ignored",
+			content: `# terratidy:ignore-file:policy.nonexistent-rule
+resource "aws_instance" "example" {
+  ami = "ami-12345678"
+}
+`,
+			expectedCount: 1, // Violation still reported
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create temp directory with test file and custom policy
+			tmpDir := t.TempDir()
+			tmpFile := filepath.Join(tmpDir, "main.tf")
+			err := os.WriteFile(tmpFile, []byte(tt.content), 0o644)
+			require.NoError(t, err)
+
+			// Write custom policy
+			policyFile := filepath.Join(tmpDir, "test.rego")
+			err = os.WriteFile(policyFile, []byte(testPolicy), 0o644)
+			require.NoError(t, err)
+
+			// Create engine with custom policy
+			engine := New(&Config{
+				PolicyFiles: []string{policyFile},
+			})
+
+			// Run engine
+			findings, err := engine.Run(context.Background(), []string{tmpFile})
+			require.NoError(t, err)
+
+			// Count policy findings
+			var policyCount int
+			for _, f := range findings {
+				if strings.HasPrefix(f.Rule, "policy.") {
+					policyCount++
+				}
+			}
+
+			assert.Equal(t, tt.expectedCount, policyCount,
+				"expected %d policy findings but got %d", tt.expectedCount, policyCount)
+		})
+	}
 }

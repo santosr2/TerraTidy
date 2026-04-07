@@ -99,6 +99,11 @@ run = "go test -v -tags=integration ./..."
 description = "Run benchmarks"
 run = "bash tools/scripts/benchmark.sh"
 
+[tasks."benchmark:baseline"]
+description = "Regenerate benchmark baseline"
+run = "go test -bench=. -benchmem -count=6 -run=^$ ./internal/... | tee benchmarks/baseline.txt"
+hide = true
+
 # =============================================================================
 # Code Quality
 # =============================================================================

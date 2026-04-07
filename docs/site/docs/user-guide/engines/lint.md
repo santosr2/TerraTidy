@@ -165,21 +165,31 @@ plugins:
 
 ## Disabling Rules
 
-Disable specific rules inline:
+Suppress specific rules using inline annotations:
 
 ```hcl
-# terratidy:ignore:terraform-unused-declarations
+# Suppress on the next block
+# terratidy:ignore:lint.terraform-unused-declarations
 variable "legacy_var" {
   type = string
 }
+
+# Suppress inline (same line as code)
+variable "temp_var" { type = string } # terratidy:ignore:lint.terraform-typed-variables
+
+# Suppress for the entire file
+# terratidy:ignore-file:lint.terraform-required-version
+
+# Suppress all lint rules for the file
+# terratidy:ignore-file:lint.*
 ```
 
-Or globally in configuration:
+Or disable globally in configuration:
 
 ```yaml
 overrides:
   rules:
-    terraform-unused-declarations:
+    lint.terraform-unused-declarations:
       enabled: false
 ```
 

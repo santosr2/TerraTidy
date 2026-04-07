@@ -493,3 +493,48 @@ func TestFilterFindings(t *testing.T) {
 		assert.Equal(t, "policy.require-tags", filtered[0].Rule)
 	})
 }
+
+// TestParse_NextBlock_AtEndOfFile covers the findNextCodeLine path that returns -1
+// when a next-block annotation appears at the very end of the file with no subsequent
+// code line. The suppression is still recorded with TargetLine -1.
+func TestParse_NextBlock_AtEndOfFile(t *testing.T) {
+	tests := []struct {
+		name           string
+		content        string
+		wantLen        int
+		wantTargetLine int
+		wantType       Type
+	}{
+		{
+			name:           "annotation at end with no following code",
+			content:        "# terratidy:ignore:style.block-label-case\n",
+			wantLen:        1,
+			wantTargetLine: -1,
+			wantType:       NextBlock,
+		},
+		{
+			name:           "annotation at end followed only by blank lines",
+			content:        "# terratidy:ignore:style.block-label-case\n\n\n",
+			wantLen:        1,
+			wantTargetLine: -1,
+			wantType:       NextBlock,
+		},
+		{
+			name:           "annotation at end followed only by comments",
+			content:        "# terratidy:ignore:style.block-label-case\n# just another comment\n",
+			wantLen:        1,
+			wantTargetLine: -1,
+			wantType:       NextBlock,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			suppressions := Parse([]byte(tt.content))
+
+			require.Len(t, suppressions, tt.wantLen)
+			assert.Equal(t, tt.wantTargetLine, suppressions[0].TargetLine)
+			assert.Equal(t, tt.wantType, suppressions[0].Type)
+		})
+	}
+}

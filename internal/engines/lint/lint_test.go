@@ -502,14 +502,17 @@ func TestParseSeverity(t *testing.T) {
 
 func TestTerraformResourceCountRule(t *testing.T) {
 	// Create content with many resources
-	content := ""
-	for i := 0; i < 20; i++ {
-		content += `resource "aws_instance" "instance_` + string(rune('a'+i)) + `" {
+	var b strings.Builder
+	for i := range 20 {
+		b.WriteString(`resource "aws_instance" "instance_`)
+		b.WriteRune(rune('a' + i))
+		b.WriteString(`" {
   ami = "ami-12345"
 }
 
-`
+`)
 	}
+	content := b.String()
 
 	tmpDir := t.TempDir()
 	tmpFile := filepath.Join(tmpDir, "main.tf")
@@ -1411,4 +1414,77 @@ resource "aws_instance" "example" {
 				"expected %d lint findings but got %d", tt.expectedCount, lintCount)
 		})
 	}
+}
+
+// TestLintModule_InlineSuppressionOnNamingFinding verifies that an inline suppression
+// annotation on the same line as a resource declaration suppresses the naming-convention
+// finding for that specific resource. This exercises the annotations.FilterFindings call
+// in lintModule (line 253 of lint.go) via the fallback (non-cache) parse path.
+func TestLintModule_InlineSuppressionOnNamingFinding(t *testing.T) {
+	dir := t.TempDir()
+	// camelCase resource name produces a lint.terraform-naming-convention finding.
+	// The inline annotation on the same line should suppress it.
+	content := `resource "aws_instance" "myBadName" {} # terratidy:ignore:lint.terraform-naming-convention
+`
+	tmpFile := filepath.Join(dir, "main.tf")
+	require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0o644))
+
+	engine := New(&Config{
+		Rules: map[string]RuleConfig{
+			"lint.terraform-naming-convention": {Enabled: true},
+		},
+	})
+	// Disable all other rules so only naming-convention runs.
+	for _, r := range engine.GetAllRules() {
+		if r.Name() != "lint.terraform-naming-convention" {
+			engine.config.Rules[r.Name()] = RuleConfig{Enabled: false}
+		}
+	}
+
+	findings, err := engine.Run(context.Background(), []string{tmpFile})
+	require.NoError(t, err)
+
+	for _, f := range findings {
+		assert.NotEqual(t, "lint.terraform-naming-convention", f.Rule,
+			"inline suppression should suppress the naming-convention finding")
+	}
+}
+
+// TestLintModule_NextBlockSuppressionOnNamingFinding verifies that a next-block suppression
+// above a resource block suppresses the naming-convention finding for that block only,
+// leaving other violations unsuppressed.
+func TestLintModule_NextBlockSuppressionOnNamingFinding(t *testing.T) {
+	dir := t.TempDir()
+	content := `# terratidy:ignore:lint.terraform-naming-convention
+resource "aws_instance" "myBadName" {}
+
+resource "aws_instance" "anotherBadName" {}
+`
+	tmpFile := filepath.Join(dir, "main.tf")
+	require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0o644))
+
+	engine := New(&Config{
+		Rules: map[string]RuleConfig{
+			"lint.terraform-naming-convention": {Enabled: true},
+		},
+	})
+	for _, r := range engine.GetAllRules() {
+		if r.Name() != "lint.terraform-naming-convention" {
+			engine.config.Rules[r.Name()] = RuleConfig{Enabled: false}
+		}
+	}
+
+	findings, err := engine.Run(context.Background(), []string{tmpFile})
+	require.NoError(t, err)
+
+	// Only the second resource (line 4) should produce a finding.
+	var namingFindings []sdk.Finding
+	for _, f := range findings {
+		if f.Rule == "lint.terraform-naming-convention" {
+			namingFindings = append(namingFindings, f)
+		}
+	}
+	require.Len(t, namingFindings, 1, "only the unsuppressed resource should produce a finding")
+	assert.Equal(t, 4, namingFindings[0].Location.StartLine,
+		"finding should be on the second resource (line 4)")
 }

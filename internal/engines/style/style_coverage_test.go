@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/santosr2/TerraTidy/pkg/sdk"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -219,4 +220,146 @@ resource "aws_instance" "test2" {
 		assert.NotEqual(t, "style.blank-line-between-blocks", f.Rule,
 			"disabled rule should not produce findings")
 	}
+}
+
+// TestFixWithDiff_ProducesDiffFinding verifies that Fix+Diff mode emits a style.diff finding
+// when the file is actually changed. This exercises the generateDiff path in checkFile.
+func TestFixWithDiff_ProducesDiffFinding(t *testing.T) {
+	dir := t.TempDir()
+	// Missing blank line between blocks - blank-line rule will fix and produce a diff.
+	content := `resource "aws_instance" "test1" {
+  ami = "ami-123"
+}
+resource "aws_instance" "test2" {
+  ami = "ami-456"
+}
+`
+	tmpFile := filepath.Join(dir, "test.tf")
+	require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0o644))
+
+	engine := New(&Config{
+		Fix:   true,
+		Diff:  true,
+		Rules: make(map[string]RuleConfig),
+	})
+
+	findings, err := engine.Run(context.Background(), []string{tmpFile})
+	require.NoError(t, err)
+
+	// The engine must emit a style.diff finding containing the unified diff text.
+	var diffFinding *sdk.Finding
+	for i := range findings {
+		if findings[i].Rule == "style.diff" {
+			diffFinding = &findings[i]
+			break
+		}
+	}
+	require.NotNil(t, diffFinding, "Fix+Diff mode must produce a style.diff finding when the file changes")
+	assert.Contains(t, diffFinding.Message, "@@", "diff finding should contain unified diff markers")
+	assert.Equal(t, sdk.SeverityInfo, diffFinding.Severity)
+}
+
+// TestFixWithDiff_NoChangeNoFinding verifies that Fix+Diff mode does NOT emit a style.diff finding
+// when the file content is unchanged (i.e. no fixable issues).
+func TestFixWithDiff_NoChangeNoFinding(t *testing.T) {
+	dir := t.TempDir()
+	// Already well-formed file - nothing to fix.
+	content := `resource "aws_instance" "test1" {
+  ami = "ami-123"
+}
+
+resource "aws_instance" "test2" {
+  ami = "ami-456"
+}
+`
+	tmpFile := filepath.Join(dir, "test.tf")
+	require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0o644))
+
+	engine := New(&Config{
+		Fix:   true,
+		Diff:  true,
+		Rules: make(map[string]RuleConfig),
+	})
+
+	findings, err := engine.Run(context.Background(), []string{tmpFile})
+	require.NoError(t, err)
+
+	for _, f := range findings {
+		assert.NotEqual(t, "style.diff", f.Rule, "no diff finding expected when file is unchanged")
+	}
+}
+
+// TestCheckFile_MultiPassFix_LoopContinues verifies that the fix loop executes multiple passes
+// when fixes are applied (exercising the fixedCount > 0 → continue branch). After the engine
+// finishes all passes, the file must be fully corrected.
+func TestCheckFile_MultiPassFix_LoopContinues(t *testing.T) {
+	dir := t.TempDir()
+	// Three consecutive resources with no blank lines forces at least one full fix loop.
+	content := `resource "aws_instance" "a" {
+  ami = "ami-1"
+}
+resource "aws_instance" "b" {
+  ami = "ami-2"
+}
+resource "aws_instance" "c" {
+  ami = "ami-3"
+}
+`
+	tmpFile := filepath.Join(dir, "multipass.tf")
+	require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0o644))
+
+	engine := New(&Config{
+		Fix:   true,
+		Rules: make(map[string]RuleConfig),
+	})
+
+	_, err := engine.Run(context.Background(), []string{tmpFile})
+	require.NoError(t, err)
+
+	// After all passes the blank-line rule must be satisfied.
+	checkEngine := New(&Config{Rules: make(map[string]RuleConfig)})
+	checkFindings, err := checkEngine.Run(context.Background(), []string{tmpFile})
+	require.NoError(t, err)
+
+	for _, f := range checkFindings {
+		assert.NotEqual(t, "style.blank-line-between-blocks", f.Rule,
+			"blank-line rule must be satisfied after multi-pass fix")
+	}
+}
+
+// TestCheckFile_DiffAndFix_ReadOriginalContent covers the branch that reads the file's original
+// content when both Diff and Fix are enabled. We ensure the engine reads the file without error
+// and that the original content is captured for the eventual diff comparison.
+func TestCheckFile_DiffAndFix_ReadOriginalContent(t *testing.T) {
+	dir := t.TempDir()
+	content := `resource "aws_instance" "x" {
+  ami = "ami-x"
+}
+resource "aws_instance" "y" {
+  ami = "ami-y"
+}
+`
+	tmpFile := filepath.Join(dir, "diff_original.tf")
+	require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0o644))
+
+	engine := New(&Config{
+		Fix:   true,
+		Diff:  true,
+		Rules: make(map[string]RuleConfig),
+	})
+
+	// A successful run proves the original-content read path (lines 125-131) completed
+	// without error and that the diff generation path was reached.
+	findings, err := engine.Run(context.Background(), []string{tmpFile})
+	require.NoError(t, err)
+
+	// File was changed, so a diff finding must exist.
+	found := false
+	for _, f := range findings {
+		if f.Rule == "style.diff" {
+			found = true
+			break
+		}
+	}
+	assert.True(t, found, "diff finding expected after fixing a file with Diff+Fix mode enabled")
 }

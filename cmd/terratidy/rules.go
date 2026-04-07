@@ -280,18 +280,18 @@ func getAllRules() []RuleInfo {
 // getStyleRuleDescription returns a description for a style rule.
 func getStyleRuleDescription(name string) string {
 	descriptions := map[string]string{
-		"style.blank-lines-between-blocks": "Ensure blank lines between resource blocks",
-		"style.block-label-case":           "Enforce snake_case naming for block labels",
-		"style.for-each-count-first":       "Place for_each/count as first attribute in blocks",
-		"style.lifecycle-at-end":           "Place lifecycle block at end of resource",
-		"style.tags-at-end":                "Place tags attribute at end of resource",
-		"style.depends-on-order":           "Order depends_on references alphabetically",
-		"style.source-version-grouped":     "Group source and version in module blocks",
-		"style.variable-order":             "Order variable blocks consistently",
-		"style.output-order":               "Order output blocks consistently",
-		"style.terraform-block-first":      "Place terraform block first in file",
-		"style.provider-block-order":       "Order provider blocks after terraform block",
-		"style.no-empty-blocks":            "Disallow empty blocks",
+		"style.blank-line-between-blocks": "Ensure blank lines between resource blocks",
+		"style.block-label-case":          "Enforce snake_case naming for block labels",
+		"style.for-each-count-first":      "Place for_each/count as first attribute in blocks",
+		"style.lifecycle-at-end":          "Place lifecycle block at end of resource",
+		"style.tags-at-end":               "Place tags attribute at end of resource",
+		"style.depends-on-order":          "Ensures depends_on is at the end of resource/module blocks",
+		"style.source-version-grouped":    "Group source and version in module blocks",
+		"style.variable-order":            "Order variable blocks consistently",
+		"style.output-order":              "Order output blocks consistently",
+		"style.terraform-block-first":     "Place terraform block first in file",
+		"style.provider-block-order":      "Order provider blocks after terraform block",
+		"style.no-empty-blocks":           "Disallow empty blocks",
 	}
 
 	if desc, ok := descriptions[name]; ok {

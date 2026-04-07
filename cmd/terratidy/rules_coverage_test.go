@@ -27,7 +27,7 @@ func TestGetStyleRuleDescription(t *testing.T) {
 		name string
 		want string
 	}{
-		{"style.blank-lines-between-blocks", "Ensure blank lines between resource blocks"},
+		{"style.blank-line-between-blocks", "Ensure blank lines between resource blocks"},
 		{"style.block-label-case", "Enforce snake_case naming for block labels"},
 		{"nonexistent.rule", ""},
 	}

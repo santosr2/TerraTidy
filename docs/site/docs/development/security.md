@@ -22,7 +22,7 @@ Scans the repository for accidentally committed secrets (API keys, tokens, priva
 
 Verifies all dependencies use approved open-source licenses:
 
-- Apache-2.0, BSD-2-Clause-FreeBSD, BSD-3-Clause, MIT, MPL-2.0
+- Apache-2.0, BSD-2-Clause, BSD-2-Clause-FreeBSD, BSD-3-Clause, MIT, MPL-2.0, Unicode-DFS-2016
 
 If a new dependency uses a license not on this list, the check will fail. Open an issue if you believe a license should be added.
 

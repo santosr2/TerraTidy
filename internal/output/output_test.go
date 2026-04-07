@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -949,6 +951,43 @@ func TestTextFormatterPathBehavior(t *testing.T) {
 		require.NoError(t, err)
 		// When AbsolutePaths is true, the full path is preserved
 		assert.Contains(t, buf.String(), absPath)
+	})
+}
+
+func TestDisplayPathRelativeConversion(t *testing.T) {
+	// Test that displayPath converts absolute paths under cwd to relative paths
+	cwd, err := os.Getwd()
+	require.NoError(t, err)
+
+	// Create an absolute path under the current working directory
+	absPathUnderCwd := filepath.Join(cwd, "subdir", "test.tf")
+
+	finding := sdk.Finding{
+		Rule:     "test.rule",
+		Message:  "Test message",
+		File:     absPathUnderCwd,
+		Severity: sdk.SeverityError,
+	}
+
+	t.Run("converts to relative when under cwd", func(t *testing.T) {
+		formatter := &TextFormatter{AbsolutePaths: false}
+		var buf bytes.Buffer
+		err := formatter.Format([]sdk.Finding{finding}, &buf)
+		require.NoError(t, err)
+		output := buf.String()
+		// Should contain the relative path, not the full absolute path
+		assert.Contains(t, output, "subdir/test.tf")
+		assert.NotContains(t, output, cwd)
+	})
+
+	t.Run("keeps absolute when flag enabled", func(t *testing.T) {
+		formatter := &TextFormatter{AbsolutePaths: true}
+		var buf bytes.Buffer
+		err := formatter.Format([]sdk.Finding{finding}, &buf)
+		require.NoError(t, err)
+		output := buf.String()
+		// Should contain the full absolute path
+		assert.Contains(t, output, absPathUnderCwd)
 	})
 }
 

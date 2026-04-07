@@ -4,10 +4,9 @@ variable "account_id" {
   type        = string
 }
 
-resource "aws_instance" "web" {
-  ami           = "ami-12345678"
-  instance_type = "t2.micro"
-  description   = "Web server instance"
+resource "aws_security_group" "web" {
+  name        = "web-server"
+  description = "Security group for web server"
 
   tags = {
     Name        = "web-server"

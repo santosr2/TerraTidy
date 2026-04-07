@@ -16,7 +16,7 @@ engines:
 
   lint:
     enabled: true
-    config_file: .tflint.hcl    # Path to TFLint config file
+    config_file: .tflint.hcl    # Path to TFLint config file (only used when use_tflint: true)
     # Enable specific plugins (optional)
     plugins:
       - aws
@@ -32,7 +32,7 @@ engines:
     # fallback_builtin: true    # Use built-in rules if TFLint unavailable
     # Engine-level rule configuration
     # rules:
-    #   terraform_deprecated_interpolation:
+    #   lint.terraform-deprecated-syntax:
     #     enabled: true
     #     severity: error
 
@@ -42,20 +42,20 @@ engines:
 # Rule overrides (applies to style and lint engines)
 overrides:
   rules:
-    # Terraform core rules
-    terraform-required-version:
+    # Terraform core rules (lint engine)
+    lint.terraform-required-version:
       enabled: true
       severity: error
 
-    terraform-deprecated-syntax:
+    lint.terraform-deprecated-syntax:
       enabled: true
       severity: warning
 
-    terraform-unused-declarations:
+    lint.terraform-unused-declarations:
       enabled: true
       severity: warning
 
-    terraform-documented-variables:
+    lint.terraform-documented-variables:
       enabled: true
       severity: warning
 

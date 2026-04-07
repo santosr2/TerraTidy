@@ -8,6 +8,8 @@ tags:
   - s3
   - deprecation
 patterns:
+  block_types:
+    - resource
   resource_types:
     - aws_s3_bucket
   forbidden_attributes:

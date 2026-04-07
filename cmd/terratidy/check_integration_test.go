@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/santosr2/TerraTidy/internal/config"
+	"github.com/santosr2/TerraTidy/internal/vcs"
 	"github.com/santosr2/TerraTidy/pkg/sdk"
 )
 
@@ -2062,8 +2063,18 @@ func TestNoRecurseWithChangedScansChangedFileDirsOnly(t *testing.T) {
 	})
 
 	t.Run("with recursive=false returns only root-level changed files", func(t *testing.T) {
+		// Debug: log cwd and what git returns
+		cwd, _ := filepath.Abs(".")
+		t.Logf("DEBUG: cwd = %q", cwd)
+
+		// Get all changed files first to see what we're working with
+		git := vcs.NewGit(".")
+		allChanged, _ := git.GetAllChangedTerraformFiles()
+		t.Logf("DEBUG: all changed files = %v", allChanged)
+
 		files, err := getChangedFiles([]string{"."}, false)
 		require.NoError(t, err)
+		t.Logf("DEBUG: filtered files = %v", files)
 
 		// Should only find root-level changed file
 		assert.Len(t, files, 1, "non-recursive mode should only find root-level changed files")

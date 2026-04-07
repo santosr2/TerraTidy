@@ -78,8 +78,10 @@ jobs:
             const fs = require('fs');
             const comparison = fs.readFileSync('comparison.txt', 'utf8');
             const regression = process.env.REGRESSION === 'true';
+            const marker = '<!-- benchmark-results -->';
 
-            const body = `## Benchmark Results
+            const body = `${marker}
+            ## Benchmark Results
 
             <details>
             <summary>${regression ? '⚠️ Performance regression detected' : '✅ No significant regressions'}</summary>
@@ -93,12 +95,29 @@ jobs:
             ${regression ? '**Note:** Please review the benchmark changes before merging.' : ''}
             `;
 
-            github.rest.issues.createComment({
+            // Find existing comment
+            const { data: comments } = await github.rest.issues.listComments({
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: body
             });
+            const existing = comments.find(c => c.body.includes(marker));
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                comment_id: existing.id,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: body
+              });
+            } else {
+              await github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: body
+              });
+            }
 
       - name: Fail on regression
         if: steps.compare.outputs.regression == 'true' && github.event_name == 'pull_request'

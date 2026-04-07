@@ -115,6 +115,108 @@ func TestIsPathWithin(t *testing.T) {
 	}
 }
 
+func TestPathsEqual(t *testing.T) {
+	tests := []struct {
+		name     string
+		a        string
+		b        string
+		expected bool
+	}{
+		{"identical paths", "/project/main.tf", "/project/main.tf", true},
+		{"different paths", "/project/main.tf", "/other/main.tf", false},
+		{"empty paths", "", "", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := pathsEqual(tt.a, tt.b)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestHasPathPrefix(t *testing.T) {
+	tests := []struct {
+		name     string
+		path     string
+		prefix   string
+		expected bool
+	}{
+		{"has prefix", "/project/modules/main.tf", "/project", true},
+		{"exact match", "/project", "/project", true},
+		{"no prefix", "/other/main.tf", "/project", false},
+		{"partial prefix mismatch", "/project-other/main.tf", "/project", true}, // prefix match, but not path boundary
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := hasPathPrefix(tt.path, tt.prefix)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestIsFileDirectlyIn(t *testing.T) {
+	tests := []struct {
+		name     string
+		filePath string
+		dirPath  string
+		expected bool
+	}{
+		{"file directly in directory", "/project/main.tf", "/project", true},
+		{"file in subdirectory", "/project/modules/main.tf", "/project", false},
+		{"file in nested subdirectory", "/project/modules/vpc/main.tf", "/project", false},
+		{"different directory", "/other/main.tf", "/project", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := isFileDirectlyIn(tt.filePath, tt.dirPath)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestGetEffectiveRecursive(t *testing.T) {
+	// Save and restore global state
+	oldNoRecurse := noRecurse
+	t.Cleanup(func() {
+		noRecurse = oldNoRecurse
+	})
+
+	t.Run("noRecurse flag true overrides config", func(t *testing.T) {
+		noRecurse = true
+		trueVal := true
+		cfg := &config.Config{Recursive: &trueVal}
+		assert.False(t, getEffectiveRecursive(cfg))
+	})
+
+	t.Run("noRecurse flag false with nil config returns true", func(t *testing.T) {
+		noRecurse = false
+		assert.True(t, getEffectiveRecursive(nil))
+	})
+
+	t.Run("noRecurse flag false with config recursive true", func(t *testing.T) {
+		noRecurse = false
+		trueVal := true
+		cfg := &config.Config{Recursive: &trueVal}
+		assert.True(t, getEffectiveRecursive(cfg))
+	})
+
+	t.Run("noRecurse flag false with config recursive false", func(t *testing.T) {
+		noRecurse = false
+		falseVal := false
+		cfg := &config.Config{Recursive: &falseVal}
+		assert.False(t, getEffectiveRecursive(cfg))
+	})
+
+	t.Run("noRecurse flag false with config recursive nil returns true", func(t *testing.T) {
+		noRecurse = false
+		cfg := &config.Config{Recursive: nil}
+		assert.True(t, getEffectiveRecursive(cfg))
+	})
+}
+
 func TestFormatFileCount(t *testing.T) {
 	tests := []struct {
 		count    int
@@ -169,14 +271,20 @@ func TestFindHCLFiles(t *testing.T) {
 	require.NoError(t, os.MkdirAll(hiddenDir, 0o755))
 	require.NoError(t, os.WriteFile(filepath.Join(hiddenDir, "cached.tf"), []byte("# cache"), 0o644))
 
-	t.Run("finds all HCL files", func(t *testing.T) {
-		files, err := findHCLFiles([]string{tmpDir})
+	t.Run("finds all HCL files recursively", func(t *testing.T) {
+		files, err := findHCLFiles([]string{tmpDir}, true)
 		require.NoError(t, err)
 		assert.Len(t, files, 3) // main.tf, variables.tf, modules/vpc/main.tf
 	})
 
+	t.Run("finds only top-level files non-recursively", func(t *testing.T) {
+		files, err := findHCLFiles([]string{tmpDir}, false)
+		require.NoError(t, err)
+		assert.Len(t, files, 2) // main.tf, variables.tf (not modules/vpc/main.tf)
+	})
+
 	t.Run("skips hidden directories", func(t *testing.T) {
-		files, err := findHCLFiles([]string{tmpDir})
+		files, err := findHCLFiles([]string{tmpDir}, true)
 		require.NoError(t, err)
 
 		for _, f := range files {
@@ -186,13 +294,13 @@ func TestFindHCLFiles(t *testing.T) {
 
 	t.Run("handles single file path", func(t *testing.T) {
 		singleFile := filepath.Join(tmpDir, "main.tf")
-		files, err := findHCLFiles([]string{singleFile})
+		files, err := findHCLFiles([]string{singleFile}, true)
 		require.NoError(t, err)
 		assert.Len(t, files, 1)
 	})
 
 	t.Run("handles non-existent path", func(t *testing.T) {
-		_, err := findHCLFiles([]string{"/non/existent/path"})
+		_, err := findHCLFiles([]string{"/non/existent/path"}, true)
 		assert.Error(t, err)
 	})
 }
@@ -208,13 +316,13 @@ func TestFindHCLFilesFromPaths(t *testing.T) {
 		require.NoError(t, os.Chdir(tmpDir))
 		defer func() { _ = os.Chdir(oldWd) }()
 
-		files, err := findHCLFilesFromPaths([]string{})
+		files, err := findHCLFilesFromPaths([]string{}, true)
 		require.NoError(t, err)
 		assert.Len(t, files, 1)
 	})
 
 	t.Run("uses provided paths", func(t *testing.T) {
-		files, err := findHCLFilesFromPaths([]string{tmpDir})
+		files, err := findHCLFilesFromPaths([]string{tmpDir}, true)
 		require.NoError(t, err)
 		assert.Len(t, files, 1)
 	})
@@ -224,8 +332,8 @@ func TestFileCollector(t *testing.T) {
 	tmpDir := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "main.tf"), []byte("# test"), 0o644))
 
-	t.Run("collects unique files", func(t *testing.T) {
-		collector := newFileCollector()
+	t.Run("collects unique files recursively", func(t *testing.T) {
+		collector := newFileCollector(true)
 		err := collector.collectPath(tmpDir)
 		require.NoError(t, err)
 		assert.Len(t, collector.files, 1)
@@ -237,7 +345,7 @@ func TestFileCollector(t *testing.T) {
 	})
 
 	t.Run("handles single file", func(t *testing.T) {
-		collector := newFileCollector()
+		collector := newFileCollector(true)
 		err := collector.collectPath(filepath.Join(tmpDir, "main.tf"))
 		require.NoError(t, err)
 		assert.Len(t, collector.files, 1)
@@ -1749,12 +1857,12 @@ func TestGetTargetFilesWithExcludes(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(modulesDir, "module.tf"), []byte("# module"), 0o644))
 
 	// Test: files without excludes
-	files, err := getTargetFilesWithExcludes([]string{tmpDir}, false, nil)
+	files, err := getTargetFilesWithExcludes([]string{tmpDir}, false, nil, nil)
 	require.NoError(t, err)
 	assert.Len(t, files, 4, "should find all 4 files without excludes")
 
 	// Test: exclude external directory
-	files, err = getTargetFilesWithExcludes([]string{tmpDir}, false, []string{"external/**"})
+	files, err = getTargetFilesWithExcludes([]string{tmpDir}, false, []string{"external/**"}, nil)
 	require.NoError(t, err)
 	assert.Len(t, files, 3, "should exclude external directory")
 	for _, f := range files {
@@ -1762,7 +1870,7 @@ func TestGetTargetFilesWithExcludes(t *testing.T) {
 	}
 
 	// Test: exclude generated files
-	files, err = getTargetFilesWithExcludes([]string{tmpDir}, false, []string{"**/*.generated.tf"})
+	files, err = getTargetFilesWithExcludes([]string{tmpDir}, false, []string{"**/*.generated.tf"}, nil)
 	require.NoError(t, err)
 	assert.Len(t, files, 3, "should exclude generated files")
 	for _, f := range files {
@@ -1770,7 +1878,7 @@ func TestGetTargetFilesWithExcludes(t *testing.T) {
 	}
 
 	// Test: multiple excludes
-	files, err = getTargetFilesWithExcludes([]string{tmpDir}, false, []string{"external/**", "**/*.generated.tf"})
+	files, err = getTargetFilesWithExcludes([]string{tmpDir}, false, []string{"external/**", "**/*.generated.tf"}, nil)
 	require.NoError(t, err)
 	assert.Len(t, files, 2, "should exclude both external and generated files")
 }
@@ -1784,7 +1892,7 @@ func TestGetTargetFilesWithExcludes_ChangedError(t *testing.T) {
 	require.NoError(t, os.Chdir(nonGitDir))
 	defer func() { _ = os.Chdir(oldWd) }()
 
-	_, err := getTargetFilesWithExcludes([]string{nonGitDir}, true, nil)
+	_, err := getTargetFilesWithExcludes([]string{nonGitDir}, true, nil, nil)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "not a git repository")
 }

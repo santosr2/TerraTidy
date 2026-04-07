@@ -12,6 +12,7 @@ These flags are available for all commands:
 | `--profile`            | Configuration profile to use                                                                             |
 | `--format`             | Output format: `text`, `json`, `json-compact`, `sarif`, `html`, `github`, `table`, `junit`, `markdown`   |
 | `--changed`            | Only check files changed in git                                                                          |
+| `--no-recurse`         | Disable recursive directory traversal (scan only specified directories, not subdirectories)             |
 | `--exclude`            | Glob patterns to exclude (repeatable or comma-separated)                                                 |
 | `--color`              | Enable colored output (default: true)                                                                    |
 | `--severity-threshold` | Minimum severity: `info`, `warning`, `error`                                                             |
@@ -48,6 +49,40 @@ terratidy style --changed
 4. Deduplicates and converts to absolute paths
 
 This means `--changed` catches all local modifications, whether staged, unstaged, or new files.
+
+## Non-Recursive Scanning (`--no-recurse`)
+
+By default, TerraTidy recursively scans all subdirectories. Use `--no-recurse` to scan only the specified directories:
+
+```bash
+# Scan only the current directory (not subdirectories)
+terratidy check --no-recurse
+
+# Scan only the modules/ directory (not modules/vpc/, modules/rds/, etc.)
+terratidy check --no-recurse modules/
+
+# Scan multiple specific directories without recursion
+terratidy check --no-recurse . modules/ environments/
+```
+
+**With `--changed`:**
+
+When combined with `--changed`, only changed files directly in the specified directories are processed:
+
+```bash
+# Only check changed files in the current directory (not subdirs)
+terratidy check --changed --no-recurse
+```
+
+**Via config:**
+
+You can also set this in `.terratidy.yaml`:
+
+```yaml
+recursive: false
+```
+
+The CLI flag `--no-recurse` takes precedence over the config file setting.
 
 ## Inline Rule Suppression
 

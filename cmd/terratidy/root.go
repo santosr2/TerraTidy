@@ -9,6 +9,7 @@ var (
 	profile           string
 	format            string
 	changed           bool
+	noRecurse         bool
 	severityThreshold string
 	color             bool
 	excludePatterns   []string
@@ -30,6 +31,7 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&profile, "profile", "", "profile to use from config")
 	rootCmd.PersistentFlags().StringVar(&format, "format", "text", "output format (text|table|json|json-compact|sarif|html|junit|markdown|github)")
 	rootCmd.PersistentFlags().BoolVar(&changed, "changed", false, "only check changed files")
+	rootCmd.PersistentFlags().BoolVar(&noRecurse, "no-recurse", false, "disable recursive directory traversal")
 	rootCmd.PersistentFlags().StringVar(
 		&severityThreshold, "severity-threshold", "",
 		"minimum severity level to fail (info|warning|error)",

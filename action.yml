@@ -50,6 +50,10 @@ inputs:
     description: "Glob patterns to exclude (comma-separated, e.g., '**/*.generated.tf,vendor/**')"
     required: false
     default: ""
+  no-recurse:
+    description: "Disable recursive directory traversal (scan only specified directories)"
+    required: false
+    default: "false"
   fail-on-error:
     description: "Fail the action if errors are found"
     required: false

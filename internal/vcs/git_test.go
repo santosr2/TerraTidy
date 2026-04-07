@@ -168,12 +168,16 @@ func TestGit_NewTempRepo(t *testing.T) {
 	cmd.Dir = tmpDir
 	require.NoError(t, cmd.Run())
 
-	// Configure git user for commits
+	// Configure git user for commits and disable GPG signing
 	cmd = exec.Command("git", "config", "user.email", "test@test.com")
 	cmd.Dir = tmpDir
 	require.NoError(t, cmd.Run())
 
 	cmd = exec.Command("git", "config", "user.name", "Test User")
+	cmd.Dir = tmpDir
+	require.NoError(t, cmd.Run())
+
+	cmd = exec.Command("git", "config", "commit.gpgsign", "false")
 	cmd.Dir = tmpDir
 	require.NoError(t, cmd.Run())
 

@@ -72,7 +72,7 @@ func runCheck(_ *cobra.Command, args []string) error {
 		return fmt.Errorf("loading plugins: %w", err)
 	}
 
-	files, err := getTargetFilesWithExcludes(args, changed, cfg.Exclude)
+	files, err := getTargetFilesWithExcludes(args, changed, cfg.Exclude, cfg)
 	if err != nil {
 		return fmt.Errorf("finding files: %w", err)
 	}

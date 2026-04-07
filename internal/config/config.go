@@ -118,6 +118,7 @@ type Config struct {
 	SeverityThreshold string      `yaml:"severity_threshold,omitempty"`
 	FailFast          bool        `yaml:"fail_fast,omitempty"`
 	Parallel          bool        `yaml:"parallel,omitempty"`
+	Recursive         *bool       `yaml:"recursive,omitempty"` // Directory recursion (default: true)
 	Cache             CacheConfig `yaml:"cache,omitempty"`
 
 	// Overrides
@@ -597,6 +598,15 @@ func (c *Config) SetDefaults() {
 	if c.Version == 0 {
 		c.Version = 1
 	}
+}
+
+// IsRecursive returns whether directory traversal should be recursive.
+// Returns true by default if not explicitly set in config.
+func (c *Config) IsRecursive() bool {
+	if c.Recursive == nil {
+		return true // Default to recursive
+	}
+	return *c.Recursive
 }
 
 // Validate checks the configuration for errors.

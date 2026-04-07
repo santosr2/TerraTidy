@@ -22,6 +22,7 @@ engines:
 severity_threshold: warning
 fail_fast: false
 parallel: true
+recursive: true
 ```
 
 ### Engine Configuration
@@ -266,6 +267,7 @@ imports:
 severity_threshold: warning
 fail_fast: false
 parallel: true
+recursive: true
 
 engines:
   fmt:
@@ -355,6 +357,31 @@ Only triggers on `error` severity, not warnings or info. Only applies to sequent
 
 ```yaml
 fail_fast: true  # Stop after first engine with errors
+```
+
+### recursive
+
+Enable or disable recursive directory scanning. Default: `true`.
+
+```yaml
+recursive: true   # Scan all subdirectories (default)
+recursive: false  # Only scan files directly in specified directories
+```
+
+When `recursive: false`, TerraTidy only processes files directly in the specified directories,
+not in their subdirectories. This is useful when you want to check specific directories without
+descending into nested modules.
+
+Can be overridden with `--no-recurse` CLI flag (the CLI flag takes precedence).
+
+**Example:**
+
+```bash
+# With recursive: true (default), scans modules/, modules/vpc/, modules/rds/, etc.
+terratidy check modules/
+
+# With recursive: false, scans only modules/ (not modules/vpc/, etc.)
+terratidy check modules/
 ```
 
 ### Cache

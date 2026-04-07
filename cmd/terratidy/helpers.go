@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/santosr2/TerraTidy/internal/cache"
@@ -230,6 +231,24 @@ func getChangedFiles(filterPaths []string, recursive bool) ([]string, error) {
 	return vcs.FilterExisting(filteredFiles), nil
 }
 
+// pathsEqual compares two paths for equality.
+// On Windows, comparison is case-insensitive due to drive letter casing differences.
+func pathsEqual(a, b string) bool {
+	if runtime.GOOS == "windows" {
+		return strings.EqualFold(a, b)
+	}
+	return a == b
+}
+
+// hasPathPrefix checks if path starts with prefix.
+// On Windows, comparison is case-insensitive due to drive letter casing differences.
+func hasPathPrefix(path, prefix string) bool {
+	if runtime.GOOS == "windows" {
+		return strings.HasPrefix(strings.ToLower(path), strings.ToLower(prefix))
+	}
+	return strings.HasPrefix(path, prefix)
+}
+
 // isPathWithin checks if a file path is within a directory path (recursively).
 func isPathWithin(filePath, dirPath string) bool {
 	// Clean and normalize paths
@@ -237,9 +256,9 @@ func isPathWithin(filePath, dirPath string) bool {
 	dirPath = filepath.Clean(dirPath)
 
 	// Check if file starts with directory path
-	if strings.HasPrefix(filePath, dirPath) {
+	if hasPathPrefix(filePath, dirPath) {
 		// Make sure it's actually within (not just a prefix match)
-		remainder := strings.TrimPrefix(filePath, dirPath)
+		remainder := filePath[len(dirPath):]
 		return remainder == "" || strings.HasPrefix(remainder, string(filepath.Separator))
 	}
 	return false
@@ -255,7 +274,8 @@ func isFileDirectlyIn(filePath, dirPath string) bool {
 	fileDir := filepath.Dir(filePath)
 
 	// File is directly in dirPath if its parent directory matches exactly
-	return fileDir == dirPath
+	// Use pathsEqual for case-insensitive comparison on Windows
+	return pathsEqual(fileDir, dirPath)
 }
 
 // findHCLFilesFromPaths is a helper that handles default paths and delegates to findHCLFiles.

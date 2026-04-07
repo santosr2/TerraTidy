@@ -115,6 +115,108 @@ func TestIsPathWithin(t *testing.T) {
 	}
 }
 
+func TestPathsEqual(t *testing.T) {
+	tests := []struct {
+		name     string
+		a        string
+		b        string
+		expected bool
+	}{
+		{"identical paths", "/project/main.tf", "/project/main.tf", true},
+		{"different paths", "/project/main.tf", "/other/main.tf", false},
+		{"empty paths", "", "", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := pathsEqual(tt.a, tt.b)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestHasPathPrefix(t *testing.T) {
+	tests := []struct {
+		name     string
+		path     string
+		prefix   string
+		expected bool
+	}{
+		{"has prefix", "/project/modules/main.tf", "/project", true},
+		{"exact match", "/project", "/project", true},
+		{"no prefix", "/other/main.tf", "/project", false},
+		{"partial prefix mismatch", "/project-other/main.tf", "/project", true}, // prefix match, but not path boundary
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := hasPathPrefix(tt.path, tt.prefix)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestIsFileDirectlyIn(t *testing.T) {
+	tests := []struct {
+		name     string
+		filePath string
+		dirPath  string
+		expected bool
+	}{
+		{"file directly in directory", "/project/main.tf", "/project", true},
+		{"file in subdirectory", "/project/modules/main.tf", "/project", false},
+		{"file in nested subdirectory", "/project/modules/vpc/main.tf", "/project", false},
+		{"different directory", "/other/main.tf", "/project", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := isFileDirectlyIn(tt.filePath, tt.dirPath)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestGetEffectiveRecursive(t *testing.T) {
+	// Save and restore global state
+	oldNoRecurse := noRecurse
+	t.Cleanup(func() {
+		noRecurse = oldNoRecurse
+	})
+
+	t.Run("noRecurse flag true overrides config", func(t *testing.T) {
+		noRecurse = true
+		trueVal := true
+		cfg := &config.Config{Recursive: &trueVal}
+		assert.False(t, getEffectiveRecursive(cfg))
+	})
+
+	t.Run("noRecurse flag false with nil config returns true", func(t *testing.T) {
+		noRecurse = false
+		assert.True(t, getEffectiveRecursive(nil))
+	})
+
+	t.Run("noRecurse flag false with config recursive true", func(t *testing.T) {
+		noRecurse = false
+		trueVal := true
+		cfg := &config.Config{Recursive: &trueVal}
+		assert.True(t, getEffectiveRecursive(cfg))
+	})
+
+	t.Run("noRecurse flag false with config recursive false", func(t *testing.T) {
+		noRecurse = false
+		falseVal := false
+		cfg := &config.Config{Recursive: &falseVal}
+		assert.False(t, getEffectiveRecursive(cfg))
+	})
+
+	t.Run("noRecurse flag false with config recursive nil returns true", func(t *testing.T) {
+		noRecurse = false
+		cfg := &config.Config{Recursive: nil}
+		assert.True(t, getEffectiveRecursive(cfg))
+	})
+}
+
 func TestFormatFileCount(t *testing.T) {
 	tests := []struct {
 		count    int

@@ -24,10 +24,11 @@ All commands use consistent exit codes:
 
 | Code | Meaning |
 |------|---------|
-| `0`  | Success, no errors found |
-| `1`  | Errors found (severity = error), or check mode violations |
+| `0`  | Success, no issues found |
+| `1`  | Issues found, configuration error, or internal error |
 
-In `--check` mode (fmt, style), any findings cause exit code 1. In normal mode, only error-severity findings cause exit code 1.
+The `--check` flag on `fmt` and `style` exits with code 1 if any issues are found, regardless of severity.
+The `check` command exits with code 1 when error-severity findings are present or when any error occurs.
 
 ## VCS Integration (`--changed`)
 
@@ -84,6 +85,84 @@ recursive: false
 ```
 
 The CLI flag `--no-recurse` takes precedence over the config file setting.
+
+## Glob Exclusions (`--exclude`)
+
+Exclude files or directories from processing using glob patterns:
+
+```bash
+# Exclude generated files
+terratidy check --exclude "**/*.generated.tf"
+
+# Exclude test fixtures
+terratidy check --exclude "test/**"
+
+# Exclude multiple patterns (comma-separated)
+terratidy check --exclude "**/*.generated.tf,test/**,vendor/**"
+
+# Exclude multiple patterns (repeated flag)
+terratidy check --exclude "**/*.generated.tf" --exclude "test/**"
+```
+
+**Pattern syntax:**
+
+- `*` - matches any sequence of characters (except `/`)
+- `**` - matches zero or more directory levels
+- `?` - matches any single character
+
+**Examples:**
+
+| Pattern | Matches |
+|---------|---------|
+| `*.tf` | `main.tf`, `variables.tf` |
+| `**/*.tf` | All `.tf` files in any directory |
+| `modules/*/` | `modules/vpc/`, `modules/rds/` |
+| `test/**` | Everything under `test/` |
+
+**With config file:**
+
+CLI `--exclude` patterns are combined with config file `exclude` patterns:
+
+```yaml
+# .terratidy.yaml
+exclude:
+  - ".terraform/**"
+  - "vendor/**"
+```
+
+```bash
+# This combines config patterns + CLI pattern
+terratidy check --exclude "test/**"
+```
+
+## Absolute Paths (`--absolute-paths`)
+
+By default, TerraTidy outputs relative file paths for readability. Use `--absolute-paths` when you need full paths:
+
+```bash
+# Default: relative paths
+terratidy check
+# Output: modules/vpc/main.tf:15: ...
+
+# Absolute paths
+terratidy check --absolute-paths
+# Output: /home/user/project/modules/vpc/main.tf:15: ...
+```
+
+**When to use:**
+
+- Tooling that requires absolute paths
+- CI systems that run from different working directories
+- Editor integrations that need full paths for navigation
+
+**Via config:**
+
+```yaml
+output:
+  absolute_paths: true
+```
+
+The CLI flag `--absolute-paths` takes precedence over the config file setting.
 
 ## Inline Rule Suppression
 
@@ -267,7 +346,7 @@ defaults to warning severity.
 terratidy lint
 
 # Enable specific rules
-terratidy lint --rule terraform_required_version --rule terraform_required_providers
+terratidy lint --rule terraform-required-version --rule terraform-required-providers
 
 # Use a specific TFLint config
 terratidy lint --config-file .tflint-strict.hcl
@@ -464,10 +543,10 @@ terratidy rules [command]
 
 **Flags (list):**
 
-| Flag       | Description                                     |
-| ---------- | ----------------------------------------------- |
-| `--engine` | Filter by engine: `style`, `lint`, `policy`     |
-| `-v`       | Show detailed descriptions                      |
+| Flag              | Description                                     |
+| ----------------- | ----------------------------------------------- |
+| `--engine`        | Filter by engine: `style`, `lint`, `policy`     |
+| `--verbose`, `-v` | Show detailed descriptions                      |
 
 **Flags (docs):**
 
@@ -587,6 +666,13 @@ terratidy lsp [flags]
 ```
 
 Used by IDE extensions for real-time diagnostics.
+
+**Flags:**
+
+| Flag          | Description                                            |
+| ------------- | ------------------------------------------------------ |
+| `--log-level` | Log level: off, error, warn, info, debug (default: info) |
+| `--log-file`  | Path to log file (default: stderr)                     |
 
 ## terratidy dev
 

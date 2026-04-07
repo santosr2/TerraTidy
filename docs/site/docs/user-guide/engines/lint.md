@@ -19,7 +19,7 @@ terratidy lint
 terratidy lint --config-file .tflint.custom.hcl
 
 # Enable specific rules
-terratidy lint --rule terraform_required_version
+terratidy lint --rule terraform-required-version
 
 # Enable a provider plugin
 terratidy lint --plugin aws
@@ -42,7 +42,7 @@ engines:
     tflint_path: /usr/local/bin/tflint  # Custom TFLint binary path
     fallback_builtin: true         # Use built-in rules if TFLint unavailable
     rules:                         # Rule-specific configuration
-      terraform_deprecated_interpolation:
+      lint.terraform-deprecated-syntax:
         enabled: true
         severity: error
 ```

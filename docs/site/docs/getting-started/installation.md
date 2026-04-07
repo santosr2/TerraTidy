@@ -4,7 +4,7 @@ TerraTidy can be installed in several ways.
 
 ## Go Install
 
-If you have Go installed (1.26.1+):
+If you have Go installed (1.25+):
 
 ```bash
 go install github.com/santosr2/TerraTidy/cmd/terratidy@latest

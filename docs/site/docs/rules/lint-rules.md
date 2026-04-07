@@ -75,7 +75,7 @@ Detects deprecated interpolation-only expressions like `"${var.x}"`.
 | ---------------- | --------------------------------- |
 | Rule ID          | `lint.terraform-deprecated-syntax`|
 | Default Severity | Warning                           |
-| Fixable          | Yes                               |
+| Fixable          | No                                |
 | Default          | Enabled                           |
 
 **Example:**
@@ -273,9 +273,9 @@ Warns when a file has too many resources, suggesting it should be split.
 engines:
   lint:
     rules:
-      terraform-resource-count:
+      lint.terraform-resource-count:
         enabled: true
-        options:
+        config:
           threshold: 10  # Custom threshold
 ```
 
@@ -286,7 +286,7 @@ Detects potential hardcoded secrets like AWS keys, passwords, and API tokens.
 | Property         | Value                               |
 | ---------------- | ----------------------------------- |
 | Rule ID          | `lint.terraform-hardcoded-secrets`  |
-| Default Severity | Error/Warning                       |
+| Default Severity | Error                               |
 | Fixable          | No                                  |
 | Default          | Enabled                             |
 
@@ -334,9 +334,11 @@ provider-specific rules. TFLint is **not embedded or linked** as a library.
 engines:
   lint:
     enabled: true
-    config_file: .tflint.hcl  # Path to TFLint config
+    use_tflint: true            # Enable TFLint subprocess integration
+    config_file: .tflint.hcl    # Path to TFLint config
     plugins:                    # TFLint provider plugins
       - aws
+    fallback_builtin: true      # Use built-in rules if TFLint unavailable
 ```
 
 ### TFLint Rules
@@ -377,15 +379,15 @@ engines:
   lint:
     enabled: true
     rules:
-      terraform-documented-variables:
+      lint.terraform-documented-variables:
         enabled: true
         severity: warning
-      terraform-typed-variables:
+      lint.terraform-typed-variables:
         enabled: true
         severity: info
-      terraform-resource-count:
+      lint.terraform-resource-count:
         enabled: true
-        options:
+        config:
           threshold: 20
 ```
 
@@ -411,7 +413,7 @@ resource "aws_instance" "WebServer" { }
 engines:
   lint:
     rules:
-      terraform-naming-convention:
+      lint.terraform-naming-convention:
         enabled: false
 ```
 
@@ -421,7 +423,7 @@ engines:
 | ----------------------------- | -------- | ------- | ---------------------------------------------- |
 | `terraform-required-version`  | Warning  | No      | Requires terraform required_version constraint |
 | `terraform-required-providers`| Info     | No      | Requires required_providers block              |
-| `terraform-deprecated-syntax` | Warning  | Yes     | Detects deprecated interpolation syntax        |
+| `terraform-deprecated-syntax` | Warning  | No      | Detects deprecated interpolation syntax        |
 | `terraform-documented-variables` | Warning | No   | Variables must have descriptions               |
 | `terraform-typed-variables`   | Info     | No      | Variables must have type constraints           |
 | `terraform-documented-outputs`| Info     | No      | Outputs must have descriptions                 |

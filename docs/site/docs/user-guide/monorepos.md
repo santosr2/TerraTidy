@@ -62,6 +62,16 @@ terratidy check --changed
 
 This checks all modified `.tf`/`.hcl`/`.tfvars` files across the entire repo.
 
+### Exclude specific modules
+
+```bash
+# Exclude legacy modules during migration
+terratidy check --exclude "modules/legacy/**"
+
+# Check everything except test fixtures
+terratidy check --exclude "test/**,**/testdata/**"
+```
+
 ## Profile-Based Workflows
 
 ### Local development (fast)

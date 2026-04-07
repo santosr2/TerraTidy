@@ -71,28 +71,39 @@ overrides:
 
 | Rule | Description |
 |------|-------------|
-| `resource-naming` | Resources should follow naming convention |
-| `variable-naming` | Variables should follow naming convention |
-| `output-naming` | Outputs should follow naming convention |
-| `module-naming` | Module calls should follow naming convention |
+| `style.block-label-case` | Block labels should follow naming convention |
+| `style.variable-naming` | Variables should follow naming convention |
+| `style.output-naming` | Outputs should follow naming convention |
+| `style.local-naming` | Locals should follow naming convention |
+| `style.module-name-convention` | Module calls should follow naming convention |
 
 ### Attribute Ordering
 
-The style engine can enforce a consistent attribute order within blocks:
+The style engine enforces attribute ordering through individual rules:
 
-1. Meta-arguments (`count`, `for_each`, `provider`)
-2. Required attributes
-3. Optional attributes
-4. Nested blocks
-5. Lifecycle meta-arguments (`depends_on`, `lifecycle`)
+| Rule | Description |
+|------|-------------|
+| `style.for-each-count-first` | `for_each`/`count` should be first attribute |
+| `style.lifecycle-at-end` | `lifecycle` block should be at end |
+| `style.tags-at-end` | `tags` should be near end (before lifecycle) |
+| `style.depends-on-order` | `depends_on` should be at end |
+| `style.source-version-grouped` | `source` and `version` grouped at start of module |
+| `style.variable-order` | Variable attributes in consistent order |
+| `style.output-order` | Output attributes in consistent order |
+
+See [Style Rules](../../rules/style-rules.md) for complete details.
 
 ### File Organization
 
 | Rule | Description |
 |------|-------------|
-| `variables-file` | Variables should be in `variables.tf` |
-| `outputs-file` | Outputs should be in `outputs.tf` |
-| `providers-file` | Provider configs should be in `providers.tf` |
+| `style.variables-in-file` | Variables should be in `variables.tf` |
+| `style.outputs-in-file` | Outputs should be in `outputs.tf` |
+| `style.providers-in-file` | Provider configs should be in `providers.tf` |
+| `style.scoped-file-organization` | Resources in scoped files (network.tf, etc.) |
+| `style.terraform-files-structure` | Standard file structure conventions |
+
+**Note:** File organization rules are disabled by default. Enable them in configuration.
 
 ## Example
 

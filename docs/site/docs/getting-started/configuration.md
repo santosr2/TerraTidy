@@ -71,7 +71,7 @@ Configuration values can use environment variables with three syntaxes:
 | ------------------- | --------------------------------------------- |
 | `${VAR}`            | Substitutes the value; empty string if unset  |
 | `${VAR:-default}`   | Uses `default` if `VAR` is unset              |
-| `${VAR:?error}`     | Required variable (empty string if unset)     |
+| `${VAR:?error}`     | Marks as required; empty string if unset      |
 
 ```yaml
 engines:
@@ -163,8 +163,9 @@ overrides:
     style.blank-line-between-blocks:
       enabled: false
 
-    # Change severity
+    # Change severity (note: must include enabled: true)
     lint.terraform-required-version:
+      enabled: true
       severity: error
 
     # Style rule with options (note the nested 'options' key)
@@ -410,8 +411,8 @@ and rarely needs configuration.
 
 ```yaml
 cache:
-  max_age: 10m    # Maximum age of cache entries (default: 5m)
-  max_size: 500   # Maximum number of entries, LRU eviction (default: 1000)
+  max_age: 5m     # Maximum age of cache entries (default: 5m)
+  max_size: 1000  # Maximum number of entries, LRU eviction (default: 1000)
   disabled: false # Disable caching entirely (default: false)
 ```
 

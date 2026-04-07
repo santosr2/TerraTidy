@@ -49,6 +49,12 @@ terratidy check main.tf variables.tf
 terratidy check --changed
 ```
 
+### Exclude Files or Directories
+
+```bash
+terratidy check --exclude "test/**,**/*.generated.tf"
+```
+
 ## Run Individual Engines
 
 ```bash

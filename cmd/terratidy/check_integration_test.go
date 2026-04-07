@@ -1801,3 +1801,152 @@ profiles:
 	// With minimal profile, only fmt runs (no style/lint findings)
 	_ = err
 }
+
+func TestExcludedFilesNotProcessed(t *testing.T) {
+	// Create temp directory with test files
+	dir := t.TempDir()
+
+	// Create directory structure
+	generatedDir := filepath.Join(dir, "generated")
+	require.NoError(t, os.MkdirAll(generatedDir, 0o755))
+
+	// Create a properly formatted file that should be processed
+	mainContent := `resource "aws_instance" "test" {
+  ami           = "ami-123"
+  instance_type = "t2.micro"
+}
+`
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "main.tf"), []byte(mainContent), 0o644))
+
+	// Create an improperly formatted file in "generated" directory
+	// This would normally produce findings, but should be excluded
+	badContent := `resource "aws_instance" "bad"   {
+ami="ami-123"
+instance_type="t2.micro"
+}`
+	require.NoError(t, os.WriteFile(filepath.Join(generatedDir, "auto.generated.tf"), []byte(badContent), 0o644))
+
+	// Create config with exclude patterns
+	configContent := `version: 1
+exclude:
+  - "generated/**"
+  - "**/*.generated.tf"
+engines:
+  fmt:
+    enabled: true
+  style:
+    enabled: false
+  lint:
+    enabled: false
+  policy:
+    enabled: false
+`
+	configPath := filepath.Join(dir, ".terratidy.yaml")
+	require.NoError(t, os.WriteFile(configPath, []byte(configContent), 0o644))
+
+	// Save and restore global state
+	oldCfgFile := cfgFile
+	oldProfile := profile
+	oldFormat := format
+	oldChanged := changed
+	oldExclude := excludePatterns
+	t.Cleanup(func() {
+		cfgFile = oldCfgFile
+		profile = oldProfile
+		format = oldFormat
+		changed = oldChanged
+		excludePatterns = oldExclude
+	})
+
+	// Load config with excludes
+	cfgFile = configPath
+	profile = ""
+	format = "text"
+	changed = false
+	excludePatterns = nil
+
+	cfg, err := loadConfig()
+	require.NoError(t, err)
+
+	// Get files with excludes
+	files, err := getTargetFilesWithExcludes([]string{dir}, false, cfg.Exclude)
+	require.NoError(t, err)
+
+	// Should only find main.tf, not the excluded generated file
+	assert.Len(t, files, 1, "should only find 1 file after excluding generated directory")
+	for _, f := range files {
+		assert.NotContains(t, f, "generated", "should not contain excluded files")
+		assert.NotContains(t, f, ".generated.tf", "should not contain excluded files")
+	}
+}
+
+func TestCLIExcludeFlag(t *testing.T) {
+	// Create temp directory with test files
+	dir := t.TempDir()
+
+	// Create directory structure
+	externalDir := filepath.Join(dir, "external")
+	require.NoError(t, os.MkdirAll(externalDir, 0o755))
+
+	// Create test files
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "main.tf"), []byte("# main"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(externalDir, "external.tf"), []byte("# external"), 0o644))
+
+	// Save and restore global state
+	oldExclude := excludePatterns
+	t.Cleanup(func() {
+		excludePatterns = oldExclude
+	})
+
+	// Set exclude patterns via CLI flag simulation
+	excludePatterns = []string{"external/**"}
+
+	// Get files with CLI excludes
+	files, err := getTargetFilesWithExcludes([]string{dir}, false, nil)
+	require.NoError(t, err)
+
+	// Should only find main.tf, not the excluded external file
+	assert.Len(t, files, 1, "should only find 1 file after CLI exclude")
+	for _, f := range files {
+		assert.NotContains(t, f, "external", "should not contain CLI-excluded files")
+	}
+}
+
+func TestCLIAndConfigExcludesCombine(t *testing.T) {
+	// Create temp directory with test files
+	dir := t.TempDir()
+
+	// Create directory structure
+	externalDir := filepath.Join(dir, "external")
+	archiveDir := filepath.Join(dir, "archive")
+	require.NoError(t, os.MkdirAll(externalDir, 0o755))
+	require.NoError(t, os.MkdirAll(archiveDir, 0o755))
+
+	// Create test files
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "main.tf"), []byte("# main"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(externalDir, "external.tf"), []byte("# external"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(archiveDir, "archive.tf"), []byte("# archive"), 0o644))
+
+	// Save and restore global state
+	oldExclude := excludePatterns
+	t.Cleanup(func() {
+		excludePatterns = oldExclude
+	})
+
+	// Set CLI exclude patterns
+	excludePatterns = []string{"external/**"}
+
+	// Config exclude patterns
+	configExcludes := []string{"archive/**"}
+
+	// Get files with both CLI and config excludes
+	files, err := getTargetFilesWithExcludes([]string{dir}, false, configExcludes)
+	require.NoError(t, err)
+
+	// Should only find main.tf, not the excluded external or archive files
+	assert.Len(t, files, 1, "should only find 1 file after combining CLI and config excludes")
+	for _, f := range files {
+		assert.NotContains(t, f, "external", "should not contain CLI-excluded files")
+		assert.NotContains(t, f, "archive", "should not contain config-excluded files")
+	}
+}

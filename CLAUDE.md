@@ -96,6 +96,10 @@ parallel: true
 imports:
   - .terratidy/*.yaml    # Glob patterns for modular configs
 
+exclude:
+  - "**/*.generated.tf"  # Glob patterns for files/dirs to exclude
+  - "vendor/**"
+
 profiles:
   production:
     engines:

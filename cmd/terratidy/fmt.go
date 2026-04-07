@@ -44,8 +44,8 @@ Use --all to also apply style fixes (equivalent to running fmt + style --fix).`,
 			return err
 		}
 
-		// Get target files (respecting --changed flag)
-		files, err := getTargetFiles(args, changed)
+		// Get target files (respecting --changed flag and excludes)
+		files, err := getTargetFilesWithExcludes(args, changed, cfg.Exclude)
 		if err != nil {
 			return fmt.Errorf("finding files: %w", err)
 		}

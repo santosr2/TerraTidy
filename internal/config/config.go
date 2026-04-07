@@ -110,6 +110,7 @@ func (c CacheConfig) IsConfigured() bool {
 type Config struct {
 	Version  int                `yaml:"version"`
 	Imports  []string           `yaml:"imports,omitempty"`
+	Exclude  []string           `yaml:"exclude,omitempty"` // Glob patterns for files/dirs to exclude
 	Engines  Engines            `yaml:"engines"`
 	Profiles map[string]Profile `yaml:"profiles,omitempty"`
 
@@ -532,6 +533,11 @@ func loadPartialConfig(path string) (*Config, error) {
 // merge merges another config into this one.
 // Import config values override base config values (last import wins).
 func (c *Config) merge(other *Config) {
+	// Merge exclude patterns (accumulate from imports)
+	if len(other.Exclude) > 0 {
+		c.Exclude = append(c.Exclude, other.Exclude...)
+	}
+
 	// Merge engine configs (BUG-7: was missing, causing import engine settings to be lost)
 	c.Engines.Fmt.mergeFrom(&other.Engines.Fmt)
 	c.Engines.Style.mergeFrom(&other.Engines.Style)

@@ -16,11 +16,152 @@ import (
 
 // getTargetFiles returns the list of files to process based on the provided paths
 // and global flags. When --changed is set, it uses VCS to detect changed files.
+// Exclude patterns from both config and CLI flags are applied.
 func getTargetFiles(paths []string, changedOnly bool) ([]string, error) {
+	var files []string
+	var err error
+
 	if changedOnly {
-		return getChangedFiles(paths)
+		files, err = getChangedFiles(paths)
+	} else {
+		files, err = findHCLFilesFromPaths(paths)
 	}
-	return findHCLFilesFromPaths(paths)
+	if err != nil {
+		return nil, err
+	}
+
+	// Apply exclude patterns (CLI patterns override/combine with config)
+	return filterExcludedFiles(files, excludePatterns), nil
+}
+
+// getTargetFilesWithExcludes returns the list of files with explicit exclude patterns.
+// Used by commands that need to pass config-based excludes.
+func getTargetFilesWithExcludes(paths []string, changedOnly bool, excludes []string) ([]string, error) {
+	var files []string
+	var err error
+
+	if changedOnly {
+		files, err = getChangedFiles(paths)
+	} else {
+		files, err = findHCLFilesFromPaths(paths)
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	// Combine CLI and config excludes without mutating originals
+	allExcludes := make([]string, 0, len(excludePatterns)+len(excludes))
+	allExcludes = append(allExcludes, excludePatterns...)
+	allExcludes = append(allExcludes, excludes...)
+	return filterExcludedFiles(files, allExcludes), nil
+}
+
+// filterExcludedFiles removes files matching any of the exclude patterns.
+func filterExcludedFiles(files []string, patterns []string) []string {
+	if len(patterns) == 0 {
+		return files
+	}
+
+	var result []string
+	for _, file := range files {
+		if !matchesAnyPattern(file, patterns) {
+			result = append(result, file)
+		}
+	}
+	return result
+}
+
+// matchesAnyPattern returns true if the file matches any of the patterns.
+func matchesAnyPattern(file string, patterns []string) bool {
+	for _, pattern := range patterns {
+		if matchGlobPattern(file, pattern) {
+			return true
+		}
+	}
+	return false
+}
+
+// matchGlobPattern matches a file path against a glob pattern.
+// Supports standard glob patterns including ** for recursive matching.
+func matchGlobPattern(filePath, pattern string) bool {
+	// Normalize paths to use forward slashes for consistent matching
+	filePath = filepath.ToSlash(filePath)
+	pattern = filepath.ToSlash(pattern)
+
+	// Handle ** (recursive) patterns
+	if strings.Contains(pattern, "**") {
+		return matchDoubleStarPattern(filePath, pattern)
+	}
+
+	// For simple patterns, use filepath.Match
+	// Try matching against both the full path and just the filename
+	if matched, _ := filepath.Match(pattern, filePath); matched {
+		return true
+	}
+	if matched, _ := filepath.Match(pattern, filepath.Base(filePath)); matched {
+		return true
+	}
+
+	// Try matching against path segments (for patterns like "vendor")
+	segments := strings.Split(filePath, "/")
+	for _, seg := range segments {
+		if matched, _ := filepath.Match(pattern, seg); matched {
+			return true
+		}
+	}
+
+	return false
+}
+
+// matchDoubleStarPattern handles glob patterns containing **.
+// ** matches zero or more directory levels.
+func matchDoubleStarPattern(filePath, pattern string) bool {
+	// Split pattern by **
+	parts := strings.Split(pattern, "**")
+
+	if len(parts) == 1 {
+		// No ** found, use simple match
+		matched, _ := filepath.Match(pattern, filePath)
+		return matched
+	}
+
+	// Check prefix (part before first **)
+	prefix := parts[0]
+	if prefix != "" && prefix != "/" {
+		prefix = strings.TrimSuffix(prefix, "/")
+		// For patterns like "vendor/**", check if the prefix appears anywhere in the path
+		// This handles both relative and absolute paths
+		if !strings.HasPrefix(filePath, prefix) && !strings.Contains(filePath, "/"+prefix) {
+			return false
+		}
+	}
+
+	// Check suffix (part after last **)
+	suffix := parts[len(parts)-1]
+	if suffix != "" && suffix != "/" {
+		suffix = strings.TrimPrefix(suffix, "/")
+		// For suffix patterns like "*.tf", match against the filename
+		if strings.HasPrefix(suffix, "*") {
+			matched, _ := filepath.Match(suffix, filepath.Base(filePath))
+			if !matched {
+				return false
+			}
+		} else if !strings.HasSuffix(filePath, suffix) {
+			return false
+		}
+	}
+
+	// For patterns like "**/vendor/**", check if vendor is in the path
+	if len(parts) > 2 {
+		for i := 1; i < len(parts)-1; i++ {
+			middle := strings.Trim(parts[i], "/")
+			if middle != "" && !strings.Contains(filePath, middle) {
+				return false
+			}
+		}
+	}
+
+	return true
 }
 
 // getChangedFiles uses VCS to get only changed Terraform/HCL files.

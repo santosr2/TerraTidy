@@ -11,6 +11,7 @@ var (
 	changed           bool
 	severityThreshold string
 	color             bool
+	excludePatterns   []string
 )
 
 var rootCmd = &cobra.Command{
@@ -34,6 +35,10 @@ func init() {
 		"minimum severity level to fail (info|warning|error)",
 	)
 	rootCmd.PersistentFlags().BoolVar(&color, "color", true, "enable colored output")
+	rootCmd.PersistentFlags().StringSliceVar(
+		&excludePatterns, "exclude", nil,
+		"glob patterns to exclude (repeatable or comma-separated)",
+	)
 }
 
 // Execute runs the root command

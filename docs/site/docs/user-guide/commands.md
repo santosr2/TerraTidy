@@ -12,6 +12,7 @@ These flags are available for all commands:
 | `--profile`            | Configuration profile to use                                                                             |
 | `--format`             | Output format: `text`, `json`, `json-compact`, `sarif`, `html`, `github`, `table`, `junit`, `markdown`   |
 | `--changed`            | Only check files changed in git                                                                          |
+| `--exclude`            | Glob patterns to exclude (repeatable or comma-separated)                                                 |
 | `--color`              | Enable colored output (default: true)                                                                    |
 | `--severity-threshold` | Minimum severity: `info`, `warning`, `error`                                                             |
 

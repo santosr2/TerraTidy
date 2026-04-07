@@ -49,6 +49,12 @@ func TestRootCmd(t *testing.T) {
 		assert.Equal(t, "true", flag.DefValue)
 	})
 
+	t.Run("has exclude flag", func(t *testing.T) {
+		flag := rootCmd.PersistentFlags().Lookup("exclude")
+		assert.NotNil(t, flag)
+		assert.Equal(t, "[]", flag.DefValue)
+	})
+
 	t.Run("silence usage is true", func(t *testing.T) {
 		assert.True(t, rootCmd.SilenceUsage)
 	})

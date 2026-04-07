@@ -1941,3 +1941,117 @@ func TestValidatePlugins_ValidSeverities(t *testing.T) {
 		})
 	}
 }
+
+func TestLoad_WithExcludePatterns(t *testing.T) {
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, ".terratidy.yaml")
+
+	content := `version: 1
+exclude:
+  - "**/*.generated.tf"
+  - "vendor/**"
+  - ".terraform/**"
+
+engines:
+  fmt:
+    enabled: true
+`
+	require.NoError(t, os.WriteFile(configPath, []byte(content), 0o644))
+
+	cfg, err := Load(configPath)
+	require.NoError(t, err)
+
+	assert.Len(t, cfg.Exclude, 3)
+	assert.Contains(t, cfg.Exclude, "**/*.generated.tf")
+	assert.Contains(t, cfg.Exclude, "vendor/**")
+	assert.Contains(t, cfg.Exclude, ".terraform/**")
+}
+
+func TestConfig_merge_ExcludePatterns(t *testing.T) {
+	t.Run("merges exclude patterns from imports", func(t *testing.T) {
+		base := &Config{
+			Version: 1,
+			Exclude: []string{"vendor/**"},
+		}
+		other := &Config{
+			Exclude: []string{"**/*.generated.tf", ".terraform/**"},
+		}
+
+		base.merge(other)
+
+		assert.Len(t, base.Exclude, 3)
+		assert.Contains(t, base.Exclude, "vendor/**")
+		assert.Contains(t, base.Exclude, "**/*.generated.tf")
+		assert.Contains(t, base.Exclude, ".terraform/**")
+	})
+
+	t.Run("handles empty base exclude", func(t *testing.T) {
+		base := &Config{
+			Version: 1,
+			Exclude: nil,
+		}
+		other := &Config{
+			Exclude: []string{"vendor/**"},
+		}
+
+		base.merge(other)
+
+		assert.Len(t, base.Exclude, 1)
+		assert.Contains(t, base.Exclude, "vendor/**")
+	})
+
+	t.Run("handles empty other exclude", func(t *testing.T) {
+		base := &Config{
+			Version: 1,
+			Exclude: []string{"vendor/**"},
+		}
+		other := &Config{
+			Exclude: nil,
+		}
+
+		base.merge(other)
+
+		assert.Len(t, base.Exclude, 1)
+		assert.Contains(t, base.Exclude, "vendor/**")
+	})
+}
+
+func TestLoad_WithImports_ExcludePatternsMerged(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create main config file with exclude patterns
+	mainConfig := `version: 1
+imports:
+  - "configs/*.yaml"
+
+exclude:
+  - "vendor/**"
+
+engines:
+  fmt:
+    enabled: true
+`
+	mainPath := filepath.Join(tmpDir, ".terratidy.yaml")
+	require.NoError(t, os.WriteFile(mainPath, []byte(mainConfig), 0o644))
+
+	// Create configs directory
+	configsDir := filepath.Join(tmpDir, "configs")
+	require.NoError(t, os.MkdirAll(configsDir, 0o755))
+
+	// Create imported config with more exclude patterns
+	importedConfig := `exclude:
+  - "**/*.generated.tf"
+  - ".terraform/**"
+`
+	importPath := filepath.Join(configsDir, "excludes.yaml")
+	require.NoError(t, os.WriteFile(importPath, []byte(importedConfig), 0o644))
+
+	cfg, err := Load(mainPath)
+	require.NoError(t, err)
+
+	// Check that exclude patterns were merged
+	assert.Len(t, cfg.Exclude, 3)
+	assert.Contains(t, cfg.Exclude, "vendor/**")
+	assert.Contains(t, cfg.Exclude, "**/*.generated.tf")
+	assert.Contains(t, cfg.Exclude, ".terraform/**")
+}

@@ -976,7 +976,9 @@ func TestDisplayPathRelativeConversion(t *testing.T) {
 		require.NoError(t, err)
 		output := buf.String()
 		// Should contain the relative path, not the full absolute path
-		assert.Contains(t, output, "subdir/test.tf")
+		// Use filepath.Join to get platform-correct separator
+		expectedRelPath := filepath.Join("subdir", "test.tf")
+		assert.Contains(t, output, expectedRelPath)
 		assert.NotContains(t, output, cwd)
 	})
 

@@ -1,0 +1,40 @@
+# yamllint configuration
+# https://yamllint.readthedocs.io/en/stable/configuration.html
+
+extends: default
+
+rules:
+  # Line length - relaxed for GitHub Actions and complex configs
+  line-length:
+    max: 200
+    allow-non-breakable-inline-mappings: true
+
+  # Allow comments without space after # for commented-out code
+  comments:
+    min-spaces-from-content: 1
+
+  # Truthy values - allow GitHub Actions 'on' key
+  truthy:
+    allowed-values: ['true', 'false', 'on']
+    check-keys: false
+
+  # Document markers - not required
+  document-start: disable
+  document-end: disable
+
+  # Indentation - 2 spaces, consistent with project
+  indentation:
+    spaces: 2
+    indent-sequences: consistent
+
+  # Braces and brackets - allow inline for short content
+  braces:
+    min-spaces-inside: 1
+    max-spaces-inside: 1
+  brackets:
+    min-spaces-inside: 0
+    max-spaces-inside: 0
+
+  # Empty lines
+  empty-lines:
+    max: 2

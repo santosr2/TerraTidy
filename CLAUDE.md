@@ -81,42 +81,65 @@ version: 1
 engines:
   fmt:
     enabled: true
+    check: false   # Dry-run mode (don't modify files)
+    diff: false    # Show diff of changes
   style:
     enabled: true
+    fix: false     # Auto-fix style issues
+    diff: false
   lint:
     enabled: true
+    use_tflint: false        # Enable TFLint integration
+    fallback_builtin: true   # Use built-in rules if TFLint unavailable
   policy:
-    enabled: false  # Opt-in for policy checking
+    enabled: false           # Opt-in for policy checking
+    policy_dirs:
+      - ./policies
 
 # Global settings
 severity_threshold: warning  # info|warning|error
 fail_fast: false
 parallel: true
+recursive: true              # Recursive directory traversal (default: true)
+
+# Caching settings
+cache:
+  disabled: false
+  max_age: "5m"
+  max_size: 1000
+
+# Output settings
+output:
+  absolute_paths: false      # Use absolute paths in findings
 
 imports:
-  - .terratidy/*.yaml    # Glob patterns for modular configs
+  - .terratidy/*.yaml        # Glob patterns for modular configs
 
 exclude:
-  - "**/*.generated.tf"  # Glob patterns for files/dirs to exclude
+  - "**/*.generated.tf"      # Glob patterns for files/dirs to exclude
   - "vendor/**"
 
 profiles:
   production:
+    description: "Production checks with policy enforcement"
+    inherits: ""             # Optional: inherit from another profile
     engines:
       policy:
         enabled: true
 
 plugins:
   enabled: true
+  verify_integrity: true     # Verify plugin integrity (default: true)
   directories:
     - .terratidy/plugins
     - ~/.terratidy/plugins
+  tags: []                   # Filter plugins by tag (empty = all)
 
 overrides:
   rules:
-    my-rule:
+    style.blank-line-between-blocks:
       enabled: true
-      severity: error
+      severity: warning
 ```
 
 ## Development

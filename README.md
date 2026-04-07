@@ -31,7 +31,7 @@ TerraTidy is a single-binary quality platform for Terraform and Terragrunt that 
 
 - **Single Binary** -- No external dependencies for core functionality
 - **Library-first Architecture** -- Uses Go libraries (hclwrite, OPA SDK) directly instead of shelling out
-- **Extensible** -- Custom rules in Go, YAML, or Bash
+- **Extensible** -- Custom rules in Go, YAML, Rego, or Bash
 - **Modular Config** -- Split large configs into organized files with glob imports
 - **Auto-fix** -- Automatically fix formatting and style issues
 - **Multiple Output Formats** -- Text, table, JSON, SARIF, HTML, JUnit, Markdown, GitHub Actions annotations
@@ -265,14 +265,15 @@ Available hook IDs: `terratidy-fmt`, `terratidy-fmt-check`, `terratidy-style`, `
   uses: santosr2/terratidy@v0
   with:
     format: sarif
-    parallel: true
+    parallel: 'true'
     github-token: ${{ secrets.GITHUB_TOKEN }}
 ```
 
 Pin to a specific release for reproducible builds: `santosr2/terratidy@v0.2.0-alpha.4`
 
 Available inputs: `version`, `config`, `profile`, `format`, `parallel`, `working-directory`,
-`skip-fmt`, `skip-style`, `skip-lint`, `skip-policy`, `fail-on-error`, `fail-on-warning`, `github-token`.
+`skip-fmt`, `skip-style`, `skip-lint`, `skip-policy`, `exclude`, `no-recurse`, `absolute-paths`,
+`changed`, `severity-threshold`, `fail-on-error`, `fail-on-warning`, `github-token`.
 
 ### VS Code Extension
 
@@ -286,10 +287,22 @@ Create custom rules in three formats:
 ### Go Plugin
 
 ```go
-package custom
+package main
 
-func (r *EnforceTaggingRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Finding, error) {
-    // Full HCL AST access
+import (
+    "github.com/hashicorp/hcl/v2"
+    "github.com/santosr2/TerraTidy/pkg/sdk"
+)
+
+type MyRule struct{}
+
+func (r *MyRule) Name() string        { return "my-rule" }
+func (r *MyRule) Description() string { return "Checks something" }
+
+func (r *MyRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Finding, error) {
+    var findings []sdk.Finding
+    // Full HCL AST access via file.Body
+    return findings, nil
 }
 ```
 

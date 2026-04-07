@@ -23,11 +23,11 @@ values = ["alpha", "beta", "rc", "final"]
 [tool.bumpversion.parts.pre_n]
 first_value = "1"
 
-# VSCode extension package.json
+# VSCode extension package.json (marketplace requires numeric-only versions)
 [[tool.bumpversion.files]]
 filename = "vscode/package.json"
-search = "\"version\": \"{current_version}\""
-replace = "\"version\": \"{new_version}\""
+search = "\"version\": \"{major}.{minor}.{patch}\""
+replace = "\"version\": \"{major}.{minor}.{patch}\""
 
 # Documentation - commands
 [[tool.bumpversion.files]]

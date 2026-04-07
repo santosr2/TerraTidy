@@ -419,6 +419,37 @@ These directories are automatically skipped during file discovery:
 - `__pycache__/` - Python cache
 - Hidden directories (starting with `.`) except the current directory
 
+### Exclude Patterns
+
+Exclude files or directories from processing using glob patterns:
+
+```yaml
+exclude:
+  - "**/*.generated.tf"      # Exclude generated files
+  - "vendor/**"              # Exclude vendor directory
+  - ".terraform/**"          # Exclude Terraform cache
+  - "examples/legacy/**"     # Exclude specific directory
+```
+
+Patterns support:
+
+- `*` - matches any sequence of characters (except `/`)
+- `**` - matches zero or more directory levels
+- `?` - matches any single character
+
+Exclude patterns from config and CLI flag `--exclude` are combined.
+
+```bash
+# Exclude additional patterns via CLI
+terratidy check --exclude "**/*.generated.tf,test/**"
+```
+
+Multiple patterns can be comma-separated or specified multiple times:
+
+```bash
+terratidy check --exclude "**/*.generated.tf" --exclude "test/**"
+```
+
 ## Command Line Overrides
 
 Configuration can be overridden via command line:

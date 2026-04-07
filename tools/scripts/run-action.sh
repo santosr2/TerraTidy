@@ -37,10 +37,28 @@ validate_format() {
   esac
 }
 
+# Validate glob patterns (allows alphanumeric, dots, underscores, slashes, hyphens, asterisks, and commas)
+validate_glob_patterns() {
+  local name="$1"
+  local value="$2"
+
+  # Empty values are allowed
+  if [ -z "$value" ]; then
+    return 0
+  fi
+
+  # Validate against safe pattern for glob patterns
+  if ! [[ "$value" =~ ^[a-zA-Z0-9._/*,\ -]*$ ]]; then
+    echo "::error::Invalid $name: contains unsafe characters. Only alphanumeric, dots, underscores, slashes, hyphens, asterisks, and commas are allowed."
+    exit 1
+  fi
+}
+
 # Validate user-provided inputs before any execution
 validate_input "config" "${INPUT_CONFIG:-}"
 validate_input "profile" "${INPUT_PROFILE:-}"
 validate_input "working-directory" "${INPUT_WORKING_DIRECTORY:-}"
+validate_glob_patterns "exclude" "${INPUT_EXCLUDE:-}"
 validate_format "${INPUT_FORMAT:-text}"
 
 # Build command arguments
@@ -73,6 +91,11 @@ fi
 # Parallel mode
 if [ "$INPUT_PARALLEL" = "true" ]; then
   ARGS="$ARGS --parallel"
+fi
+
+# Exclude patterns (comma-separated)
+if [ -n "${INPUT_EXCLUDE:-}" ]; then
+  ARGS="$ARGS --exclude $INPUT_EXCLUDE"
 fi
 
 # Output format

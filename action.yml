@@ -46,6 +46,10 @@ inputs:
     description: "Skip policy checks"
     required: false
     default: "false"
+  exclude:
+    description: "Glob patterns to exclude (comma-separated, e.g., '**/*.generated.tf,vendor/**')"
+    required: false
+    default: ""
   fail-on-error:
     description: "Fail the action if errors are found"
     required: false
@@ -119,6 +123,7 @@ runs:
         INPUT_SKIP_STYLE: ${{ inputs.skip-style }}
         INPUT_SKIP_LINT: ${{ inputs.skip-lint }}
         INPUT_SKIP_POLICY: ${{ inputs.skip-policy }}
+        INPUT_EXCLUDE: ${{ inputs.exclude }}
         INPUT_FAIL_ON_ERROR: ${{ inputs.fail-on-error }}
         INPUT_FAIL_ON_WARNING: ${{ inputs.fail-on-warning }}
         INPUT_WORKING_DIRECTORY: ${{ inputs.working-directory }}

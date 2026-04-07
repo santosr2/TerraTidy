@@ -182,6 +182,7 @@ These flags apply to all commands:
 | `--profile`                | Configuration profile to use                                                         |
 | `--format`                 | Output format: text, table, json, json-compact, sarif, html, junit, markdown, github |
 | `--changed`                | Only check files changed in git                                                      |
+| `--exclude`                | Glob patterns to exclude (repeatable or comma-separated)                             |
 | `--severity-threshold`     | Minimum severity to fail: info, warning, error                                       |
 | `--color`                  | Enable colored output (default: true)                                                |
 

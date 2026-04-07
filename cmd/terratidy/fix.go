@@ -46,7 +46,7 @@ func runFix(_ *cobra.Command, args []string) error {
 		return fmt.Errorf("loading plugins: %w", err)
 	}
 
-	files, err := getTargetFiles(args, changed)
+	files, err := getTargetFilesWithExcludes(args, changed, cfg.Exclude)
 	if err != nil {
 		return fmt.Errorf("finding files: %w", err)
 	}

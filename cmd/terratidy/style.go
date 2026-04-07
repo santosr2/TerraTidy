@@ -49,8 +49,8 @@ Use --fix to automatically fix fixable style issues.`,
 			return fmt.Errorf("loading plugins: %w", err)
 		}
 
-		// Get target files (respecting --changed flag)
-		files, err := getTargetFiles(args, changed)
+		// Get target files (respecting --changed flag and excludes)
+		files, err := getTargetFilesWithExcludes(args, changed, cfg.Exclude)
 		if err != nil {
 			return fmt.Errorf("finding files: %w", err)
 		}

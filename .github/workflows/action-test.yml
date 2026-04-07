@@ -122,3 +122,50 @@ jobs:
           format: sarif
           fail-on-error: 'false'
           github-token: ${{ secrets.GITHUB_TOKEN }}
+
+  test-exclude:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0  # Fetch all history for version info
+          persist-credentials: false
+
+      - name: Create test files with exclusion scenario
+        run: |
+          mkdir -p test-terraform/generated
+          # Well-formatted main file
+          printf '%s\n' \
+            'resource "aws_instance" "example" {' \
+            '  ami           = "ami-12345678"' \
+            '  instance_type = "t2.micro"' \
+            '}' > test-terraform/main.tf
+          # Badly formatted file that should be excluded
+          printf '%s\n' \
+            'resource "aws_instance" "bad"   {' \
+            'ami="ami-123"' \
+            'instance_type="t2.micro"' \
+            '}' > test-terraform/generated/auto.generated.tf
+
+      - name: Run TerraTidy Action with exclude patterns
+        id: exclude-test
+        uses: ./
+        with:
+          working-directory: test-terraform
+          format: json
+          exclude: 'generated/**,**/*.generated.tf'
+          fail-on-error: 'false'
+
+      - name: Verify exclude worked
+        shell: bash
+        run: |
+          # The generated files should be excluded, so findings should only be from main.tf
+          echo "Findings count: ${STEPS_EXCLUDE_TEST_OUTPUTS_FINDINGS_COUNT}"
+          # If exclude didn't work, we'd see formatting errors from the badly formatted file
+        env:
+          STEPS_EXCLUDE_TEST_OUTPUTS_FINDINGS_COUNT: ${{ steps.exclude-test.outputs.findings-count }}

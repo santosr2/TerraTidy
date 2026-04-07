@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -169,4 +170,79 @@ func TestPrintFixSummary(t *testing.T) {
 	printFixSummary(nil, 0)
 	printFixSummary([]sdk.Finding{{Fix: nil}}, 1)
 	printFixSummary(nil, 5)
+}
+
+func TestRunFixWithExcludes(t *testing.T) {
+	// Create temp directory with test files
+	dir := t.TempDir()
+
+	// Create directory structure
+	externalDir := filepath.Join(dir, "external")
+	require.NoError(t, os.MkdirAll(externalDir, 0o755))
+
+	// Create a file that needs formatting (will be fixed)
+	mainContent := `resource "aws_instance" "test" {
+ami           = "ami-123"
+instance_type = "t2.micro"
+}
+`
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "main.tf"), []byte(mainContent), 0o644))
+
+	// Create a badly formatted file in "external" directory (should be excluded)
+	badContent := `resource "aws_instance" "bad"   {
+ami="ami-123"
+}`
+	require.NoError(t, os.WriteFile(filepath.Join(externalDir, "external.tf"), []byte(badContent), 0o644))
+
+	// Create config with exclude patterns
+	configContent := `version: 1
+exclude:
+  - "external/**"
+engines:
+  fmt:
+    enabled: true
+  style:
+    enabled: false
+  lint:
+    enabled: false
+  policy:
+    enabled: false
+`
+	configPath := filepath.Join(dir, ".terratidy.yaml")
+	require.NoError(t, os.WriteFile(configPath, []byte(configContent), 0o644))
+
+	// Save and restore global state
+	oldCfgFile := cfgFile
+	oldProfile := profile
+	oldFormat := format
+	oldChanged := changed
+	oldExclude := excludePatterns
+	t.Cleanup(func() {
+		cfgFile = oldCfgFile
+		profile = oldProfile
+		format = oldFormat
+		changed = oldChanged
+		excludePatterns = oldExclude
+	})
+
+	// Set up global state
+	cfgFile = configPath
+	profile = ""
+	format = "text"
+	changed = false
+	excludePatterns = nil
+
+	// Run the fix command - this exercises getTargetFilesWithExcludes in fix.go
+	err := runFix(&cobra.Command{}, []string{dir})
+	require.NoError(t, err)
+
+	// Verify main.tf was formatted
+	content, err := os.ReadFile(filepath.Join(dir, "main.tf"))
+	require.NoError(t, err)
+	assert.Contains(t, string(content), "ami           =", "main.tf should be formatted")
+
+	// Verify external.tf was NOT touched (excluded)
+	externalContent, err := os.ReadFile(filepath.Join(externalDir, "external.tf"))
+	require.NoError(t, err)
+	assert.Equal(t, badContent, string(externalContent), "excluded file should not be modified")
 }

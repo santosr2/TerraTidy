@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -1476,10 +1477,11 @@ patterns:
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			// Build directories YAML list
-			dirsYAML := ""
+			var dirsBuilder strings.Builder
 			for _, d := range tc.directories {
-				dirsYAML += fmt.Sprintf("    - %s\n", d)
+				fmt.Fprintf(&dirsBuilder, "    - %s\n", d)
 			}
+			dirsYAML := dirsBuilder.String()
 
 			yaml := fmt.Sprintf(`
 version: 1
@@ -1530,6 +1532,400 @@ plugins:
 				assert.Contains(t, loadedRuleNames, expectedRule,
 					"rule %s should be loaded", expectedRule)
 			}
+		})
+	}
+}
+
+func TestMatchGlobPattern(t *testing.T) {
+	tests := []struct {
+		name     string
+		filePath string
+		pattern  string
+		expected bool
+	}{
+		// Simple patterns
+		{
+			name:     "exact file match",
+			filePath: "main.tf",
+			pattern:  "main.tf",
+			expected: true,
+		},
+		{
+			name:     "wildcard extension",
+			filePath: "variables.tf",
+			pattern:  "*.tf",
+			expected: true,
+		},
+		{
+			name:     "no match different extension",
+			filePath: "main.go",
+			pattern:  "*.tf",
+			expected: false,
+		},
+		// Double star patterns
+		{
+			name:     "double star prefix",
+			filePath: "modules/vpc/main.tf",
+			pattern:  "**/*.tf",
+			expected: true,
+		},
+		{
+			name:     "double star with extension",
+			filePath: "deep/nested/path/file.generated.tf",
+			pattern:  "**/*.generated.tf",
+			expected: true,
+		},
+		{
+			name:     "double star suffix (vendor)",
+			filePath: "vendor/module/main.tf",
+			pattern:  "vendor/**",
+			expected: true,
+		},
+		{
+			name:     "double star suffix deep",
+			filePath: "vendor/a/b/c/d/main.tf",
+			pattern:  "vendor/**",
+			expected: true,
+		},
+		{
+			name:     "no match outside vendor",
+			filePath: "modules/main.tf",
+			pattern:  "vendor/**",
+			expected: false,
+		},
+		{
+			name:     "terraform cache",
+			filePath: ".terraform/providers/main.tf",
+			pattern:  ".terraform/**",
+			expected: true,
+		},
+		{
+			name:     "terragrunt cache",
+			filePath: ".terragrunt-cache/abc123/main.tf",
+			pattern:  ".terragrunt-cache/**",
+			expected: true,
+		},
+		// Edge cases
+		{
+			name:     "absolute path with pattern",
+			filePath: "/Users/test/project/vendor/main.tf",
+			pattern:  "vendor/**",
+			expected: true,
+		},
+		{
+			name:     "forward slashes normalized",
+			filePath: "vendor\\module\\main.tf",
+			pattern:  "vendor/**",
+			expected: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := matchGlobPattern(tt.filePath, tt.pattern)
+			assert.Equal(t, tt.expected, result,
+				"matchGlobPattern(%q, %q) = %v, want %v",
+				tt.filePath, tt.pattern, result, tt.expected)
+		})
+	}
+}
+
+func TestFilterExcludedFiles(t *testing.T) {
+	tests := []struct {
+		name     string
+		files    []string
+		patterns []string
+		expected []string
+	}{
+		{
+			name:     "no patterns returns all files",
+			files:    []string{"main.tf", "variables.tf"},
+			patterns: nil,
+			expected: []string{"main.tf", "variables.tf"},
+		},
+		{
+			name:     "empty patterns returns all files",
+			files:    []string{"main.tf", "variables.tf"},
+			patterns: []string{},
+			expected: []string{"main.tf", "variables.tf"},
+		},
+		{
+			name:     "filter generated files",
+			files:    []string{"main.tf", "generated.tf", "file.generated.tf"},
+			patterns: []string{"**/*.generated.tf"},
+			expected: []string{"main.tf", "generated.tf"},
+		},
+		{
+			name:     "filter vendor directory",
+			files:    []string{"main.tf", "vendor/module/main.tf", "vendor/other.tf"},
+			patterns: []string{"vendor/**"},
+			expected: []string{"main.tf"},
+		},
+		{
+			name:     "multiple patterns",
+			files:    []string{"main.tf", "vendor/x.tf", "file.generated.tf", ".terraform/y.tf"},
+			patterns: []string{"vendor/**", "**/*.generated.tf", ".terraform/**"},
+			expected: []string{"main.tf"},
+		},
+		{
+			name:     "no matches",
+			files:    []string{"main.tf", "variables.tf"},
+			patterns: []string{"*.go", "*.py"},
+			expected: []string{"main.tf", "variables.tf"},
+		},
+		{
+			name:     "all files excluded",
+			files:    []string{"vendor/a.tf", "vendor/b.tf"},
+			patterns: []string{"vendor/**"},
+			expected: nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := filterExcludedFiles(tt.files, tt.patterns)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestMatchesAnyPattern(t *testing.T) {
+	tests := []struct {
+		name     string
+		file     string
+		patterns []string
+		expected bool
+	}{
+		{
+			name:     "matches first pattern",
+			file:     "vendor/main.tf",
+			patterns: []string{"vendor/**", "**/*.generated.tf"},
+			expected: true,
+		},
+		{
+			name:     "matches second pattern",
+			file:     "file.generated.tf",
+			patterns: []string{"vendor/**", "**/*.generated.tf"},
+			expected: true,
+		},
+		{
+			name:     "matches no patterns",
+			file:     "main.tf",
+			patterns: []string{"vendor/**", "**/*.generated.tf"},
+			expected: false,
+		},
+		{
+			name:     "empty patterns",
+			file:     "main.tf",
+			patterns: []string{},
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := matchesAnyPattern(tt.file, tt.patterns)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestGetTargetFilesWithExcludes(t *testing.T) {
+	// Create temp directory with test files
+	tmpDir := t.TempDir()
+
+	// Create directory structure
+	// Note: "vendor" is already skipped by shouldSkipDir, so use "external" instead
+	externalDir := filepath.Join(tmpDir, "external", "module")
+	require.NoError(t, os.MkdirAll(externalDir, 0o755))
+
+	modulesDir := filepath.Join(tmpDir, "modules")
+	require.NoError(t, os.MkdirAll(modulesDir, 0o755))
+
+	// Create test files
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "main.tf"), []byte("# main"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "file.generated.tf"), []byte("# generated"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(externalDir, "external.tf"), []byte("# external"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(modulesDir, "module.tf"), []byte("# module"), 0o644))
+
+	// Test: files without excludes
+	files, err := getTargetFilesWithExcludes([]string{tmpDir}, false, nil)
+	require.NoError(t, err)
+	assert.Len(t, files, 4, "should find all 4 files without excludes")
+
+	// Test: exclude external directory
+	files, err = getTargetFilesWithExcludes([]string{tmpDir}, false, []string{"external/**"})
+	require.NoError(t, err)
+	assert.Len(t, files, 3, "should exclude external directory")
+	for _, f := range files {
+		assert.NotContains(t, f, "external", "should not contain external files")
+	}
+
+	// Test: exclude generated files
+	files, err = getTargetFilesWithExcludes([]string{tmpDir}, false, []string{"**/*.generated.tf"})
+	require.NoError(t, err)
+	assert.Len(t, files, 3, "should exclude generated files")
+	for _, f := range files {
+		assert.NotContains(t, f, ".generated.tf", "should not contain generated files")
+	}
+
+	// Test: multiple excludes
+	files, err = getTargetFilesWithExcludes([]string{tmpDir}, false, []string{"external/**", "**/*.generated.tf"})
+	require.NoError(t, err)
+	assert.Len(t, files, 2, "should exclude both external and generated files")
+}
+
+func TestGetTargetFilesWithExcludes_ChangedError(t *testing.T) {
+	// changedOnly=true outside a git repo must return an error
+	nonGitDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(nonGitDir, "main.tf"), []byte("# test"), 0o644))
+
+	oldWd, _ := os.Getwd()
+	require.NoError(t, os.Chdir(nonGitDir))
+	defer func() { _ = os.Chdir(oldWd) }()
+
+	_, err := getTargetFilesWithExcludes([]string{nonGitDir}, true, nil)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "not a git repository")
+}
+
+func TestMatchGlobPattern_BaseFileNameMatch(t *testing.T) {
+	// Pattern has no path separator: should match against the base filename even when
+	// the full path doesn't match (covers the filepath.Base branch).
+	tests := []struct {
+		name     string
+		filePath string
+		pattern  string
+		expected bool
+	}{
+		{
+			name:     "base name match via *.tf on nested path",
+			filePath: "some/nested/dir/main.tf",
+			pattern:  "main.tf",
+			expected: true,
+		},
+		{
+			name:     "base name no match",
+			filePath: "some/nested/dir/variables.tf",
+			pattern:  "main.tf",
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := matchGlobPattern(tt.filePath, tt.pattern)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestMatchGlobPattern_SegmentMatch(t *testing.T) {
+	// Pattern matches a single path segment (not full path, not base name).
+	// Covers the segments loop in matchGlobPattern.
+	tests := []struct {
+		name     string
+		filePath string
+		pattern  string
+		expected bool
+	}{
+		{
+			name:     "middle segment exact match",
+			filePath: "a/vendor/b/main.tf",
+			pattern:  "vendor",
+			expected: true,
+		},
+		{
+			name:     "no segment match",
+			filePath: "a/modules/b/main.tf",
+			pattern:  "vendor",
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := matchGlobPattern(tt.filePath, tt.pattern)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestMatchDoubleStarPattern_NoDoubleStarFallback(t *testing.T) {
+	// matchDoubleStarPattern with a pattern that contains no ** (len(parts)==1)
+	// falls back to a simple filepath.Match. This branch is only reachable when the
+	// function is called directly (matchGlobPattern routes here only when ** is present,
+	// but we test the internal branch for coverage).
+	result := matchDoubleStarPattern("main.tf", "main.tf")
+	assert.True(t, result, "exact match without ** should return true")
+
+	result = matchDoubleStarPattern("variables.tf", "main.tf")
+	assert.False(t, result, "non-matching pattern without ** should return false")
+}
+
+func TestMatchDoubleStarPattern_SuffixLiteralMatch(t *testing.T) {
+	// Suffix branch where the suffix does NOT start with '*': checks HasSuffix.
+	// Pattern like "**/.terraform" where suffix is ".terraform" (no wildcard).
+	tests := []struct {
+		name     string
+		filePath string
+		pattern  string
+		expected bool
+	}{
+		{
+			name:     "literal suffix matches",
+			filePath: "project/.terraform",
+			pattern:  "**/.terraform",
+			expected: true,
+		},
+		{
+			name:     "literal suffix no match",
+			filePath: "project/modules",
+			pattern:  "**/.terraform",
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := matchDoubleStarPattern(tt.filePath, tt.pattern)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestMatchDoubleStarPattern_MiddleSegments(t *testing.T) {
+	// Pattern with more than one ** (len(parts) > 2) exercises the middle-segment loop.
+	tests := []struct {
+		name     string
+		filePath string
+		pattern  string
+		expected bool
+	}{
+		{
+			name:     "middle segment present",
+			filePath: "a/vendor/b/main.tf",
+			pattern:  "**/vendor/**",
+			expected: true,
+		},
+		{
+			name:     "middle segment absent",
+			filePath: "a/modules/b/main.tf",
+			pattern:  "**/vendor/**",
+			expected: false,
+		},
+		{
+			name:     "deep nesting with middle segment",
+			filePath: "x/y/vendor/z/w/main.tf",
+			pattern:  "**/vendor/**",
+			expected: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := matchDoubleStarPattern(tt.filePath, tt.pattern)
+			assert.Equal(t, tt.expected, result)
 		})
 	}
 }

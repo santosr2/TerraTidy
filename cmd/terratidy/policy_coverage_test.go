@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/santosr2/TerraTidy/internal/config"
+	"github.com/santosr2/TerraTidy/pkg/sdk"
 )
 
 func TestRunPolicyCheckWithConfig(t *testing.T) {
@@ -37,4 +38,30 @@ func TestBuildPolicyConfig_WithEngineConfig(t *testing.T) {
 	policyCfg := buildPolicyConfig(cfg)
 	assert.Equal(t, []string{"./policies"}, policyCfg.PolicyDirs)
 	assert.Equal(t, []string{"custom.rego"}, policyCfg.PolicyFiles)
+}
+
+func TestOutputPolicyResults(t *testing.T) {
+	t.Run("no findings returns nil", func(t *testing.T) {
+		err := outputPolicyResults(nil)
+		assert.NoError(t, err)
+	})
+
+	t.Run("warning findings return nil", func(t *testing.T) {
+		findings := []sdk.Finding{
+			{Rule: "policy.rule", Severity: sdk.SeverityWarning, Message: "warning"},
+		}
+		err := outputPolicyResults(findings)
+		assert.NoError(t, err)
+	})
+
+	t.Run("error findings return ExitError", func(t *testing.T) {
+		findings := []sdk.Finding{
+			{Rule: "policy.rule", Severity: sdk.SeverityError, Message: "error"},
+		}
+		err := outputPolicyResults(findings)
+		require.Error(t, err)
+		var exitErr *sdk.ExitError
+		assert.ErrorAs(t, err, &exitErr)
+		assert.Equal(t, 1, exitErr.Code)
+	})
 }

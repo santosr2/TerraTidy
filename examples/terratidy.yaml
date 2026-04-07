@@ -19,6 +19,7 @@ imports:
 severity_threshold: warning  # Filter diagnostics (info|warning|error)
 fail_fast: false             # Stop on first error
 parallel: true               # Run engines in parallel
+recursive: true              # Scan subdirectories (false = only specified dirs)
 
 # Cache configuration (optional, defaults shown)
 # cache:

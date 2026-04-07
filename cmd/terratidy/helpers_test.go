@@ -169,14 +169,20 @@ func TestFindHCLFiles(t *testing.T) {
 	require.NoError(t, os.MkdirAll(hiddenDir, 0o755))
 	require.NoError(t, os.WriteFile(filepath.Join(hiddenDir, "cached.tf"), []byte("# cache"), 0o644))
 
-	t.Run("finds all HCL files", func(t *testing.T) {
-		files, err := findHCLFiles([]string{tmpDir})
+	t.Run("finds all HCL files recursively", func(t *testing.T) {
+		files, err := findHCLFiles([]string{tmpDir}, true)
 		require.NoError(t, err)
 		assert.Len(t, files, 3) // main.tf, variables.tf, modules/vpc/main.tf
 	})
 
+	t.Run("finds only top-level files non-recursively", func(t *testing.T) {
+		files, err := findHCLFiles([]string{tmpDir}, false)
+		require.NoError(t, err)
+		assert.Len(t, files, 2) // main.tf, variables.tf (not modules/vpc/main.tf)
+	})
+
 	t.Run("skips hidden directories", func(t *testing.T) {
-		files, err := findHCLFiles([]string{tmpDir})
+		files, err := findHCLFiles([]string{tmpDir}, true)
 		require.NoError(t, err)
 
 		for _, f := range files {
@@ -186,13 +192,13 @@ func TestFindHCLFiles(t *testing.T) {
 
 	t.Run("handles single file path", func(t *testing.T) {
 		singleFile := filepath.Join(tmpDir, "main.tf")
-		files, err := findHCLFiles([]string{singleFile})
+		files, err := findHCLFiles([]string{singleFile}, true)
 		require.NoError(t, err)
 		assert.Len(t, files, 1)
 	})
 
 	t.Run("handles non-existent path", func(t *testing.T) {
-		_, err := findHCLFiles([]string{"/non/existent/path"})
+		_, err := findHCLFiles([]string{"/non/existent/path"}, true)
 		assert.Error(t, err)
 	})
 }
@@ -208,13 +214,13 @@ func TestFindHCLFilesFromPaths(t *testing.T) {
 		require.NoError(t, os.Chdir(tmpDir))
 		defer func() { _ = os.Chdir(oldWd) }()
 
-		files, err := findHCLFilesFromPaths([]string{})
+		files, err := findHCLFilesFromPaths([]string{}, true)
 		require.NoError(t, err)
 		assert.Len(t, files, 1)
 	})
 
 	t.Run("uses provided paths", func(t *testing.T) {
-		files, err := findHCLFilesFromPaths([]string{tmpDir})
+		files, err := findHCLFilesFromPaths([]string{tmpDir}, true)
 		require.NoError(t, err)
 		assert.Len(t, files, 1)
 	})
@@ -224,8 +230,8 @@ func TestFileCollector(t *testing.T) {
 	tmpDir := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "main.tf"), []byte("# test"), 0o644))
 
-	t.Run("collects unique files", func(t *testing.T) {
-		collector := newFileCollector()
+	t.Run("collects unique files recursively", func(t *testing.T) {
+		collector := newFileCollector(true)
 		err := collector.collectPath(tmpDir)
 		require.NoError(t, err)
 		assert.Len(t, collector.files, 1)
@@ -237,7 +243,7 @@ func TestFileCollector(t *testing.T) {
 	})
 
 	t.Run("handles single file", func(t *testing.T) {
-		collector := newFileCollector()
+		collector := newFileCollector(true)
 		err := collector.collectPath(filepath.Join(tmpDir, "main.tf"))
 		require.NoError(t, err)
 		assert.Len(t, collector.files, 1)
@@ -1749,12 +1755,12 @@ func TestGetTargetFilesWithExcludes(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(modulesDir, "module.tf"), []byte("# module"), 0o644))
 
 	// Test: files without excludes
-	files, err := getTargetFilesWithExcludes([]string{tmpDir}, false, nil)
+	files, err := getTargetFilesWithExcludes([]string{tmpDir}, false, nil, nil)
 	require.NoError(t, err)
 	assert.Len(t, files, 4, "should find all 4 files without excludes")
 
 	// Test: exclude external directory
-	files, err = getTargetFilesWithExcludes([]string{tmpDir}, false, []string{"external/**"})
+	files, err = getTargetFilesWithExcludes([]string{tmpDir}, false, []string{"external/**"}, nil)
 	require.NoError(t, err)
 	assert.Len(t, files, 3, "should exclude external directory")
 	for _, f := range files {
@@ -1762,7 +1768,7 @@ func TestGetTargetFilesWithExcludes(t *testing.T) {
 	}
 
 	// Test: exclude generated files
-	files, err = getTargetFilesWithExcludes([]string{tmpDir}, false, []string{"**/*.generated.tf"})
+	files, err = getTargetFilesWithExcludes([]string{tmpDir}, false, []string{"**/*.generated.tf"}, nil)
 	require.NoError(t, err)
 	assert.Len(t, files, 3, "should exclude generated files")
 	for _, f := range files {
@@ -1770,7 +1776,7 @@ func TestGetTargetFilesWithExcludes(t *testing.T) {
 	}
 
 	// Test: multiple excludes
-	files, err = getTargetFilesWithExcludes([]string{tmpDir}, false, []string{"external/**", "**/*.generated.tf"})
+	files, err = getTargetFilesWithExcludes([]string{tmpDir}, false, []string{"external/**", "**/*.generated.tf"}, nil)
 	require.NoError(t, err)
 	assert.Len(t, files, 2, "should exclude both external and generated files")
 }
@@ -1784,7 +1790,7 @@ func TestGetTargetFilesWithExcludes_ChangedError(t *testing.T) {
 	require.NoError(t, os.Chdir(nonGitDir))
 	defer func() { _ = os.Chdir(oldWd) }()
 
-	_, err := getTargetFilesWithExcludes([]string{nonGitDir}, true, nil)
+	_, err := getTargetFilesWithExcludes([]string{nonGitDir}, true, nil, nil)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "not a git repository")
 }

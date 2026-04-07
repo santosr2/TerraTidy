@@ -24,6 +24,9 @@ func TestGetChangedFiles_TempRepo(t *testing.T) {
 	}
 
 	run("init", "-b", "main")
+	run("config", "commit.gpgsign", "false")
+	run("config", "user.email", "test@test.com")
+	run("config", "user.name", "test")
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "main.tf"), []byte(`resource "test" "t" {}`), 0o644))
 	run("add", ".")
 	run("commit", "-m", "initial")
@@ -52,6 +55,9 @@ func TestGetChangedTerraformFiles_TempRepo(t *testing.T) {
 	}
 
 	run("init", "-b", "main")
+	run("config", "commit.gpgsign", "false")
+	run("config", "user.email", "test@test.com")
+	run("config", "user.name", "test")
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "main.tf"), []byte(`resource "test" "t" {}`), 0o644))
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "readme.md"), []byte("# readme"), 0o644))
 	run("add", ".")
@@ -86,6 +92,9 @@ func TestGetFileStatuses_TempRepo(t *testing.T) {
 	}
 
 	run("init", "-b", "main")
+	run("config", "commit.gpgsign", "false")
+	run("config", "user.email", "test@test.com")
+	run("config", "user.name", "test")
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "existing.tf"), []byte(`variable "v" {}`), 0o644))
 	run("add", ".")
 	run("commit", "-m", "initial")

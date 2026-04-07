@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -1869,7 +1870,7 @@ engines:
 	require.NoError(t, err)
 
 	// Get files with excludes
-	files, err := getTargetFilesWithExcludes([]string{dir}, false, cfg.Exclude)
+	files, err := getTargetFilesWithExcludes([]string{dir}, false, cfg.Exclude, cfg)
 	require.NoError(t, err)
 
 	// Should only find main.tf, not the excluded generated file
@@ -1902,7 +1903,7 @@ func TestCLIExcludeFlag(t *testing.T) {
 	excludePatterns = []string{"external/**"}
 
 	// Get files with CLI excludes
-	files, err := getTargetFilesWithExcludes([]string{dir}, false, nil)
+	files, err := getTargetFilesWithExcludes([]string{dir}, false, nil, nil)
 	require.NoError(t, err)
 
 	// Should only find main.tf, not the excluded external file
@@ -1940,7 +1941,7 @@ func TestCLIAndConfigExcludesCombine(t *testing.T) {
 	configExcludes := []string{"archive/**"}
 
 	// Get files with both CLI and config excludes
-	files, err := getTargetFilesWithExcludes([]string{dir}, false, configExcludes)
+	files, err := getTargetFilesWithExcludes([]string{dir}, false, configExcludes, nil)
 	require.NoError(t, err)
 
 	// Should only find main.tf, not the excluded external or archive files
@@ -1949,4 +1950,258 @@ func TestCLIAndConfigExcludesCombine(t *testing.T) {
 		assert.NotContains(t, f, "external", "should not contain CLI-excluded files")
 		assert.NotContains(t, f, "archive", "should not contain config-excluded files")
 	}
+}
+
+// TestNoRecurseFlagOnlyScansSpecifiedDirectory verifies that --no-recurse
+// only scans the specified directory, not its subdirectories.
+func TestNoRecurseFlagOnlyScansSpecifiedDirectory(t *testing.T) {
+	// Create temp directory with test files
+	dir := t.TempDir()
+
+	// Create subdirectory structure
+	subDir := filepath.Join(dir, "modules")
+	nestedDir := filepath.Join(subDir, "vpc")
+	require.NoError(t, os.MkdirAll(nestedDir, 0o755))
+
+	// Create test files at different levels
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "main.tf"), []byte("# root level"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "variables.tf"), []byte("# root level"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(subDir, "module.tf"), []byte("# subdir level"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(nestedDir, "vpc.tf"), []byte("# nested level"), 0o644))
+
+	// Save and restore global state
+	oldNoRecurse := noRecurse
+	t.Cleanup(func() {
+		noRecurse = oldNoRecurse
+	})
+
+	t.Run("with noRecurse=false scans all levels", func(t *testing.T) {
+		noRecurse = false
+		files, err := getTargetFiles([]string{dir}, false)
+		require.NoError(t, err)
+
+		// Should find all 4 files
+		assert.Len(t, files, 4, "recursive scan should find all .tf files")
+	})
+
+	t.Run("with noRecurse=true scans only specified directory", func(t *testing.T) {
+		noRecurse = true
+		files, err := getTargetFiles([]string{dir}, false)
+		require.NoError(t, err)
+
+		// Should only find 2 files in root directory
+		assert.Len(t, files, 2, "non-recursive scan should only find root-level files")
+
+		for _, f := range files {
+			// Verify no subdirectory files are included
+			assert.NotContains(t, f, "modules", "should not contain files from subdirectories")
+		}
+	})
+}
+
+// TestNoRecurseWithChangedScansChangedFileDirsOnly verifies that --no-recurse
+// with --changed only returns changed files directly in specified directories.
+func TestNoRecurseWithChangedScansChangedFileDirsOnly(t *testing.T) {
+	// Create temp directory for git repo
+	dir := t.TempDir()
+
+	// Helper to run git commands
+	runGit := func(args ...string) {
+		cmd := exec.Command("git", args...)
+		cmd.Dir = dir
+		cmd.Env = append(os.Environ(),
+			"GIT_AUTHOR_NAME=test",
+			"GIT_AUTHOR_EMAIL=test@test.com",
+			"GIT_COMMITTER_NAME=test",
+			"GIT_COMMITTER_EMAIL=test@test.com",
+		)
+		out, err := cmd.CombinedOutput()
+		require.NoError(t, err, "git %v failed: %s", args, out)
+	}
+
+	// Create directory structure
+	subDir := filepath.Join(dir, "modules")
+	require.NoError(t, os.MkdirAll(subDir, 0o755))
+
+	// Initialize git repo with initial commit
+	runGit("init", "-b", "main")
+	runGit("config", "commit.gpgsign", "false")
+	runGit("config", "user.email", "test@test.com")
+	runGit("config", "user.name", "test")
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "main.tf"), []byte("# root"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(subDir, "module.tf"), []byte("# subdir"), 0o644))
+	runGit("add", ".")
+	runGit("commit", "-m", "initial")
+
+	// Modify files at both levels (create uncommitted changes)
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "main.tf"), []byte("# root modified"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(subDir, "module.tf"), []byte("# subdir modified"), 0o644))
+
+	// Save and restore working directory
+	oldWd, err := os.Getwd()
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		require.NoError(t, os.Chdir(oldWd))
+	})
+
+	// Change to test directory
+	require.NoError(t, os.Chdir(dir))
+
+	// Save and restore global state
+	oldNoRecurse := noRecurse
+	t.Cleanup(func() {
+		noRecurse = oldNoRecurse
+	})
+
+	t.Run("with recursive=true returns all changed files", func(t *testing.T) {
+		files, err := getChangedFiles([]string{"."}, true)
+		require.NoError(t, err)
+
+		// Should find both changed files
+		assert.Len(t, files, 2, "recursive mode should find all changed files")
+	})
+
+	t.Run("with recursive=false returns only root-level changed files", func(t *testing.T) {
+		files, err := getChangedFiles([]string{"."}, false)
+		require.NoError(t, err)
+
+		// Should only find root-level changed file
+		assert.Len(t, files, 1, "non-recursive mode should only find root-level changed files")
+
+		for _, f := range files {
+			assert.NotContains(t, f, "modules", "should not contain files from subdirectories")
+		}
+	})
+}
+
+// TestNoRecurseWithPositionalPathScansBaseDirOnly verifies that --no-recurse
+// with a positional path argument only scans files directly in that directory.
+func TestNoRecurseWithPositionalPathScansBaseDirOnly(t *testing.T) {
+	// Create temp directory with nested structure
+	dir := t.TempDir()
+
+	// Create directory structure:
+	// dir/
+	//   main.tf
+	//   modules/
+	//     module.tf
+	//     vpc/
+	//       vpc.tf
+	modulesDir := filepath.Join(dir, "modules")
+	vpcDir := filepath.Join(modulesDir, "vpc")
+	require.NoError(t, os.MkdirAll(vpcDir, 0o755))
+
+	// Create test files
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "main.tf"), []byte("# root"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(modulesDir, "module.tf"), []byte("# modules level"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(vpcDir, "vpc.tf"), []byte("# vpc nested"), 0o644))
+
+	// Save and restore global state
+	oldNoRecurse := noRecurse
+	t.Cleanup(func() {
+		noRecurse = oldNoRecurse
+	})
+
+	t.Run("recursive scan of modules/ finds all nested files", func(t *testing.T) {
+		noRecurse = false
+		files, err := getTargetFiles([]string{modulesDir}, false)
+		require.NoError(t, err)
+
+		// Should find both module.tf and vpc/vpc.tf
+		assert.Len(t, files, 2, "recursive scan should find all files in modules/")
+	})
+
+	t.Run("non-recursive scan of modules/ finds only direct children", func(t *testing.T) {
+		noRecurse = true
+		files, err := getTargetFiles([]string{modulesDir}, false)
+		require.NoError(t, err)
+
+		// Should only find module.tf, not vpc/vpc.tf
+		assert.Len(t, files, 1, "non-recursive scan should only find direct children")
+
+		for _, f := range files {
+			assert.NotContains(t, f, "vpc", "should not contain files from nested subdirectories")
+			assert.Contains(t, f, "module.tf", "should contain the direct child file")
+		}
+	})
+
+	t.Run("non-recursive scan of multiple paths", func(t *testing.T) {
+		noRecurse = true
+		// Pass both root dir and modules dir as positional arguments
+		files, err := getTargetFiles([]string{dir, modulesDir}, false)
+		require.NoError(t, err)
+
+		// Should find main.tf (from dir) and module.tf (from modules/)
+		// But NOT vpc/vpc.tf
+		assert.Len(t, files, 2, "should find one file from each specified directory")
+
+		for _, f := range files {
+			assert.NotContains(t, f, "vpc", "should not contain nested files")
+		}
+	})
+}
+
+// TestConfigRecursiveFalseBehavesLikeNoRecurseFlag verifies that recursive: false
+// in config produces the same behavior as the --no-recurse CLI flag.
+func TestConfigRecursiveFalseBehavesLikeNoRecurseFlag(t *testing.T) {
+	// Create temp directory with nested structure
+	dir := t.TempDir()
+
+	// Create directory structure
+	subDir := filepath.Join(dir, "modules")
+	require.NoError(t, os.MkdirAll(subDir, 0o755))
+
+	// Create test files
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "main.tf"), []byte("# root"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(subDir, "module.tf"), []byte("# subdir"), 0o644))
+
+	// Save and restore global state
+	oldNoRecurse := noRecurse
+	t.Cleanup(func() {
+		noRecurse = oldNoRecurse
+	})
+
+	// Reset noRecurse flag to ensure config takes effect
+	noRecurse = false
+
+	t.Run("config recursive true scans all files", func(t *testing.T) {
+		cfg := &config.Config{
+			Version:   1,
+			Recursive: config.BoolPtr(true),
+		}
+
+		files, err := getTargetFilesWithExcludes([]string{dir}, false, nil, cfg)
+		require.NoError(t, err)
+
+		assert.Len(t, files, 2, "recursive: true should find all files")
+	})
+
+	t.Run("config recursive false scans only root level", func(t *testing.T) {
+		cfg := &config.Config{
+			Version:   1,
+			Recursive: config.BoolPtr(false),
+		}
+
+		files, err := getTargetFilesWithExcludes([]string{dir}, false, nil, cfg)
+		require.NoError(t, err)
+
+		assert.Len(t, files, 1, "recursive: false should only find root-level files")
+		for _, f := range files {
+			assert.NotContains(t, f, "modules", "should not contain subdirectory files")
+		}
+	})
+
+	t.Run("CLI flag overrides config", func(t *testing.T) {
+		// Config says recursive: true, but CLI flag says --no-recurse
+		noRecurse = true
+		cfg := &config.Config{
+			Version:   1,
+			Recursive: config.BoolPtr(true),
+		}
+
+		files, err := getTargetFilesWithExcludes([]string{dir}, false, nil, cfg)
+		require.NoError(t, err)
+
+		assert.Len(t, files, 1, "CLI --no-recurse should override config recursive: true")
+	})
 }

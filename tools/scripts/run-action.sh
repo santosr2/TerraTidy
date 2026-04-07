@@ -98,6 +98,11 @@ if [ -n "${INPUT_EXCLUDE:-}" ]; then
   ARGS="$ARGS --exclude $INPUT_EXCLUDE"
 fi
 
+# No-recurse flag
+if [ "${INPUT_NO_RECURSE:-false}" = "true" ]; then
+  ARGS="$ARGS --no-recurse"
+fi
+
 # Output format
 FORMAT="$INPUT_FORMAT"
 ARGS="$ARGS --format $FORMAT"

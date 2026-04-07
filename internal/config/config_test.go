@@ -488,6 +488,52 @@ func TestCacheConfig_IsConfigured(t *testing.T) {
 	}
 }
 
+func TestRecursiveConfig_Parsing(t *testing.T) {
+	tests := []struct {
+		name          string
+		yaml          string
+		wantRecursive bool
+	}{
+		{
+			name: "recursive explicitly true",
+			yaml: `
+version: 1
+recursive: true
+`,
+			wantRecursive: true,
+		},
+		{
+			name: "recursive explicitly false",
+			yaml: `
+version: 1
+recursive: false
+`,
+			wantRecursive: false,
+		},
+		{
+			name: "recursive not set (default true)",
+			yaml: `
+version: 1
+`,
+			wantRecursive: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			configPath := filepath.Join(dir, ".terratidy.yaml")
+			err := os.WriteFile(configPath, []byte(tt.yaml), 0o600)
+			require.NoError(t, err)
+
+			cfg, err := Load(configPath)
+			require.NoError(t, err)
+
+			assert.Equal(t, tt.wantRecursive, cfg.IsRecursive())
+		})
+	}
+}
+
 func TestConfig_merge(t *testing.T) {
 	cfg := &Config{
 		Overrides: OverridesConfig{

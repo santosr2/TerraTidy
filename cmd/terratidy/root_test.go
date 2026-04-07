@@ -37,6 +37,12 @@ func TestRootCmd(t *testing.T) {
 		assert.Equal(t, "false", flag.DefValue)
 	})
 
+	t.Run("has no-recurse flag", func(t *testing.T) {
+		flag := rootCmd.PersistentFlags().Lookup("no-recurse")
+		assert.NotNil(t, flag)
+		assert.Equal(t, "false", flag.DefValue)
+	})
+
 	t.Run("has severity-threshold flag", func(t *testing.T) {
 		flag := rootCmd.PersistentFlags().Lookup("severity-threshold")
 		assert.NotNil(t, flag)

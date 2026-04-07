@@ -17,14 +17,15 @@ import (
 // getTargetFiles returns the list of files to process based on the provided paths
 // and global flags. When --changed is set, it uses VCS to detect changed files.
 // Exclude patterns from both config and CLI flags are applied.
+// When --no-recurse is set, only files in the specified directories (not subdirs) are scanned.
 func getTargetFiles(paths []string, changedOnly bool) ([]string, error) {
 	var files []string
 	var err error
 
 	if changedOnly {
-		files, err = getChangedFiles(paths)
+		files, err = getChangedFiles(paths, !noRecurse)
 	} else {
-		files, err = findHCLFilesFromPaths(paths)
+		files, err = findHCLFilesFromPaths(paths, !noRecurse)
 	}
 	if err != nil {
 		return nil, err
@@ -36,14 +37,16 @@ func getTargetFiles(paths []string, changedOnly bool) ([]string, error) {
 
 // getTargetFilesWithExcludes returns the list of files with explicit exclude patterns.
 // Used by commands that need to pass config-based excludes.
-func getTargetFilesWithExcludes(paths []string, changedOnly bool, excludes []string) ([]string, error) {
+// The cfg parameter is used to determine the recursive setting (CLI flag takes precedence).
+func getTargetFilesWithExcludes(paths []string, changedOnly bool, excludes []string, cfg *config.Config) ([]string, error) {
 	var files []string
 	var err error
 
+	recursive := getEffectiveRecursive(cfg)
 	if changedOnly {
-		files, err = getChangedFiles(paths)
+		files, err = getChangedFiles(paths, recursive)
 	} else {
-		files, err = findHCLFilesFromPaths(paths)
+		files, err = findHCLFilesFromPaths(paths, recursive)
 	}
 	if err != nil {
 		return nil, err
@@ -166,7 +169,8 @@ func matchDoubleStarPattern(filePath, pattern string) bool {
 
 // getChangedFiles uses VCS to get only changed Terraform/HCL files.
 // If paths are provided, it filters the changed files to only those within the paths.
-func getChangedFiles(filterPaths []string) ([]string, error) {
+// When recursive is false, only changed files directly in the specified directories are returned.
+func getChangedFiles(filterPaths []string, recursive bool) ([]string, error) {
 	git := vcs.NewGit(".")
 
 	// Check if we're in a git repo
@@ -180,9 +184,23 @@ func getChangedFiles(filterPaths []string) ([]string, error) {
 		return nil, fmt.Errorf("getting changed files: %w", err)
 	}
 
-	// If no filter paths provided, return all changed files
+	// If no filter paths provided, handle based on recursive setting
 	if len(filterPaths) == 0 || (len(filterPaths) == 1 && filterPaths[0] == ".") {
-		return vcs.FilterExisting(changedFiles), nil
+		if recursive {
+			return vcs.FilterExisting(changedFiles), nil
+		}
+		// Non-recursive: only return files directly in current directory
+		cwd, err := filepath.Abs(".")
+		if err != nil {
+			return nil, fmt.Errorf("getting working directory: %w", err)
+		}
+		var topLevelFiles []string
+		for _, file := range changedFiles {
+			if isFileDirectlyIn(file, cwd) {
+				topLevelFiles = append(topLevelFiles, file)
+			}
+		}
+		return vcs.FilterExisting(topLevelFiles), nil
 	}
 
 	// Filter changed files to only those within the specified paths
@@ -194,10 +212,17 @@ func getChangedFiles(filterPaths []string) ([]string, error) {
 				continue
 			}
 
-			// Check if the file is within the filter path
-			if isPathWithin(file, absFilterPath) {
-				filteredFiles = append(filteredFiles, file)
-				break
+			// Check if the file is within the filter path (recursive or direct)
+			if recursive {
+				if isPathWithin(file, absFilterPath) {
+					filteredFiles = append(filteredFiles, file)
+					break
+				}
+			} else {
+				if isFileDirectlyIn(file, absFilterPath) {
+					filteredFiles = append(filteredFiles, file)
+					break
+				}
 			}
 		}
 	}
@@ -205,7 +230,7 @@ func getChangedFiles(filterPaths []string) ([]string, error) {
 	return vcs.FilterExisting(filteredFiles), nil
 }
 
-// isPathWithin checks if a file path is within a directory path.
+// isPathWithin checks if a file path is within a directory path (recursively).
 func isPathWithin(filePath, dirPath string) bool {
 	// Clean and normalize paths
 	filePath = filepath.Clean(filePath)
@@ -220,18 +245,34 @@ func isPathWithin(filePath, dirPath string) bool {
 	return false
 }
 
+// isFileDirectlyIn checks if a file is directly in a directory (not in a subdirectory).
+func isFileDirectlyIn(filePath, dirPath string) bool {
+	// Clean and normalize paths
+	filePath = filepath.Clean(filePath)
+	dirPath = filepath.Clean(dirPath)
+
+	// Get the directory of the file
+	fileDir := filepath.Dir(filePath)
+
+	// File is directly in dirPath if its parent directory matches exactly
+	return fileDir == dirPath
+}
+
 // findHCLFilesFromPaths is a helper that handles default paths and delegates to findHCLFiles.
-func findHCLFilesFromPaths(paths []string) ([]string, error) {
+// When recursive is false, only files in the specified directories (not subdirs) are scanned.
+func findHCLFilesFromPaths(paths []string, recursive bool) ([]string, error) {
 	targetPaths := paths
 	if len(targetPaths) == 0 {
 		targetPaths = []string{"."}
 	}
-	return findHCLFiles(targetPaths)
+	return findHCLFiles(targetPaths, recursive)
 }
 
-// findHCLFiles recursively finds all .tf and .hcl files in the given paths.
-func findHCLFiles(paths []string) ([]string, error) {
-	collector := newFileCollector()
+// findHCLFiles finds all .tf and .hcl files in the given paths.
+// When recursive is true, it recursively scans subdirectories.
+// When recursive is false, it only scans the specified directories (not subdirs).
+func findHCLFiles(paths []string, recursive bool) ([]string, error) {
+	collector := newFileCollector(recursive)
 	for _, path := range paths {
 		if err := collector.collectPath(path); err != nil {
 			return nil, err
@@ -242,12 +283,13 @@ func findHCLFiles(paths []string) ([]string, error) {
 
 // fileCollector collects unique HCL files.
 type fileCollector struct {
-	files []string
-	seen  map[string]bool
+	files     []string
+	seen      map[string]bool
+	recursive bool
 }
 
-func newFileCollector() *fileCollector {
-	return &fileCollector{seen: make(map[string]bool)}
+func newFileCollector(recursive bool) *fileCollector {
+	return &fileCollector{seen: make(map[string]bool), recursive: recursive}
 }
 
 func (c *fileCollector) collectPath(path string) error {
@@ -257,12 +299,16 @@ func (c *fileCollector) collectPath(path string) error {
 	}
 
 	if info.IsDir() {
-		return c.walkDirectory(path)
+		if c.recursive {
+			return c.walkDirectory(path)
+		}
+		return c.scanDirectory(path)
 	}
 	c.addFileIfHCL(path)
 	return nil
 }
 
+// walkDirectory recursively walks a directory and collects HCL files.
 func (c *fileCollector) walkDirectory(dir string) error {
 	err := filepath.Walk(dir, func(p string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -278,6 +324,23 @@ func (c *fileCollector) walkDirectory(dir string) error {
 	})
 	if err != nil {
 		return fmt.Errorf("walking %s: %w", dir, err)
+	}
+	return nil
+}
+
+// scanDirectory scans only the top level of a directory (non-recursive).
+func (c *fileCollector) scanDirectory(dir string) error {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return fmt.Errorf("reading directory %s: %w", dir, err)
+	}
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue // Skip subdirectories in non-recursive mode
+		}
+		path := filepath.Join(dir, entry.Name())
+		c.addFileIfHCL(path)
 	}
 	return nil
 }
@@ -478,6 +541,22 @@ func getEffectiveParallel(cfg *config.Config, cliParallel bool) bool {
 		return cfg.Parallel
 	}
 	return false
+}
+
+// getEffectiveRecursive returns whether directory traversal should be recursive.
+// CLI flag (--no-recurse) takes precedence over config file setting.
+// Default is true (recursive) if not specified anywhere.
+func getEffectiveRecursive(cfg *config.Config) bool {
+	// CLI flag takes precedence
+	if noRecurse {
+		return false
+	}
+	// Then config
+	if cfg != nil {
+		return cfg.IsRecursive()
+	}
+	// Default to recursive
+	return true
 }
 
 // shouldFailFast returns whether fail-fast mode is enabled from config.

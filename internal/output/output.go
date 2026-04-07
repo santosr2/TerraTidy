@@ -14,10 +14,10 @@ import (
 	"github.com/santosr2/TerraTidy/pkg/sdk"
 )
 
-// displayPath returns the path for display, converting to relative if not verbose.
-// Full absolute paths are only shown when verbose is true.
-func displayPath(path string, verbose bool) string {
-	if verbose {
+// displayPath returns the path for display, converting to relative unless absolutePaths is true.
+// Relative paths are the default for better readability in CI/editor output.
+func displayPath(path string, absolutePaths bool) string {
+	if absolutePaths {
 		return path
 	}
 	// Try to convert to relative path
@@ -48,8 +48,9 @@ type Formatter interface {
 
 // TextFormatter outputs findings in human-readable text format
 type TextFormatter struct {
-	Verbose bool
-	Color   bool
+	Verbose       bool
+	Color         bool
+	AbsolutePaths bool
 }
 
 // Format implements the Formatter interface for text output
@@ -78,7 +79,7 @@ func (f *TextFormatter) Format(findings []sdk.Finding, w io.Writer) error {
 			iconColor = colorCyan
 		}
 
-		displayFile := displayPath(finding.File, f.Verbose)
+		displayFile := displayPath(finding.File, f.AbsolutePaths)
 		if f.Color {
 			if f.Verbose {
 				_, _ = fmt.Fprintf(w, "%s%s%s %s:%d:%d: %s %s(%s)%s\n",
@@ -123,7 +124,8 @@ func (f *TextFormatter) Format(findings []sdk.Finding, w io.Writer) error {
 
 // JSONFormatter outputs findings in JSON format
 type JSONFormatter struct {
-	Pretty bool
+	Pretty        bool
+	AbsolutePaths bool
 }
 
 // JSONOutput represents the JSON output structure
@@ -175,7 +177,7 @@ func (f *JSONFormatter) Format(findings []sdk.Finding, w io.Writer) error {
 		output.Findings = append(output.Findings, JSONFinding{
 			Rule:    finding.Rule,
 			Message: finding.Message,
-			File:    finding.File,
+			File:    displayPath(finding.File, f.AbsolutePaths),
 			Location: JSONLocation{
 				Start: JSONPosition{
 					Line:   finding.Location.StartLine,
@@ -211,30 +213,30 @@ func (f *JSONFormatter) Format(findings []sdk.Finding, w io.Writer) error {
 
 // GetFormatter returns the appropriate formatter based on the format string
 func GetFormatter(format string, verbose bool, version string) (Formatter, error) {
-	return GetFormatterWithColor(format, verbose, version, true)
+	return GetFormatterWithColor(format, verbose, version, true, false)
 }
 
-// GetFormatterWithColor returns the appropriate formatter with color control
-func GetFormatterWithColor(format string, verbose bool, version string, color bool) (Formatter, error) {
+// GetFormatterWithColor returns the appropriate formatter with color and path control
+func GetFormatterWithColor(format string, verbose bool, version string, color bool, absolutePaths bool) (Formatter, error) {
 	switch format {
 	case "text", "":
-		return &TextFormatter{Verbose: verbose, Color: color}, nil
+		return &TextFormatter{Verbose: verbose, Color: color, AbsolutePaths: absolutePaths}, nil
 	case "json":
-		return &JSONFormatter{Pretty: true}, nil
+		return &JSONFormatter{Pretty: true, AbsolutePaths: absolutePaths}, nil
 	case "json-compact":
-		return &JSONFormatter{Pretty: false}, nil
+		return &JSONFormatter{Pretty: false, AbsolutePaths: absolutePaths}, nil
 	case "sarif":
-		return &SARIFFormatter{Version: version}, nil
+		return &SARIFFormatter{Version: version, AbsolutePaths: absolutePaths}, nil
 	case "html":
-		return &HTMLFormatter{Title: "TerraTidy Report", Version: version}, nil
+		return &HTMLFormatter{Title: "TerraTidy Report", Version: version, AbsolutePaths: absolutePaths}, nil
 	case "github", "gha":
-		return &GitHubActionsFormatter{}, nil
+		return &GitHubActionsFormatter{AbsolutePaths: absolutePaths}, nil
 	case "table":
-		return &TableFormatter{Color: color, Verbose: verbose}, nil
+		return &TableFormatter{Color: color, Verbose: verbose, AbsolutePaths: absolutePaths}, nil
 	case "junit", "junit-xml":
-		return &JUnitFormatter{Version: version}, nil
+		return &JUnitFormatter{Version: version, AbsolutePaths: absolutePaths}, nil
 	case "markdown", "md":
-		return &MarkdownFormatter{Version: version, Title: "TerraTidy Report"}, nil
+		return &MarkdownFormatter{Version: version, Title: "TerraTidy Report", AbsolutePaths: absolutePaths}, nil
 	default:
 		return nil, fmt.Errorf("unsupported output format: %s", format)
 	}
@@ -242,8 +244,9 @@ func GetFormatterWithColor(format string, verbose bool, version string, color bo
 
 // TableFormatter outputs findings in a colored table format for terminal display
 type TableFormatter struct {
-	Color   bool
-	Verbose bool
+	Color         bool
+	Verbose       bool
+	AbsolutePaths bool
 }
 
 // Format implements the Formatter interface for table output
@@ -324,8 +327,8 @@ func (f *TableFormatter) printFinding(w io.Writer, finding sdk.Finding) {
 		severity = "INFO"
 	}
 
-	// Format location - use short filename for readability
-	filename := filepath.Base(finding.File)
+	// Format location - use displayPath for consistent path handling
+	filename := displayPath(finding.File, f.AbsolutePaths)
 	location := filename
 	if finding.Location.StartLine > 0 {
 		location = fmt.Sprintf("%s:%d:%d", filename, finding.Location.StartLine, finding.Location.StartColumn)
@@ -355,14 +358,16 @@ func (f *TableFormatter) printFinding(w io.Writer, finding sdk.Finding) {
 
 // GitHubActionsFormatter outputs findings as GitHub Actions workflow commands
 // See: https://docs.github.com/en/actions/using-workflows/workflow-commands-for-github-actions
-type GitHubActionsFormatter struct{}
+type GitHubActionsFormatter struct {
+	AbsolutePaths bool
+}
 
 // Format implements the Formatter interface for GitHub Actions workflow commands
 // Outputs in the format: ::error file={name},line={line},col={col}::{message}
 func (f *GitHubActionsFormatter) Format(findings []sdk.Finding, w io.Writer) error {
 	for _, finding := range findings {
 		command := f.severityToCommand(finding.Severity)
-		file := finding.File
+		file := displayPath(finding.File, f.AbsolutePaths)
 		line := finding.Location.StartLine
 		col := finding.Location.StartColumn
 		endLine := finding.Location.EndLine
@@ -424,8 +429,9 @@ func escapeGitHubMessage(s string) string {
 
 // HTMLFormatter outputs findings as an HTML report
 type HTMLFormatter struct {
-	Title   string
-	Version string
+	Title         string
+	Version       string
+	AbsolutePaths bool
 }
 
 // Format implements the Formatter interface for HTML output
@@ -641,11 +647,12 @@ func (f *HTMLFormatter) generateFileSection(file string, findings []sdk.Finding)
 		findingsHTML += f.generateFindingHTML(finding)
 	}
 
+	displayFile := displayPath(file, f.AbsolutePaths)
 	return fmt.Sprintf(`
         <div class="file-section">
             <div class="file-header">%s</div>
             %s
-        </div>`, escapeHTML(file), findingsHTML)
+        </div>`, escapeHTML(displayFile), findingsHTML)
 }
 
 func (f *HTMLFormatter) generateFindingHTML(finding sdk.Finding) string {

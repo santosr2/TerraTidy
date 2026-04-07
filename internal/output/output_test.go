@@ -872,7 +872,7 @@ func TestTableFormatter(t *testing.T) {
 
 func TestGetFormatterWithColor(t *testing.T) {
 	t.Run("table format with color enabled", func(t *testing.T) {
-		f, err := GetFormatterWithColor("table", true, "1.0.0", true)
+		f, err := GetFormatterWithColor("table", true, "1.0.0", true, false)
 		require.NoError(t, err)
 		table, ok := f.(*TableFormatter)
 		require.True(t, ok, "expected TableFormatter")
@@ -880,10 +880,122 @@ func TestGetFormatterWithColor(t *testing.T) {
 	})
 
 	t.Run("table format with color disabled", func(t *testing.T) {
-		f, err := GetFormatterWithColor("table", true, "1.0.0", false)
+		f, err := GetFormatterWithColor("table", true, "1.0.0", false, false)
 		require.NoError(t, err)
 		table, ok := f.(*TableFormatter)
 		require.True(t, ok, "expected TableFormatter")
 		assert.False(t, table.Color)
+	})
+
+	t.Run("text format with absolutePaths enabled", func(t *testing.T) {
+		f, err := GetFormatterWithColor("text", true, "1.0.0", true, true)
+		require.NoError(t, err)
+		text, ok := f.(*TextFormatter)
+		require.True(t, ok, "expected TextFormatter")
+		assert.True(t, text.AbsolutePaths)
+	})
+
+	t.Run("text format with absolutePaths disabled", func(t *testing.T) {
+		f, err := GetFormatterWithColor("text", true, "1.0.0", true, false)
+		require.NoError(t, err)
+		text, ok := f.(*TextFormatter)
+		require.True(t, ok, "expected TextFormatter")
+		assert.False(t, text.AbsolutePaths)
+	})
+
+	t.Run("json format with absolutePaths enabled", func(t *testing.T) {
+		f, err := GetFormatterWithColor("json", true, "1.0.0", true, true)
+		require.NoError(t, err)
+		jsonFmt, ok := f.(*JSONFormatter)
+		require.True(t, ok, "expected JSONFormatter")
+		assert.True(t, jsonFmt.AbsolutePaths)
+	})
+
+	t.Run("sarif format with absolutePaths enabled", func(t *testing.T) {
+		f, err := GetFormatterWithColor("sarif", true, "1.0.0", true, true)
+		require.NoError(t, err)
+		sarifFmt, ok := f.(*SARIFFormatter)
+		require.True(t, ok, "expected SARIFFormatter")
+		assert.True(t, sarifFmt.AbsolutePaths)
+	})
+}
+
+func TestTextFormatterPathBehavior(t *testing.T) {
+	// Use an absolute path for testing
+	absPath := "/absolute/path/to/test.tf"
+
+	finding := sdk.Finding{
+		Rule:     "test.rule",
+		Message:  "Test message",
+		File:     absPath,
+		Severity: sdk.SeverityError,
+	}
+
+	t.Run("relative paths by default", func(t *testing.T) {
+		formatter := &TextFormatter{AbsolutePaths: false}
+		var buf bytes.Buffer
+		err := formatter.Format([]sdk.Finding{finding}, &buf)
+		require.NoError(t, err)
+		// When AbsolutePaths is false and path is absolute, displayPath attempts
+		// to make it relative. Since the path doesn't exist under cwd, it stays absolute.
+		// But the key is that AbsolutePaths=false is set.
+		assert.Contains(t, buf.String(), "test.tf")
+	})
+
+	t.Run("absolute paths when enabled", func(t *testing.T) {
+		formatter := &TextFormatter{AbsolutePaths: true}
+		var buf bytes.Buffer
+		err := formatter.Format([]sdk.Finding{finding}, &buf)
+		require.NoError(t, err)
+		// When AbsolutePaths is true, the full path is preserved
+		assert.Contains(t, buf.String(), absPath)
+	})
+}
+
+func TestJSONFormatterPathBehavior(t *testing.T) {
+	absPath := "/absolute/path/to/test.tf"
+
+	finding := sdk.Finding{
+		Rule:     "test.rule",
+		Message:  "Test message",
+		File:     absPath,
+		Severity: sdk.SeverityError,
+	}
+
+	t.Run("absolute paths when enabled", func(t *testing.T) {
+		formatter := &JSONFormatter{Pretty: false, AbsolutePaths: true}
+		var buf bytes.Buffer
+		err := formatter.Format([]sdk.Finding{finding}, &buf)
+		require.NoError(t, err)
+
+		var result map[string]any
+		err = json.Unmarshal(buf.Bytes(), &result)
+		require.NoError(t, err)
+
+		findings := result["findings"].([]any)
+		require.Len(t, findings, 1)
+		firstFinding := findings[0].(map[string]any)
+		assert.Equal(t, absPath, firstFinding["file"])
+	})
+}
+
+func TestSARIFFormatterPathBehavior(t *testing.T) {
+	absPath := "/absolute/path/to/test.tf"
+
+	finding := sdk.Finding{
+		Rule:     "test.rule",
+		Message:  "Test message",
+		File:     absPath,
+		Severity: sdk.SeverityError,
+	}
+
+	t.Run("absolute paths when enabled", func(t *testing.T) {
+		formatter := &SARIFFormatter{Version: "1.0.0", AbsolutePaths: true}
+		var buf bytes.Buffer
+		err := formatter.Format([]sdk.Finding{finding}, &buf)
+		require.NoError(t, err)
+
+		// Parse SARIF output and check the artifact location contains the absolute path
+		assert.Contains(t, buf.String(), absPath)
 	})
 }

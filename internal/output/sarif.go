@@ -11,7 +11,8 @@ import (
 
 // SARIFFormatter outputs findings in SARIF format for GitHub Code Scanning
 type SARIFFormatter struct {
-	Version string // TerraTidy version
+	Version       string // TerraTidy version
+	AbsolutePaths bool
 }
 
 // SARIF represents the root SARIF document
@@ -114,7 +115,7 @@ type SARIFReplacement struct {
 // Format implements the Formatter interface for SARIF output
 func (f *SARIFFormatter) Format(findings []sdk.Finding, w io.Writer) error {
 	rules := buildSARIFRules(findings)
-	results := buildSARIFResults(findings)
+	results := f.buildSARIFResults(findings)
 	sarif := f.buildSARIFDocument(rules, results)
 
 	encoder := json.NewEncoder(w)
@@ -143,16 +144,17 @@ func buildSARIFRules(findings []sdk.Finding) []SARIFRule {
 	return rules
 }
 
-func buildSARIFResults(findings []sdk.Finding) []SARIFResult {
+func (f *SARIFFormatter) buildSARIFResults(findings []sdk.Finding) []SARIFResult {
 	var results []SARIFResult
 	for _, finding := range findings {
-		result := buildSARIFResult(finding)
+		result := f.buildSARIFResult(finding)
 		results = append(results, result)
 	}
 	return results
 }
 
-func buildSARIFResult(finding sdk.Finding) SARIFResult {
+func (f *SARIFFormatter) buildSARIFResult(finding sdk.Finding) SARIFResult {
+	filePath := displayPath(finding.File, f.AbsolutePaths)
 	result := SARIFResult{
 		RuleID: finding.Rule,
 		Level:  sarifLevel(finding.Severity),
@@ -163,7 +165,7 @@ func buildSARIFResult(finding sdk.Finding) SARIFResult {
 			{
 				PhysicalLocation: SARIFPhysicalLocation{
 					ArtifactLocation: SARIFArtifactLocation{
-						URI:       filepath.ToSlash(finding.File),
+						URI:       filepath.ToSlash(filePath),
 						URIBaseID: "%SRCROOT%",
 					},
 					Region: buildSARIFRegion(
@@ -178,7 +180,7 @@ func buildSARIFResult(finding sdk.Finding) SARIFResult {
 	}
 
 	if finding.Fix != nil {
-		result.Fixes = buildSARIFFixes(finding)
+		result.Fixes = f.buildSARIFFixes(finding)
 	}
 	return result
 }
@@ -193,7 +195,8 @@ func buildSARIFRegion(startLine, startCol, endLine, endCol int) SARIFRegion {
 	}
 }
 
-func buildSARIFFixes(finding sdk.Finding) []SARIFFix {
+func (f *SARIFFormatter) buildSARIFFixes(finding sdk.Finding) []SARIFFix {
+	filePath := displayPath(finding.File, f.AbsolutePaths)
 	return []SARIFFix{
 		{
 			Description: SARIFMessage{
@@ -202,7 +205,7 @@ func buildSARIFFixes(finding sdk.Finding) []SARIFFix {
 			ArtifactChanges: []SARIFArtifactChange{
 				{
 					ArtifactLocation: SARIFArtifactLocation{
-						URI:       filepath.ToSlash(finding.File),
+						URI:       filepath.ToSlash(filePath),
 						URIBaseID: "%SRCROOT%",
 					},
 					Replacements: []SARIFReplacement{

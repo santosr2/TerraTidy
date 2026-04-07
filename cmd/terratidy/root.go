@@ -10,6 +10,7 @@ var (
 	format            string
 	changed           bool
 	noRecurse         bool
+	absolutePaths     bool
 	severityThreshold string
 	color             bool
 	excludePatterns   []string
@@ -32,6 +33,7 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&format, "format", "text", "output format (text|table|json|json-compact|sarif|html|junit|markdown|github)")
 	rootCmd.PersistentFlags().BoolVar(&changed, "changed", false, "only check changed files")
 	rootCmd.PersistentFlags().BoolVar(&noRecurse, "no-recurse", false, "disable recursive directory traversal")
+	rootCmd.PersistentFlags().BoolVar(&absolutePaths, "absolute-paths", false, "output absolute file paths instead of relative")
 	rootCmd.PersistentFlags().StringVar(
 		&severityThreshold, "severity-threshold", "",
 		"minimum severity level to fail (info|warning|error)",

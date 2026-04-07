@@ -12,7 +12,8 @@ import (
 // JUnitFormatter outputs findings in JUnit XML format for CI/CD integration.
 // This format is widely supported by CI systems like Jenkins, GitLab CI, GitHub Actions, etc.
 type JUnitFormatter struct {
-	Version string
+	Version       string
+	AbsolutePaths bool
 }
 
 // JUnitTestSuites represents the root element of JUnit XML output
@@ -131,16 +132,17 @@ func (f *JUnitFormatter) Format(findings []sdk.Finding, w io.Writer) error {
 func (f *JUnitFormatter) buildTestSuite(file string, findings []sdk.Finding, timestamp string) JUnitTestSuite {
 	var errors, failures int
 	var testCases []JUnitTestCase
+	displayFile := displayPath(file, f.AbsolutePaths)
 
 	for i := range findings {
 		testCase := JUnitTestCase{
 			Name:      findings[i].Rule,
-			ClassName: file,
+			ClassName: displayFile,
 		}
 
 		// Build detailed message with location
 		detail := fmt.Sprintf("File: %s\nLine: %d, Column: %d\n\n%s",
-			findings[i].File,
+			displayFile,
 			findings[i].Location.StartLine,
 			findings[i].Location.StartColumn,
 			findings[i].Message,

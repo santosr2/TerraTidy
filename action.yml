@@ -54,6 +54,10 @@ inputs:
     description: "Disable recursive directory traversal (scan only specified directories)"
     required: false
     default: "false"
+  absolute-paths:
+    description: "Output absolute file paths instead of relative"
+    required: false
+    default: "false"
   fail-on-error:
     description: "Fail the action if errors are found"
     required: false
@@ -128,6 +132,8 @@ runs:
         INPUT_SKIP_LINT: ${{ inputs.skip-lint }}
         INPUT_SKIP_POLICY: ${{ inputs.skip-policy }}
         INPUT_EXCLUDE: ${{ inputs.exclude }}
+        INPUT_NO_RECURSE: ${{ inputs.no-recurse }}
+        INPUT_ABSOLUTE_PATHS: ${{ inputs.absolute-paths }}
         INPUT_FAIL_ON_ERROR: ${{ inputs.fail-on-error }}
         INPUT_FAIL_ON_WARNING: ${{ inputs.fail-on-warning }}
         INPUT_WORKING_DIRECTORY: ${{ inputs.working-directory }}

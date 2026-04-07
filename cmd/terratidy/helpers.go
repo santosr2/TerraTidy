@@ -451,8 +451,8 @@ func printNoFilesMessage() {
 // outputResults formats and prints findings, then returns an ExitError if
 // there are errors. This is the shared implementation used by lint, style,
 // and policy commands.
-func outputResults(findings []sdk.Finding, label string) error {
-	formatter, err := output.GetFormatterWithColor(format, true, version, color)
+func outputResults(findings []sdk.Finding, label string, cfg *config.Config) error {
+	formatter, err := output.GetFormatterWithColor(format, true, version, color, getEffectiveAbsolutePaths(cfg))
 	if err != nil {
 		return fmt.Errorf("getting formatter: %w", err)
 	}
@@ -585,6 +585,22 @@ func getEffectiveRecursive(cfg *config.Config) bool {
 	}
 	// Default to recursive
 	return true
+}
+
+// getEffectiveAbsolutePaths returns whether output should use absolute file paths.
+// CLI flag (--absolute-paths) takes precedence over config file setting.
+// Default is false (relative paths) if not specified anywhere.
+func getEffectiveAbsolutePaths(cfg *config.Config) bool {
+	// CLI flag takes precedence
+	if absolutePaths {
+		return true
+	}
+	// Then config
+	if cfg != nil {
+		return cfg.IsAbsolutePaths()
+	}
+	// Default to relative paths
+	return false
 }
 
 // shouldFailFast returns whether fail-fast mode is enabled from config.

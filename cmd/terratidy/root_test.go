@@ -61,6 +61,12 @@ func TestRootCmd(t *testing.T) {
 		assert.Equal(t, "[]", flag.DefValue)
 	})
 
+	t.Run("has absolute-paths flag", func(t *testing.T) {
+		flag := rootCmd.PersistentFlags().Lookup("absolute-paths")
+		assert.NotNil(t, flag)
+		assert.Equal(t, "false", flag.DefValue)
+	})
+
 	t.Run("silence usage is true", func(t *testing.T) {
 		assert.True(t, rootCmd.SilenceUsage)
 	})

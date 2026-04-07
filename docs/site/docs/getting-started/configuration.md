@@ -384,6 +384,25 @@ terratidy check modules/
 terratidy check modules/
 ```
 
+### Output
+
+Configure output formatting options.
+
+```yaml
+output:
+  absolute_paths: false  # Use absolute file paths instead of relative (default: false)
+```
+
+| Option          | Type | Default | Description                                |
+| --------------- | ---- | ------- | ------------------------------------------ |
+| `absolute_paths` | bool | `false` | Output absolute paths instead of relative |
+
+By default, TerraTidy outputs relative paths (relative to the current working directory)
+which are more readable in CI logs and editor integrations. Set `absolute_paths: true`
+when you need full paths for tooling integration.
+
+Can be overridden with `--absolute-paths` CLI flag.
+
 ### Cache
 
 TerraTidy caches parsed HCL files to avoid redundant reads. The cache is managed automatically

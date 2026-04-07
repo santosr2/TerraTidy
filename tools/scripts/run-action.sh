@@ -66,12 +66,12 @@ ARGS=""
 
 # Config file
 if [ -f "$INPUT_CONFIG" ]; then
-  ARGS="$ARGS --config $INPUT_CONFIG"
+  ARGS="$ARGS --config \"$INPUT_CONFIG\""
 fi
 
 # Profile
 if [ -n "$INPUT_PROFILE" ]; then
-  ARGS="$ARGS --profile $INPUT_PROFILE"
+  ARGS="$ARGS --profile \"$INPUT_PROFILE\""
 fi
 
 # Skip flags
@@ -95,7 +95,7 @@ fi
 
 # Exclude patterns (comma-separated)
 if [ -n "${INPUT_EXCLUDE:-}" ]; then
-  ARGS="$ARGS --exclude $INPUT_EXCLUDE"
+  ARGS="$ARGS --exclude \"$INPUT_EXCLUDE\""
 fi
 
 # No-recurse flag
@@ -106,6 +106,16 @@ fi
 # Absolute paths flag
 if [ "${INPUT_ABSOLUTE_PATHS:-false}" = "true" ]; then
   ARGS="$ARGS --absolute-paths"
+fi
+
+# Changed files only
+if [ "${INPUT_CHANGED:-false}" = "true" ]; then
+  ARGS="$ARGS --changed"
+fi
+
+# Severity threshold
+if [ -n "${INPUT_SEVERITY_THRESHOLD:-}" ]; then
+  ARGS="$ARGS --severity-threshold \"$INPUT_SEVERITY_THRESHOLD\""
 fi
 
 # Output format
@@ -123,20 +133,21 @@ if [ "$FORMAT" = "sarif" ]; then
 fi
 
 # Run TerraTidy and capture output
+# Note: We use eval to properly handle quoted arguments in ARGS
 TMPDIR="${RUNNER_TEMP:-/tmp}"
 set +e
 if [ "$FORMAT" = "sarif" ]; then
-  terratidy check $ARGS > "$SARIF_FILE" 2>"$TMPDIR/terratidy-stderr.txt"
+  eval "terratidy check $ARGS" > "$SARIF_FILE" 2>"$TMPDIR/terratidy-stderr.txt"
   EXIT_CODE=$?
   cat "$TMPDIR/terratidy-stderr.txt" || true
   OUTPUT=$(cat "$SARIF_FILE")
 elif [ "$FORMAT" = "json" ] || [ "$FORMAT" = "json-compact" ]; then
-  terratidy check $ARGS > "$TMPDIR/terratidy-output.json" 2>"$TMPDIR/terratidy-stderr.txt"
+  eval "terratidy check $ARGS" > "$TMPDIR/terratidy-output.json" 2>"$TMPDIR/terratidy-stderr.txt"
   EXIT_CODE=$?
   cat "$TMPDIR/terratidy-stderr.txt" || true
   OUTPUT=$(cat "$TMPDIR/terratidy-output.json")
 else
-  OUTPUT=$(terratidy check $ARGS 2>&1)
+  OUTPUT=$(eval "terratidy check $ARGS" 2>&1)
   EXIT_CODE=$?
 fi
 set -e

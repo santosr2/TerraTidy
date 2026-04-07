@@ -70,6 +70,14 @@ inputs:
     description: "GitHub token for PR annotations"
     required: false
     default: ""
+  changed:
+    description: "Only check files changed in git"
+    required: false
+    default: "false"
+  severity-threshold:
+    description: "Minimum severity level to report (info, warning, error)"
+    required: false
+    default: ""
 
 outputs:
   findings-count:
@@ -134,6 +142,8 @@ runs:
         INPUT_EXCLUDE: ${{ inputs.exclude }}
         INPUT_NO_RECURSE: ${{ inputs.no-recurse }}
         INPUT_ABSOLUTE_PATHS: ${{ inputs.absolute-paths }}
+        INPUT_CHANGED: ${{ inputs.changed }}
+        INPUT_SEVERITY_THRESHOLD: ${{ inputs.severity-threshold }}
         INPUT_FAIL_ON_ERROR: ${{ inputs.fail-on-error }}
         INPUT_FAIL_ON_WARNING: ${{ inputs.fail-on-warning }}
         INPUT_WORKING_DIRECTORY: ${{ inputs.working-directory }}

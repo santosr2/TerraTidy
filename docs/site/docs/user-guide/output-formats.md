@@ -346,6 +346,30 @@ terratidy check --format json | jq '.findings | group_by(.rule) | map({rule: .[0
 terratidy check --severity-threshold error
 ```
 
+### Path Format
+
+By default, file paths in output are relative to the current working directory:
+
+```bash
+# Default: relative paths
+terratidy check
+# Output: modules/vpc/main.tf:15:3: error [style.block-label-case] ...
+
+# Use absolute paths
+terratidy check --absolute-paths
+# Output: /Users/dev/project/modules/vpc/main.tf:15:3: error [style.block-label-case] ...
+```
+
+Relative paths are more readable in CI logs and editor integrations. Use `--absolute-paths`
+when you need full paths for tooling integration or scripts that run from different directories.
+
+This can also be set in configuration:
+
+```yaml
+output:
+  absolute_paths: true
+```
+
 ### Skip Specific Engines
 
 ```bash

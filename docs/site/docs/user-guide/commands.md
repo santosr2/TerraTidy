@@ -15,6 +15,7 @@ These flags are available for all commands:
 | `--no-recurse`         | Disable recursive directory traversal (scan only specified directories, not subdirectories)             |
 | `--exclude`            | Glob patterns to exclude (repeatable or comma-separated)                                                 |
 | `--color`              | Enable colored output (default: true)                                                                    |
+| `--absolute-paths`     | Output absolute file paths instead of relative                                                           |
 | `--severity-threshold` | Minimum severity: `info`, `warning`, `error`                                                             |
 
 ## Exit Codes

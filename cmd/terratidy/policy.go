@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/santosr2/TerraTidy/internal/config"
 	"github.com/santosr2/TerraTidy/internal/engines/policy"
 	"github.com/santosr2/TerraTidy/pkg/sdk"
 	"github.com/spf13/cobra"
@@ -104,12 +105,12 @@ Use --changed to only check files that have been modified in git.`,
 		findings = filterFindingsBySeverity(findings, threshold)
 
 		// Output results using formatter
-		return outputPolicyResults(findings)
+		return outputPolicyResults(findings, cfg)
 	},
 }
 
-func outputPolicyResults(findings []sdk.Finding) error {
-	return outputResults(findings, "Policy check summary")
+func outputPolicyResults(findings []sdk.Finding, cfg *config.Config) error {
+	return outputResults(findings, "Policy check summary", cfg)
 }
 
 func init() {

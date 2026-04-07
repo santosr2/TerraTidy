@@ -98,7 +98,7 @@ func runCheck(_ *cobra.Command, args []string) error {
 	threshold := getEffectiveSeverityThreshold(cfg)
 	allFindings = filterFindingsBySeverity(allFindings, threshold)
 
-	return outputCheckResults(allFindings, useStructuredOutput)
+	return outputCheckResults(allFindings, useStructuredOutput, cfg)
 }
 
 // loadPluginRules loads plugin rules from the configured plugin directories.
@@ -437,8 +437,8 @@ func buildPolicyConfig(cfg *config.Config) *policy.Config {
 	return policy.ConfigFromEngine(cfg.Engines.Policy)
 }
 
-func outputCheckResults(allFindings []sdk.Finding, _ bool) error {
-	formatter, err := output.GetFormatterWithColor(format, true, version, color)
+func outputCheckResults(allFindings []sdk.Finding, _ bool, cfg *config.Config) error {
+	formatter, err := output.GetFormatterWithColor(format, true, version, color, getEffectiveAbsolutePaths(cfg))
 	if err != nil {
 		return fmt.Errorf("getting formatter: %w", err)
 	}

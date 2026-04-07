@@ -217,6 +217,49 @@ func TestGetEffectiveRecursive(t *testing.T) {
 	})
 }
 
+func TestGetEffectiveAbsolutePaths(t *testing.T) {
+	// Save original value and restore after test
+	originalAbsolutePaths := absolutePaths
+	defer func() { absolutePaths = originalAbsolutePaths }()
+
+	t.Run("CLI flag true takes precedence over config false", func(t *testing.T) {
+		absolutePaths = true
+		falseVal := false
+		cfg := &config.Config{Output: config.OutputConfig{AbsolutePaths: &falseVal}}
+		assert.True(t, getEffectiveAbsolutePaths(cfg))
+	})
+
+	t.Run("CLI flag true takes precedence over nil config", func(t *testing.T) {
+		absolutePaths = true
+		assert.True(t, getEffectiveAbsolutePaths(nil))
+	})
+
+	t.Run("CLI flag false with nil config returns false", func(t *testing.T) {
+		absolutePaths = false
+		assert.False(t, getEffectiveAbsolutePaths(nil))
+	})
+
+	t.Run("CLI flag false with config absolute_paths true", func(t *testing.T) {
+		absolutePaths = false
+		trueVal := true
+		cfg := &config.Config{Output: config.OutputConfig{AbsolutePaths: &trueVal}}
+		assert.True(t, getEffectiveAbsolutePaths(cfg))
+	})
+
+	t.Run("CLI flag false with config absolute_paths false", func(t *testing.T) {
+		absolutePaths = false
+		falseVal := false
+		cfg := &config.Config{Output: config.OutputConfig{AbsolutePaths: &falseVal}}
+		assert.False(t, getEffectiveAbsolutePaths(cfg))
+	})
+
+	t.Run("CLI flag false with config absolute_paths nil returns false", func(t *testing.T) {
+		absolutePaths = false
+		cfg := &config.Config{Output: config.OutputConfig{AbsolutePaths: nil}}
+		assert.False(t, getEffectiveAbsolutePaths(cfg))
+	})
+}
+
 func TestFormatFileCount(t *testing.T) {
 	tests := []struct {
 		count    int

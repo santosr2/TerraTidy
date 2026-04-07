@@ -11,8 +11,9 @@ import (
 // MarkdownFormatter outputs findings as a Markdown summary.
 // This format is ideal for PR comments, GitHub Actions summaries, and documentation.
 type MarkdownFormatter struct {
-	Version string
-	Title   string
+	Version       string
+	Title         string
+	AbsolutePaths bool
 }
 
 // Format implements the Formatter interface for Markdown output
@@ -85,7 +86,8 @@ func (f *MarkdownFormatter) writeSummary(w io.Writer, total, errors, warnings, i
 }
 
 func (f *MarkdownFormatter) writeFileFindingsAsTable(w io.Writer, file string, findings []sdk.Finding) {
-	_, _ = fmt.Fprintf(w, "### `%s`\n\n", file)
+	displayFile := displayPath(file, f.AbsolutePaths)
+	_, _ = fmt.Fprintf(w, "### `%s`\n\n", displayFile)
 	_, _ = fmt.Fprint(w, "| Severity | Line | Rule | Message |\n")
 	_, _ = fmt.Fprint(w, "|----------|------|------|---------|")
 

@@ -43,7 +43,7 @@ func TestBuildPolicyConfig_WithEngineConfig(t *testing.T) {
 
 func TestOutputPolicyResults(t *testing.T) {
 	t.Run("no findings returns nil", func(t *testing.T) {
-		err := outputPolicyResults(nil)
+		err := outputPolicyResults(nil, nil)
 		assert.NoError(t, err)
 	})
 
@@ -51,7 +51,7 @@ func TestOutputPolicyResults(t *testing.T) {
 		findings := []sdk.Finding{
 			{Rule: "policy.rule", Severity: sdk.SeverityWarning, Message: "warning"},
 		}
-		err := outputPolicyResults(findings)
+		err := outputPolicyResults(findings, nil)
 		assert.NoError(t, err)
 	})
 
@@ -59,7 +59,7 @@ func TestOutputPolicyResults(t *testing.T) {
 		findings := []sdk.Finding{
 			{Rule: "policy.rule", Severity: sdk.SeverityError, Message: "error"},
 		}
-		err := outputPolicyResults(findings)
+		err := outputPolicyResults(findings, nil)
 		require.Error(t, err)
 		var exitErr *sdk.ExitError
 		assert.ErrorAs(t, err, &exitErr)

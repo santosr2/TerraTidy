@@ -25,7 +25,7 @@ func TestOutputStyleResults_CheckMode(t *testing.T) {
 		{Rule: "style.blank-lines", Message: "test", Severity: sdk.SeverityWarning, File: "main.tf"},
 	}
 
-	err := outputStyleResults(findings, true)
+	err := outputStyleResults(findings, true, nil)
 	assert.Error(t, err, "check mode with findings should return error")
 	assert.Contains(t, err.Error(), "style issue")
 }
@@ -39,7 +39,7 @@ func TestOutputStyleResults_NoCheckMode(t *testing.T) {
 		{Rule: "style.blank-lines", Message: "test", Severity: sdk.SeverityWarning, File: "main.tf"},
 	}
 
-	err := outputStyleResults(findings, false)
+	err := outputStyleResults(findings, false, nil)
 	assert.NoError(t, err, "non-check mode should not return error for warnings")
 }
 
@@ -48,7 +48,7 @@ func TestOutputStyleResults_NoFindings(t *testing.T) {
 	format = "text"
 	defer func() { format = old }()
 
-	err := outputStyleResults(nil, true)
+	err := outputStyleResults(nil, true, nil)
 	assert.NoError(t, err, "check mode with no findings should not error")
 }
 
@@ -64,7 +64,7 @@ func TestOutputLintResults_WithFindings(t *testing.T) {
 		{Rule: "lint.terraform-required-version", Message: "missing", Severity: sdk.SeverityWarning, File: "main.tf"},
 	}
 
-	err := outputLintResults(findings)
+	err := outputLintResults(findings, nil)
 	assert.NoError(t, err)
 }
 
@@ -73,7 +73,7 @@ func TestOutputLintResults_NoFindings(t *testing.T) {
 	format = "text"
 	defer func() { format = old }()
 
-	err := outputLintResults(nil)
+	err := outputLintResults(nil, nil)
 	assert.NoError(t, err)
 }
 

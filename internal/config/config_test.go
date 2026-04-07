@@ -534,6 +534,62 @@ version: 1
 	}
 }
 
+func TestOutputAbsolutePathsConfig_Parsing(t *testing.T) {
+	tests := []struct {
+		name              string
+		yaml              string
+		wantAbsolutePaths bool
+	}{
+		{
+			name: "absolute_paths explicitly true",
+			yaml: `
+version: 1
+output:
+  absolute_paths: true
+`,
+			wantAbsolutePaths: true,
+		},
+		{
+			name: "absolute_paths explicitly false",
+			yaml: `
+version: 1
+output:
+  absolute_paths: false
+`,
+			wantAbsolutePaths: false,
+		},
+		{
+			name: "absolute_paths not set (default false)",
+			yaml: `
+version: 1
+`,
+			wantAbsolutePaths: false,
+		},
+		{
+			name: "output section without absolute_paths (default false)",
+			yaml: `
+version: 1
+output: {}
+`,
+			wantAbsolutePaths: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			configPath := filepath.Join(dir, ".terratidy.yaml")
+			err := os.WriteFile(configPath, []byte(tt.yaml), 0o600)
+			require.NoError(t, err)
+
+			cfg, err := Load(configPath)
+			require.NoError(t, err)
+
+			assert.Equal(t, tt.wantAbsolutePaths, cfg.IsAbsolutePaths())
+		})
+	}
+}
+
 func TestConfig_merge(t *testing.T) {
 	cfg := &Config{
 		Overrides: OverridesConfig{

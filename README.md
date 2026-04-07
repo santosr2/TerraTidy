@@ -186,6 +186,7 @@ These flags apply to all commands:
 | `--exclude`                | Glob patterns to exclude (repeatable or comma-separated)                             |
 | `--severity-threshold`     | Minimum severity to fail: info, warning, error                                       |
 | `--color`                  | Enable colored output (default: true)                                                |
+| `--absolute-paths`         | Output absolute file paths instead of relative                                       |
 
 ### Check Command Flags
 

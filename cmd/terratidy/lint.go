@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/santosr2/TerraTidy/internal/config"
 	"github.com/santosr2/TerraTidy/internal/engines/lint"
 	"github.com/santosr2/TerraTidy/pkg/sdk"
 	"github.com/spf13/cobra"
@@ -105,12 +106,12 @@ Use --changed to only lint files that have been modified in git.`,
 		findings = filterFindingsBySeverity(findings, threshold)
 
 		// Output results using formatter
-		return outputLintResults(findings)
+		return outputLintResults(findings, cfg)
 	},
 }
 
-func outputLintResults(findings []sdk.Finding) error {
-	return outputResults(findings, "Lint summary")
+func outputLintResults(findings []sdk.Finding, cfg *config.Config) error {
+	return outputResults(findings, "Lint summary", cfg)
 }
 
 func init() {

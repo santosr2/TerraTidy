@@ -106,6 +106,11 @@ func (c CacheConfig) IsConfigured() bool {
 	return c.MaxAge != 0 || c.MaxSize != 0 || c.Disabled
 }
 
+// OutputConfig holds configuration for output formatting.
+type OutputConfig struct {
+	AbsolutePaths *bool `yaml:"absolute_paths,omitempty"` // Use absolute paths in output (default: false)
+}
+
 // Config represents the complete TerraTidy configuration
 type Config struct {
 	Version  int                `yaml:"version"`
@@ -115,11 +120,12 @@ type Config struct {
 	Profiles map[string]Profile `yaml:"profiles,omitempty"`
 
 	// Global settings
-	SeverityThreshold string      `yaml:"severity_threshold,omitempty"`
-	FailFast          bool        `yaml:"fail_fast,omitempty"`
-	Parallel          bool        `yaml:"parallel,omitempty"`
-	Recursive         *bool       `yaml:"recursive,omitempty"` // Directory recursion (default: true)
-	Cache             CacheConfig `yaml:"cache,omitempty"`
+	SeverityThreshold string       `yaml:"severity_threshold,omitempty"`
+	FailFast          bool         `yaml:"fail_fast,omitempty"`
+	Parallel          bool         `yaml:"parallel,omitempty"`
+	Recursive         *bool        `yaml:"recursive,omitempty"` // Directory recursion (default: true)
+	Cache             CacheConfig  `yaml:"cache,omitempty"`
+	Output            OutputConfig `yaml:"output,omitempty"`
 
 	// Overrides
 	Overrides OverridesConfig `yaml:"overrides,omitempty"`
@@ -607,6 +613,15 @@ func (c *Config) IsRecursive() bool {
 		return true // Default to recursive
 	}
 	return *c.Recursive
+}
+
+// IsAbsolutePaths returns whether output should use absolute file paths.
+// Returns false by default (relative paths) if not explicitly set in config.
+func (c *Config) IsAbsolutePaths() bool {
+	if c.Output.AbsolutePaths == nil {
+		return false // Default to relative paths
+	}
+	return *c.Output.AbsolutePaths
 }
 
 // Validate checks the configuration for errors.

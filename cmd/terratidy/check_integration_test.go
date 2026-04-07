@@ -106,7 +106,7 @@ func TestOutputCheckResults(t *testing.T) {
 		format = "text"
 		defer func() { format = old }()
 
-		err := outputCheckResults(nil, false)
+		err := outputCheckResults(nil, false, nil)
 		assert.NoError(t, err)
 	})
 
@@ -118,7 +118,7 @@ func TestOutputCheckResults(t *testing.T) {
 		findings := []sdk.Finding{
 			{Rule: "test.rule", Message: "test", Severity: sdk.SeverityError, File: "test.tf"},
 		}
-		err := outputCheckResults(findings, false)
+		err := outputCheckResults(findings, false, nil)
 		assert.Error(t, err, "should return exit error for errors")
 	})
 
@@ -130,7 +130,7 @@ func TestOutputCheckResults(t *testing.T) {
 		findings := []sdk.Finding{
 			{Rule: "test.rule", Message: "test", Severity: sdk.SeverityError, File: "test.tf"},
 		}
-		err := outputCheckResults(findings, true)
+		err := outputCheckResults(findings, true, nil)
 		assert.Error(t, err, "should return exit error for errors in json")
 	})
 }
@@ -2203,5 +2203,55 @@ func TestConfigRecursiveFalseBehavesLikeNoRecurseFlag(t *testing.T) {
 		require.NoError(t, err)
 
 		assert.Len(t, files, 1, "CLI --no-recurse should override config recursive: true")
+	})
+}
+
+func TestAbsolutePathsOutputBehavior(t *testing.T) {
+	// Save original value and restore after test
+	originalAbsolutePaths := absolutePaths
+	defer func() { absolutePaths = originalAbsolutePaths }()
+
+	t.Run("default uses relative paths", func(t *testing.T) {
+		absolutePaths = false
+		cfg := &config.Config{
+			Version: 1,
+		}
+
+		// getEffectiveAbsolutePaths should return false by default
+		result := getEffectiveAbsolutePaths(cfg)
+		assert.False(t, result, "default should use relative paths")
+	})
+
+	t.Run("CLI flag enables absolute paths", func(t *testing.T) {
+		absolutePaths = true
+		cfg := &config.Config{
+			Version: 1,
+		}
+
+		result := getEffectiveAbsolutePaths(cfg)
+		assert.True(t, result, "CLI flag should enable absolute paths")
+	})
+
+	t.Run("config enables absolute paths", func(t *testing.T) {
+		absolutePaths = false
+		cfg := &config.Config{
+			Version: 1,
+			Output:  config.OutputConfig{AbsolutePaths: config.BoolPtr(true)},
+		}
+
+		result := getEffectiveAbsolutePaths(cfg)
+		assert.True(t, result, "config should enable absolute paths")
+	})
+
+	t.Run("CLI flag takes precedence over config", func(t *testing.T) {
+		// CLI says absolute, config says relative
+		absolutePaths = true
+		cfg := &config.Config{
+			Version: 1,
+			Output:  config.OutputConfig{AbsolutePaths: config.BoolPtr(false)},
+		}
+
+		result := getEffectiveAbsolutePaths(cfg)
+		assert.True(t, result, "CLI flag should override config")
 	})
 }

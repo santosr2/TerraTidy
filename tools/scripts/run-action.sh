@@ -103,6 +103,11 @@ if [ "${INPUT_NO_RECURSE:-false}" = "true" ]; then
   ARGS="$ARGS --no-recurse"
 fi
 
+# Absolute paths flag
+if [ "${INPUT_ABSOLUTE_PATHS:-false}" = "true" ]; then
+  ARGS="$ARGS --absolute-paths"
+fi
+
 # Output format
 FORMAT="$INPUT_FORMAT"
 ARGS="$ARGS --format $FORMAT"

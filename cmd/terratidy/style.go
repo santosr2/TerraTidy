@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/santosr2/TerraTidy/internal/config"
 	"github.com/santosr2/TerraTidy/internal/engines/style"
 	"github.com/santosr2/TerraTidy/pkg/sdk"
 	"github.com/spf13/cobra"
@@ -85,12 +86,12 @@ Use --fix to automatically fix fixable style issues.`,
 		findings = filterFindingsBySeverity(findings, threshold)
 
 		// Output results using formatter
-		return outputStyleResults(findings, styleCheck)
+		return outputStyleResults(findings, styleCheck, cfg)
 	},
 }
 
-func outputStyleResults(findings []sdk.Finding, checkMode bool) error {
-	if err := outputResults(findings, "Style check summary"); err != nil {
+func outputStyleResults(findings []sdk.Finding, checkMode bool, cfg *config.Config) error {
+	if err := outputResults(findings, "Style check summary", cfg); err != nil {
 		return err
 	}
 

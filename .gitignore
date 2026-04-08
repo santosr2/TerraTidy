@@ -54,6 +54,7 @@ benchmarks/*
 
 # AI assistant configs (local, not tracked)
 .claude
+.pre-pecs
 .specs
 .plans
 .issues

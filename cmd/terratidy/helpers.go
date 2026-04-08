@@ -15,6 +15,16 @@ import (
 	"github.com/santosr2/TerraTidy/pkg/sdk"
 )
 
+// skipDirs is a set of directory names to skip during traversal.
+// Declared at package level to avoid allocation on every shouldSkipDir call.
+var skipDirs = map[string]bool{
+	"node_modules":      true,
+	"vendor":            true,
+	".terraform":        true,
+	".terragrunt-cache": true,
+	"__pycache__":       true,
+}
+
 // getTargetFiles returns the list of files to process based on the provided paths
 // and global flags. When --changed is set, it uses VCS to detect changed files.
 // Exclude patterns from both config and CLI flags are applied.
@@ -399,14 +409,7 @@ func shouldSkipDir(_ string, name string) bool {
 	if strings.HasPrefix(name, ".") && name != "." {
 		return true
 	}
-	// Skip common non-terraform directories
-	skipDirs := map[string]bool{
-		"node_modules":      true,
-		"vendor":            true,
-		".terraform":        true,
-		".terragrunt-cache": true,
-		"__pycache__":       true,
-	}
+	// Skip common non-terraform directories (see package-level skipDirs)
 	return skipDirs[name]
 }
 
@@ -443,8 +446,10 @@ func countBySeverity(findings []sdk.Finding) (errors, warnings, info int) {
 func printNoFilesMessage() {
 	if changed {
 		fmt.Println("No changed HCL files found")
+		fmt.Println("Hint: Remove --changed to check all files, or stage changes with git add")
 	} else {
 		fmt.Println("No HCL files found")
+		fmt.Println("Hint: Ensure you're in a directory with .tf, .tfvars, or .hcl files")
 	}
 }
 
@@ -566,7 +571,7 @@ func getEffectiveParallel(cfg *config.Config, cliParallel bool) bool {
 		return true
 	}
 	if cfg != nil {
-		return cfg.Parallel
+		return cfg.IsParallel()
 	}
 	return false
 }
@@ -606,7 +611,7 @@ func getEffectiveAbsolutePaths(cfg *config.Config) bool {
 // shouldFailFast returns whether fail-fast mode is enabled from config.
 func shouldFailFast(cfg *config.Config) bool {
 	if cfg != nil {
-		return cfg.FailFast
+		return cfg.IsFailFast()
 	}
 	return false
 }

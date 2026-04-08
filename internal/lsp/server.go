@@ -263,7 +263,11 @@ func (s *Server) Run() error {
 		}
 
 		if err := s.handleMessage(msg); err != nil {
-			// Log error but continue processing
+			// Check for exit request - return to allow cleanup
+			if errors.Is(err, ErrServerExit) {
+				return err
+			}
+			// Log other errors but continue processing
 			s.logError("handling message: %v", err)
 		}
 	}
@@ -282,8 +286,8 @@ func (s *Server) readMessage() (json.RawMessage, error) {
 		if line == "" {
 			break
 		}
-		if strings.HasPrefix(line, "Content-Length:") {
-			lengthStr := strings.TrimSpace(strings.TrimPrefix(line, "Content-Length:"))
+		if after, ok := strings.CutPrefix(line, "Content-Length:"); ok {
+			lengthStr := strings.TrimSpace(after)
 			contentLength, err = strconv.Atoi(lengthStr)
 			if err != nil {
 				return nil, fmt.Errorf("invalid content length: %w", err)
@@ -291,8 +295,8 @@ func (s *Server) readMessage() (json.RawMessage, error) {
 		}
 	}
 
-	if contentLength == 0 {
-		return nil, fmt.Errorf("no content length header")
+	if contentLength <= 0 {
+		return nil, fmt.Errorf("invalid or missing content length header")
 	}
 
 	// Reject oversized messages to prevent memory exhaustion
@@ -492,13 +496,14 @@ func (s *Server) handleShutdown(msg RequestMessage) error {
 	})
 }
 
+// ErrServerExit is returned when the LSP server should exit.
+// The exit code is determined by the Shutdown field.
+var ErrServerExit = errors.New("server exit requested")
+
 // handleExit handles the exit notification
 func (s *Server) handleExit() error {
-	if s.shutdown {
-		os.Exit(0)
-	}
-	os.Exit(1)
-	return nil
+	// Return sentinel error instead of os.Exit to allow proper cleanup
+	return ErrServerExit
 }
 
 // handleDidOpen handles textDocument/didOpen notification
@@ -617,6 +622,10 @@ func (s *Server) handleFormatting(msg RequestMessage) error {
 
 	s.docMu.RLock()
 	doc, ok := s.documents[params.TextDocument.URI]
+	var original string
+	if ok {
+		original = doc.Content
+	}
 	s.docMu.RUnlock()
 
 	if !ok {
@@ -624,7 +633,6 @@ func (s *Server) handleFormatting(msg RequestMessage) error {
 	}
 
 	// Format the document content using hclwrite
-	original := doc.Content
 	formatted := string(format.Format([]byte(original)))
 
 	// If content is unchanged, return empty edits
@@ -662,6 +670,10 @@ func (s *Server) handleCodeAction(msg RequestMessage) error {
 
 	s.docMu.RLock()
 	doc, ok := s.documents[uri]
+	var original string
+	if ok {
+		original = doc.Content
+	}
 	s.docMu.RUnlock()
 
 	if !ok || len(params.Context.Diagnostics) == 0 {
@@ -669,7 +681,6 @@ func (s *Server) handleCodeAction(msg RequestMessage) error {
 	}
 
 	// Compute the formatted version once for all fix actions
-	original := doc.Content
 	formatted := string(format.Format([]byte(original)))
 	hasFormatFix := formatted != original
 
@@ -739,15 +750,48 @@ func (s *Server) handleDiagnostic(msg RequestMessage) error {
 	})
 }
 
+// getOrCreateTempFile creates or returns the temp file path for a document.
+// Returns empty string on failure.
+func (s *Server) getOrCreateTempFile(uri, filePath string) string {
+	tmpExt := filepath.Ext(filePath)
+	if tmpExt == "" {
+		tmpExt = ".tf"
+	}
+	// Use session temp directory if available, otherwise fall back to system temp
+	tempDir := s.sessionTempDir
+	if tempDir == "" {
+		tempDir = os.TempDir()
+	}
+	f, err := os.CreateTemp(tempDir, "terratidy-*"+tmpExt)
+	if err != nil {
+		return ""
+	}
+	tempFile := f.Name()
+	_ = f.Close()
+
+	// Update document with tempFile under write lock
+	s.docMu.Lock()
+	if d, exists := s.documents[uri]; exists {
+		d.tempFile = tempFile
+		s.documents[uri] = d
+	}
+	s.docMu.Unlock()
+
+	return tempFile
+}
+
 // getDiagnostics generates diagnostics for a document
 func (s *Server) getDiagnostics(uri string) []Diagnostic {
+	// Copy document content and tempFile under lock to avoid data races
 	s.docMu.RLock()
 	doc, ok := s.documents[uri]
-	s.docMu.RUnlock()
-
 	if !ok {
+		s.docMu.RUnlock()
 		return []Diagnostic{}
 	}
+	content := doc.Content
+	tempFile := doc.tempFile
+	s.docMu.RUnlock()
 
 	filePath := uriToPath(uri)
 	if filePath == "" {
@@ -773,25 +817,14 @@ func (s *Server) getDiagnostics(uri string) []Diagnostic {
 	defer func() { <-s.diagSem }()
 
 	// Reuse a temp file per document to avoid creating one per keystroke
-	if doc.tempFile == "" {
-		tmpExt := filepath.Ext(filePath)
-		if tmpExt == "" {
-			tmpExt = ".tf"
-		}
-		// Use session temp directory if available, otherwise fall back to system temp
-		tempDir := s.sessionTempDir
-		if tempDir == "" {
-			tempDir = os.TempDir()
-		}
-		f, err := os.CreateTemp(tempDir, "terratidy-*"+tmpExt)
-		if err != nil {
+	if tempFile == "" {
+		tempFile = s.getOrCreateTempFile(uri, filePath)
+		if tempFile == "" {
 			return []Diagnostic{}
 		}
-		doc.tempFile = f.Name()
-		_ = f.Close()
 	}
 
-	if err := os.WriteFile(doc.tempFile, []byte(doc.Content), 0o600); err != nil {
+	if err := os.WriteFile(tempFile, []byte(content), 0o600); err != nil {
 		return []Diagnostic{}
 	}
 
@@ -800,14 +833,14 @@ func (s *Server) getDiagnostics(uri string) []Diagnostic {
 	var findings []sdk.Finding
 
 	if s.lintEngine != nil && s.isEngineEnabled("lint") {
-		lintFindings, err := s.lintEngine.Run(ctx, []string{doc.tempFile})
+		lintFindings, err := s.lintEngine.Run(ctx, []string{tempFile})
 		if err == nil {
 			findings = append(findings, lintFindings...)
 		}
 	}
 
 	if s.styleEngine != nil && s.isEngineEnabled("style") {
-		styleFindings, err := s.styleEngine.Run(ctx, []string{doc.tempFile})
+		styleFindings, err := s.styleEngine.Run(ctx, []string{tempFile})
 		if err == nil {
 			findings = append(findings, styleFindings...)
 		}

@@ -15,9 +15,9 @@ func TestGetEffectiveParallel(t *testing.T) {
 		cliParallel bool
 		want        bool
 	}{
-		{"cli flag true overrides config", &config.Config{Parallel: false}, true, true},
-		{"cli flag false uses config true", &config.Config{Parallel: true}, false, true},
-		{"both false", &config.Config{Parallel: false}, false, false},
+		{"cli flag true overrides config", &config.Config{Parallel: config.BoolPtr(false)}, true, true},
+		{"cli flag false uses config true", &config.Config{Parallel: config.BoolPtr(true)}, false, true},
+		{"both false", &config.Config{Parallel: config.BoolPtr(false)}, false, false},
 		{"nil config cli false", nil, false, false},
 		{"nil config cli true", nil, true, true},
 	}
@@ -36,8 +36,8 @@ func TestShouldFailFast(t *testing.T) {
 		want bool
 	}{
 		{"nil config", nil, false},
-		{"fail fast enabled", &config.Config{FailFast: true}, true},
-		{"fail fast disabled", &config.Config{FailFast: false}, false},
+		{"fail fast enabled", &config.Config{FailFast: config.BoolPtr(true)}, true},
+		{"fail fast disabled", &config.Config{FailFast: config.BoolPtr(false)}, false},
 	}
 
 	for _, tt := range tests {

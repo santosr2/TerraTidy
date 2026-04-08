@@ -87,11 +87,16 @@ Use --changed to only check files that have been modified in git.`,
 			return nil
 		}
 
-		modeMsg := ""
-		if changed {
-			modeMsg = " (changed files only)"
+		// For structured output formats, skip the progress messages
+		useStructuredOutput := format != "" && format != "text"
+
+		if !useStructuredOutput {
+			modeMsg := ""
+			if changed {
+				modeMsg = " (changed files only)"
+			}
+			fmt.Printf("Running policy checks on %s%s...\n\n", formatFileCount(len(files)), modeMsg)
 		}
-		fmt.Printf("Running policy checks on %s%s...\n\n", formatFileCount(len(files)), modeMsg)
 
 		// Run policy checks
 		ctx := context.Background()

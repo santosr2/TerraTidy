@@ -389,19 +389,47 @@ func (e *Engine) evaluatePolicies(
 	evalCtx := &policyEvalContext{ctx: ctx, moduleData: moduleData, dir: dir}
 
 	for _, policy := range policies {
-		// Evaluate deny rules
-		denyFindings := e.evaluateQuery(evalCtx, policy, "data.terraform.deny", sdk.SeverityError)
-		findings = append(findings, denyFindings...)
-
-		// Evaluate warn rules
-		warnFindings := e.evaluateQuery(evalCtx, policy, "data.terraform.warn", sdk.SeverityWarning)
-		findings = append(findings, warnFindings...)
+		// Prepare the policy once for both deny and warn queries
+		policyFindings := e.evaluatePolicyWithPrepare(evalCtx, policy)
+		findings = append(findings, policyFindings...)
 	}
 
 	return findings, nil
 }
 
+// evaluatePolicyWithPrepare compiles the policy once and evaluates both deny and warn rules.
+func (e *Engine) evaluatePolicyWithPrepare(evalCtx *policyEvalContext, policy string) []sdk.Finding {
+	var findings []sdk.Finding
+
+	// Queries to evaluate
+	queries := []struct {
+		query    string
+		severity sdk.Severity
+	}{
+		{"data.terraform.deny", sdk.SeverityError},
+		{"data.terraform.warn", sdk.SeverityWarning},
+	}
+
+	for _, q := range queries {
+		r := rego.New(
+			rego.Query(q.query),
+			rego.Module("policy.rego", policy),
+			rego.Input(evalCtx.moduleData),
+		)
+
+		rs, err := r.Eval(evalCtx.ctx)
+		if err != nil {
+			continue
+		}
+
+		findings = append(findings, e.extractFindings(rs, evalCtx.dir, q.severity)...)
+	}
+
+	return findings
+}
+
 // evaluateQuery evaluates a single Rego query and returns findings.
+// Kept for backward compatibility with tests.
 func (e *Engine) evaluateQuery(
 	evalCtx *policyEvalContext,
 	policy string,

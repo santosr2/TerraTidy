@@ -5,6 +5,7 @@ package vcs
 import (
 	"bufio"
 	"bytes"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -53,7 +54,7 @@ func sanitizeGitError(err error) error {
 		msg = msg[:maxGitErrorLen] + "... (truncated)"
 	}
 
-	return fmt.Errorf("%s", msg)
+	return errors.New(msg)
 }
 
 // ValidateGitRef validates a git ref name to prevent injection attacks.

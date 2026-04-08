@@ -48,8 +48,8 @@ engines:
 
 	assert.Equal(t, 1, cfg.Version)
 	assert.Equal(t, "error", cfg.SeverityThreshold)
-	assert.True(t, cfg.FailFast)
-	assert.False(t, cfg.Parallel)
+	assert.True(t, cfg.IsFailFast())
+	assert.False(t, cfg.IsParallel())
 	assert.True(t, cfg.Engines.Fmt.IsEnabled())
 	assert.False(t, cfg.Engines.Style.IsEnabled())
 	assert.True(t, cfg.Engines.Lint.IsEnabled())
@@ -366,8 +366,8 @@ func TestDefaultConfig(t *testing.T) {
 	assert.True(t, cfg.Engines.Lint.IsEnabled())
 	assert.False(t, cfg.Engines.Policy.IsEnabled())
 	assert.Equal(t, "warning", cfg.SeverityThreshold)
-	assert.False(t, cfg.FailFast)
-	assert.True(t, cfg.Parallel)
+	assert.False(t, cfg.IsFailFast())
+	assert.True(t, cfg.IsParallel())
 }
 
 func TestCacheConfig_Parsing(t *testing.T) {
@@ -914,7 +914,7 @@ fail_fast: true
 	require.NoError(t, err)
 
 	assert.Equal(t, "error", cfg.SeverityThreshold)
-	assert.True(t, cfg.FailFast)
+	assert.True(t, cfg.IsFailFast())
 }
 
 func TestLoad_WithEnvVarsDefault(t *testing.T) {
@@ -1665,8 +1665,8 @@ func TestConfig_merge_GlobalSettings(t *testing.T) {
 	base := &Config{
 		Version:           1,
 		SeverityThreshold: "info",
-		FailFast:          false,
-		Parallel:          false,
+		FailFast:          BoolPtr(false),
+		Parallel:          BoolPtr(false),
 		Plugins: PluginsConfig{
 			Enabled:     false,
 			Directories: []string{},
@@ -1675,8 +1675,8 @@ func TestConfig_merge_GlobalSettings(t *testing.T) {
 
 	other := &Config{
 		SeverityThreshold: "error",
-		FailFast:          true,
-		Parallel:          true,
+		FailFast:          BoolPtr(true),
+		Parallel:          BoolPtr(true),
 		Plugins: PluginsConfig{
 			Enabled:         true,
 			Directories:     []string{"./plugins"},
@@ -1687,8 +1687,8 @@ func TestConfig_merge_GlobalSettings(t *testing.T) {
 	base.merge(other)
 
 	assert.Equal(t, "error", base.SeverityThreshold)
-	assert.True(t, base.FailFast)
-	assert.True(t, base.Parallel)
+	assert.True(t, base.IsFailFast())
+	assert.True(t, base.IsParallel())
 	assert.True(t, base.Plugins.Enabled)
 	assert.Equal(t, []string{"./plugins"}, base.Plugins.Directories)
 	require.NotNil(t, base.Plugins.VerifyIntegrity)

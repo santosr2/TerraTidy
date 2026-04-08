@@ -90,7 +90,7 @@ func TestServer_ReadMessage(t *testing.T) {
 
 		_, err := server.readMessage()
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "no content length")
+		assert.Contains(t, err.Error(), "invalid or missing content length")
 	})
 
 	t.Run("oversized content length rejected", func(t *testing.T) {

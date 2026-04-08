@@ -320,7 +320,7 @@ imports:
 severity_threshold: %s
 fail_fast: %t
 parallel: %t
-`, cfg.Version, cfg.SeverityThreshold, cfg.FailFast, cfg.Parallel)
+`, cfg.Version, cfg.SeverityThreshold, cfg.IsFailFast(), cfg.IsParallel())
 
 	if err := os.WriteFile(configPath, []byte(mainCfg), 0o600); err != nil {
 		return fmt.Errorf("writing main config: %w", err)

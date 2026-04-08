@@ -1,5 +1,11 @@
 //go:build !windows
 
+// Package plugins provides plugin loading and management.
+//
+// SECURITY WARNING: Bash plugins execute with full user privileges.
+// There is no sandboxing or privilege restriction. Only load Bash plugins
+// from trusted sources. Ensure plugins are verified via checksums in
+// the plugin manifest when verify_integrity is enabled in config.
 package plugins
 
 import (
@@ -22,9 +28,9 @@ import (
 const maxStderrLen = 500
 
 // absolutePathPattern matches Unix absolute paths for sanitization.
-// Matches paths like /home/user/file.tf but not ./relative/path.
+// Matches paths like /home/user/file.tf, /tmp/file.tf, or /file.tf but not ./relative/path.
 // Only matches paths preceded by whitespace or at start of string.
-var absolutePathPattern = regexp.MustCompile(`(^|\s)(/(?:[a-zA-Z0-9._-]+/)+[a-zA-Z0-9._-]+)`)
+var absolutePathPattern = regexp.MustCompile(`(^|\s)(/(?:[a-zA-Z0-9._-]+/?)*[a-zA-Z0-9._-]+)`)
 
 // sanitizeStderr truncates and sanitizes stderr output for error messages.
 // It truncates to maxStderrLen and replaces absolute paths with relative names.

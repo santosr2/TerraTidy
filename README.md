@@ -65,8 +65,13 @@ docker run --rm -v $(pwd):/app ghcr.io/santosr2/terratidy check
 ### From Source
 
 ```bash
-go install github.com/santosr2/TerraTidy/cmd/terratidy@latest
+# Use explicit version until v0.2.0 stable (see note below)
+go install github.com/santosr2/TerraTidy/cmd/terratidy@v0.2.0-alpha.4
 ```
+
+> **Note:** Avoid `@latest` until v0.2.0 is released. Due to a repository rename after v0.1.0,
+> `@latest` resolves to v0.1.0 which has a broken module path. See the
+> [deprecation notice](https://github.com/santosr2/TerraTidy/discussions/105) for details.
 
 ## Quick Start
 

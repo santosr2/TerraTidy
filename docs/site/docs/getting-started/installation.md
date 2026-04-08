@@ -7,8 +7,14 @@ TerraTidy can be installed in several ways.
 If you have Go installed (1.25+):
 
 ```bash
-go install github.com/santosr2/TerraTidy/cmd/terratidy@latest
+# Use explicit version until v0.2.0 stable
+go install github.com/santosr2/TerraTidy/cmd/terratidy@v0.2.0-alpha.4
 ```
+
+!!! warning "Avoid `@latest` until v0.2.0"
+    Due to a repository rename after v0.1.0, `go install ...@latest` resolves to v0.1.0
+    which has a broken module path. Use an explicit pre-release version until v0.2.0 stable
+    is released.
 
 ## Homebrew (macOS/Linux)
 

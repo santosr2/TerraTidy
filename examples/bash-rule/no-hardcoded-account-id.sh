@@ -1,6 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Validate argument
+if [ $# -lt 1 ] || [ -z "${1:-}" ]; then
+  echo '{"findings": []}' >&2
+  echo "Usage: no-hardcoded-account-id.sh <file>" >&2
+  exit 1
+fi
+
 FILE="$1"
 
 # Match 12-digit AWS account IDs (standalone, not inside a variable reference)

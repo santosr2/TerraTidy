@@ -7,6 +7,7 @@ Single-binary Terraform/Terragrunt quality platform. Go 1.25+ (dev: 1.26), libra
 ```text
 cmd/terratidy/          # CLI (Cobra)
 internal/
+  annotations/          # Suppression annotation parsing and filtering
   buildinfo/            # Build information and versioning
   cache/                # Caching layer
   config/               # YAML config with imports, profiles, glob patterns
@@ -32,7 +33,7 @@ action.yml              # GitHub Action definition
 ## Core Interfaces
 
 ```go
-// Every engine implements this (internal/runner/runner.go)
+// Every engine implements this (pkg/sdk/types.go)
 type Engine interface {
     Name() string
     Run(ctx context.Context, files []string) ([]sdk.Finding, error)
@@ -208,7 +209,7 @@ TypeScript extension using Bun package manager and Biome linter/formatter.
 - **Location**: `vscode/src/extension.ts` (main entry)
 - **LSP client**: Uses `vscode-languageclient` to connect to TerraTidy LSP server
 - **Commands**: `terratidy.init`, `terratidy.showOutput`, `terratidy.restartServer`
-- **Settings**: 11 configuration options (executablePath, configPath, profile, engines.*, etc.)
+- **Settings**: 12 configuration options (executablePath, configPath, profile, engines.*, etc.)
 - **Assets**: Icon, CHANGELOG, LICENSE are symlinks from root (do not duplicate)
 - **VS Code engine**: ^1.110.0
 

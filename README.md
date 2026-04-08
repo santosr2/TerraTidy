@@ -34,6 +34,7 @@ TerraTidy is a single-binary quality platform for Terraform and Terragrunt that 
 - **Extensible** -- Custom rules in Go, YAML, Rego, or Bash
 - **Modular Config** -- Split large configs into organized files with glob imports
 - **Auto-fix** -- Automatically fix formatting and style issues
+- **Suppression Annotations** -- Inline comments to suppress specific findings per-line or per-block
 - **Multiple Output Formats** -- Text, table, JSON, SARIF, HTML, JUnit, Markdown, GitHub Actions annotations
 - **Multi-platform** -- Linux, macOS, Windows (amd64 and arm64)
 
@@ -278,7 +279,8 @@ Available inputs: `version`, `config`, `profile`, `format`, `parallel`, `working
 ### VS Code Extension
 
 The TerraTidy VS Code extension provides real-time diagnostics via LSP.
-See [vscode/README.md](vscode/README.md) for installation instructions.
+Install from the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=santosr2.vscode-terratidy)
+or see [vscode/README.md](vscode/README.md) for full installation instructions.
 
 ## Custom Rules
 
@@ -348,7 +350,7 @@ Full documentation is available at [docs/site/docs/](docs/site/docs/).
 ```bash
 git clone https://github.com/santosr2/TerraTidy
 cd terratidy
-mise install        # Install Go 1.26.1 and tools
+mise install        # Install Go 1.26 and tools
 mise run setup      # Download and tidy Go modules
 mise run build      # Build binary
 ```

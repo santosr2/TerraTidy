@@ -4,6 +4,7 @@ import (
 	"encoding/xml"
 	"fmt"
 	"io"
+	"sort"
 	"time"
 
 	"github.com/santosr2/TerraTidy/pkg/sdk"
@@ -86,10 +87,16 @@ func (f *JUnitFormatter) Format(findings []sdk.Finding, w io.Writer) error {
 		}
 	}
 
-	// Build test suites (one per file)
+	// Build test suites (one per file), sorted for deterministic output
+	files := make([]string, 0, len(byFile))
+	for file := range byFile {
+		files = append(files, file)
+	}
+	sort.Strings(files)
+
 	var suites []JUnitTestSuite
-	for file, fileFindings := range byFile {
-		suite := f.buildTestSuite(file, fileFindings, timestamp)
+	for _, file := range files {
+		suite := f.buildTestSuite(file, byFile[file], timestamp)
 		suites = append(suites, suite)
 	}
 

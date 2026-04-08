@@ -181,7 +181,7 @@ func TestJSONFormatter(t *testing.T) {
 	}
 }
 
-func TestGetFormatter(t *testing.T) {
+func TestGetFormatterWithColor_Formats(t *testing.T) {
 	tests := []struct {
 		name     string
 		format   string
@@ -255,7 +255,7 @@ func TestGetFormatter(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			formatter, err := GetFormatter(tt.format, tt.verbose, "1.0.0")
+			formatter, err := GetFormatterWithColor(tt.format, tt.verbose, "1.0.0", true, false)
 			if tt.wantErr {
 				require.Error(t, err)
 				return
@@ -1039,4 +1039,111 @@ func TestSARIFFormatterPathBehavior(t *testing.T) {
 		// Parse SARIF output and check the artifact location contains the absolute path
 		assert.Contains(t, buf.String(), absPath)
 	})
+}
+
+// TestHTMLFormatterDeterministic verifies that HTML output is deterministic across runs
+func TestHTMLFormatterDeterministic(t *testing.T) {
+	// Create findings with files in non-sorted order
+	findings := []sdk.Finding{
+		{Rule: "rule1", Message: "msg1", File: "z_file.tf", Severity: sdk.SeverityError},
+		{Rule: "rule2", Message: "msg2", File: "a_file.tf", Severity: sdk.SeverityWarning},
+		{Rule: "rule3", Message: "msg3", File: "m_file.tf", Severity: sdk.SeverityInfo},
+	}
+
+	formatter := &HTMLFormatter{Version: "1.0.0"}
+
+	// Run format multiple times and verify output is identical
+	var outputs []string
+	for i := 0; i < 5; i++ {
+		var buf bytes.Buffer
+		err := formatter.Format(findings, &buf)
+		require.NoError(t, err)
+		outputs = append(outputs, buf.String())
+	}
+
+	// All outputs should be identical
+	for i := 1; i < len(outputs); i++ {
+		assert.Equal(t, outputs[0], outputs[i], "HTML output should be deterministic across runs")
+	}
+
+	// Verify files appear in sorted order
+	output := outputs[0]
+	aIdx := strings.Index(output, "a_file.tf")
+	mIdx := strings.Index(output, "m_file.tf")
+	zIdx := strings.Index(output, "z_file.tf")
+	assert.True(t, aIdx < mIdx && mIdx < zIdx, "Files should appear in sorted order: a < m < z")
+}
+
+// TestJUnitFormatterDeterministic verifies that JUnit output is deterministic across runs
+func TestJUnitFormatterDeterministic(t *testing.T) {
+	// Create findings with files in non-sorted order
+	findings := []sdk.Finding{
+		{Rule: "rule1", Message: "msg1", File: "z_file.tf", Severity: sdk.SeverityError},
+		{Rule: "rule2", Message: "msg2", File: "a_file.tf", Severity: sdk.SeverityWarning},
+		{Rule: "rule3", Message: "msg3", File: "m_file.tf", Severity: sdk.SeverityInfo},
+	}
+
+	formatter := &JUnitFormatter{Version: "1.0.0"}
+
+	// Run format multiple times and verify output is identical
+	var outputs []string
+	for i := 0; i < 5; i++ {
+		var buf bytes.Buffer
+		err := formatter.Format(findings, &buf)
+		require.NoError(t, err)
+		outputs = append(outputs, buf.String())
+	}
+
+	// All outputs should be identical
+	for i := 1; i < len(outputs); i++ {
+		assert.Equal(t, outputs[0], outputs[i], "JUnit output should be deterministic across runs")
+	}
+
+	// Verify test suites appear in sorted order by file
+	output := outputs[0]
+	aIdx := strings.Index(output, "a_file.tf")
+	mIdx := strings.Index(output, "m_file.tf")
+	zIdx := strings.Index(output, "z_file.tf")
+	assert.True(t, aIdx < mIdx && mIdx < zIdx, "Test suites should appear in sorted order: a < m < z")
+}
+
+// TestSARIFFormatterDeterministic verifies that SARIF output is deterministic across runs
+func TestSARIFFormatterDeterministic(t *testing.T) {
+	// Create findings with rules in non-sorted order
+	findings := []sdk.Finding{
+		{Rule: "z_rule", Message: "msg1", File: "test.tf", Severity: sdk.SeverityError},
+		{Rule: "a_rule", Message: "msg2", File: "test.tf", Severity: sdk.SeverityWarning},
+		{Rule: "m_rule", Message: "msg3", File: "test.tf", Severity: sdk.SeverityInfo},
+	}
+
+	formatter := &SARIFFormatter{Version: "1.0.0"}
+
+	// Run format multiple times and verify output is identical
+	var outputs []string
+	for i := 0; i < 5; i++ {
+		var buf bytes.Buffer
+		err := formatter.Format(findings, &buf)
+		require.NoError(t, err)
+		outputs = append(outputs, buf.String())
+	}
+
+	// All outputs should be identical
+	for i := 1; i < len(outputs); i++ {
+		assert.Equal(t, outputs[0], outputs[i], "SARIF output should be deterministic across runs")
+	}
+
+	// Verify rules appear in sorted order in the rules array
+	output := outputs[0]
+
+	// Parse JSON to check rules array order
+	var sarif SARIF
+	err := json.Unmarshal([]byte(output), &sarif)
+	require.NoError(t, err)
+	require.Len(t, sarif.Runs, 1)
+
+	rules := sarif.Runs[0].Tool.Driver.Rules
+	require.Len(t, rules, 3)
+	assert.Equal(t, "a_rule", rules[0].ID, "Rules should be sorted alphabetically")
+	assert.Equal(t, "m_rule", rules[1].ID, "Rules should be sorted alphabetically")
+	assert.Equal(t, "z_rule", rules[2].ID, "Rules should be sorted alphabetically")
 }

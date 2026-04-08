@@ -2,7 +2,7 @@ name: Test
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
     paths:
       - '**/*.go'
       - 'go.mod'
@@ -11,7 +11,7 @@ on:
       - 'revive.toml'
       - '.github/workflows/test.yml'
   pull_request:
-    branches: [ main ]
+    branches: [main]
     paths:
       - '**/*.go'
       - 'go.mod'

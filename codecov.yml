@@ -21,10 +21,10 @@ coverage:
 parsers:
   gcov:
     branch_detection:
-      conditional: yes
-      loop: yes
-      method: no
-      macro: no
+      conditional: true
+      loop: true
+      method: false
+      macro: false
 
 comment:
   layout: "reach,diff,flags,files"

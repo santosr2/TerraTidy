@@ -821,28 +821,32 @@ func (r *TerraformUnusedDeclarationsRule) Check(ctx *sdk.Context, file *hcl.File
 	}
 
 	// Search for var.X references in all module files
-	// Get content from all files for usage detection
-	contentStr := ""
+	// Use strings.Builder for efficient concatenation (O(n) instead of O(n²))
+	var contentBuilder strings.Builder
 	for _, content := range ctx.AllFiles {
-		contentStr += string(content) + "\n"
+		contentBuilder.Write(content)
+		contentBuilder.WriteByte('\n')
 	}
+	contentStr := contentBuilder.String()
 
-	// Check each variable
+	// Check each variable - precompile regex once per variable
 	for varName, varRange := range declaredVars {
-		// Check if var.X appears in content
-		pattern := fmt.Sprintf("var\\.%s[^a-zA-Z0-9_]", regexp.QuoteMeta(varName))
-		if matched, _ := regexp.MatchString(pattern, contentStr); !matched {
-			// Also check for var.X at end of expression
-			patternEnd := fmt.Sprintf("var\\.%s$", regexp.QuoteMeta(varName))
-			if matchedEnd, _ := regexp.MatchString(patternEnd, contentStr); !matchedEnd {
-				findings = append(findings, sdk.Finding{
-					Rule:     r.Name(),
-					Message:  fmt.Sprintf("Variable '%s' is declared but never used", varName),
-					File:     ctx.File,
-					Location: sdk.LocationFromRange(varRange),
-					Severity: sdk.SeverityWarning,
-				})
-			}
+		// Build pattern and compile once (not per-call like regexp.MatchString)
+		// Check if var.X appears followed by non-identifier char or at end
+		pattern := fmt.Sprintf(`var\.%s(?:[^a-zA-Z0-9_]|$)`, regexp.QuoteMeta(varName))
+		re, err := regexp.Compile(pattern)
+		if err != nil {
+			continue // Skip malformed patterns
+		}
+
+		if !re.MatchString(contentStr) {
+			findings = append(findings, sdk.Finding{
+				Rule:     r.Name(),
+				Message:  fmt.Sprintf("Variable '%s' is declared but never used", varName),
+				File:     ctx.File,
+				Location: sdk.LocationFromRange(varRange),
+				Severity: sdk.SeverityWarning,
+			})
 		}
 	}
 
@@ -1242,6 +1246,7 @@ func (e *Engine) RunTFLint(ctx context.Context, dir string) ([]sdk.Finding, erro
 			Rule:     "tflint.error",
 			Message:  tflintErr.Summary + ": " + tflintErr.Detail,
 			Severity: sdk.SeverityError,
+			File:     dir, // Default to directory when no range available
 		}
 
 		if tflintErr.Range != nil {

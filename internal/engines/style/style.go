@@ -267,47 +267,22 @@ func (e *Engine) generateDiff(path string, originalContent []byte) (*sdk.Finding
 	}, nil
 }
 
-// applyFixes applies auto-fixes to the file in one optimized pass.
-// Returns the number of fixes applied.
+// applyFixes applies ONE auto-fix to the file per pass.
+// Returns the number of fixes applied (0 or 1).
+// The multi-pass loop in Run will re-read the file and re-run rules after each fix,
+// ensuring subsequent fixes are computed against the updated content.
 func (e *Engine) applyFixes(ctx *sdk.Context, _ *hcl.File, findings []sdk.Finding) (int, error) {
-	// Group findings by fixability
-	var fixableFindings []sdk.Finding
+	// Find the first fixable finding
 	for i := range findings {
-		if findings[i].Fix != nil {
-			fixableFindings = append(fixableFindings, findings[i])
-		}
-	}
-
-	if len(fixableFindings) == 0 {
-		return 0, nil
-	}
-
-	// Deduplicate findings by rule+location to avoid redundant fixes
-	// The same rule at the same location would produce the same fix
-	seenFixes := make(map[string]bool)
-	var uniqueFindings []sdk.Finding
-	for _, f := range fixableFindings {
-		// Key by rule name and location to allow same rule at different locations
-		key := fmt.Sprintf("%s:%s:%d:%d", f.Rule, f.File, f.Location.StartLine, f.Location.StartColumn)
-		if !seenFixes[key] {
-			seenFixes[key] = true
-			uniqueFindings = append(uniqueFindings, f)
-		}
-	}
-
-	// Apply each unique fix sequentially
-	// With FixResult, fixes are pre-computed so we write them directly
-	fixedCount := 0
-	for _, finding := range uniqueFindings {
-		if finding.Fix.Content != nil {
-			if err := os.WriteFile(ctx.File, finding.Fix.Content, 0o600); err != nil {
-				return fixedCount, fmt.Errorf("writing fix for %s: %w", finding.Rule, err)
+		if findings[i].Fix != nil && findings[i].Fix.Content != nil {
+			if err := os.WriteFile(ctx.File, findings[i].Fix.Content, 0o600); err != nil {
+				return 0, fmt.Errorf("writing fix for %s: %w", findings[i].Rule, err)
 			}
-			fixedCount++
+			return 1, nil
 		}
 	}
 
-	return fixedCount, nil
+	return 0, nil
 }
 
 // getRuleConfig returns the configuration for a rule

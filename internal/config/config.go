@@ -121,8 +121,8 @@ type Config struct {
 
 	// Global settings
 	SeverityThreshold string       `yaml:"severity_threshold,omitempty"`
-	FailFast          bool         `yaml:"fail_fast,omitempty"`
-	Parallel          bool         `yaml:"parallel,omitempty"`
+	FailFast          *bool        `yaml:"fail_fast,omitempty"`
+	Parallel          *bool        `yaml:"parallel,omitempty"`
 	Recursive         *bool        `yaml:"recursive,omitempty"` // Directory recursion (default: true)
 	Cache             CacheConfig  `yaml:"cache,omitempty"`
 	Output            OutputConfig `yaml:"output,omitempty"`
@@ -474,7 +474,14 @@ func globWithTimeout(pattern string, timeout time.Duration) ([]string, error) {
 // loadImports loads and merges imported configurations.
 // The visited map tracks already-loaded files to detect circular imports.
 func (c *Config) loadImports(baseDir string, visited map[string]bool) error {
+	absBaseDir, _ := filepath.Abs(baseDir)
+
 	for _, pattern := range c.Imports {
+		// Block obvious path traversal patterns
+		if strings.Contains(pattern, "..") {
+			return fmt.Errorf("import pattern %q contains path traversal", pattern)
+		}
+
 		// Convert relative pattern to absolute
 		if !filepath.IsAbs(pattern) {
 			pattern = filepath.Join(baseDir, pattern)
@@ -484,6 +491,14 @@ func (c *Config) loadImports(baseDir string, visited map[string]bool) error {
 		matches, err := globWithTimeout(pattern, globTimeout)
 		if err != nil {
 			return fmt.Errorf("expanding import pattern %s: %w", pattern, err)
+		}
+
+		// Verify all matches are within the base directory (prevent symlink attacks)
+		for _, match := range matches {
+			absMatch, _ := filepath.Abs(match)
+			if !strings.HasPrefix(absMatch, absBaseDir) {
+				return fmt.Errorf("import %q resolves outside config directory", match)
+			}
 		}
 
 		// Check result count to prevent resource exhaustion
@@ -571,11 +586,19 @@ func (c *Config) merge(other *Config) {
 	if other.SeverityThreshold != "" {
 		c.SeverityThreshold = other.SeverityThreshold
 	}
-	if other.FailFast {
+	if other.FailFast != nil {
 		c.FailFast = other.FailFast
 	}
-	if other.Parallel {
+	if other.Parallel != nil {
 		c.Parallel = other.Parallel
+	}
+	if other.Recursive != nil {
+		c.Recursive = other.Recursive
+	}
+
+	// Merge output config
+	if other.Output.AbsolutePaths != nil {
+		c.Output.AbsolutePaths = other.Output.AbsolutePaths
 	}
 
 	// Merge plugin config
@@ -613,6 +636,24 @@ func (c *Config) IsRecursive() bool {
 		return true // Default to recursive
 	}
 	return *c.Recursive
+}
+
+// IsFailFast returns whether to stop on first error.
+// Returns false by default if not explicitly set in config.
+func (c *Config) IsFailFast() bool {
+	if c.FailFast == nil {
+		return false
+	}
+	return *c.FailFast
+}
+
+// IsParallel returns whether to run checks in parallel.
+// Returns true by default if not explicitly set in config.
+func (c *Config) IsParallel() bool {
+	if c.Parallel == nil {
+		return true
+	}
+	return *c.Parallel
 }
 
 // IsAbsolutePaths returns whether output should use absolute file paths.
@@ -887,7 +928,7 @@ func DefaultConfig() *Config {
 			Policy: PolicyEngineConfig{Enabled: BoolPtr(false)}, // Opt-in
 		},
 		SeverityThreshold: "warning",
-		FailFast:          false,
-		Parallel:          true,
+		FailFast:          BoolPtr(false),
+		Parallel:          BoolPtr(true),
 	}
 }

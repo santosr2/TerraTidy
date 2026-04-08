@@ -766,7 +766,7 @@ patterns:
 	require.NoError(t, os.WriteFile(filepath.Join(pluginDir, "always-finds.yaml"), []byte(yamlRule), 0o644))
 
 	cfg := config.DefaultConfig()
-	cfg.FailFast = true
+	cfg.FailFast = config.BoolPtr(true)
 	cfg.Engines.Fmt.Enabled = config.BoolPtr(false)
 	cfg.Engines.Style.Enabled = config.BoolPtr(true)
 	cfg.Engines.Lint.Enabled = config.BoolPtr(true)
@@ -1057,10 +1057,10 @@ func TestRootConfigFieldsAffectRuntime(t *testing.T) {
 
 	t.Run("fail_fast stops on error", func(t *testing.T) {
 		cfg := config.DefaultConfig()
-		cfg.FailFast = true
+		cfg.FailFast = config.BoolPtr(true)
 		assert.True(t, shouldFailFast(cfg), "shouldFailFast should return true when enabled")
 
-		cfg.FailFast = false
+		cfg.FailFast = config.BoolPtr(false)
 		assert.False(t, shouldFailFast(cfg), "shouldFailFast should return false when disabled")
 
 		// Verify hasErrors detects error severity
@@ -1077,11 +1077,11 @@ func TestRootConfigFieldsAffectRuntime(t *testing.T) {
 		cfg := config.DefaultConfig()
 
 		// Config parallel=true, CLI parallel=false -> use config (true)
-		cfg.Parallel = true
+		cfg.Parallel = config.BoolPtr(true)
 		assert.True(t, getEffectiveParallel(cfg, false), "should use config when CLI flag false")
 
 		// Config parallel=false, CLI parallel=true -> CLI wins
-		cfg.Parallel = false
+		cfg.Parallel = config.BoolPtr(false)
 		assert.True(t, getEffectiveParallel(cfg, true), "CLI flag should override config")
 
 		// Both false
@@ -1128,8 +1128,8 @@ overrides:
 	t.Run("all fields work together in runAllChecksWithConfig", func(t *testing.T) {
 		cfg := config.DefaultConfig()
 		cfg.SeverityThreshold = "warning"
-		cfg.FailFast = false
-		cfg.Parallel = false
+		cfg.FailFast = config.BoolPtr(false)
+		cfg.Parallel = config.BoolPtr(false)
 		cfg.Engines.Fmt.Enabled = config.BoolPtr(true)
 		cfg.Engines.Style.Enabled = config.BoolPtr(true)
 		cfg.Engines.Lint.Enabled = config.BoolPtr(false)

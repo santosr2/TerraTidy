@@ -1,5 +1,7 @@
+import * as cp from 'node:child_process';
 import * as os from 'node:os';
 import * as path from 'node:path';
+import { promisify } from 'node:util';
 import * as vscode from 'vscode';
 import { LanguageClient, type LanguageClientOptions, type ServerOptions } from 'vscode-languageclient/node';
 
@@ -42,7 +44,8 @@ export async function activate(context: vscode.ExtensionContext) {
 }
 
 // Extension deactivation
-export async function deactivate() {
+export async function deactivate(): Promise<void> {
+    configListener?.dispose();
     await stopLanguageClient();
 }
 
@@ -55,13 +58,14 @@ async function startLanguageClient(context: vscode.ExtensionContext): Promise<vo
     outputChannel.appendLine(`Config executablePath: "${rawPath}"`);
     outputChannel.appendLine(`Resolved executablePath: "${executablePath}"`);
 
-    // Check if terratidy is available
+    // Check if terratidy is available (async to avoid blocking event loop)
+    const execFile = promisify(cp.execFile);
     try {
-        const cp = require('node:child_process');
-        cp.execFileSync(executablePath, ['version'], { stdio: 'ignore' });
+        await execFile(executablePath, ['version']);
     } catch {
         const message =
-            'TerraTidy executable not found. Please install TerraTidy or configure terratidy.executablePath.';
+            'TerraTidy executable not found. Please install TerraTidy or configure terratidy.executablePath. ' +
+            'See https://github.com/santosr2/TerraTidy#installation for installation instructions.';
         outputChannel.appendLine(message);
         vscode.window.showErrorMessage(message);
         return;
@@ -78,6 +82,9 @@ async function startLanguageClient(context: vscode.ExtensionContext): Promise<vo
         },
     };
 
+    // Create FileSystemWatcher outside clientOptions so we can dispose it on failure
+    const configWatcher = vscode.workspace.createFileSystemWatcher('**/.terratidy.{yaml,yml}');
+
     // Client options: configure the LSP client
     const clientOptions: LanguageClientOptions = {
         documentSelector: [
@@ -89,7 +96,7 @@ async function startLanguageClient(context: vscode.ExtensionContext): Promise<vo
         ],
         synchronize: {
             // Notify the server about file configuration changes
-            fileEvents: vscode.workspace.createFileSystemWatcher('**/.terratidy.{yaml,yml}'),
+            fileEvents: configWatcher,
         },
         outputChannel: outputChannel,
         traceOutputChannel: outputChannel,
@@ -102,7 +109,11 @@ async function startLanguageClient(context: vscode.ExtensionContext): Promise<vo
     try {
         await client.start();
         outputChannel.appendLine('TerraTidy LSP server started');
+        // Register watcher for disposal when extension deactivates
+        context.subscriptions.push(configWatcher);
     } catch (error) {
+        // Dispose the watcher since we won't be using it
+        configWatcher.dispose();
         const errorMessage = error instanceof Error ? error.message : String(error);
         outputChannel.appendLine(`Failed to start LSP server: ${errorMessage}`);
         vscode.window.showErrorMessage(`TerraTidy LSP server failed to start: ${errorMessage}`);
@@ -126,7 +137,8 @@ async function startLanguageClient(context: vscode.ExtensionContext): Promise<vo
             }
         }
     });
-    context.subscriptions.push(configListener);
+    // Note: configListener is managed manually via module-level variable,
+    // not pushed to subscriptions to avoid duplicate disposal on restart
 }
 
 // Stop the language client
@@ -186,34 +198,33 @@ async function initTerraTidy(): Promise<void> {
     const cwd = workspaceFolder.uri.fsPath;
 
     try {
-        const cp = require('node:child_process');
         await new Promise<void>((resolve, reject) => {
-            const process = cp.spawn(executablePath, ['init'], {
+            const child = cp.spawn(executablePath, ['init'], {
                 cwd,
             });
 
             let stdout = '';
             let stderr = '';
 
-            process.stdout.on('data', (data: Buffer) => {
+            child.stdout.on('data', (data: Buffer) => {
                 stdout += data.toString();
             });
 
-            process.stderr.on('data', (data: Buffer) => {
+            child.stderr.on('data', (data: Buffer) => {
                 stderr += data.toString();
             });
 
-            process.on('close', (code: number) => {
+            child.on('close', (code: number | null) => {
                 if (code === 0) {
                     outputChannel.appendLine(`Init output: ${stdout}`);
                     resolve();
                 } else {
                     outputChannel.appendLine(`Init failed: ${stderr}`);
-                    reject(new Error(stderr || 'Init failed'));
+                    reject(new Error(stderr || `Init failed with code ${code ?? 'signal'}`));
                 }
             });
 
-            process.on('error', (error: Error) => {
+            child.on('error', (error: Error) => {
                 reject(error);
             });
         });

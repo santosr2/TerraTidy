@@ -92,6 +92,7 @@ jobs:
     needs: build-and-test
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    environment: release
 
     steps:
       - name: Checkout
@@ -103,6 +104,7 @@ jobs:
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: "1.2.x"
+          no-cache: true  # Disable cache for security-sensitive publish job
 
       - name: Install dependencies
         working-directory: vscode

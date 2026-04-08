@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/santosr2/TerraTidy/pkg/sdk"
@@ -209,11 +210,6 @@ func (f *JSONFormatter) Format(findings []sdk.Finding, w io.Writer) error {
 	}
 
 	return encoder.Encode(output)
-}
-
-// GetFormatter returns the appropriate formatter based on the format string
-func GetFormatter(format string, verbose bool, version string) (Formatter, error) {
-	return GetFormatterWithColor(format, verbose, version, true, false)
 }
 
 // GetFormatterWithColor returns the appropriate formatter with color and path control
@@ -634,9 +630,16 @@ func (f *HTMLFormatter) generateFindings(findings []sdk.Finding, byFile map[stri
         </div>`
 	}
 
+	// Sort files for deterministic output
+	files := make([]string, 0, len(byFile))
+	for file := range byFile {
+		files = append(files, file)
+	}
+	sort.Strings(files)
+
 	var sections string
-	for file, fileFindings := range byFile {
-		sections += f.generateFileSection(file, fileFindings)
+	for _, file := range files {
+		sections += f.generateFileSection(file, byFile[file])
 	}
 	return sections
 }

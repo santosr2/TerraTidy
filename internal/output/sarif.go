@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"path/filepath"
+	"sort"
 
 	"github.com/santosr2/TerraTidy/pkg/sdk"
 )
@@ -60,6 +61,11 @@ type SARIFMessage struct {
 	Text string `json:"text"`
 }
 
+// SARIFArtifactContent represents the content of an artifact (per SARIF 2.1.0 spec)
+type SARIFArtifactContent struct {
+	Text string `json:"text"`
+}
+
 // SARIFResult represents a single result/finding
 type SARIFResult struct {
 	RuleID    string          `json:"ruleId"`
@@ -108,8 +114,8 @@ type SARIFArtifactChange struct {
 
 // SARIFReplacement represents a replacement
 type SARIFReplacement struct {
-	DeletedRegion   SARIFRegion  `json:"deletedRegion"`
-	InsertedContent SARIFMessage `json:"insertedContent,omitempty"`
+	DeletedRegion   SARIFRegion          `json:"deletedRegion"`
+	InsertedContent SARIFArtifactContent `json:"insertedContent,omitzero"`
 }
 
 // Format implements the Formatter interface for SARIF output
@@ -129,8 +135,15 @@ func buildSARIFRules(findings []sdk.Finding) []SARIFRule {
 		rulesMap[finding.Rule] = true
 	}
 
-	var rules []SARIFRule
+	// Sort rule IDs for deterministic output
+	ruleIDs := make([]string, 0, len(rulesMap))
 	for ruleID := range rulesMap {
+		ruleIDs = append(ruleIDs, ruleID)
+	}
+	sort.Strings(ruleIDs)
+
+	rules := make([]SARIFRule, 0, len(ruleIDs))
+	for _, ruleID := range ruleIDs {
 		rules = append(rules, SARIFRule{
 			ID: ruleID,
 			ShortDescription: SARIFMessage{

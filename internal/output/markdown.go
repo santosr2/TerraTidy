@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"sort"
+	"strings"
 
 	"github.com/santosr2/TerraTidy/pkg/sdk"
 )
@@ -120,18 +121,19 @@ func (f *MarkdownFormatter) severityIcon(severity sdk.Severity) string {
 // escapeMarkdown escapes special markdown characters in strings
 func escapeMarkdown(s string) string {
 	// Escape pipe characters which would break table formatting
-	result := ""
+	var b strings.Builder
+	b.Grow(len(s))
 	for _, c := range s {
 		switch c {
 		case '|':
-			result += "\\|"
+			b.WriteString("\\|")
 		case '\n':
-			result += " "
+			b.WriteByte(' ')
 		case '\r':
 			// Skip carriage returns
 		default:
-			result += string(c)
+			b.WriteRune(c)
 		}
 	}
-	return result
+	return b.String()
 }

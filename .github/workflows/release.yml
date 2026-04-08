@@ -5,12 +5,17 @@ on:
     tags:
       - 'v*'
 
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 permissions:
   contents: read
 
 jobs:
   goreleaser:
     runs-on: ubuntu-latest
+    environment: release
     permissions:
       contents: write
       packages: write

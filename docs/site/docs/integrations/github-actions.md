@@ -67,8 +67,8 @@ jobs:
     # Only check files changed in git
     changed: 'false'
 
-    # Minimum severity to report: info, warning, error
-    severity-threshold: 'info'
+    # Minimum severity to report: info, warning, error (default: uses config or warning)
+    severity-threshold: ''
 
     # Fail on errors (default: true)
     fail-on-error: 'true'

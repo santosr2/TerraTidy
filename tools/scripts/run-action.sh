@@ -16,9 +16,9 @@ validate_input() {
     return 0
   fi
 
-  # Validate against safe pattern
-  if ! [[ "$value" =~ ^[a-zA-Z0-9._/\ -]*$ ]]; then
-    echo "::error::Invalid $name: contains unsafe characters. Only alphanumeric, dots, underscores, slashes, hyphens, and spaces are allowed."
+  # Validate against safe pattern (includes backslash and colon for Windows paths)
+  if ! [[ "$value" =~ ^[a-zA-Z0-9._/\\:\ -]*$ ]]; then
+    echo "::error::Invalid $name: contains unsafe characters. Only alphanumeric, dots, underscores, slashes, backslashes, colons, hyphens, and spaces are allowed."
     exit 1
   fi
 }
@@ -158,6 +158,8 @@ echo "$OUTPUT"
 # Accurate counts are only available for json/json-compact formats.
 # For other formats, findings-count reflects the exit code (0 = clean,
 # non-zero = issues found) and errors-count/warnings-count are estimates.
+# Note: For non-JSON formats, warnings-count is always 0. Use json or json-compact
+# format if you need accurate warning counts for fail-on-warning.
 if [ "$FORMAT" = "json" ] || [ "$FORMAT" = "json-compact" ]; then
   FINDINGS=$(echo "$OUTPUT" | jq -r '.summary.total // 0')
   ERRORS=$(echo "$OUTPUT" | jq -r '.summary.errors // 0')

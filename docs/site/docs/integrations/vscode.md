@@ -6,10 +6,18 @@ TerraTidy provides a VS Code extension for seamless integration with your editor
 
 ### From Marketplace
 
+Install from the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=santosr2.vscode-terratidy):
+
 1. Open VS Code
 2. Go to Extensions (Ctrl+Shift+X / Cmd+Shift+X)
 3. Search for "TerraTidy"
 4. Click Install
+
+Or install via command line:
+
+```bash
+code --install-extension santosr2.vscode-terratidy
+```
 
 ### From VSIX
 
@@ -48,7 +56,7 @@ Format Terraform and HCL files using `hclwrite`:
 ```json
 {
   "[terraform]": {
-    "editor.defaultFormatter": "santosr2.terratidy",
+    "editor.defaultFormatter": "santosr2.vscode-terratidy",
     "editor.formatOnSave": true
   }
 }
@@ -152,7 +160,7 @@ Verify installation:
 
 ```bash
 which terratidy
-terratidy --version
+terratidy version
 ```
 
 Set explicit path:

@@ -183,7 +183,7 @@ jobs:
           TAG_NAME: ${{ github.ref_name }}
 
   update-version-tags:
-    needs: parse-version
+    needs: [parse-version, goreleaser]
     permissions:
       contents: write
     runs-on: ubuntu-latest
@@ -228,7 +228,7 @@ jobs:
           PRERELEASE: ${{ needs.parse-version.outputs.prerelease }}
 
   update-docker-tags:
-    needs: parse-version
+    needs: [parse-version, goreleaser]
     if: needs.parse-version.outputs.prerelease != ''
     runs-on: ubuntu-latest
     timeout-minutes: 10

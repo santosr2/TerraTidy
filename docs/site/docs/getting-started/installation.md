@@ -40,8 +40,18 @@ sudo mv terratidy /usr/local/bin/
 ### Windows
 
 ```powershell
-# Download from releases page
-# Add to PATH
+# Download the latest release
+Invoke-WebRequest -Uri "https://github.com/santosr2/TerraTidy/releases/latest/download/terratidy_windows_amd64.zip" -OutFile "terratidy.zip"
+
+# Extract the archive
+Expand-Archive -Path "terratidy.zip" -DestinationPath "."
+
+# Move to a directory in your PATH (e.g., C:\Program Files\TerraTidy)
+New-Item -ItemType Directory -Force -Path "C:\Program Files\TerraTidy"
+Move-Item -Path "terratidy.exe" -Destination "C:\Program Files\TerraTidy\"
+
+# Add to PATH (run as Administrator)
+[Environment]::SetEnvironmentVariable("Path", $env:Path + ";C:\Program Files\TerraTidy", "Machine")
 ```
 
 ## Docker

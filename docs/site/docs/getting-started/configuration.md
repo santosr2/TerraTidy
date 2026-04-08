@@ -71,7 +71,7 @@ Configuration values can use environment variables with three syntaxes:
 | ------------------- | --------------------------------------------- |
 | `${VAR}`            | Substitutes the value; empty string if unset  |
 | `${VAR:-default}`   | Uses `default` if `VAR` is unset              |
-| `${VAR:?error}`     | Marks as required; empty string if unset      |
+| `${VAR:?error}`     | Fails with error message if `VAR` is unset    |
 
 ```yaml
 engines:
@@ -433,6 +433,9 @@ external subprocess for provider-specific checks:
 engines:
   lint:
     enabled: true
+    use_tflint: false           # Enable TFLint integration (default: false)
+    tflint_path: ""             # Custom path to TFLint binary (optional)
+    fallback_builtin: true      # Use built-in rules if TFLint unavailable (default: true)
     config_file: .tflint.hcl    # Path to TFLint config (optional)
     plugins:                     # TFLint plugins to enable (optional)
       - aws

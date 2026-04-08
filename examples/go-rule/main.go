@@ -51,6 +51,10 @@ func (r *RequireTagsRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Finding
 		if block.Type != "resource" {
 			continue
 		}
+		// Guard against blocks with no labels (malformed HCL)
+		if len(block.Labels) == 0 {
+			continue
+		}
 		hasTags := false
 		for _, attr := range block.Body.Attributes {
 			if attr.Name == "tags" {
@@ -60,7 +64,7 @@ func (r *RequireTagsRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Finding
 		}
 		if !hasTags {
 			findings = append(findings, sdk.Finding{
-				Rule:     "require-tags",
+				Rule:     r.Name(),
 				Message:  fmt.Sprintf("Resource %q is missing a tags attribute", block.Labels[0]),
 				File:     ctx.File,
 				Location: sdk.LocationFromRange(block.DefRange()),
@@ -71,6 +75,8 @@ func (r *RequireTagsRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Finding
 	return findings, nil
 }
 
-func (r *RequireTagsRule) Fix(_ *sdk.Context, _ *hcl.File) ([]byte, error) {
-	return nil, nil
-}
+// Optional: implement sdk.Fixer interface for auto-fix support
+// func (r *RequireTagsRule) Fix(ctx *sdk.Context, file *hcl.File) ([]byte, error) {
+//     // Return modified file content
+//     return fixedContent, nil
+// }

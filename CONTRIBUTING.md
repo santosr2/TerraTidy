@@ -93,4 +93,4 @@ and detailed instructions for adding engines, rules, and output formats, see the
 
 ## Code of Conduct
 
-Be respectful and inclusive. We're here to build great software together!
+Please read and follow our [Code of Conduct](CODE_OF_CONDUCT.md). Be respectful and inclusive!

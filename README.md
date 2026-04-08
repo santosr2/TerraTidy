@@ -31,9 +31,10 @@ TerraTidy is a single-binary quality platform for Terraform and Terragrunt that 
 
 - **Single Binary** -- No external dependencies for core functionality
 - **Library-first Architecture** -- Uses Go libraries (hclwrite, OPA SDK) directly instead of shelling out
-- **Extensible** -- Custom rules in Go, YAML, or Bash
+- **Extensible** -- Custom rules in Go, YAML, Rego, or Bash
 - **Modular Config** -- Split large configs into organized files with glob imports
 - **Auto-fix** -- Automatically fix formatting and style issues
+- **Suppression Annotations** -- Inline comments to suppress specific findings per-line or per-block
 - **Multiple Output Formats** -- Text, table, JSON, SARIF, HTML, JUnit, Markdown, GitHub Actions annotations
 - **Multi-platform** -- Linux, macOS, Windows (amd64 and arm64)
 
@@ -265,19 +266,21 @@ Available hook IDs: `terratidy-fmt`, `terratidy-fmt-check`, `terratidy-style`, `
   uses: santosr2/terratidy@v0
   with:
     format: sarif
-    parallel: true
+    parallel: 'true'
     github-token: ${{ secrets.GITHUB_TOKEN }}
 ```
 
 Pin to a specific release for reproducible builds: `santosr2/terratidy@v0.2.0-alpha.4`
 
 Available inputs: `version`, `config`, `profile`, `format`, `parallel`, `working-directory`,
-`skip-fmt`, `skip-style`, `skip-lint`, `skip-policy`, `fail-on-error`, `fail-on-warning`, `github-token`.
+`skip-fmt`, `skip-style`, `skip-lint`, `skip-policy`, `exclude`, `no-recurse`, `absolute-paths`,
+`changed`, `severity-threshold`, `fail-on-error`, `fail-on-warning`, `github-token`.
 
 ### VS Code Extension
 
 The TerraTidy VS Code extension provides real-time diagnostics via LSP.
-See [vscode/README.md](vscode/README.md) for installation instructions.
+Install from the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=santosr2.vscode-terratidy)
+or see [vscode/README.md](vscode/README.md) for full installation instructions.
 
 ## Custom Rules
 
@@ -286,10 +289,22 @@ Create custom rules in three formats:
 ### Go Plugin
 
 ```go
-package custom
+package main
 
-func (r *EnforceTaggingRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Finding, error) {
-    // Full HCL AST access
+import (
+    "github.com/hashicorp/hcl/v2"
+    "github.com/santosr2/TerraTidy/pkg/sdk"
+)
+
+type MyRule struct{}
+
+func (r *MyRule) Name() string        { return "my-rule" }
+func (r *MyRule) Description() string { return "Checks something" }
+
+func (r *MyRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Finding, error) {
+    var findings []sdk.Finding
+    // Full HCL AST access via file.Body
+    return findings, nil
 }
 ```
 
@@ -335,7 +350,7 @@ Full documentation is available at [docs/site/docs/](docs/site/docs/).
 ```bash
 git clone https://github.com/santosr2/TerraTidy
 cd terratidy
-mise install        # Install Go 1.26.1 and tools
+mise install        # Install Go 1.26 and tools
 mise run setup      # Download and tidy Go modules
 mise run build      # Build binary
 ```

@@ -18,7 +18,7 @@ This extension brings TerraTidy's powerful formatting, style checking, linting, 
 
 ## Installation
 
-Install from the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=santosr2.terratidy):
+Install from the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=santosr2.vscode-terratidy):
 
 1. Open VS Code
 2. Go to Extensions (`Ctrl+Shift+X` / `Cmd+Shift+X`)
@@ -28,7 +28,7 @@ Install from the [VS Code Marketplace](https://marketplace.visualstudio.com/item
 Or install via command line:
 
 ```bash
-code --install-extension santosr2.terratidy
+code --install-extension santosr2.vscode-terratidy
 ```
 
 ## Requirements
@@ -184,11 +184,11 @@ For the best experience, add these settings to your `settings.json`:
   "terratidy.runOnSave": true,
   "terratidy.formatOnSave": true,
   "[terraform]": {
-    "editor.defaultFormatter": "santosr2.terratidy",
+    "editor.defaultFormatter": "santosr2.vscode-terratidy",
     "editor.formatOnSave": true
   },
   "[hcl]": {
-    "editor.defaultFormatter": "santosr2.terratidy",
+    "editor.defaultFormatter": "santosr2.vscode-terratidy",
     "editor.formatOnSave": true
   }
 }
@@ -202,7 +202,7 @@ Make sure TerraTidy is installed and in your PATH:
 
 ```bash
 which terratidy
-terratidy --version
+terratidy version
 ```
 
 Or specify the full path in settings:

@@ -13,8 +13,8 @@ resource "aws_instance" "suppressed_tags" {
 }
 
 # Inline suppression - suppresses on the same line
-resource "aws_s3_bucket" "example" { # terratidy:ignore:naming-convention
-  bucket = "MyBucketWithBadName"
+resource "aws_s3_bucket" "MyBucket" { # terratidy:ignore:style.block-label-case
+  bucket = "my-bucket-name"
 }
 
 # Wildcard suppression - suppresses all style rules for next block
@@ -26,7 +26,7 @@ resource "aws_instance" "no_style_checks" {
 
 # Multiple annotations can be stacked
 # terratidy:ignore:require-tags
-# terratidy:ignore:naming-convention
+# terratidy:ignore:style.block-label-case
 resource "aws_instance" "multiple_suppressions" {
   ami           = "ami-12345678"
   instance_type = "t2.micro"

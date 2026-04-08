@@ -9,11 +9,13 @@ imports:
   # - ./config/base.yaml
 
 # Exclude patterns - glob patterns for files/directories to skip
-# exclude:
-#   - "**/*.generated.tf"     # Exclude generated files
-#   - "vendor/**"             # Exclude vendor directory
-#   - ".terraform/**"         # Exclude Terraform cache
-#   - "examples/legacy/**"    # Exclude specific directory
+# These are combined with CLI --exclude patterns
+exclude:
+  - "**/*.generated.tf"     # Exclude generated files
+  - "vendor/**"             # Exclude vendor directory
+  - ".terraform/**"         # Exclude Terraform cache (also auto-skipped)
+  - "test/fixtures/**"      # Exclude test fixtures
+  # - "modules/legacy/**"   # Exclude legacy modules during migration
 
 # Global settings
 severity_threshold: warning  # Filter diagnostics (info|warning|error)
@@ -27,9 +29,10 @@ recursive: true              # Scan subdirectories (false = only specified dirs)
 #   max_size: 1000   # Maximum number of entries (LRU eviction)
 #   disabled: false  # Disable caching entirely
 
-# Output configuration (optional)
-# output:
-#   absolute_paths: false  # Use absolute file paths instead of relative
+# Output configuration
+output:
+  absolute_paths: false  # Use absolute file paths instead of relative
+                         # Set true for tooling that needs full paths
 
 # Engine configuration
 engines:
@@ -52,7 +55,7 @@ engines:
   # Lint engine - 11 built-in AST rules, optional TFLint integration (subprocess)
   lint:
     enabled: true
-    config_file: .tflint.hcl   # Path to TFLint config file
+    config_file: .tflint.hcl   # Path to TFLint config file (only used when use_tflint: true)
     # plugins:                  # TFLint plugins to enable
     #   - aws
     #   - google
@@ -62,7 +65,7 @@ engines:
     # tflint_path: tflint       # Custom TFLint binary path
     # fallback_builtin: false   # Use built-in rules if TFLint unavailable
     # rules:                    # Rule-specific configuration
-    #   terraform_deprecated_interpolation:
+    #   lint.terraform-deprecated-syntax:
     #     enabled: true
     #     severity: error
 
@@ -116,6 +119,7 @@ profiles:
 
 # Rule overrides - enable/disable rules, change severity
 # This is the correct place for per-rule configuration
+# Note: 'enabled' defaults to false if omitted. Always set it explicitly.
 overrides:
   rules:
     # Enable a rule that's disabled by default

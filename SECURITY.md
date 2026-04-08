@@ -13,13 +13,11 @@ We take the security of TerraTidy seriously. If you believe you have found a sec
 
 ### How to Report
 
-**Please do NOT report security vulnerabilities through public GitHub issues.**
-
-Instead, please report them via one of the following methods:
+Please report security vulnerabilities via one of the following methods:
 
 1. **GitHub Security Advisories** (Preferred): Use [GitHub's private vulnerability reporting](https://github.com/santosr2/TerraTidy/security/advisories/new)
 
-2. **Email**: Contact the maintainers directly (include "SECURITY" in the subject line)
+2. **GitHub Issues**: For non-sensitive security questions, open a [GitHub Issue](https://github.com/santosr2/TerraTidy/issues) with the "security" label
 
 ### What to Include
 

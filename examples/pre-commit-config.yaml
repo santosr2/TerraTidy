@@ -21,6 +21,12 @@ repos:
       # Or use terratidy-check for all checks at once:
       # - id: terratidy-check
       #
+      # With custom options (exclude patterns, non-recursive, etc.):
+      # - id: terratidy-check
+      #   args:
+      #     - --exclude=**/*.generated.tf,test/**
+      #     - --no-recurse  # disable recursive directory traversal
+      #
       # For auto-fix mode (modifies files in place):
       # - id: terratidy-fmt
       # - id: terratidy-style-fix

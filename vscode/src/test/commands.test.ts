@@ -3,7 +3,7 @@ import * as vscode from 'vscode';
 
 suite('Commands', () => {
     suiteSetup(async () => {
-        const ext = vscode.extensions.getExtension('santosr2.terratidy');
+        const ext = vscode.extensions.getExtension('santosr2.vscode-terratidy');
         assert.ok(ext, 'Extension should be installed');
         await ext.activate();
     });

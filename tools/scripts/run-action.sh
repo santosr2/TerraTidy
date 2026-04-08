@@ -16,9 +16,9 @@ validate_input() {
     return 0
   fi
 
-  # Validate against safe pattern
-  if ! [[ "$value" =~ ^[a-zA-Z0-9._/\ -]*$ ]]; then
-    echo "::error::Invalid $name: contains unsafe characters. Only alphanumeric, dots, underscores, slashes, hyphens, and spaces are allowed."
+  # Validate against safe pattern (includes backslash and colon for Windows paths)
+  if ! [[ "$value" =~ ^[a-zA-Z0-9._/\\:\ -]*$ ]]; then
+    echo "::error::Invalid $name: contains unsafe characters. Only alphanumeric, dots, underscores, slashes, backslashes, colons, hyphens, and spaces are allowed."
     exit 1
   fi
 }
@@ -61,82 +61,93 @@ validate_input "working-directory" "${INPUT_WORKING_DIRECTORY:-}"
 validate_glob_patterns "exclude" "${INPUT_EXCLUDE:-}"
 validate_format "${INPUT_FORMAT:-text}"
 
-# Build command arguments
-ARGS=""
+# Build command as array (safer than string + eval)
+CMD=(terratidy check)
 
 # Config file
-if [ -f "$INPUT_CONFIG" ]; then
-  ARGS="$ARGS --config $INPUT_CONFIG"
+if [ -n "${INPUT_CONFIG:-}" ] && [ -f "${INPUT_CONFIG:-}" ]; then
+  CMD+=(--config "$INPUT_CONFIG")
 fi
 
 # Profile
-if [ -n "$INPUT_PROFILE" ]; then
-  ARGS="$ARGS --profile $INPUT_PROFILE"
+if [ -n "${INPUT_PROFILE:-}" ]; then
+  CMD+=(--profile "$INPUT_PROFILE")
 fi
 
 # Skip flags
-if [ "$INPUT_SKIP_FMT" = "true" ]; then
-  ARGS="$ARGS --skip-fmt"
+if [ "${INPUT_SKIP_FMT:-false}" = "true" ]; then
+  CMD+=(--skip-fmt)
 fi
-if [ "$INPUT_SKIP_STYLE" = "true" ]; then
-  ARGS="$ARGS --skip-style"
+if [ "${INPUT_SKIP_STYLE:-false}" = "true" ]; then
+  CMD+=(--skip-style)
 fi
-if [ "$INPUT_SKIP_LINT" = "true" ]; then
-  ARGS="$ARGS --skip-lint"
+if [ "${INPUT_SKIP_LINT:-false}" = "true" ]; then
+  CMD+=(--skip-lint)
 fi
-if [ "$INPUT_SKIP_POLICY" = "true" ]; then
-  ARGS="$ARGS --skip-policy"
+if [ "${INPUT_SKIP_POLICY:-false}" = "true" ]; then
+  CMD+=(--skip-policy)
 fi
 
 # Parallel mode
-if [ "$INPUT_PARALLEL" = "true" ]; then
-  ARGS="$ARGS --parallel"
+if [ "${INPUT_PARALLEL:-false}" = "true" ]; then
+  CMD+=(--parallel)
 fi
 
 # Exclude patterns (comma-separated)
 if [ -n "${INPUT_EXCLUDE:-}" ]; then
-  ARGS="$ARGS --exclude $INPUT_EXCLUDE"
+  CMD+=(--exclude "$INPUT_EXCLUDE")
 fi
 
 # No-recurse flag
 if [ "${INPUT_NO_RECURSE:-false}" = "true" ]; then
-  ARGS="$ARGS --no-recurse"
+  CMD+=(--no-recurse)
 fi
 
 # Absolute paths flag
 if [ "${INPUT_ABSOLUTE_PATHS:-false}" = "true" ]; then
-  ARGS="$ARGS --absolute-paths"
+  CMD+=(--absolute-paths)
+fi
+
+# Changed files only
+if [ "${INPUT_CHANGED:-false}" = "true" ]; then
+  CMD+=(--changed)
+fi
+
+# Severity threshold
+if [ -n "${INPUT_SEVERITY_THRESHOLD:-}" ]; then
+  CMD+=(--severity-threshold "$INPUT_SEVERITY_THRESHOLD")
 fi
 
 # Output format
-FORMAT="$INPUT_FORMAT"
-ARGS="$ARGS --format $FORMAT"
+FORMAT="${INPUT_FORMAT:-text}"
+CMD+=(--format "$FORMAT")
 
 # SARIF output file
 SARIF_FILE=""
 SARIF_OUTPUT_PATH=""
 if [ "$FORMAT" = "sarif" ]; then
   SARIF_FILE="terratidy-results.sarif"
-  SARIF_OUTPUT_PATH="${INPUT_WORKING_DIRECTORY}/terratidy-results.sarif"
+  SARIF_OUTPUT_PATH="${INPUT_WORKING_DIRECTORY:-}/terratidy-results.sarif"
   SARIF_OUTPUT_PATH="${SARIF_OUTPUT_PATH#./}"
   echo "sarif-file=$SARIF_OUTPUT_PATH" >> "$GITHUB_OUTPUT"
 fi
 
 # Run TerraTidy and capture output
-TMPDIR="${RUNNER_TEMP:-/tmp}"
+# Use array expansion instead of eval for safety
+_TMPDIR="${RUNNER_TEMP:-/tmp}"
 set +e
 if [ "$FORMAT" = "sarif" ]; then
-  terratidy check $ARGS > "$SARIF_FILE" 2>"$TMPDIR/terratidy-stderr.txt"
+  "${CMD[@]}" > "$SARIF_FILE" 2>"$_TMPDIR/terratidy-stderr.txt"
   EXIT_CODE=$?
-  cat "$TMPDIR/terratidy-stderr.txt" || true
+  cat "$_TMPDIR/terratidy-stderr.txt" || true
   OUTPUT=$(cat "$SARIF_FILE")
 elif [ "$FORMAT" = "json" ] || [ "$FORMAT" = "json-compact" ]; then
-  terratidy check $ARGS > "$TMPDIR/terratidy-output.json" 2>"$TMPDIR/terratidy-stderr.txt"
+  "${CMD[@]}" > "$_TMPDIR/terratidy-output.json" 2>"$_TMPDIR/terratidy-stderr.txt"
   EXIT_CODE=$?
-  cat "$TMPDIR/terratidy-stderr.txt" || true
-  OUTPUT=$(cat "$TMPDIR/terratidy-output.json")
+  cat "$_TMPDIR/terratidy-stderr.txt" || true
+  OUTPUT=$(cat "$_TMPDIR/terratidy-output.json")
 else
-  OUTPUT=$(terratidy check $ARGS 2>&1)
+  OUTPUT=$("${CMD[@]}" 2>&1)
   EXIT_CODE=$?
 fi
 set -e
@@ -147,6 +158,8 @@ echo "$OUTPUT"
 # Accurate counts are only available for json/json-compact formats.
 # For other formats, findings-count reflects the exit code (0 = clean,
 # non-zero = issues found) and errors-count/warnings-count are estimates.
+# Note: For non-JSON formats, warnings-count is always 0. Use json or json-compact
+# format if you need accurate warning counts for fail-on-warning.
 if [ "$FORMAT" = "json" ] || [ "$FORMAT" = "json-compact" ]; then
   FINDINGS=$(echo "$OUTPUT" | jq -r '.summary.total // 0')
   ERRORS=$(echo "$OUTPUT" | jq -r '.summary.errors // 0')
@@ -167,11 +180,11 @@ echo "warnings-count=$WARNINGS" >> "$GITHUB_OUTPUT"
 # Determine if we should fail
 SHOULD_FAIL=false
 
-if [ "$INPUT_FAIL_ON_ERROR" = "true" ] && [ "$ERRORS" -gt 0 ]; then
+if [ "${INPUT_FAIL_ON_ERROR:-true}" = "true" ] && [ "$ERRORS" -gt 0 ]; then
   SHOULD_FAIL=true
 fi
 
-if [ "$INPUT_FAIL_ON_WARNING" = "true" ] && [ "$WARNINGS" -gt 0 ]; then
+if [ "${INPUT_FAIL_ON_WARNING:-false}" = "true" ] && [ "$WARNINGS" -gt 0 ]; then
   SHOULD_FAIL=true
 fi
 

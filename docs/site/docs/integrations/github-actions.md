@@ -40,7 +40,7 @@ jobs:
     # Configuration profile to use
     profile: ''
 
-    # Output format: text, json, json-compact, sarif, html, table, github
+    # Output format: text, table, json, json-compact, sarif, html, junit, markdown, github
     format: 'text'
 
     # Run engines in parallel
@@ -54,6 +54,21 @@ jobs:
     skip-style: 'false'
     skip-lint: 'false'
     skip-policy: 'false'
+
+    # Exclude patterns (comma-separated glob patterns)
+    exclude: ''
+
+    # Disable recursive directory traversal
+    no-recurse: 'false'
+
+    # Output absolute file paths instead of relative
+    absolute-paths: 'false'
+
+    # Only check files changed in git
+    changed: 'false'
+
+    # Minimum severity to report: info, warning, error (default: uses config or warning)
+    severity-threshold: ''
 
     # Fail on errors (default: true)
     fail-on-error: 'true'
@@ -74,9 +89,15 @@ jobs:
 | `warnings-count`   | Number of warning-level findings     |
 | `sarif-file`       | Path to SARIF file (if sarif format) |
 
+**Note:** Accurate counts for `findings-count`, `errors-count`, and `warnings-count` require
+`format: json` or `format: json-compact`. For other formats, `findings-count` reflects the
+exit code and error/warning counts are estimates.
+
 ## Examples
 
 ### SARIF Upload to GitHub
+
+The action automatically uploads SARIF results when `format: sarif` and `github-token` are provided:
 
 ```yaml
 jobs:
@@ -88,11 +109,15 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Run TerraTidy
+        id: terratidy
         uses: santosr2/terratidy@v0
         with:
           format: sarif
           fail-on-error: 'false'
           github-token: ${{ secrets.GITHUB_TOKEN }}
+      # Note: SARIF upload is automatic when github-token is provided
+      # The sarif-file output can be used for manual upload if needed:
+      # ${{ steps.terratidy.outputs.sarif-file }}
 ```
 
 ### Check with Profile
@@ -135,6 +160,26 @@ jobs:
     fail-on-error: 'true'
 ```
 
+### Exclude Generated Files
+
+```yaml
+- name: Run TerraTidy
+  uses: santosr2/terratidy@v0
+  with:
+    exclude: '**/*.generated.tf,vendor/**,test/**'
+    fail-on-error: 'true'
+```
+
+### Check Specific Directory (Non-Recursive)
+
+```yaml
+- name: Check Root Module Only
+  uses: santosr2/terratidy@v0
+  with:
+    working-directory: 'modules/vpc'
+    no-recurse: 'true'
+```
+
 ### Complete Workflow
 
 ```yaml
@@ -169,6 +214,7 @@ jobs:
         run: terraform validate
 
       - name: TerraTidy Check
+        id: terratidy
         uses: santosr2/terratidy@v0
         with:
           format: sarif

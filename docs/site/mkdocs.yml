@@ -89,6 +89,7 @@ nav:
       - Output Formats: user-guide/output-formats.md
       - Profiles: user-guide/profiles.md
       - Monorepos: user-guide/monorepos.md
+      - Filtering and Exclusions: user-guide/filtering.md
       - Performance: user-guide/performance.md
       - Recipes: user-guide/recipes.md
       - Security: user-guide/security.md

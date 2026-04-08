@@ -1,8 +1,8 @@
 {
-	"name": "terratidy",
-	"displayName": "TerraTidy",
+	"name": "vscode-terratidy",
+	"displayName": "TerraTidy for VS Code",
 	"description": "TerraTidy - Terraform and Terragrunt quality platform for formatting, style checking, linting, and policy enforcement",
-	"version": "0.2.0-alpha.4",
+	"version": "0.2.0",
 	"publisher": "santosr2",
 	"license": "MIT",
 	"repository": {
@@ -178,7 +178,9 @@
 		"pretest": "bun run compile",
 		"test": "vscode-test",
 		"package": "vsce package",
-		"publish": "vsce publish"
+		"publish": "vsce publish",
+		"package:pre": "vsce package --pre-release",
+		"publish:pre": "vsce publish --pre-release"
 	},
 	"dependencies": {
 		"vscode-languageclient": "^9.0.1"

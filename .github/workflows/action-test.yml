@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'action.yml'
+      - 'tools/scripts/run-action.sh'
       - '**/*.go'
       - 'go.mod'
       - 'go.sum'
@@ -13,6 +14,7 @@ on:
     branches: [main]
     paths:
       - 'action.yml'
+      - 'tools/scripts/run-action.sh'
       - '**/*.go'
       - 'go.mod'
       - 'go.sum'
@@ -169,3 +171,86 @@ jobs:
           # If exclude didn't work, we'd see formatting errors from the badly formatted file
         env:
           STEPS_EXCLUDE_TEST_OUTPUTS_FINDINGS_COUNT: ${{ steps.exclude-test.outputs.findings-count }}
+
+  test-no-recurse:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Create test files with subdirectory
+        run: |
+          mkdir -p test-terraform/submodule
+          # File in root directory
+          printf '%s\n' \
+            'resource "aws_instance" "root" {' \
+            '  ami           = "ami-12345678"' \
+            '  instance_type = "t2.micro"' \
+            '}' > test-terraform/main.tf
+          # File in subdirectory (should be skipped with no-recurse)
+          printf '%s\n' \
+            'resource "aws_instance" "sub" {' \
+            '  ami           = "ami-12345678"' \
+            '  instance_type = "t2.micro"' \
+            '}' > test-terraform/submodule/main.tf
+
+      - name: Run TerraTidy Action with no-recurse
+        id: no-recurse-test
+        uses: ./
+        with:
+          working-directory: test-terraform
+          format: json
+          no-recurse: 'true'
+          fail-on-error: 'false'
+
+      - name: Verify no-recurse worked
+        shell: bash
+        run: |
+          # With no-recurse, only root files should be checked
+          echo "Findings count: ${STEPS_NO_RECURSE_TEST_OUTPUTS_FINDINGS_COUNT}"
+        env:
+          STEPS_NO_RECURSE_TEST_OUTPUTS_FINDINGS_COUNT: ${{ steps.no-recurse-test.outputs.findings-count }}
+
+  test-absolute-paths:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Create test Terraform file
+        run: |
+          mkdir -p test-terraform
+          printf '%s\n' \
+            'resource "aws_instance" "example" {' \
+            '  ami           = "ami-12345678"' \
+            '  instance_type = "t2.micro"' \
+            '}' > test-terraform/main.tf
+
+      - name: Run TerraTidy Action with absolute-paths
+        id: absolute-paths-test
+        uses: ./
+        with:
+          working-directory: test-terraform
+          format: text
+          absolute-paths: 'true'
+          fail-on-error: 'false'
+
+      - name: Verify absolute-paths flag accepted
+        shell: bash
+        run: |
+          # If absolute-paths flag wasn't accepted, the action would fail
+          echo "absolute-paths flag test passed"

@@ -183,8 +183,6 @@ parallel: true
 engines:
   fmt:
     enabled: true
-    config:
-      indent_size: 2
 `
 
 	styleConfig := `# Style Configuration
@@ -195,7 +193,7 @@ engines:
 overrides:
   rules:
     # Customize style rules here
-    # style.blank-lines-between-blocks:
+    # style.blank-line-between-blocks:
     #   enabled: true
     #   severity: warning
 `
@@ -204,21 +202,19 @@ overrides:
 engines:
   lint:
     enabled: true
-    config:
-      # Enable specific plugins
-      # plugins:
-      #   - aws
-      #   - google
+    # Enable specific plugins
+    # plugins:
+    #   - aws
+    #   - google
 `
 
 	policyConfig := `# Policy Configuration
 engines:
   policy:
     enabled: false  # Enable when you have policies defined
-    config:
-      # Policy directories
-      # policy_dirs:
-      #   - ./policies
+    # Policy directories
+    # policy_dirs:
+    #   - ./policies
 `
 
 	// Write all files
@@ -260,33 +256,25 @@ parallel: true
 engines:
   fmt:
     enabled: true
-    config:
-      indent_size: 2
 
   style:
     enabled: true
-    config:
-      # Style rules are enabled by default
 
   lint:
     enabled: true
-    config:
-      # Linting rules are enabled by default
 
   policy:
     enabled: false
-    config:
-      # Enable and configure policy directories
-      # policy_dirs:
-      #   - ./policies
+    # policy_dirs:
+    #   - ./policies
 
 # Override specific rules
 # overrides:
 #   rules:
-#     style.blank-lines-between-blocks:
+#     style.blank-line-between-blocks:
 #       enabled: true
 #       severity: warning
-#     lint.terraform_required_version:
+#     lint.terraform-required-version:
 #       enabled: true
 #       severity: error
 `
@@ -307,32 +295,25 @@ parallel: true
 engines:
   fmt:
     enabled: true
-    config:
-      indent_size: 2
 
   style:
     enabled: true
-    config:
-      # Monorepo-friendly settings
 
   lint:
     enabled: true
-    config:
-      # Enable AWS/GCP/Azure plugins as needed
-      # plugins:
-      #   - aws
+    # Enable AWS/GCP/Azure plugins as needed
+    # plugins:
+    #   - aws
 
   policy:
     enabled: true
-    config:
-      # Central policies for the organization
-      policy_dirs:
-        - ./policies
+    # Central policies for the organization
+    policy_dirs:
+      - ./policies
 
 # Profiles for different environments/teams
 profiles:
   ci:
-    profile: ci
     description: "CI/CD pipeline checks"
     engines:
       fmt:
@@ -345,7 +326,6 @@ profiles:
         enabled: true
 
   development:
-    profile: development
     description: "Local development settings"
     engines:
       fmt:
@@ -361,11 +341,11 @@ profiles:
 overrides:
   rules:
     # Enforce terraform version in all modules
-    lint.terraform_required_version:
+    lint.terraform-required-version:
       enabled: true
       severity: error
     # Enforce provider version constraints
-    lint.terraform_required_providers:
+    lint.terraform-required-providers:
       enabled: true
       severity: error
 `
@@ -386,8 +366,6 @@ parallel: true
 engines:
   fmt:
     enabled: %t
-    config:
-      indent_size: 2
 
   style:
     enabled: %t

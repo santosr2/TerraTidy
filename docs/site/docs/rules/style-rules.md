@@ -63,7 +63,7 @@ Ensures blocks are not empty without content.
 | Property | Value |
 |----------|-------|
 | Rule ID | `style.no-empty-blocks` |
-| Default Severity | Warning |
+| Default Severity | Info |
 | Fixable | No |
 | Default | Enabled |
 
@@ -277,8 +277,8 @@ Ensures `tags`/`labels` are near the end of resource blocks (before lifecycle).
 | Property | Value |
 |----------|-------|
 | Rule ID | `style.tags-at-end` |
-| Default Severity | Warning/Info |
-| Fixable | No |
+| Default Severity | Warning |
+| Fixable | Yes |
 | Default | Enabled |
 
 **Example:**
@@ -311,7 +311,7 @@ Ensures `depends_on` is at the end of resource/module blocks.
 | Property | Value |
 |----------|-------|
 | Rule ID | `style.depends-on-order` |
-| Default Severity | Warning/Info |
+| Default Severity | Warning |
 | Fixable | Yes |
 | Default | Enabled |
 
@@ -340,7 +340,7 @@ Ensures `source` and `version` are grouped at the start of module blocks.
 |----------|-------|
 | Rule ID | `style.source-version-grouped` |
 | Default Severity | Warning |
-| Fixable | No |
+| Fixable | Yes |
 | Default | Enabled |
 
 **Example:**
@@ -444,7 +444,7 @@ Ensures `terraform` block is the first block in the file.
 |----------|-------|
 | Rule ID | `style.terraform-block-first` |
 | Default Severity | Warning |
-| Fixable | No |
+| Fixable | Yes |
 | Default | Enabled |
 
 **Example:**
@@ -477,7 +477,7 @@ Ensures provider blocks come after terraform block and before resources.
 |----------|-------|
 | Rule ID | `style.provider-block-order` |
 | Default Severity | Warning |
-| Fixable | No |
+| Fixable | Yes |
 | Default | Enabled |
 
 **Example:**
@@ -576,11 +576,11 @@ provider "aws" {
 engines:
   style:
     rules:
-      variables-in-file:
+      style.variables-in-file:
         enabled: true
-      outputs-in-file:
+      style.outputs-in-file:
         enabled: true
-      providers-in-file:
+      style.providers-in-file:
         enabled: true
 ```
 
@@ -753,7 +753,7 @@ Ensures meta-arguments (for_each, count, provider, depends_on) appear in a consi
 |----------|-------|
 | Rule ID | `style.meta-arguments-order` |
 | Default Severity | Info |
-| Fixable | No |
+| Fixable | Yes |
 | Default | **Disabled** |
 
 **Expected Order:**
@@ -788,7 +788,7 @@ Ensures attributes within lifecycle blocks follow a consistent order.
 |----------|-------|
 | Rule ID | `style.lifecycle-attribute-order` |
 | Default Severity | Info |
-| Fixable | No |
+| Fixable | Yes |
 | Default | **Disabled** |
 
 **Expected Order:**
@@ -827,11 +827,10 @@ Ensures nested blocks within resources follow a consistent order.
 
 **Expected Order:**
 
-1. `connection`
-2. `provisioner`
-3. `dynamic`
-4. `timeouts`
-5. `lifecycle`
+1. `timeouts`
+2. `connection`
+3. `provisioner`
+4. `lifecycle`
 
 **Example:**
 
@@ -1076,15 +1075,15 @@ engines:
   style:
     enabled: true
     rules:
-      blank-line-between-blocks:
+      style.blank-line-between-blocks:
         enabled: true
         severity: warning
-      block-label-case:
+      style.block-label-case:
         enabled: true
         severity: warning
-      for-each-count-first:
+      style.for-each-count-first:
         enabled: true
-      variable-order:
+      style.variable-order:
         enabled: true
         severity: info
 ```
@@ -1112,7 +1111,7 @@ resource "aws_instance" "MyServer" { }
 engines:
   style:
     rules:
-      block-label-case:
+      style.block-label-case:
         enabled: false
 ```
 
@@ -1129,7 +1128,7 @@ engines:
 | Rule | Severity | Fixable | Description |
 |------|----------|---------|-------------|
 | `blank-line-between-blocks` | Warning | Yes | Exactly one blank line between blocks |
-| `no-empty-blocks` | Warning | No | Blocks should not be empty |
+| `no-empty-blocks` | Info | No | Blocks should not be empty |
 | `no-leading-trailing-blank-lines` | Info | Yes | No leading/trailing blank lines in blocks |
 | `attribute-group-spacing` | Info | Yes | Blank lines between attribute groups |
 | `block-label-case` | Warning | No | Block labels use snake_case |
@@ -1138,13 +1137,13 @@ engines:
 | `local-naming` | Warning | No | Local value names use snake_case |
 | `for-each-count-first` | Warning | Yes | for_each/count as first attribute |
 | `lifecycle-at-end` | Warning | Yes | lifecycle block at end |
-| `tags-at-end` | Warning | No | tags near end of block |
+| `tags-at-end` | Warning | Yes | tags near end of block |
 | `depends-on-order` | Warning | Yes | depends_on at end of block |
-| `source-version-grouped` | Warning | No | source and version together |
+| `source-version-grouped` | Warning | Yes | source and version together |
 | `variable-order` | Info | Yes | Variable attribute ordering |
 | `output-order` | Info | Yes | Output attribute ordering |
-| `terraform-block-first` | Warning | No | terraform block first in file |
-| `provider-block-order` | Warning | No | provider after terraform, before resources |
+| `terraform-block-first` | Warning | Yes | terraform block first in file |
+| `provider-block-order` | Warning | Yes | provider after terraform, before resources |
 
 ### Disabled by Default (Opt-in)
 
@@ -1170,8 +1169,8 @@ engines:
 
 | Rule | Severity | Fixable | Description |
 |------|----------|---------|-------------|
-| `meta-arguments-order` | Info | No | Meta-arguments in consistent order |
-| `lifecycle-attribute-order` | Info | No | Lifecycle attributes in order |
+| `meta-arguments-order` | Info | Yes | Meta-arguments in consistent order |
+| `lifecycle-attribute-order` | Info | Yes | Lifecycle attributes in order |
 | `nested-block-order` | Info | No | Nested blocks in consistent order |
 | `one-line-attribute-spacing` | Info | No | Consistent single vs multi-line blocks |
 

@@ -26,7 +26,7 @@ suite('LSP Lifecycle', () => {
             return;
         }
 
-        const ext = vscode.extensions.getExtension('santosr2.terratidy');
+        const ext = vscode.extensions.getExtension('santosr2.vscode-terratidy');
         assert.ok(ext, 'Extension should be installed');
 
         // Open a .tf file to trigger activation
@@ -58,7 +58,7 @@ suite('LSP Lifecycle', () => {
         // Give time for restart
         await new Promise((resolve) => setTimeout(resolve, 3000));
 
-        const ext = vscode.extensions.getExtension('santosr2.terratidy');
+        const ext = vscode.extensions.getExtension('santosr2.vscode-terratidy');
         assert.ok(ext?.isActive, 'Extension should still be active after restart');
     });
 });

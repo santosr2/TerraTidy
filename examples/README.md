@@ -20,7 +20,7 @@ terratidy check
 terratidy check --config examples/terratidy.yaml
 
 # Use profile from config
-terratidy check --profile production
+terratidy check --profile ci
 ```
 
 ## Integration Examples
@@ -64,7 +64,8 @@ Copy to `.github/workflows/terratidy.yml` in your project.
 - ✅ SARIF upload for Code Scanning
 - ✅ PR comments with results
 - ✅ Auto-fix on develop branch
-- ✅ Caching for faster runs
+- ✅ Exclusion patterns for generated files
+- ✅ Matrix builds for checking modules independently
 
 ## Custom Rules
 
@@ -240,7 +241,39 @@ repos:
       - id: terratidy-check
 ```
 
-### Scenario 4: Rule Overrides
+### Scenario 4: Exclude Files and Directories
+
+Want to skip generated files or test fixtures?
+
+```bash
+# Via CLI flag
+terratidy check --exclude "**/*.generated.tf,test/**"
+
+# Via config file
+cat > .terratidy.yaml << 'EOF'
+version: 1
+
+exclude:
+  - "**/*.generated.tf"
+  - "vendor/**"
+  - "test/fixtures/**"
+
+engines:
+  fmt: { enabled: true }
+  style: { enabled: true }
+EOF
+```
+
+### Scenario 5: Check Specific Module (Non-Recursive)
+
+Want to check only a specific module without descending into submodules?
+
+```bash
+# Check only files in modules/vpc/, not modules/vpc/submodule/
+terratidy check --no-recurse modules/vpc/
+```
+
+### Scenario 6: Rule Overrides
 
 Want to customize rule behavior?
 
@@ -295,7 +328,10 @@ terratidy check --format sarif > results.sarif
 ### 1. Run on Changed Files Only
 
 ```bash
-# Using git
+# Using --changed flag (recommended)
+terratidy check --changed
+
+# Or using git directly
 terratidy check $(git diff --name-only --diff-filter=ACM | grep -E '\.(tf|hcl)$')
 ```
 
@@ -313,16 +349,28 @@ terratidy lint           # Just linting
 terratidy fix           # Fix all auto-fixable issues
 ```
 
-### 4. Verbose Output
+### 4. Detailed Output
 
 ```bash
-terratidy check --verbose
+terratidy check --format table
 ```
 
 ### 5. Fail on Specific Severity
 
 ```bash
 terratidy check --severity-threshold error  # Only fail on errors
+```
+
+### 6. Exclude Generated or Vendored Files
+
+```bash
+terratidy check --exclude "**/*.generated.tf,vendor/**,test/**"
+```
+
+### 7. Check Directory Without Descending
+
+```bash
+terratidy check --no-recurse modules/  # Only top-level, not subdirectories
 ```
 
 ## Troubleshooting

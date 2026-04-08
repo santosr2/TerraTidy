@@ -116,7 +116,8 @@ Choose the output format based on your CI system:
 
 1. **Use `--changed` for PR checks** to only validate modified files
 2. **Use `--parallel` for full scans** to speed up CI runs
-3. **Pin the version** to avoid surprises from upgrades
-4. **Use profiles** for different CI stages (fast PR check vs thorough merge gate)
-5. **Upload SARIF** for GitHub Code Scanning integration
-6. **Fail on errors only** with `--severity-threshold error` for lenient checks
+3. **Use `--exclude` to skip generated or vendored files** (e.g., `--exclude "vendor/**,**/*.generated.tf"`)
+4. **Pin the version** to avoid surprises from upgrades
+5. **Use profiles** for different CI stages (fast PR check vs thorough merge gate)
+6. **Upload SARIF** for GitHub Code Scanning integration
+7. **Fail on errors only** with `--severity-threshold error` for lenient checks

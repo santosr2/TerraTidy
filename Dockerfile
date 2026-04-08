@@ -1,6 +1,6 @@
 # Runtime image for TerraTidy.
 # Goreleaser places the binary in the build context automatically.
-# For local builds: make docker-build
+# For local builds: mise run docker:build
 FROM alpine:3.23@sha256:25109184c71bdad752c8312a8623239686a9a2071e8825f20acb8f2198c3f659
 
 RUN apk --no-cache add ca-certificates \
@@ -14,7 +14,7 @@ RUN chmod +x /usr/local/bin/terratidy
 
 USER terratidy
 
-HEALTHCHECK --interval=30s --timeout=3s CMD ["terratidy", "version"]
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s CMD ["terratidy", "version"]
 
 ENTRYPOINT ["terratidy"]
 CMD ["--help"]

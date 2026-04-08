@@ -34,4 +34,4 @@ else
 fi
 
 echo ""
-echo "✓ Benchmark results saved to: $BENCH_DIR"
+echo "Benchmark results saved to: $BENCH_DIR"

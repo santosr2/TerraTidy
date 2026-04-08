@@ -123,7 +123,7 @@ runs:
         else
           go install "github.com/santosr2/TerraTidy/cmd/terratidy@${INPUT_VERSION}"
         fi
-        echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
+        echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
 
     - name: Run TerraTidy
       id: terratidy

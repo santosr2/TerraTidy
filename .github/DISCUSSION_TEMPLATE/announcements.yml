@@ -1,0 +1,46 @@
+title: "[Announcement] "
+labels: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This category is for official announcements from the TerraTidy maintainers.
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: Brief summary of the announcement
+      placeholder: What is being announced?
+    validations:
+      required: true
+
+  - type: textarea
+    id: details
+    attributes:
+      label: Details
+      description: Full details of the announcement
+      placeholder: Provide all relevant information...
+    validations:
+      required: true
+
+  - type: textarea
+    id: timeline
+    attributes:
+      label: Timeline
+      description: Key dates and milestones (if applicable)
+      placeholder: |
+        | Date | Milestone |
+        |------|-----------|
+        | YYYY-MM-DD | ... |
+    validations:
+      required: false
+
+  - type: textarea
+    id: action
+    attributes:
+      label: Recommended Action
+      description: What users should do in response to this announcement
+      placeholder: Steps users should take...
+    validations:
+      required: false

@@ -1,0 +1,48 @@
+title: "[Idea] "
+labels: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Share ideas for new features or improvements. For concrete feature requests
+        with specific requirements, consider opening an
+        [issue](https://github.com/santosr2/TerraTidy/issues/new?template=feature_request.yml) instead.
+
+  - type: textarea
+    id: idea
+    attributes:
+      label: Idea
+      description: Describe your idea
+      placeholder: What would you like to see in TerraTidy?
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or Use Case
+      description: What problem does this solve or what use case does it enable?
+      placeholder: Why would this be useful?
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives Considered
+      description: Have you considered any workarounds or alternative approaches?
+      placeholder: Current workarounds or alternative solutions...
+    validations:
+      required: false
+
+  - type: dropdown
+    id: contribution
+    attributes:
+      label: Would you contribute this?
+      description: Are you interested in implementing this idea?
+      options:
+        - "Yes, I'd like to implement this"
+        - "I could help with testing/feedback"
+        - "No, just sharing the idea"
+    validations:
+      required: false

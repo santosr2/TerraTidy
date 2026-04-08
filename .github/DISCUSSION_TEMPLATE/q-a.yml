@@ -1,0 +1,58 @@
+title: ""
+labels: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Ask questions about using TerraTidy. Please search existing discussions first to avoid duplicates.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: What area does your question relate to?
+      options:
+        - Installation
+        - Configuration
+        - Formatting (fmt engine)
+        - Style rules
+        - Linting
+        - Policy (OPA)
+        - Custom rules / Plugins
+        - CI/CD integration
+        - VS Code extension
+        - LSP server
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: question
+    attributes:
+      label: Question
+      description: What would you like to know?
+      placeholder: Describe your question clearly...
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: Any relevant context (config, error messages, what you've tried)
+      placeholder: |
+        ```yaml
+        # Your .terratidy.yaml or relevant config
+        ```
+      render: yaml
+    validations:
+      required: false
+
+  - type: input
+    id: version
+    attributes:
+      label: TerraTidy Version
+      description: Output of `terratidy version --short`
+      placeholder: "0.2.0-alpha.4"
+    validations:
+      required: false

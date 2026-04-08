@@ -1,0 +1,46 @@
+title: ""
+labels: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Share your TerraTidy setup, custom rules, CI/CD integrations, or any creative uses. Help others learn from your experience!
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What are you sharing?
+      description: Brief description of what you're showcasing
+      placeholder: Describe what you've built or configured...
+    validations:
+      required: true
+
+  - type: textarea
+    id: details
+    attributes:
+      label: Details
+      description: Share configs, code, screenshots, or whatever helps explain your setup
+      placeholder: |
+        ```yaml
+        # Your config or code here
+        ```
+    validations:
+      required: true
+
+  - type: textarea
+    id: lessons
+    attributes:
+      label: Lessons Learned
+      description: Any tips, gotchas, or things you learned along the way
+      placeholder: What would you tell someone trying to do the same thing?
+    validations:
+      required: false
+
+  - type: input
+    id: repo
+    attributes:
+      label: Repository (optional)
+      description: Link to a public repo if you want to share more
+      placeholder: "https://github.com/..."
+    validations:
+      required: false

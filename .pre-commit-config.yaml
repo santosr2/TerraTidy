@@ -32,7 +32,6 @@ repos:
   - repo: https://github.com/dnephin/pre-commit-golang
     rev: v0.5.1
     hooks:
-      # Note: go-fmt removed; golangci-lint enforces gofumpt formatting
       - id: go-mod-tidy
 
   - repo: https://github.com/golangci/golangci-lint

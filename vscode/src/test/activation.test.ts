@@ -3,12 +3,12 @@ import * as vscode from 'vscode';
 
 suite('Extension Activation', () => {
     test('extension is present', () => {
-        const ext = vscode.extensions.getExtension('santosr2.terratidy');
+        const ext = vscode.extensions.getExtension('santosr2.vscode-terratidy');
         assert.ok(ext, 'Extension should be installed');
     });
 
     test('extension activates on .tf file', async () => {
-        const ext = vscode.extensions.getExtension('santosr2.terratidy');
+        const ext = vscode.extensions.getExtension('santosr2.vscode-terratidy');
         assert.ok(ext, 'Extension should be installed');
 
         // Opening a .tf file should trigger activation

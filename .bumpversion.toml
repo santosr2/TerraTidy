@@ -14,8 +14,6 @@ serialize = [
 commit = true
 tag = false
 message = "chore: bump version to {new_version}"
-# Note: sign_tags has no effect when tag = false; tags are created manually
-sign_tags = true
 
 [tool.bumpversion.parts.pre_l]
 optional_value = "final"

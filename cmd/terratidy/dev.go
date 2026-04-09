@@ -85,7 +85,7 @@ func watchDirExists() bool {
 func printWatchDirMissingHelp() {
 	fmt.Printf("Watch directory does not exist: %s\n\n", devWatch)
 	fmt.Println("Create it with:")
-	fmt.Printf("  mkdir -p %s\n\n", devWatch)
+	fmt.Printf("  mkdir -p %q\n\n", devWatch)
 	fmt.Println("Or use terratidy init-rule to create a rule:")
 	fmt.Println("  terratidy init-rule --name my-rule --type rego")
 }

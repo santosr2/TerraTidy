@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"text/tabwriter"
 
+	"github.com/santosr2/TerraTidy/internal/buildinfo"
 	"github.com/santosr2/TerraTidy/internal/config"
 	"github.com/santosr2/TerraTidy/internal/plugins"
 	"github.com/spf13/cobra"
@@ -218,8 +219,8 @@ func (r *ExampleRule) Fix(ctx *sdk.Context, file *hcl.File) ([]byte, error) {
 
 go 1.26.1
 
-require github.com/santosr2/TerraTidy v0.2.0-alpha.4
-`, pluginName)
+require github.com/santosr2/TerraTidy v%s
+`, pluginName, buildinfo.Version)
 
 		goModPath := filepath.Join(dir, "go.mod")
 		if err := os.WriteFile(goModPath, []byte(goModContent), 0o600); err != nil {

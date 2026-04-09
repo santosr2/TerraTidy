@@ -317,27 +317,6 @@ func TestYAMLRule_Tags(t *testing.T) {
 	})
 }
 
-func TestParseSeverity(t *testing.T) {
-	tests := []struct {
-		input    string
-		expected sdk.Severity
-	}{
-		{"error", sdk.SeverityError},
-		{"Error", sdk.SeverityError},
-		{"ERROR", sdk.SeverityError},
-		{"warning", sdk.SeverityWarning},
-		{"info", sdk.SeverityInfo},
-		{"unknown", sdk.SeverityWarning},
-		{"", sdk.SeverityWarning},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.input, func(t *testing.T) {
-			assert.Equal(t, tt.expected, parseSeverity(tt.input))
-		})
-	}
-}
-
 func TestYAMLRule_Check_NonHclsyntaxBody(t *testing.T) {
 	rule := &YAMLRule{config: YAMLRuleConfig{
 		Name:    "test",

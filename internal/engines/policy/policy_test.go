@@ -7,10 +7,34 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/open-policy-agent/opa/v1/rego"
 	"github.com/santosr2/TerraTidy/internal/config"
+	"github.com/santosr2/TerraTidy/pkg/sdk"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// evaluateQuery is a test helper that evaluates a single Rego query.
+// Extracted from production code where it was only used by tests.
+func (e *Engine) evaluateQuery(
+	evalCtx *policyEvalContext,
+	policy string,
+	query string,
+	severity sdk.Severity,
+) []sdk.Finding {
+	r := rego.New(
+		rego.Query(query),
+		rego.Module("policy.rego", policy),
+		rego.Input(evalCtx.moduleData),
+	)
+
+	rs, err := r.Eval(evalCtx.ctx)
+	if err != nil {
+		return nil
+	}
+
+	return e.extractFindings(rs, evalCtx.dir, severity)
+}
 
 func TestEngine_New(t *testing.T) {
 	// Test with nil config

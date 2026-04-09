@@ -1,6 +1,8 @@
 package rules
 
 import (
+	"path/filepath"
+
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/hclsyntax"
 	"github.com/santosr2/TerraTidy/pkg/sdk"
@@ -29,7 +31,7 @@ func (r *VariablesInFileRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Fin
 	}
 
 	// Skip if this is variables.tf
-	basename := extractBasename(ctx.File)
+	basename := filepath.Base(ctx.File)
 	if basename == "variables.tf" {
 		return findings, nil
 	}
@@ -82,7 +84,7 @@ func (r *OutputsInFileRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Findi
 	}
 
 	// Skip if this is outputs.tf
-	basename := extractBasename(ctx.File)
+	basename := filepath.Base(ctx.File)
 	if basename == "outputs.tf" {
 		return findings, nil
 	}
@@ -135,7 +137,7 @@ func (r *ProvidersInFileRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Fin
 	}
 
 	// Skip if this is providers.tf or versions.tf
-	basename := extractBasename(ctx.File)
+	basename := filepath.Base(ctx.File)
 	if basename == "providers.tf" || basename == "versions.tf" {
 		return findings, nil
 	}
@@ -163,15 +165,4 @@ func (r *ProvidersInFileRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Fin
 // Fix is a no-op for this rule as moving blocks requires manual review.
 func (r *ProvidersInFileRule) Fix(_ *sdk.Context, _ *hcl.File) ([]byte, error) {
 	return nil, nil
-}
-
-// extractBasename extracts the base filename from a path.
-func extractBasename(path string) string {
-	// Find the last path separator
-	for i := len(path) - 1; i >= 0; i-- {
-		if path[i] == '/' || path[i] == '\\' {
-			return path[i+1:]
-		}
-	}
-	return path
 }

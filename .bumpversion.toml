@@ -149,9 +149,3 @@ replace = "v{new_version}"
 filename = "examples/go-rule/go.mod"
 search = "github.com/santosr2/TerraTidy v{current_version}"
 replace = "github.com/santosr2/TerraTidy v{new_version}"
-
-# CLI - init-rule template module dependency
-[[tool.bumpversion.files]]
-filename = "cmd/terratidy/plugins.go"
-search = "github.com/santosr2/TerraTidy v{current_version}"
-replace = "github.com/santosr2/TerraTidy v{new_version}"

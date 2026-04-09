@@ -243,7 +243,7 @@ func (e *Engine) lintModule(ctx context.Context, dir string, files []string) ([]
 			// Apply severity override from config
 			for i := range ruleFindings {
 				if ruleConfig.Severity != "" {
-					ruleFindings[i].Severity = parseSeverity(ruleConfig.Severity)
+					ruleFindings[i].Severity = sdk.ParseSeverity(ruleConfig.Severity, sdk.SeverityWarning)
 				}
 			}
 			fileFindings = append(fileFindings, ruleFindings...)
@@ -296,11 +296,6 @@ func (e *Engine) GetAllRules() []sdk.Rule {
 // groupFilesByDirectory delegates to sdk.GroupFilesByDirectory.
 func (e *Engine) groupFilesByDirectory(files []string) map[string][]string {
 	return sdk.GroupFilesByDirectory(files)
-}
-
-// parseSeverity converts string severity to sdk.Severity (defaults to warning).
-func parseSeverity(severity string) sdk.Severity {
-	return sdk.ParseSeverity(severity, sdk.SeverityWarning)
 }
 
 // ============================================================================
@@ -926,14 +921,16 @@ func (r *TerraformHardcodedSecretsRule) Description() string {
 
 // Secret patterns to detect
 var secretPatterns = []struct {
-	name    string
-	pattern *regexp.Regexp
+	name     string
+	pattern  *regexp.Regexp
+	severity sdk.Severity // SeverityError unless specified
 }{
-	{"AWS Access Key", regexp.MustCompile(`AKIA[0-9A-Z]{16}`)},
-	{"AWS Secret Key", regexp.MustCompile(`(?i)(aws_secret_access_key|secret_key)\s*=\s*"[A-Za-z0-9/+=]{40}"`)},
-	{"Generic API Key", regexp.MustCompile(`(?i)(api_key|apikey|api_token)\s*=\s*"[A-Za-z0-9_\-]{20,}"`)},
-	{"Private Key", regexp.MustCompile(`-----BEGIN (RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----`)},
-	{"Generic Secret", regexp.MustCompile(`(?i)(password|passwd|secret|token)\s*=\s*"[^"$]{8,}"`)},
+	{"AWS Access Key", regexp.MustCompile(`AKIA[0-9A-Z]{16}`), sdk.SeverityError},
+	{"AWS Secret Key", regexp.MustCompile(`(?i)(aws_secret_access_key|secret_key)\s*=\s*"[A-Za-z0-9/+=]{40}"`), sdk.SeverityError},
+	{"Generic API Key", regexp.MustCompile(`(?i)(api_key|apikey|api_token)\s*=\s*"[A-Za-z0-9_\-]{20,}"`), sdk.SeverityError},
+	{"Private Key", regexp.MustCompile(`-----BEGIN (RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----`), sdk.SeverityError},
+	// Word boundary (\b) prevents matching password_policy, secret_id, token_type, etc.
+	{"Generic Secret", regexp.MustCompile(`(?i)\b(password|passwd|secret|token)\b\s*=\s*"[^"$]{8,}"`), sdk.SeverityWarning},
 }
 
 // Sensitive attribute names that should use variables
@@ -980,7 +977,7 @@ func (r *TerraformHardcodedSecretsRule) Check(ctx *sdk.Context, file *hcl.File) 
 						EndLine:     i + 1,
 						EndColumn:   1,
 					},
-					Severity: sdk.SeverityError,
+					Severity: sp.severity,
 				})
 			}
 		}
@@ -1003,9 +1000,18 @@ func (r *TerraformHardcodedSecretsRule) checkBlockForSecrets(
 ) {
 	for attrName, attr := range block.Body.Attributes {
 		// Check if attribute name is sensitive
+		// Match exact names or suffix patterns (e.g., db_password, admin_token)
+		// Don't match prefix patterns (e.g., password_policy, token_validity, secret_id)
 		isSensitive := false
+		lowerName := strings.ToLower(attrName)
 		for _, sensitive := range sensitiveAttributes {
-			if strings.Contains(strings.ToLower(attrName), sensitive) {
+			// Exact match: "password", "secret", etc.
+			if lowerName == sensitive {
+				isSensitive = true
+				break
+			}
+			// Suffix match: "db_password", "admin_token", etc. (likely actual secrets)
+			if strings.HasSuffix(lowerName, "_"+sensitive) {
 				isSensitive = true
 				break
 			}

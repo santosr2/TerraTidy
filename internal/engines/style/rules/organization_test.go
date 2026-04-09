@@ -235,23 +235,3 @@ func TestProvidersInFileRule(t *testing.T) {
 		assert.Nil(t, result)
 	})
 }
-
-func TestExtractBasename(t *testing.T) {
-	tests := []struct {
-		name     string
-		path     string
-		expected string
-	}{
-		{"unix path", "/home/user/project/main.tf", "main.tf"},
-		{"windows path", "C:\\Users\\project\\main.tf", "main.tf"},
-		{"just filename", "main.tf", "main.tf"},
-		{"nested path", "/a/b/c/d/variables.tf", "variables.tf"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := extractBasename(tt.path)
-			assert.Equal(t, tt.expected, result)
-		})
-	}
-}

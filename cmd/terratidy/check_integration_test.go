@@ -106,7 +106,7 @@ func TestOutputCheckResults(t *testing.T) {
 		format = "text"
 		defer func() { format = old }()
 
-		err := outputCheckResults(nil, false, nil)
+		err := outputCheckResults(nil, nil)
 		assert.NoError(t, err)
 	})
 
@@ -118,7 +118,7 @@ func TestOutputCheckResults(t *testing.T) {
 		findings := []sdk.Finding{
 			{Rule: "test.rule", Message: "test", Severity: sdk.SeverityError, File: "test.tf"},
 		}
-		err := outputCheckResults(findings, false, nil)
+		err := outputCheckResults(findings, nil)
 		assert.Error(t, err, "should return exit error for errors")
 	})
 
@@ -130,7 +130,7 @@ func TestOutputCheckResults(t *testing.T) {
 		findings := []sdk.Finding{
 			{Rule: "test.rule", Message: "test", Severity: sdk.SeverityError, File: "test.tf"},
 		}
-		err := outputCheckResults(findings, true, nil)
+		err := outputCheckResults(findings, nil)
 		assert.Error(t, err, "should return exit error for errors in json")
 	})
 }

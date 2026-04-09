@@ -62,7 +62,7 @@ func TestShouldSkipDir(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := shouldSkipDir("", tt.dirName)
+			result := shouldSkipDir(tt.dirName)
 			assert.Equal(t, tt.expected, result)
 		})
 	}

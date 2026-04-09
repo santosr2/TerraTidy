@@ -478,28 +478,6 @@ func TestGroupFilesByDirectory(t *testing.T) {
 	assert.Len(t, result[filepath.Join("project", "environments", "dev")], 1)
 }
 
-func TestParseSeverity(t *testing.T) {
-	tests := []struct {
-		input string
-		want  string
-	}{
-		{"error", "error"},
-		{"warning", "warning"},
-		{"info", "info"},
-		{"ERROR", "error"},
-		{"WARNING", "warning"},
-		{"unknown", "warning"}, // defaults to warning
-		{"", "warning"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.input, func(t *testing.T) {
-			result := parseSeverity(tt.input)
-			assert.Equal(t, tt.want, string(result))
-		})
-	}
-}
-
 func TestTerraformResourceCountRule(t *testing.T) {
 	// Create content with many resources
 	var b strings.Builder
@@ -1112,6 +1090,35 @@ resource "aws_db_instance" "test" {
 		findings, err := rule.Check(ctx, hclFile)
 		require.NoError(t, err)
 		require.NotEmpty(t, findings)
+		// Generic Secret findings use warning severity (not error) to reduce noise
+		assert.Equal(t, sdk.SeverityWarning, findings[0].Severity)
+	})
+
+	t.Run("no finding for password_policy attribute", func(t *testing.T) {
+		// password_policy contains "password" but is not a secret - word boundary prevents match
+		content := `
+resource "aws_cognito_user_pool" "test" {
+  password_policy = "MEDIUM"
+  token_validity  = "3600"
+  secret_id       = "arn:aws:secretsmanager:us-east-1:123456789:secret:my-secret"
+}
+`
+		dir := t.TempDir()
+		file := filepath.Join(dir, "main.tf")
+		require.NoError(t, os.WriteFile(file, []byte(content), 0o644))
+
+		parser := hclparse.NewParser()
+		hclFile, diags := parser.ParseHCLFile(file)
+		require.False(t, diags.HasErrors())
+
+		ctx := &sdk.Context{
+			File:     file,
+			AllFiles: map[string][]byte{file: []byte(content)},
+		}
+
+		findings, err := rule.Check(ctx, hclFile)
+		require.NoError(t, err)
+		assert.Empty(t, findings, "should not flag password_policy, token_validity, or secret_id")
 	})
 
 	t.Run("no finding for clean config", func(t *testing.T) {

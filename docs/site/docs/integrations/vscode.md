@@ -34,6 +34,14 @@ code --install-extension terratidy.vsix
 - TerraTidy CLI must be installed and in your PATH
 - VS Code 1.110.0 or higher
 
+### Syntax Highlighting
+
+TerraTidy does not provide syntax highlighting. Install the
+[HashiCorp Terraform](https://marketplace.visualstudio.com/items?itemName=HashiCorp.terraform)
+extension for Terraform syntax highlighting, or another HCL extension for
+Terragrunt and other HCL files. TerraTidy is designed to work alongside
+these extensions without conflicts.
+
 ## Features
 
 ### Real-time Diagnostics
@@ -219,8 +227,11 @@ The extension sets `extensionKind: ["workspace"]` so it runs on the
 remote side when using Remote Development (SSH, Containers, WSL).
 Ensure TerraTidy is installed in the remote environment.
 
-### terraform-vars Language
+### File Activation
 
-The extension activates on the `terraform-vars` language, which is
-provided by the [HashiCorp Terraform](https://marketplace.visualstudio.com/items?itemName=HashiCorp.terraform)
-extension. Install it for `.tfvars` file support.
+The extension activates on file patterns (`*.tf`, `*.tfvars`, `*.hcl`)
+rather than language IDs. This ensures it works regardless of which
+syntax highlighting extension is installed, but also means features
+like `Format Document` may require explicitly selecting TerraTidy as
+the formatter via `Editor: Format Document With...` if another
+extension also registers for these file types.

@@ -5,7 +5,6 @@ import (
 	"errors"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -13,19 +12,19 @@ import (
 	"github.com/santosr2/TerraTidy/pkg/sdk"
 )
 
-// mockEngine is a test engine implementation
-type mockEngine struct {
+// fakeEngine is a test engine implementation
+type fakeEngine struct {
 	name     string
 	findings []sdk.Finding
 	err      error
 	runFunc  func(ctx context.Context, files []string) ([]sdk.Finding, error)
 }
 
-func (e *mockEngine) Name() string {
+func (e *fakeEngine) Name() string {
 	return e.name
 }
 
-func (e *mockEngine) Run(ctx context.Context, files []string) ([]sdk.Finding, error) {
+func (e *fakeEngine) Run(ctx context.Context, files []string) ([]sdk.Finding, error) {
 	if e.runFunc != nil {
 		return e.runFunc(ctx, files)
 	}
@@ -40,11 +39,11 @@ func (e *mockEngine) Run(ctx context.Context, files []string) ([]sdk.Finding, er
 func TestRunnerSequential(t *testing.T) {
 	ctx := context.Background()
 
-	engine1 := &mockEngine{
+	engine1 := &fakeEngine{
 		name:     "engine1",
 		findings: []sdk.Finding{{Rule: "rule1", Message: "msg1"}},
 	}
-	engine2 := &mockEngine{
+	engine2 := &fakeEngine{
 		name:     "engine2",
 		findings: []sdk.Finding{{Rule: "rule2", Message: "msg2"}, {Rule: "rule3", Message: "msg3"}},
 	}
@@ -66,7 +65,7 @@ func TestRunnerParallel(t *testing.T) {
 	started.Add(2)
 	gate := make(chan struct{})
 
-	engine1 := &mockEngine{
+	engine1 := &fakeEngine{
 		name: "engine1",
 		runFunc: func(_ context.Context, _ []string) ([]sdk.Finding, error) {
 			started.Done()
@@ -74,7 +73,7 @@ func TestRunnerParallel(t *testing.T) {
 			return []sdk.Finding{{Rule: "rule1"}}, nil
 		},
 	}
-	engine2 := &mockEngine{
+	engine2 := &fakeEngine{
 		name: "engine2",
 		runFunc: func(_ context.Context, _ []string) ([]sdk.Finding, error) {
 			started.Done()
@@ -108,8 +107,8 @@ func TestRunnerWithError(t *testing.T) {
 	ctx := context.Background()
 	expectedErr := errors.New("engine error")
 
-	engine1 := &mockEngine{name: "engine1", findings: []sdk.Finding{{Rule: "rule1"}}}
-	engine2 := &mockEngine{name: "engine2", err: expectedErr}
+	engine1 := &fakeEngine{name: "engine1", findings: []sdk.Finding{{Rule: "rule1"}}}
+	engine2 := &fakeEngine{name: "engine2", err: expectedErr}
 
 	runner := New().AddEngine(engine1).AddEngine(engine2)
 
@@ -121,8 +120,8 @@ func TestRunnerWithError(t *testing.T) {
 func TestRunnerWithResults(t *testing.T) {
 	ctx := context.Background()
 
-	engine1 := &mockEngine{name: "engine1", findings: []sdk.Finding{{Rule: "rule1"}}}
-	engine2 := &mockEngine{name: "engine2", findings: []sdk.Finding{{Rule: "rule2"}}}
+	engine1 := &fakeEngine{name: "engine1", findings: []sdk.Finding{{Rule: "rule1"}}}
+	engine2 := &fakeEngine{name: "engine2", findings: []sdk.Finding{{Rule: "rule2"}}}
 
 	runner := New().AddEngine(engine1).AddEngine(engine2)
 
@@ -135,18 +134,14 @@ func TestRunnerWithResults(t *testing.T) {
 func TestRunnerContextCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 
-	engine1 := &mockEngine{
+	engine1 := &fakeEngine{
 		name: "engine1",
 		runFunc: func(ctx context.Context, _ []string) ([]sdk.Finding, error) {
-			select {
-			case <-ctx.Done():
-				return nil, ctx.Err()
-			case <-time.After(100 * time.Millisecond):
-				return nil, nil
-			}
+			// Context is already canceled before Run is called
+			return nil, ctx.Err()
 		},
 	}
-	engine2 := &mockEngine{name: "engine2"}
+	engine2 := &fakeEngine{name: "engine2"}
 
 	runner := New().AddEngine(engine1).AddEngine(engine2)
 
@@ -161,8 +156,8 @@ func TestRunnerEngineCount(t *testing.T) {
 	runner := New()
 	assert.Equal(t, 0, runner.EngineCount())
 
-	runner.AddEngine(&mockEngine{name: "e1"})
-	runner.AddEngine(&mockEngine{name: "e2"})
+	runner.AddEngine(&fakeEngine{name: "e1"})
+	runner.AddEngine(&fakeEngine{name: "e2"})
 	assert.Equal(t, 2, runner.EngineCount())
 }
 

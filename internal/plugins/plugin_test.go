@@ -14,44 +14,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestPluginTypeConstants(t *testing.T) {
-	assert.Equal(t, PluginType("rule"), PluginTypeRule)
-	assert.Equal(t, PluginType("engine"), PluginTypeEngine)
-	assert.Equal(t, PluginType("formatter"), PluginTypeFormatter)
-}
-
-func TestPluginMetadata(t *testing.T) {
-	meta := PluginMetadata{
-		Name:        "test-plugin",
-		Version:     "1.0.0",
-		Description: "A test plugin",
-		Author:      "Test Author",
-		Type:        PluginTypeRule,
-		Path:        "/path/to/plugin.so",
-	}
-
-	assert.Equal(t, "test-plugin", meta.Name)
-	assert.Equal(t, "1.0.0", meta.Version)
-	assert.Equal(t, "A test plugin", meta.Description)
-	assert.Equal(t, "Test Author", meta.Author)
-	assert.Equal(t, PluginTypeRule, meta.Type)
-	assert.Equal(t, "/path/to/plugin.so", meta.Path)
-}
-
-func TestPlugin(t *testing.T) {
-	plugin := Plugin{
-		Metadata: PluginMetadata{
-			Name:    "test",
-			Version: "1.0.0",
-			Type:    PluginTypeRule,
-		},
-		Instance: "mock-instance",
-	}
-
-	assert.Equal(t, "test", plugin.Metadata.Name)
-	assert.Equal(t, "mock-instance", plugin.Instance)
-}
-
 func TestNewManager(t *testing.T) {
 	dirs := []string{"/path/to/plugins", "~/.terratidy/plugins"}
 	manager := NewManager(dirs, false)
@@ -103,26 +65,28 @@ func TestManager_loadFromDirectory_ExpandsHome(t *testing.T) {
 	assert.NoError(t, err) // Returns nil for non-existent
 }
 
-// MockRule implements sdk.Rule for testing
-type MockRule struct {
+// fakeRule implements sdk.Rule for testing.
+// This is a test fake (not a mock framework) - a minimal implementation
+// for verifying the plugin manager correctly handles Rule registrations.
+type fakeRule struct {
 	name        string
 	description string
 }
 
-func (r *MockRule) Name() string        { return r.name }
-func (r *MockRule) Description() string { return r.description }
-func (r *MockRule) Check(_ *sdk.Context, _ *hcl.File) ([]sdk.Finding, error) {
+func (r *fakeRule) Name() string        { return r.name }
+func (r *fakeRule) Description() string { return r.description }
+func (r *fakeRule) Check(_ *sdk.Context, _ *hcl.File) ([]sdk.Finding, error) {
 	return nil, nil
 }
 
-func (r *MockRule) Fix(_ *sdk.Context, _ *hcl.File) ([]byte, error) {
+func (r *fakeRule) Fix(_ *sdk.Context, _ *hcl.File) ([]byte, error) {
 	return nil, nil
 }
 
 func TestManager_RegisterRule(t *testing.T) {
 	manager := NewManager(nil, false)
 
-	rule := &MockRule{name: "test-rule", description: "Test rule"}
+	rule := &fakeRule{name: "test-rule", description: "Test rule"}
 	manager.RegisterRule(rule)
 
 	rules := manager.GetRules()
@@ -133,7 +97,7 @@ func TestManager_RegisterRule(t *testing.T) {
 func TestManager_GetRule(t *testing.T) {
 	manager := NewManager(nil, false)
 
-	rule := &MockRule{name: "test-rule", description: "Test rule"}
+	rule := &fakeRule{name: "test-rule", description: "Test rule"}
 	manager.RegisterRule(rule)
 
 	t.Run("existing rule", func(t *testing.T) {
@@ -148,20 +112,22 @@ func TestManager_GetRule(t *testing.T) {
 	})
 }
 
-// MockEngine implements EnginePlugin for testing
-type MockEngine struct {
+// fakeEngine implements sdk.Engine for testing.
+// This is a test fake (not a mock framework) - a minimal implementation
+// for verifying the plugin manager correctly handles Engine registrations.
+type fakeEngine struct {
 	name string
 }
 
-func (e *MockEngine) Name() string { return e.name }
-func (e *MockEngine) Run(_ context.Context, _ []string) ([]sdk.Finding, error) {
+func (e *fakeEngine) Name() string { return e.name }
+func (e *fakeEngine) Run(_ context.Context, _ []string) ([]sdk.Finding, error) {
 	return nil, nil
 }
 
 func TestManager_RegisterEngine(t *testing.T) {
 	manager := NewManager(nil, false)
 
-	engine := &MockEngine{name: "test-engine"}
+	engine := &fakeEngine{name: "test-engine"}
 	manager.RegisterEngine(engine)
 
 	engines := manager.GetEngines()
@@ -172,7 +138,7 @@ func TestManager_RegisterEngine(t *testing.T) {
 func TestManager_GetEngine(t *testing.T) {
 	manager := NewManager(nil, false)
 
-	engine := &MockEngine{name: "test-engine"}
+	engine := &fakeEngine{name: "test-engine"}
 	manager.RegisterEngine(engine)
 
 	t.Run("existing engine", func(t *testing.T) {
@@ -187,20 +153,22 @@ func TestManager_GetEngine(t *testing.T) {
 	})
 }
 
-// MockFormatter implements FormatterPlugin for testing
-type MockFormatter struct {
+// fakeFormatter implements FormatterPlugin for testing.
+// This is a test fake (not a mock framework) - a minimal implementation
+// for verifying the plugin manager correctly handles Formatter registrations.
+type fakeFormatter struct {
 	name string
 }
 
-func (f *MockFormatter) Name() string { return f.name }
-func (f *MockFormatter) Format(_ []sdk.Finding, _ io.Writer) error {
+func (f *fakeFormatter) Name() string { return f.name }
+func (f *fakeFormatter) Format(_ []sdk.Finding, _ io.Writer) error {
 	return nil
 }
 
 func TestManager_RegisterFormatter(t *testing.T) {
 	manager := NewManager(nil, false)
 
-	formatter := &MockFormatter{name: "test-formatter"}
+	formatter := &fakeFormatter{name: "test-formatter"}
 	manager.RegisterFormatter(formatter)
 
 	formatters := manager.GetFormatters()
@@ -211,7 +179,7 @@ func TestManager_RegisterFormatter(t *testing.T) {
 func TestManager_GetFormatter(t *testing.T) {
 	manager := NewManager(nil, false)
 
-	formatter := &MockFormatter{name: "test-formatter"}
+	formatter := &fakeFormatter{name: "test-formatter"}
 	manager.RegisterFormatter(formatter)
 
 	t.Run("existing formatter", func(t *testing.T) {
@@ -248,7 +216,7 @@ func TestManager_ListPlugins(t *testing.T) {
 func TestManager_GetRules_ReturnsCopy(t *testing.T) {
 	manager := NewManager(nil, false)
 
-	rule := &MockRule{name: "test-rule"}
+	rule := &fakeRule{name: "test-rule"}
 	manager.RegisterRule(rule)
 
 	// Get rules and modify the returned map
@@ -263,7 +231,7 @@ func TestManager_GetRules_ReturnsCopy(t *testing.T) {
 func TestManager_GetEngines_ReturnsCopy(t *testing.T) {
 	manager := NewManager(nil, false)
 
-	engine := &MockEngine{name: "test-engine"}
+	engine := &fakeEngine{name: "test-engine"}
 	manager.RegisterEngine(engine)
 
 	// Get engines and modify the returned map
@@ -278,7 +246,7 @@ func TestManager_GetEngines_ReturnsCopy(t *testing.T) {
 func TestManager_GetFormatters_ReturnsCopy(t *testing.T) {
 	manager := NewManager(nil, false)
 
-	formatter := &MockFormatter{name: "test-formatter"}
+	formatter := &fakeFormatter{name: "test-formatter"}
 	manager.RegisterFormatter(formatter)
 
 	// Get formatters and modify the returned map
@@ -290,53 +258,53 @@ func TestManager_GetFormatters_ReturnsCopy(t *testing.T) {
 	assert.Len(t, originalFormatters, 1)
 }
 
-func TestManager_ConcurrentAccess(_ *testing.T) {
-	manager := NewManager(nil, false)
+func TestManager_ConcurrentAccess(t *testing.T) {
+	// This test verifies the Manager is thread-safe under concurrent access.
+	// It should complete without panics or data races (run with -race).
+	require.NotPanics(t, func() {
+		manager := NewManager(nil, false)
+		done := make(chan bool)
 
-	// Run concurrent operations
-	done := make(chan bool)
+		go func() {
+			for i := range 100 {
+				manager.RegisterRule(&fakeRule{name: "rule-" + string(rune('a'+i%26))})
+			}
+			done <- true
+		}()
 
-	go func() {
-		for i := 0; i < 100; i++ {
-			manager.RegisterRule(&MockRule{name: "rule-" + string(rune('a'+i%26))})
+		go func() {
+			for range 100 {
+				_ = manager.GetRules()
+			}
+			done <- true
+		}()
+
+		go func() {
+			for i := range 100 {
+				manager.RegisterEngine(&fakeEngine{name: "engine-" + string(rune('a'+i%26))})
+			}
+			done <- true
+		}()
+
+		go func() {
+			for range 100 {
+				_ = manager.GetEngines()
+			}
+			done <- true
+		}()
+
+		// Wait for all goroutines
+		for range 4 {
+			<-done
 		}
-		done <- true
-	}()
-
-	go func() {
-		for i := 0; i < 100; i++ {
-			_ = manager.GetRules()
-		}
-		done <- true
-	}()
-
-	go func() {
-		for i := 0; i < 100; i++ {
-			manager.RegisterEngine(&MockEngine{name: "engine-" + string(rune('a'+i%26))})
-		}
-		done <- true
-	}()
-
-	go func() {
-		for i := 0; i < 100; i++ {
-			_ = manager.GetEngines()
-		}
-		done <- true
-	}()
-
-	// Wait for all goroutines
-	for i := 0; i < 4; i++ {
-		<-done
-	}
-
-	// Should not panic
+	})
 }
 
 // testRulePlugin implements RulePlugin for interface verification
 type testRulePlugin struct{}
 
 func (p *testRulePlugin) GetRules() []sdk.Rule {
-	return []sdk.Rule{&MockRule{name: "test"}}
+	return []sdk.Rule{&fakeRule{name: "test"}}
 }
 
 func TestRulePluginInterface(t *testing.T) {
@@ -350,12 +318,12 @@ func TestRulePluginInterface(t *testing.T) {
 
 func TestEnginePluginInterface(_ *testing.T) {
 	// Verify the EnginePlugin interface
-	var _ EnginePlugin = &MockEngine{}
+	var _ EnginePlugin = &fakeEngine{}
 }
 
 func TestFormatterPluginInterface(_ *testing.T) {
 	// Verify the FormatterPlugin interface
-	var _ FormatterPlugin = &MockFormatter{}
+	var _ FormatterPlugin = &fakeFormatter{}
 }
 
 func TestManager_LoadAll_WithYAMLFile(t *testing.T) {
@@ -656,8 +624,8 @@ func TestPluginMetadata_AllFields(t *testing.T) {
 func TestManager_RegisterMultipleRulesWithSameName(t *testing.T) {
 	manager := NewManager(nil, false)
 
-	rule1 := &MockRule{name: "duplicate", description: "First rule"}
-	rule2 := &MockRule{name: "duplicate", description: "Second rule"}
+	rule1 := &fakeRule{name: "duplicate", description: "First rule"}
+	rule2 := &fakeRule{name: "duplicate", description: "Second rule"}
 
 	manager.RegisterRule(rule1)
 	manager.RegisterRule(rule2)
@@ -671,8 +639,8 @@ func TestManager_RegisterMultipleRulesWithSameName(t *testing.T) {
 func TestManager_RegisterMultipleEnginesWithSameName(t *testing.T) {
 	manager := NewManager(nil, false)
 
-	engine1 := &MockEngine{name: "duplicate"}
-	engine2 := &MockEngine{name: "duplicate"}
+	engine1 := &fakeEngine{name: "duplicate"}
+	engine2 := &fakeEngine{name: "duplicate"}
 
 	manager.RegisterEngine(engine1)
 	manager.RegisterEngine(engine2)
@@ -686,8 +654,8 @@ func TestManager_RegisterMultipleEnginesWithSameName(t *testing.T) {
 func TestManager_RegisterMultipleFormattersWithSameName(t *testing.T) {
 	manager := NewManager(nil, false)
 
-	formatter1 := &MockFormatter{name: "duplicate"}
-	formatter2 := &MockFormatter{name: "duplicate"}
+	formatter1 := &fakeFormatter{name: "duplicate"}
+	formatter2 := &fakeFormatter{name: "duplicate"}
 
 	manager.RegisterFormatter(formatter1)
 	manager.RegisterFormatter(formatter2)
@@ -698,20 +666,20 @@ func TestManager_RegisterMultipleFormattersWithSameName(t *testing.T) {
 	assert.Equal(t, formatter2, formatters["duplicate"])
 }
 
-// MockFixableRule is a rule that returns actual fix bytes.
-type MockFixableRule struct {
+// fakeFixableRule is a rule that returns actual fix bytes.
+type fakeFixableRule struct {
 	name     string
 	findings []sdk.Finding
 	fixBytes []byte
 }
 
-func (r *MockFixableRule) Name() string        { return r.name }
-func (r *MockFixableRule) Description() string { return "Fixable rule for testing" }
-func (r *MockFixableRule) Check(_ *sdk.Context, _ *hcl.File) ([]sdk.Finding, error) {
+func (r *fakeFixableRule) Name() string        { return r.name }
+func (r *fakeFixableRule) Description() string { return "Fixable rule for testing" }
+func (r *fakeFixableRule) Check(_ *sdk.Context, _ *hcl.File) ([]sdk.Finding, error) {
 	return r.findings, nil
 }
 
-func (r *MockFixableRule) Fix(_ *sdk.Context, _ *hcl.File) ([]byte, error) {
+func (r *fakeFixableRule) Fix(_ *sdk.Context, _ *hcl.File) ([]byte, error) {
 	return r.fixBytes, nil
 }
 
@@ -727,7 +695,7 @@ func TestGoPluginRuleFixApplied(t *testing.T) {
   }
 }
 `)
-		rule := &MockFixableRule{
+		rule := &fakeFixableRule{
 			name: "fixable-rule",
 			findings: []sdk.Finding{
 				{Rule: "fixable-rule", Message: "Missing tags"},
@@ -743,7 +711,7 @@ func TestGoPluginRuleFixApplied(t *testing.T) {
 	})
 
 	t.Run("rule without fix returns nil", func(t *testing.T) {
-		rule := &MockRule{name: "non-fixable-rule"}
+		rule := &fakeRule{name: "non-fixable-rule"}
 
 		ctx := &sdk.Context{File: "test.tf"}
 		result, err := rule.Fix(ctx, nil)
@@ -754,7 +722,7 @@ func TestGoPluginRuleFixApplied(t *testing.T) {
 	t.Run("fixable rule registered with manager", func(t *testing.T) {
 		manager := NewManager(nil, false)
 		fixedContent := []byte("fixed content")
-		rule := &MockFixableRule{
+		rule := &fakeFixableRule{
 			name:     "managed-fixable-rule",
 			fixBytes: fixedContent,
 		}

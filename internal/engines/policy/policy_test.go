@@ -262,46 +262,6 @@ deny contains msg if {
 	assert.True(t, found, "should find custom policy violation")
 }
 
-func TestGroupFilesByDirectory(t *testing.T) {
-	engine := New(nil)
-
-	files := []string{
-		filepath.Join("project", "modules", "vpc", "main.tf"),
-		filepath.Join("project", "modules", "vpc", "variables.tf"),
-		filepath.Join("project", "modules", "ec2", "main.tf"),
-		filepath.Join("project", "environments", "dev", "main.tf"),
-	}
-
-	result := engine.groupFilesByDirectory(files)
-
-	assert.Len(t, result, 3, "should have 3 directories")
-	assert.Len(t, result[filepath.Join("project", "modules", "vpc")], 2)
-	assert.Len(t, result[filepath.Join("project", "modules", "ec2")], 1)
-	assert.Len(t, result[filepath.Join("project", "environments", "dev")], 1)
-}
-
-func TestParseSeverity(t *testing.T) {
-	tests := []struct {
-		input string
-		want  string
-	}{
-		{"error", "error"},
-		{"warning", "warning"},
-		{"info", "info"},
-		{"ERROR", "error"},
-		{"WARNING", "warning"},
-		{"unknown", "error"}, // defaults to error for policies
-		{"", "error"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.input, func(t *testing.T) {
-			result := parseSeverity(tt.input)
-			assert.Equal(t, tt.want, string(result))
-		})
-	}
-}
-
 func TestViolationToFinding_String(t *testing.T) {
 	engine := New(nil)
 

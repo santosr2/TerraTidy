@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -241,4 +242,123 @@ func TestValidateTFLintPath_CustomPath_IsDir(t *testing.T) {
 	err := engine.validateTFLintPath()
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "directory")
+}
+
+// TestRunWithTFLint_WhenAvailable tests the RunWithTFLint path when tflint is installed.
+func TestRunWithTFLint_WhenAvailable(t *testing.T) {
+	if _, err := exec.LookPath("tflint"); err != nil {
+		t.Skip("tflint not available")
+	}
+
+	dir := t.TempDir()
+	content := `resource "aws_instance" "test" {
+  ami           = "ami-123"
+  instance_type = "t2.micro"
+}
+`
+	tmpFile := filepath.Join(dir, "main.tf")
+	require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0o644))
+
+	engine := New(&Config{
+		UseTFLint:       true,
+		FallbackBuiltin: true,
+	})
+
+	// This will call RunWithTFLint
+	findings, err := engine.Run(context.Background(), []string{tmpFile})
+	// TFLint may return findings or errors depending on config, but shouldn't panic
+	_ = err
+	_ = findings
+}
+
+// TestRunWithTFLint_ContextCancellation tests context cancellation in RunWithTFLint.
+func TestRunWithTFLint_ContextCancellation(t *testing.T) {
+	if _, err := exec.LookPath("tflint"); err != nil {
+		t.Skip("tflint not available")
+	}
+
+	dir := t.TempDir()
+	content := `resource "aws_instance" "test" {
+  ami = "ami-123"
+}
+`
+	tmpFile := filepath.Join(dir, "main.tf")
+	require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0o644))
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // Cancel immediately
+
+	engine := New(&Config{
+		UseTFLint:       true,
+		FallbackBuiltin: false,
+	})
+
+	_, err := engine.RunWithTFLint(ctx, []string{tmpFile})
+	assert.ErrorIs(t, err, context.Canceled)
+}
+
+// TestRunWithTFLint_FallbackOnError tests fallback to built-in when TFLint fails.
+func TestRunWithTFLint_FallbackOnError(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping on Windows: requires shell script execution")
+	}
+
+	// Create a fake tflint that outputs to stderr and fails
+	dir := t.TempDir()
+	fakeTFLint := filepath.Join(dir, "tflint")
+	script := "#!/bin/sh\necho 'tflint error: config not found' >&2\nexit 1\n"
+	require.NoError(t, os.WriteFile(fakeTFLint, []byte(script), 0o755))
+
+	tfDir := t.TempDir()
+	content := `resource "aws_instance" "test" {
+  ami           = "ami-123"
+  instance_type = "t2.micro"
+}
+`
+	tmpFile := filepath.Join(tfDir, "main.tf")
+	require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0o644))
+
+	engine := New(&Config{
+		UseTFLint:       true,
+		TFLintPath:      fakeTFLint,
+		FallbackBuiltin: true,
+	})
+
+	// RunWithTFLint should fallback to built-in rules when TFLint fails
+	findings, err := engine.RunWithTFLint(context.Background(), []string{tmpFile})
+	// Should not error when fallback is enabled
+	require.NoError(t, err)
+	// findings may be empty slice, that's fine
+	_ = findings
+}
+
+// TestRunWithTFLint_NoFallbackOnError tests error propagation when fallback is disabled.
+func TestRunWithTFLint_NoFallbackOnError(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping on Windows: requires shell script execution")
+	}
+
+	// Create a fake tflint that outputs to stderr and fails
+	dir := t.TempDir()
+	fakeTFLint := filepath.Join(dir, "tflint")
+	script := "#!/bin/sh\necho 'tflint error: config not found' >&2\nexit 1\n"
+	require.NoError(t, os.WriteFile(fakeTFLint, []byte(script), 0o755))
+
+	tfDir := t.TempDir()
+	content := `resource "aws_instance" "test" {
+  ami = "ami-123"
+}
+`
+	tmpFile := filepath.Join(tfDir, "main.tf")
+	require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0o644))
+
+	engine := New(&Config{
+		UseTFLint:       true,
+		TFLintPath:      fakeTFLint,
+		FallbackBuiltin: false,
+	})
+
+	// RunWithTFLint should return error when fallback is disabled
+	_, err := engine.RunWithTFLint(context.Background(), []string{tmpFile})
+	assert.Error(t, err)
 }

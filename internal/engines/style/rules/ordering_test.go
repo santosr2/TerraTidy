@@ -239,10 +239,40 @@ func TestLifecycleAtEndRule(t *testing.T) {
 		require.NotEmpty(t, findings[0].Fix.Content, "Fix.Content should contain fixed bytes")
 	})
 
-	t.Run("Fix returns nil", func(t *testing.T) {
+	t.Run("Fix returns nil for nil inputs", func(t *testing.T) {
 		result, err := rule.Fix(nil, nil)
 		assert.NoError(t, err)
 		assert.Nil(t, result)
+	})
+
+	t.Run("Fix moves lifecycle to end", func(t *testing.T) {
+		content := `resource "aws_instance" "example" {
+  lifecycle {
+    prevent_destroy = true
+  }
+  ami           = "ami-123"
+  instance_type = "t2.micro"
+}
+`
+		tmpDir := t.TempDir()
+		tmpFile := filepath.Join(tmpDir, "test.tf")
+		require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0o644))
+
+		file, diags := hclsyntax.ParseConfig([]byte(content), tmpFile, hcl.InitialPos)
+		require.False(t, diags.HasErrors())
+
+		hclFile := &hcl.File{Body: file.Body}
+		ctx := &sdk.Context{File: tmpFile}
+
+		result, err := rule.Fix(ctx, hclFile)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+
+		// Verify lifecycle is now after ami and instance_type
+		resultStr := string(result)
+		lifecycleIdx := indexOf(resultStr, "lifecycle")
+		amiIdx := indexOf(resultStr, "ami")
+		assert.Greater(t, lifecycleIdx, amiIdx, "lifecycle should be after ami")
 	})
 }
 
@@ -348,6 +378,33 @@ func TestTagsAtEndRule(t *testing.T) {
 		require.NotNil(t, findings[0].Fix, "Fix should be populated for fixable finding")
 		require.NotEmpty(t, findings[0].Fix.Content, "Fix.Content should contain fixed bytes")
 	})
+
+	t.Run("Fix reorders tags to end of attributes", func(t *testing.T) {
+		content := `resource "aws_instance" "example" {
+  tags = { Name = "test" }
+  ami  = "ami-123"
+}
+`
+		tmpDir := t.TempDir()
+		tmpFile := filepath.Join(tmpDir, "test.tf")
+		require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0o644))
+
+		file, diags := hclsyntax.ParseConfig([]byte(content), tmpFile, hcl.InitialPos)
+		require.False(t, diags.HasErrors())
+
+		hclFile := &hcl.File{Body: file.Body}
+		ctx := &sdk.Context{File: tmpFile}
+
+		result, err := rule.Fix(ctx, hclFile)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+
+		// Verify tags is now after ami (at end of attributes)
+		resultStr := string(result)
+		tagsIdx := indexOf(resultStr, "tags")
+		amiIdx := indexOf(resultStr, "ami")
+		assert.Greater(t, tagsIdx, amiIdx, "tags should be after ami")
+	})
 }
 
 func TestDependsOnOrderRule(t *testing.T) {
@@ -405,10 +462,37 @@ func TestDependsOnOrderRule(t *testing.T) {
 		})
 	}
 
-	t.Run("Fix returns nil", func(t *testing.T) {
+	t.Run("Fix returns nil for nil inputs", func(t *testing.T) {
 		result, err := rule.Fix(nil, nil)
 		assert.NoError(t, err)
 		assert.Nil(t, result)
+	})
+
+	t.Run("Fix moves depends_on to end", func(t *testing.T) {
+		content := `resource "aws_instance" "example" {
+  depends_on = [aws_vpc.main]
+  ami        = "ami-123"
+}
+`
+		tmpDir := t.TempDir()
+		tmpFile := filepath.Join(tmpDir, "test.tf")
+		require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0o644))
+
+		file, diags := hclsyntax.ParseConfig([]byte(content), tmpFile, hcl.InitialPos)
+		require.False(t, diags.HasErrors())
+
+		hclFile := &hcl.File{Body: file.Body}
+		ctx := &sdk.Context{File: tmpFile}
+
+		result, err := rule.Fix(ctx, hclFile)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+
+		// Verify depends_on is now after ami
+		resultStr := string(result)
+		dependsOnIdx := indexOf(resultStr, "depends_on")
+		amiIdx := indexOf(resultStr, "ami")
+		assert.Greater(t, dependsOnIdx, amiIdx, "depends_on should be after ami")
 	})
 }
 
@@ -487,6 +571,34 @@ func TestSourceVersionGroupedRule(t *testing.T) {
 			assert.Len(t, findings, tt.wantFindings)
 		})
 	}
+
+	t.Run("Fix moves source and version to start", func(t *testing.T) {
+		content := `module "example" {
+  name    = "test"
+  source  = "./module"
+  version = "1.0.0"
+}
+`
+		tmpDir := t.TempDir()
+		tmpFile := filepath.Join(tmpDir, "test.tf")
+		require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0o644))
+
+		file, diags := hclsyntax.ParseConfig([]byte(content), tmpFile, hcl.InitialPos)
+		require.False(t, diags.HasErrors())
+
+		hclFile := &hcl.File{Body: file.Body}
+		ctx := &sdk.Context{File: tmpFile}
+
+		result, err := rule.Fix(ctx, hclFile)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+
+		// Verify source is now before name
+		resultStr := string(result)
+		sourceIdx := indexOf(resultStr, "source")
+		nameIdx := indexOf(resultStr, "name")
+		assert.Less(t, sourceIdx, nameIdx, "source should be before name")
+	})
 }
 
 func TestVariableOrderRule(t *testing.T) {

@@ -460,24 +460,6 @@ func TestEngine_ContextCancellation(t *testing.T) {
 	assert.Equal(t, context.Canceled, err)
 }
 
-func TestGroupFilesByDirectory(t *testing.T) {
-	engine := New(nil)
-
-	files := []string{
-		filepath.Join("project", "modules", "vpc", "main.tf"),
-		filepath.Join("project", "modules", "vpc", "variables.tf"),
-		filepath.Join("project", "modules", "ec2", "main.tf"),
-		filepath.Join("project", "environments", "dev", "main.tf"),
-	}
-
-	result := engine.groupFilesByDirectory(files)
-
-	assert.Len(t, result, 3, "should have 3 directories")
-	assert.Len(t, result[filepath.Join("project", "modules", "vpc")], 2)
-	assert.Len(t, result[filepath.Join("project", "modules", "ec2")], 1)
-	assert.Len(t, result[filepath.Join("project", "environments", "dev")], 1)
-}
-
 func TestTerraformResourceCountRule(t *testing.T) {
 	// Create content with many resources
 	var b strings.Builder
@@ -627,10 +609,8 @@ variable "instance_type" {
 	})
 	require.NoError(t, err)
 
-	// Should have no major findings (everything is well-documented)
-	for _, f := range findings {
-		t.Logf("Finding: %s - %s", f.Rule, f.Message)
-	}
+	// Should have no findings (everything is well-documented)
+	assert.Empty(t, findings, "expected no findings for well-documented files")
 }
 
 func TestEngine_ValidateTFLintPath(t *testing.T) {
@@ -1147,14 +1127,14 @@ resource "aws_instance" "test" {
 	})
 }
 
-// mockPluginRule is a simple rule implementation for testing plugin integration
-type mockPluginRule struct {
+// fakePluginRule is a simple rule implementation for testing plugin integration
+type fakePluginRule struct {
 	name string
 }
 
-func (r *mockPluginRule) Name() string        { return r.name }
-func (r *mockPluginRule) Description() string { return "Mock plugin rule for testing" }
-func (r *mockPluginRule) Check(_ *sdk.Context, _ *hcl.File) ([]sdk.Finding, error) {
+func (r *fakePluginRule) Name() string        { return r.name }
+func (r *fakePluginRule) Description() string { return "Fake plugin rule for testing" }
+func (r *fakePluginRule) Check(_ *sdk.Context, _ *hcl.File) ([]sdk.Finding, error) {
 	return nil, nil
 }
 
@@ -1168,7 +1148,7 @@ func TestNew_AcceptsPluginRules(t *testing.T) {
 	})
 
 	t.Run("with single plugin rule", func(t *testing.T) {
-		pluginRule := &mockPluginRule{name: "plugin.test-rule"}
+		pluginRule := &fakePluginRule{name: "plugin.test-rule"}
 		engine := New(nil, pluginRule)
 
 		rules := engine.GetAllRules()
@@ -1187,9 +1167,9 @@ func TestNew_AcceptsPluginRules(t *testing.T) {
 	})
 
 	t.Run("with multiple plugin rules", func(t *testing.T) {
-		plugin1 := &mockPluginRule{name: "plugin.rule-one"}
-		plugin2 := &mockPluginRule{name: "plugin.rule-two"}
-		plugin3 := &mockPluginRule{name: "plugin.rule-three"}
+		plugin1 := &fakePluginRule{name: "plugin.rule-one"}
+		plugin2 := &fakePluginRule{name: "plugin.rule-two"}
+		plugin3 := &fakePluginRule{name: "plugin.rule-three"}
 
 		engine := New(nil, plugin1, plugin2, plugin3)
 
@@ -1200,7 +1180,7 @@ func TestNew_AcceptsPluginRules(t *testing.T) {
 }
 
 func TestNew_PluginRulesAppendedAfterBuiltIn(t *testing.T) {
-	pluginRule := &mockPluginRule{name: "plugin.test-rule"}
+	pluginRule := &fakePluginRule{name: "plugin.test-rule"}
 	engine := New(nil, pluginRule)
 
 	rules := engine.GetAllRules()
@@ -1211,25 +1191,25 @@ func TestNew_PluginRulesAppendedAfterBuiltIn(t *testing.T) {
 	assert.Equal(t, "plugin.test-rule", lastRule.Name(), "plugin rule should be appended after built-in rules")
 }
 
-// mockErrorRule is a rule that always returns an error from Check.
-type mockErrorRule struct {
+// fakeErrorRule is a rule that always returns an error from Check.
+type fakeErrorRule struct {
 	name string
 }
 
-func (r *mockErrorRule) Name() string        { return r.name }
-func (r *mockErrorRule) Description() string { return "always errors" }
-func (r *mockErrorRule) Check(_ *sdk.Context, _ *hcl.File) ([]sdk.Finding, error) {
+func (r *fakeErrorRule) Name() string        { return r.name }
+func (r *fakeErrorRule) Description() string { return "always errors" }
+func (r *fakeErrorRule) Check(_ *sdk.Context, _ *hcl.File) ([]sdk.Finding, error) {
 	return nil, fmt.Errorf("rule check failed intentionally")
 }
 
-// mockFindingRule is a rule that always returns a fixed warning finding.
-type mockFindingRule struct {
+// fakeFindingRule is a rule that always returns a fixed warning finding.
+type fakeFindingRule struct {
 	name string
 }
 
-func (r *mockFindingRule) Name() string        { return r.name }
-func (r *mockFindingRule) Description() string { return "always finds something" }
-func (r *mockFindingRule) Check(ctx *sdk.Context, _ *hcl.File) ([]sdk.Finding, error) {
+func (r *fakeFindingRule) Name() string        { return r.name }
+func (r *fakeFindingRule) Description() string { return "always finds something" }
+func (r *fakeFindingRule) Check(ctx *sdk.Context, _ *hcl.File) ([]sdk.Finding, error) {
 	return []sdk.Finding{
 		{
 			Rule:     r.name,
@@ -1273,7 +1253,7 @@ func TestLintModule_RuleError(t *testing.T) {
 	tfFile := filepath.Join(dir, "main.tf")
 	require.NoError(t, os.WriteFile(tfFile, []byte(`resource "aws_instance" "x" {}`), 0o644))
 
-	errRule := &mockErrorRule{name: "plugin.error-rule"}
+	errRule := &fakeErrorRule{name: "plugin.error-rule"}
 	engine := New(nil, errRule)
 	// Disable all built-in rules so only our error rule runs.
 	for _, r := range engine.GetAllRules() {
@@ -1292,7 +1272,7 @@ func TestLintModule_SeverityOverride(t *testing.T) {
 	tfFile := filepath.Join(dir, "main.tf")
 	require.NoError(t, os.WriteFile(tfFile, []byte(`resource "aws_instance" "x" {}`), 0o644))
 
-	findingRule := &mockFindingRule{name: "plugin.finding-rule"}
+	findingRule := &fakeFindingRule{name: "plugin.finding-rule"}
 	engine := New(&Config{
 		Rules: map[string]RuleConfig{
 			"plugin.finding-rule": {

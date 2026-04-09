@@ -13,8 +13,8 @@ import (
 func TestRunnerWithResults_Parallel(t *testing.T) {
 	ctx := context.Background()
 
-	engine1 := &mockEngine{name: "engine1", findings: []sdk.Finding{{Rule: "rule1"}}}
-	engine2 := &mockEngine{name: "engine2", findings: []sdk.Finding{{Rule: "rule2"}}}
+	engine1 := &fakeEngine{name: "engine1", findings: []sdk.Finding{{Rule: "rule1"}}}
+	engine2 := &fakeEngine{name: "engine2", findings: []sdk.Finding{{Rule: "rule2"}}}
 
 	runner := New().AddEngine(engine1).AddEngine(engine2).SetParallel(true)
 

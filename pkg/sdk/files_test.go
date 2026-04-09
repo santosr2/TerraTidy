@@ -44,6 +44,13 @@ func TestGroupFilesByDirectory(t *testing.T) {
 		assert.Contains(t, got, "a")
 		assert.Contains(t, got, "b")
 	})
+
+	t.Run("no directory component", func(t *testing.T) {
+		// Bare filename with no directory returns "." as the directory
+		got := GroupFilesByDirectory([]string{"main.tf", "vars.tf"})
+		require.Contains(t, got, ".")
+		assert.Equal(t, []string{"main.tf", "vars.tf"}, got["."])
+	})
 }
 
 func TestIsHCLFile(t *testing.T) {
@@ -66,6 +73,7 @@ func TestIsHCLFile(t *testing.T) {
 		{"noext", false},
 		{"main.tf.bak", false},
 		{"main.json", false},
+		{"terraform.tfvars.json", false}, // JSON format, not HCL
 	}
 
 	for _, tt := range tests {

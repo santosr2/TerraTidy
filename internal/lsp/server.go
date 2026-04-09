@@ -1052,7 +1052,19 @@ func (s *Server) buildStyleConfig() *style.Config {
 		return styleCfg
 	}
 
-	// Merge override rules from config
+	// Apply engine-level style rules first (from engines.style.rules)
+	for ruleName, ruleCfg := range s.config.Engines.Style.Rules {
+		rc := style.RuleConfig{
+			Enabled:  ruleCfg.Enabled,
+			Severity: ruleCfg.Severity,
+		}
+		if ruleCfg.Config != nil {
+			rc.Options = ruleCfg.Config
+		}
+		styleCfg.Rules[ruleName] = rc
+	}
+
+	// Apply override rules (from overrides.rules), which take precedence
 	for ruleName, ruleCfg := range s.config.Overrides.Rules {
 		rc := style.RuleConfig{
 			Enabled:  ruleCfg.Enabled,

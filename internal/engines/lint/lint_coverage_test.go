@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -298,6 +299,10 @@ func TestRunWithTFLint_ContextCancellation(t *testing.T) {
 
 // TestRunWithTFLint_FallbackOnError tests fallback to built-in when TFLint fails.
 func TestRunWithTFLint_FallbackOnError(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping on Windows: requires shell script execution")
+	}
+
 	// Create a fake tflint that outputs to stderr and fails
 	dir := t.TempDir()
 	fakeTFLint := filepath.Join(dir, "tflint")
@@ -329,6 +334,10 @@ func TestRunWithTFLint_FallbackOnError(t *testing.T) {
 
 // TestRunWithTFLint_NoFallbackOnError tests error propagation when fallback is disabled.
 func TestRunWithTFLint_NoFallbackOnError(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping on Windows: requires shell script execution")
+	}
+
 	// Create a fake tflint that outputs to stderr and fails
 	dir := t.TempDir()
 	fakeTFLint := filepath.Join(dir, "tflint")

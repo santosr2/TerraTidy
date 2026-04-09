@@ -46,12 +46,7 @@ func init() {
 }
 
 func runInitRule(_ *cobra.Command, _ []string) error {
-	// Validate name
-	if initRuleName == "" {
-		return fmt.Errorf("rule name is required")
-	}
-
-	// Normalize name
+	// Normalize name (Cobra validates --name is required via MarkFlagRequired)
 	normalizedName := strings.ToLower(strings.ReplaceAll(initRuleName, " ", "-"))
 
 	// Create output directory

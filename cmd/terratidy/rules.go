@@ -178,10 +178,11 @@ func runRulesDocs(_ *cobra.Command, _ []string) error {
 	fmt.Println()
 
 	currentEngine := ""
+	caser := cases.Title(language.English)
 	for _, rule := range rules {
 		if rule.Engine != currentEngine {
 			currentEngine = rule.Engine
-			fmt.Printf("## %s Engine\n\n", cases.Title(language.English).String(currentEngine))
+			fmt.Printf("## %s Engine\n\n", caser.String(currentEngine))
 		}
 
 		fmt.Printf("### %s\n\n", rule.Name)

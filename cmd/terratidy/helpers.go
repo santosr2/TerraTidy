@@ -352,7 +352,7 @@ func (c *fileCollector) walkDirectory(dir string) error {
 		if err != nil {
 			return err
 		}
-		if info.IsDir() && shouldSkipDir(p, info.Name()) {
+		if info.IsDir() && shouldSkipDir(info.Name()) {
 			return filepath.SkipDir
 		}
 		if !info.IsDir() {
@@ -384,7 +384,7 @@ func (c *fileCollector) scanDirectory(dir string) error {
 }
 
 func (c *fileCollector) addFileIfHCL(path string) {
-	if !isHCLFile(path) || c.seen[path] {
+	if !isHCLFile(path) {
 		return
 	}
 	absPath := toAbsPath(path)
@@ -404,7 +404,7 @@ func toAbsPath(path string) string {
 }
 
 // shouldSkipDir returns true if the directory should be skipped during traversal.
-func shouldSkipDir(_ string, name string) bool {
+func shouldSkipDir(name string) bool {
 	// Skip hidden directories
 	if strings.HasPrefix(name, ".") && name != "." {
 		return true

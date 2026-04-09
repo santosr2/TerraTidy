@@ -151,7 +151,7 @@ func (r *BashRule) Check(ctx *sdk.Context, _ *hcl.File) ([]sdk.Finding, error) {
 				EndLine:     f.Line,
 				EndColumn:   f.Column,
 			},
-			Severity: parseSeverity(f.Severity),
+			Severity: sdk.ParseSeverity(f.Severity, sdk.SeverityWarning),
 		})
 	}
 

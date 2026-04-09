@@ -428,28 +428,6 @@ func (e *Engine) evaluatePolicyWithPrepare(evalCtx *policyEvalContext, policy st
 	return findings
 }
 
-// evaluateQuery evaluates a single Rego query and returns findings.
-// Kept for backward compatibility with tests.
-func (e *Engine) evaluateQuery(
-	evalCtx *policyEvalContext,
-	policy string,
-	query string,
-	severity sdk.Severity,
-) []sdk.Finding {
-	r := rego.New(
-		rego.Query(query),
-		rego.Module("policy.rego", policy),
-		rego.Input(evalCtx.moduleData),
-	)
-
-	rs, err := r.Eval(evalCtx.ctx)
-	if err != nil {
-		return nil
-	}
-
-	return e.extractFindings(rs, evalCtx.dir, severity)
-}
-
 // extractFindings extracts findings from Rego result set.
 func (e *Engine) extractFindings(rs rego.ResultSet, dir string, severity sdk.Severity) []sdk.Finding {
 	var findings []sdk.Finding

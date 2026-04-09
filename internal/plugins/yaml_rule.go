@@ -81,7 +81,7 @@ func (r *YAMLRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Finding, error
 		return nil, nil
 	}
 
-	severity := parseSeverity(r.config.Severity)
+	severity := sdk.ParseSeverity(r.config.Severity, sdk.SeverityWarning)
 	var findings []sdk.Finding
 
 	for _, block := range body.Blocks {
@@ -276,9 +276,4 @@ func compileAttributePatterns(patterns []AttributePattern) ([]compiledPattern, e
 		})
 	}
 	return compiled, nil
-}
-
-// parseSeverity converts a severity string to an sdk.Severity value (defaults to warning).
-func parseSeverity(s string) sdk.Severity {
-	return sdk.ParseSeverity(s, sdk.SeverityWarning)
 }

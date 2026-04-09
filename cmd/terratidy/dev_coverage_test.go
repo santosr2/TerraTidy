@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bytes"
+	"io"
 	"os"
 	"path/filepath"
 	"testing"
@@ -80,4 +82,32 @@ func TestWatchDirExists(t *testing.T) {
 
 		assert.False(t, watchDirExists())
 	})
+}
+
+func TestPrintWatchDirMissingHelp_QuotesPathWithSpecialChars(t *testing.T) {
+	// Save and restore devWatch
+	oldDevWatch := devWatch
+	defer func() { devWatch = oldDevWatch }()
+
+	// Test path with spaces and special characters
+	devWatch = "/path/with spaces/and'quotes"
+
+	// Capture stdout
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	printWatchDirMissingHelp()
+
+	w.Close()
+	os.Stdout = oldStdout
+
+	var buf bytes.Buffer
+	_, _ = io.Copy(&buf, r)
+	output := buf.String()
+
+	// The mkdir hint should use quoted path (via %q) to handle special chars
+	// %q produces: "/path/with spaces/and'quotes"
+	assert.Contains(t, output, `mkdir -p "/path/with spaces/and'quotes"`,
+		"path with special chars should be properly quoted in shell hint")
 }

@@ -18,7 +18,6 @@ import (
 var (
 	testRuleFixtures string
 	testRuleExpect   string
-	testRuleVerbose  bool
 )
 
 var testRuleCmd = &cobra.Command{
@@ -44,7 +43,6 @@ with expected results.`,
 func init() {
 	testRuleCmd.Flags().StringVar(&testRuleFixtures, "fixtures", "test_fixtures/", "fixtures directory")
 	testRuleCmd.Flags().StringVar(&testRuleExpect, "expect", "", "expected findings file (YAML or JSON)")
-	testRuleCmd.Flags().BoolVarP(&testRuleVerbose, "verbose", "v", false, "verbose output")
 	rootCmd.AddCommand(testRuleCmd)
 }
 

@@ -56,11 +56,21 @@ func runFix(_ *cobra.Command, args []string) error {
 		return nil
 	}
 
-	printFixHeader(len(files))
+	// For structured output formats, skip the progress messages
+	useStructuredOutput := format != "" && format != "text"
 
-	allFindings, totalFixed, err := runAllFixesWithConfig(cfg, files, pluginRules)
+	if !useStructuredOutput {
+		printFixHeader(len(files))
+	}
+
+	allFindings, totalFixed, err := runAllFixesWithConfig(cfg, files, pluginRules, useStructuredOutput)
 	if err != nil {
 		return err
+	}
+
+	// For structured formats, use the formatter pipeline
+	if useStructuredOutput {
+		return outputResults(allFindings, "Fix summary", cfg)
 	}
 
 	printFixSummary(allFindings, totalFixed)
@@ -75,19 +85,19 @@ func printFixHeader(fileCount int) {
 	fmt.Printf("Fixing %s%s...\n\n", formatFileCount(fileCount), modeMsg)
 }
 
-func runAllFixesWithConfig(cfg *config.Config, files []string, pluginRules []sdk.Rule) ([]sdk.Finding, int, error) {
+func runAllFixesWithConfig(cfg *config.Config, files []string, pluginRules []sdk.Rule, useStructuredOutput bool) ([]sdk.Finding, int, error) {
 	ctx := context.Background()
 	var allFindings []sdk.Finding
 	totalFixed := 0
 
-	fmtFindings, formatted, err := runFmtFix(ctx, files)
+	fmtFindings, formatted, err := runFmtFix(ctx, files, useStructuredOutput)
 	if err != nil {
 		return nil, 0, err
 	}
 	allFindings = append(allFindings, fmtFindings...)
 	totalFixed += formatted
 
-	styleFindings, styleFixed, err := runStyleFixWithConfig(ctx, cfg, files, pluginRules)
+	styleFindings, styleFixed, err := runStyleFixWithConfig(ctx, cfg, files, pluginRules, useStructuredOutput)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -97,20 +107,26 @@ func runAllFixesWithConfig(cfg *config.Config, files []string, pluginRules []sdk
 	// Re-run fmt after style fixes to restore proper HCL formatting
 	// (style fixes may disrupt equal sign alignment)
 	if styleFixed > 0 {
-		fmt.Println("3. Re-formatting files...")
+		if !useStructuredOutput {
+			fmt.Println("3. Re-formatting files...")
+		}
 		fmtEngine := fmtengine.New(&fmtengine.Config{Check: false})
 		if _, err := fmtEngine.Run(ctx, files); err != nil {
 			return nil, 0, fmt.Errorf("re-formatting failed: %w", err)
 		}
-		fmt.Println("   Done")
-		fmt.Println()
+		if !useStructuredOutput {
+			fmt.Println("   Done")
+			fmt.Println()
+		}
 	}
 
 	return allFindings, totalFixed, nil
 }
 
-func runFmtFix(ctx context.Context, files []string) ([]sdk.Finding, int, error) {
-	fmt.Println("1. Formatting files...")
+func runFmtFix(ctx context.Context, files []string, useStructuredOutput bool) ([]sdk.Finding, int, error) {
+	if !useStructuredOutput {
+		fmt.Println("1. Formatting files...")
+	}
 	fmtEngine := fmtengine.New(&fmtengine.Config{Check: false})
 	findings, err := fmtEngine.Run(ctx, files)
 	if err != nil {
@@ -118,7 +134,9 @@ func runFmtFix(ctx context.Context, files []string) ([]sdk.Finding, int, error) 
 	}
 
 	formatted := countFormattedFiles(findings)
-	fmt.Printf("   Formatted %d file(s)\n\n", formatted)
+	if !useStructuredOutput {
+		fmt.Printf("   Formatted %d file(s)\n\n", formatted)
+	}
 	return findings, formatted, nil
 }
 
@@ -132,8 +150,10 @@ func countFormattedFiles(findings []sdk.Finding) int {
 	return count
 }
 
-func runStyleFixWithConfig(ctx context.Context, cfg *config.Config, files []string, pluginRules []sdk.Rule) ([]sdk.Finding, int, error) {
-	fmt.Println("2. Fixing style issues...")
+func runStyleFixWithConfig(ctx context.Context, cfg *config.Config, files []string, pluginRules []sdk.Rule, useStructuredOutput bool) ([]sdk.Finding, int, error) {
+	if !useStructuredOutput {
+		fmt.Println("2. Fixing style issues...")
+	}
 	styleCfg := buildStyleConfig(cfg, true)
 	styleEngine := style.New(styleCfg, pluginRules...)
 	findings, err := styleEngine.Run(ctx, files)
@@ -142,7 +162,9 @@ func runStyleFixWithConfig(ctx context.Context, cfg *config.Config, files []stri
 	}
 
 	fixed := countFixedStyleIssues(findings)
-	fmt.Printf("   Fixed %d style issue(s)\n\n", fixed)
+	if !useStructuredOutput {
+		fmt.Printf("   Fixed %d style issue(s)\n\n", fixed)
+	}
 	return findings, fixed, nil
 }
 

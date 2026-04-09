@@ -64,7 +64,7 @@ Use --changed to only lint files that have been modified in git.`,
 		lintCfg := buildLintConfig(cfg)
 
 		// CLI flags override config file settings (use Changed() to detect explicit flags)
-		if cmd.Flags().Changed("config-file") {
+		if cmd.Flags().Changed("tflint-config") {
 			lintCfg.ConfigFile = lintConfigFile
 		}
 		if cmd.Flags().Changed("plugin") {
@@ -115,7 +115,7 @@ func outputLintResults(findings []sdk.Finding, cfg *config.Config) error {
 }
 
 func init() {
-	lintCmd.Flags().StringVar(&lintConfigFile, "config-file", ".tflint.hcl", "path to TFLint config file")
+	lintCmd.Flags().StringVar(&lintConfigFile, "tflint-config", ".tflint.hcl", "path to TFLint config file")
 	lintCmd.Flags().StringSliceVar(&lintPlugins, "plugin", []string{}, "plugins to enable (aws, google, azurerm)")
 	lintCmd.Flags().StringSliceVar(&lintRules, "rule", []string{}, "specific rules to enable")
 	rootCmd.AddCommand(lintCmd)

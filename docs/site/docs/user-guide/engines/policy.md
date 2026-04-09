@@ -14,7 +14,7 @@ Terraform configurations using the powerful Rego policy language.
 terratidy policy
 
 # With custom policy directory
-terratidy policy --policy-dir ./policies
+terratidy policy --policy-dirs ./policies
 
 # Show policy input (for debugging)
 terratidy policy --show-input

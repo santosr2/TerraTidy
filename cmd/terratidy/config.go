@@ -13,7 +13,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-var configOutputFormat string
+var configSerializeFormat string
 
 var configCmd = &cobra.Command{
 	Use:   "config",
@@ -34,7 +34,7 @@ applies profile settings, and shows the final resolved configuration.`,
   terratidy config show
 
   # Show config in JSON format
-  terratidy config show --format json
+  terratidy config show --output json
 
   # Show specific config file
   terratidy config show --config custom.yaml`,
@@ -100,7 +100,7 @@ var configInitProfileCmd = &cobra.Command{
 }
 
 func init() {
-	configShowCmd.Flags().StringVar(&configOutputFormat, "format", "yaml", "output format (yaml|json)")
+	configShowCmd.Flags().StringVar(&configSerializeFormat, "output", "yaml", "serialization format (yaml|json)")
 
 	configCmd.AddCommand(configShowCmd)
 	configCmd.AddCommand(configValidateCmd)
@@ -124,13 +124,13 @@ func runConfigShow(_ *cobra.Command, _ []string) error {
 	}
 
 	var output []byte
-	switch strings.ToLower(configOutputFormat) {
+	switch strings.ToLower(configSerializeFormat) {
 	case "json":
 		output, err = json.MarshalIndent(cfg, "", "  ")
 	case "yaml":
 		output, err = yaml.Marshal(cfg)
 	default:
-		return fmt.Errorf("unsupported format: %s (use yaml or json)", configOutputFormat)
+		return fmt.Errorf("unsupported format: %s (use yaml or json)", configSerializeFormat)
 	}
 
 	if err != nil {

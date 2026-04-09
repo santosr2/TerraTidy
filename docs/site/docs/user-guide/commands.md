@@ -329,11 +329,11 @@ terratidy lint [paths...] [flags]
 
 **Flags:**
 
-| Flag            | Description                                  |
-| --------------- | -------------------------------------------- |
-| `--config-file` | Path to TFLint config (default: .tflint.hcl) |
-| `--plugin`      | Plugins to enable (aws, google, azurerm)     |
-| `--rule`        | Specific rules to enable                     |
+| Flag              | Description                                  |
+| ----------------- | -------------------------------------------- |
+| `--tflint-config` | Path to TFLint config (default: .tflint.hcl) |
+| `--plugin`        | Plugins to enable (aws, google, azurerm)     |
+| `--rule`          | Specific rules to enable                     |
 
 **`--rule`** enables specific rules by name. Works for both built-in lint rules and TFLint
 rules (when TFLint is installed). Multiple `--rule` flags can be passed. Each enabled rule
@@ -349,7 +349,7 @@ terratidy lint
 terratidy lint --rule terraform-required-version --rule terraform-required-providers
 
 # Use a specific TFLint config
-terratidy lint --config-file .tflint-strict.hcl
+terratidy lint --tflint-config .tflint-strict.hcl
 
 # Enable AWS plugin
 terratidy lint --plugin aws
@@ -367,7 +367,7 @@ terratidy policy [paths...] [flags]
 
 | Flag            | Description                            |
 | --------------- | -------------------------------------- |
-| `--policy-dir`  | Directories containing .rego files     |
+| `--policy-dirs` | Directories containing .rego files     |
 | `--policy-file` | Individual Rego policy files           |
 | `--show-input`  | Show input JSON for debugging policies |
 
@@ -381,7 +381,7 @@ passed to OPA for evaluation. Useful for debugging why a policy rule does or doe
 terratidy policy
 
 # Run with custom policies
-terratidy policy --policy-dir ./policies
+terratidy policy --policy-dirs ./policies
 
 # Debug: see what OPA receives as input
 terratidy policy --show-input
@@ -496,7 +496,6 @@ terratidy test-rule [rule-path] [flags]
 | ------------ | ------------------------------------------------ |
 | `--fixtures` | Fixtures directory (default: `test_fixtures/`)   |
 | `--expect`   | Expected findings file (YAML or JSON)            |
-| `-v`         | Verbose output                                   |
 
 **Expected Findings Format:**
 
@@ -615,9 +614,9 @@ with separate files per engine.
 
 **Flags (`show`):**
 
-| Flag       | Description                                     |
-| ---------- | ----------------------------------------------- |
-| `--format` | Output format: `yaml`, `json` (default: `yaml`) |
+| Flag       | Description                                           |
+| ---------- | ----------------------------------------------------- |
+| `--output` | Serialization format: `yaml`, `json` (default: `yaml`) |
 
 **Examples:**
 
@@ -626,7 +625,7 @@ with separate files per engine.
 terratidy config show
 
 # Show as JSON
-terratidy config show --format json
+terratidy config show --output json
 
 # Validate configuration
 terratidy config validate

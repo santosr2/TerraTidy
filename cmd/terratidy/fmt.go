@@ -77,6 +77,10 @@ Use --all to also apply style fixes (equivalent to running fmt + style --fix).`,
 			return fmt.Errorf("formatting files: %w", err)
 		}
 
+		// Apply severity threshold filtering
+		threshold := getEffectiveSeverityThreshold(cfg)
+		findings = filterFindingsBySeverity(findings, threshold)
+
 		// Display formatting results
 		needsFormatting := 0
 		formatted := 0

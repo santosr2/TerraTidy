@@ -16,7 +16,7 @@ TFLint integration adds provider-specific checks when TFLint is installed.
 terratidy lint
 
 # Use a custom TFLint config file
-terratidy lint --config-file .tflint.custom.hcl
+terratidy lint --tflint-config .tflint.custom.hcl
 
 # Enable specific rules
 terratidy lint --rule terraform-required-version

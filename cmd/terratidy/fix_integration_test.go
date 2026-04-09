@@ -31,7 +31,7 @@ ami="ami-456"
 	require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0o644))
 
 	cfg := config.DefaultConfig()
-	findings, totalFixed, err := runAllFixesWithConfig(cfg, []string{tmpFile}, nil)
+	findings, totalFixed, err := runAllFixesWithConfig(cfg, []string{tmpFile}, nil, false)
 	require.NoError(t, err)
 	assert.GreaterOrEqual(t, totalFixed, 0)
 	_ = findings
@@ -70,7 +70,7 @@ resource "aws_instance" "two" {
 	cfg.Engines.Fmt.Enabled = config.BoolPtr(true)
 	cfg.Engines.Style.Enabled = config.BoolPtr(true)
 
-	findings, totalFixed, err := runAllFixesWithConfig(cfg, []string{tmpFile}, nil)
+	findings, totalFixed, err := runAllFixesWithConfig(cfg, []string{tmpFile}, nil, false)
 	require.NoError(t, err)
 	// The blank-lines rule should have fixed at least 1 issue.
 	assert.GreaterOrEqual(t, totalFixed, 1)
@@ -110,7 +110,7 @@ patterns:
 	require.Len(t, pluginRules, 1)
 
 	ctx := context.Background()
-	findings, fixed, err := runStyleFixWithConfig(ctx, cfg, []string{tfFile}, pluginRules)
+	findings, fixed, err := runStyleFixWithConfig(ctx, cfg, []string{tfFile}, pluginRules, false)
 	require.NoError(t, err)
 	_ = fixed
 
@@ -134,7 +134,7 @@ instance_type = "t2.micro"
 	require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0o644))
 
 	ctx := context.Background()
-	findings, formatted, err := runFmtFix(ctx, []string{tmpFile})
+	findings, formatted, err := runFmtFix(ctx, []string{tmpFile}, false)
 	require.NoError(t, err)
 	assert.Greater(t, formatted, 0, "should have formatted at least one file")
 	_ = findings
@@ -159,7 +159,7 @@ resource "aws_instance" "test2" {
 
 	ctx := context.Background()
 	cfg := config.DefaultConfig()
-	findings, fixed, err := runStyleFixWithConfig(ctx, cfg, []string{tmpFile}, nil)
+	findings, fixed, err := runStyleFixWithConfig(ctx, cfg, []string{tmpFile}, nil, false)
 	require.NoError(t, err)
 	_ = findings
 	_ = fixed

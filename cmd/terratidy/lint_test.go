@@ -17,8 +17,8 @@ func TestLintCmd(t *testing.T) {
 		assert.NotEmpty(t, lintCmd.Example)
 	})
 
-	t.Run("has config-file flag", func(t *testing.T) {
-		flag := lintCmd.Flags().Lookup("config-file")
+	t.Run("has tflint-config flag", func(t *testing.T) {
+		flag := lintCmd.Flags().Lookup("tflint-config")
 		assert.NotNil(t, flag)
 		assert.Equal(t, ".tflint.hcl", flag.DefValue)
 	})
@@ -65,15 +65,15 @@ func TestLintCmdExecution(t *testing.T) {
 		assert.NoError(t, err, "lint on valid tf file should not error")
 	})
 
-	t.Run("lint with explicit config-file flag", func(t *testing.T) {
-		// Test that --config-file flag override works (BUG-4 fix coverage)
+	t.Run("lint with explicit tflint-config flag", func(t *testing.T) {
+		// Test that --tflint-config flag override works (BUG-4 fix coverage)
 		changed = false
 		format = "text"
 
 		// Reset the flag to ensure Changed() works correctly
-		lintCmd.Flags().Set("config-file", "custom.hcl")
+		lintCmd.Flags().Set("tflint-config", "custom.hcl")
 
-		rootCmd.SetArgs([]string{"lint", "--config-file", "custom.hcl", tmpDir})
+		rootCmd.SetArgs([]string{"lint", "--tflint-config", "custom.hcl", tmpDir})
 		err := rootCmd.Execute()
 		// May error if file doesn't exist, but the flag parsing path is covered
 		_ = err

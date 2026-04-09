@@ -278,7 +278,7 @@ test_invalid_config {
 	fmt.Println("Next steps:")
 	fmt.Printf("  1. Edit %s to add your policy logic\n", regoFile)
 	fmt.Printf("  2. Add test cases in %s\n", testFile)
-	fmt.Println("  3. Run: terratidy policy --policy-dir ./policies")
+	fmt.Println("  3. Run: terratidy policy --policy-dirs ./policies")
 
 	return nil
 }

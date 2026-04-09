@@ -32,13 +32,13 @@ Built-in policies include:
   - Required tags on resources
   - Module version constraints
 
-Custom policies can be provided via --policy-dir or --policy-file flags.
+Custom policies can be provided via --policy-dirs or --policy-file flags.
 Use --changed to only check files that have been modified in git.`,
 	Example: `  # Run policy checks on current directory
   terratidy policy
 
   # Run with custom policies
-  terratidy policy --policy-dir ./policies
+  terratidy policy --policy-dirs ./policies
 
   # Only check changed files
   terratidy policy --changed
@@ -119,7 +119,7 @@ func outputPolicyResults(findings []sdk.Finding, cfg *config.Config) error {
 }
 
 func init() {
-	policyCmd.Flags().StringSliceVar(&policyDirs, "policy-dir", nil, "directories containing Rego policy files")
+	policyCmd.Flags().StringSliceVar(&policyDirs, "policy-dirs", nil, "directories containing Rego policy files")
 	policyCmd.Flags().StringSliceVar(&policyFiles, "policy-file", nil, "individual Rego policy files")
 	policyCmd.Flags().BoolVar(&policyShowJSON, "show-input", false, "show input JSON for debugging policies")
 	rootCmd.AddCommand(policyCmd)

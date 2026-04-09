@@ -253,12 +253,12 @@ func TestRunConfigShow_JSONFormat(t *testing.T) {
 	require.NoError(t, os.WriteFile(cfgPath, []byte("version: 1\n"), 0o644))
 
 	old := cfgFile
-	oldFmt := configOutputFormat
+	oldFmt := configSerializeFormat
 	cfgFile = cfgPath
-	configOutputFormat = "json"
+	configSerializeFormat = "json"
 	defer func() {
 		cfgFile = old
-		configOutputFormat = oldFmt
+		configSerializeFormat = oldFmt
 	}()
 
 	err := runConfigShow(nil, nil)
@@ -271,12 +271,12 @@ func TestRunConfigShow_InvalidFormat(t *testing.T) {
 	require.NoError(t, os.WriteFile(cfgPath, []byte("version: 1\n"), 0o644))
 
 	old := cfgFile
-	oldFmt := configOutputFormat
+	oldFmt := configSerializeFormat
 	cfgFile = cfgPath
-	configOutputFormat = "toml"
+	configSerializeFormat = "toml"
 	defer func() {
 		cfgFile = old
-		configOutputFormat = oldFmt
+		configSerializeFormat = oldFmt
 	}()
 
 	err := runConfigShow(nil, nil)

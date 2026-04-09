@@ -388,6 +388,17 @@ func TestManager_loadGoPlugin_InvalidFile(t *testing.T) {
 // requires building real .so files with proper symbols, which is better suited for
 // integration tests. The functions are structured to return clear errors for missing
 // symbols and incorrect types, which are tested via the error paths above.
+//
+// Paths that cannot be covered in unit tests:
+//   - loadRulePlugin/loadEnginePlugin/loadFormatterPlugin wrong-signature branches:
+//     require a real compiled .so with a New symbol of the wrong type.
+//   - loadFromDirectory os.UserHomeDir() failure (line ~223): UserHomeDir reads $HOME
+//     on Unix; unsetting it may still succeed via /etc/passwd on some systems.
+//   - loadFromDirectory os.Stat() non-ENOENT error (line ~234): requires a path that
+//     Stat fails on for reasons other than not-exist, which is not reliably triggerable
+//     without mocks.
+//   - os.ReadDir() error (line ~259) is covered by TestManager_LoadFromDirectory_PermissionIssues
+//     on non-Windows via the chmod 0o000 technique.
 
 func TestLoadManifest(t *testing.T) {
 	t.Run("valid manifest", func(t *testing.T) {

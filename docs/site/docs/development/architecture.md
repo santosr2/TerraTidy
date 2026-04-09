@@ -263,11 +263,9 @@ type Formatter interface {
 - `SARIFFormatter` - GitHub-compatible SARIF
 - `JUnitFormatter` - JUnit XML for CI systems
 - `MarkdownFormatter` - Markdown tables
-- `HTMLFormatter` - HTML report
+- `HTMLFormatter` - Interactive HTML reports
 - `TableFormatter` - Tabular text output
 - `GitHubActionsFormatter` - GitHub Actions annotations
-- `HTMLFormatter` - Interactive HTML reports
-- `JUnitFormatter` - CI-compatible JUnit XML
 
 ## LSP Server
 

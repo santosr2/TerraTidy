@@ -141,13 +141,15 @@ func TestRunConfigValidate(t *testing.T) {
 		assert.NoError(t, err)
 	})
 
-	t.Run("nonexistent config file errors", func(t *testing.T) {
+	t.Run("nonexistent config file errors with init hint", func(t *testing.T) {
 		old := cfgFile
 		cfgFile = "/nonexistent/.terratidy.yaml"
 		defer func() { cfgFile = old }()
 
 		err := runConfigValidate(nil, nil)
-		assert.Error(t, err)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "configuration file not found")
+		assert.Contains(t, err.Error(), "terratidy init")
 	})
 }
 
@@ -172,6 +174,17 @@ func TestRunConfigSplit(t *testing.T) {
 	splitDir := filepath.Join(dir, ".terratidy")
 	_, err = os.Stat(splitDir)
 	assert.NoError(t, err)
+}
+
+func TestRunConfigSplit_NonExistentConfig(t *testing.T) {
+	old := cfgFile
+	cfgFile = "/nonexistent/.terratidy.yaml"
+	defer func() { cfgFile = old }()
+
+	err := runConfigSplit(nil, nil)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "configuration file not found")
+	assert.Contains(t, err.Error(), "terratidy init")
 }
 
 func TestRunConfigMerge(t *testing.T) {

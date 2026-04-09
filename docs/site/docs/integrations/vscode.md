@@ -142,7 +142,7 @@ Default shortcuts:
 
 | Shortcut | Command |
 |----------|---------|
-| `Ctrl+Shift+F` / `Cmd+Shift+F` | Format Document |
+| `Shift+Alt+F` / `Shift+Option+F` | Format Document |
 | `Ctrl+.` / `Cmd+.` | Quick Fix |
 
 Customize in Keyboard Shortcuts (`Ctrl+K Ctrl+S`):
@@ -203,7 +203,7 @@ Run checks manually when needed.
 
 ### Engine Selection for Diagnostics
 
-Document formatting (`Format Document` command, `Ctrl+Shift+F`) works
+Document formatting (`Format Document` command, `Shift+Alt+F`) works
 regardless of engine settings. For real-time diagnostics (squiggly
 underlines), the `engines.style` and `engines.lint` toggles control
 which engines run. Disabling an engine prevents its diagnostics from

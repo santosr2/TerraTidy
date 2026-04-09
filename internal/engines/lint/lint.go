@@ -1126,7 +1126,7 @@ func (e *Engine) validateTFLintPath() error {
 	if e.config.TFLintPath == "" {
 		_, err := exec.LookPath(path)
 		if err != nil {
-			return fmt.Errorf("tflint not found in PATH")
+			return fmt.Errorf("tflint not found in PATH (install: brew install tflint, or see https://github.com/terraform-linters/tflint#installation)")
 		}
 		return nil
 	}

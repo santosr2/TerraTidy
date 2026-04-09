@@ -220,7 +220,7 @@ func (m *Manager) loadFromDirectory(dir string) error {
 	if strings.HasPrefix(dir, "~") {
 		home, err := os.UserHomeDir()
 		if err != nil {
-			return err
+			return fmt.Errorf("expanding ~ in plugin directory: %w", err)
 		}
 		dir = filepath.Join(home, dir[1:])
 	}
@@ -231,7 +231,7 @@ func (m *Manager) loadFromDirectory(dir string) error {
 		return nil // Directory doesn't exist, skip
 	}
 	if err != nil {
-		return err
+		return fmt.Errorf("checking plugin directory %s: %w", relativePath(dir), err)
 	}
 	if !info.IsDir() {
 		return fmt.Errorf("%s is not a directory", relativePath(dir))
@@ -256,7 +256,7 @@ func (m *Manager) loadFromDirectory(dir string) error {
 	// Find plugin files
 	entries, err := os.ReadDir(dir)
 	if err != nil {
-		return err
+		return fmt.Errorf("reading plugin directory %s: %w", relativePath(dir), err)
 	}
 
 	for _, entry := range entries {
@@ -359,7 +359,7 @@ func (m *Manager) loadRulePlugin(p *plugin.Plugin, metadata *PluginMetadata) err
 
 	newFunc, ok := sym.(func() RulePlugin)
 	if !ok {
-		return fmt.Errorf("new function has wrong signature")
+		return fmt.Errorf("plugin %s (%s): New function has wrong signature, expected func() RulePlugin", metadata.Name, relativePath(metadata.Path))
 	}
 
 	rulePlugin := newFunc()
@@ -389,7 +389,7 @@ func (m *Manager) loadEnginePlugin(p *plugin.Plugin, metadata *PluginMetadata) e
 
 	newFunc, ok := sym.(func() EnginePlugin)
 	if !ok {
-		return fmt.Errorf("new function has wrong signature")
+		return fmt.Errorf("plugin %s (%s): New function has wrong signature, expected func() EnginePlugin", metadata.Name, relativePath(metadata.Path))
 	}
 
 	engine := newFunc()
@@ -415,7 +415,7 @@ func (m *Manager) loadFormatterPlugin(p *plugin.Plugin, metadata *PluginMetadata
 
 	newFunc, ok := sym.(func() FormatterPlugin)
 	if !ok {
-		return fmt.Errorf("new function has wrong signature")
+		return fmt.Errorf("plugin %s (%s): New function has wrong signature, expected func() FormatterPlugin", metadata.Name, relativePath(metadata.Path))
 	}
 
 	formatter := newFunc()

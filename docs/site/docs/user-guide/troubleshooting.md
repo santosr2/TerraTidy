@@ -7,10 +7,10 @@ Common issues and how to resolve them.
 ### Config file not found
 
 ```text
-Error: configuration file not found: .terratidy.yaml
+Error: configuration file not found: .terratidy.yaml (run 'terratidy init' to create one)
 ```
 
-TerraTidy looks for `.terratidy.yaml` in the current directory. Create one with `terratidy init`
+TerraTidy looks for `.terratidy.yaml` in the current directory. Run `terratidy init` to create one,
 or specify a path with `--config`.
 
 ### Invalid config syntax
@@ -117,7 +117,7 @@ Check that TerraTidy is in your PATH and the configuration file is valid.
 ### TFLint not found
 
 ```text
-Warning: TFLint not found in PATH
+Error: tflint not found in PATH (install: brew install tflint, or see https://github.com/terraform-linters/tflint#installation)
 ```
 
 The lint engine falls back to built-in rules when TFLint is not installed. To use TFLint:

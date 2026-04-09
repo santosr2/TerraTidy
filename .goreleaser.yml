@@ -30,11 +30,13 @@ builds:
 
 archives:
   - id: terratidy
-    format: tar.gz
+    formats:
+      - tar.gz
     name_template: "{{ .ProjectName }}-{{ .Version }}-{{ .Os }}-{{ .Arch }}"
     format_overrides:
       - goos: windows
-        format: zip
+        formats:
+          - zip
     files:
       - LICENSE
       - README.md

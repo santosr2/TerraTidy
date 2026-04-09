@@ -151,15 +151,13 @@ func runConfigValidate(_ *cobra.Command, _ []string) error {
 
 	// Check if file exists
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
-		return fmt.Errorf("configuration file not found: %s", configPath)
+		return fmt.Errorf("configuration file not found: %s (run 'terratidy init' to create one)", configPath)
 	}
 
 	// Load and validate
 	cfg, err := config.Load(configPath)
 	if err != nil {
-		fmt.Println("[!] Validation failed:")
-		fmt.Printf("    %v\n", err)
-		return err
+		return fmt.Errorf("validation failed: %w", err)
 	}
 
 	// Additional validation
@@ -236,7 +234,7 @@ func runConfigSplit(_ *cobra.Command, _ []string) error {
 	configPath := getConfigPath()
 
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
-		return fmt.Errorf("configuration file not found: %s", configPath)
+		return fmt.Errorf("configuration file not found: %s (run 'terratidy init' to create one)", configPath)
 	}
 
 	cfg, err := config.Load(configPath)

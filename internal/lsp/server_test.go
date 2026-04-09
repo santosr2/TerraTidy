@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -70,7 +71,7 @@ func TestServer_ReadMessage(t *testing.T) {
 		content := `{"jsonrpc":"2.0","method":"test"}`
 		// Build proper Content-Length header
 		contentLen := len(content)
-		input := "Content-Length: " + intToStr(contentLen) + "\r\n\r\n" + content
+		input := "Content-Length: " + strconv.Itoa(contentLen) + "\r\n\r\n" + content
 
 		server := NewServer(strings.NewReader(input), &bytes.Buffer{})
 
@@ -96,7 +97,7 @@ func TestServer_ReadMessage(t *testing.T) {
 	t.Run("oversized content length rejected", func(t *testing.T) {
 		// Content-Length exceeds 10 MB limit
 		oversizedLength := 11 * 1024 * 1024 // 11 MB
-		input := "Content-Length: " + intToStr(oversizedLength) + "\r\n\r\n"
+		input := "Content-Length: " + strconv.Itoa(oversizedLength) + "\r\n\r\n"
 
 		server := NewServer(strings.NewReader(input), &bytes.Buffer{})
 
@@ -110,7 +111,7 @@ func TestServer_ReadMessage(t *testing.T) {
 		// Instead, test with a reasonable size that's under the limit
 		content := `{"jsonrpc":"2.0","method":"test"}`
 		contentLen := len(content)
-		input := "Content-Length: " + intToStr(contentLen) + "\r\n\r\n" + content
+		input := "Content-Length: " + strconv.Itoa(contentLen) + "\r\n\r\n" + content
 
 		server := NewServer(strings.NewReader(input), &bytes.Buffer{})
 
@@ -118,18 +119,6 @@ func TestServer_ReadMessage(t *testing.T) {
 		require.NoError(t, err)
 		assert.NotNil(t, msg)
 	})
-}
-
-func intToStr(n int) string {
-	if n == 0 {
-		return "0"
-	}
-	var result []byte
-	for n > 0 {
-		result = append([]byte{byte('0' + n%10)}, result...)
-		n /= 10
-	}
-	return string(result)
 }
 
 func TestServer_SendResult(t *testing.T) {
@@ -2091,6 +2080,83 @@ func TestServer_BuildStyleConfig_WithOverrides(t *testing.T) {
 
 	rule2 := cfg.Rules["style.blank-lines-between-blocks"]
 	assert.False(t, rule2.Enabled)
+	assert.Equal(t, "info", rule2.Severity)
+}
+
+func TestServer_BuildStyleConfig_WithEngineStyleRules(t *testing.T) {
+	server := NewServer(strings.NewReader(""), &bytes.Buffer{})
+	server.config = &config.Config{
+		Engines: config.Engines{
+			Style: config.StyleEngineConfig{
+				Rules: map[string]config.RuleConfig{
+					"style.terraform-block-first": {
+						Enabled:  false,
+						Severity: "info",
+					},
+					"style.blank-line-between-blocks": {
+						Enabled:  true,
+						Severity: "warning",
+					},
+				},
+			},
+		},
+	}
+
+	cfg := server.buildStyleConfig()
+
+	require.NotNil(t, cfg)
+	assert.Len(t, cfg.Rules, 2)
+
+	rule1 := cfg.Rules["style.terraform-block-first"]
+	assert.False(t, rule1.Enabled)
+	assert.Equal(t, "info", rule1.Severity)
+
+	rule2 := cfg.Rules["style.blank-line-between-blocks"]
+	assert.True(t, rule2.Enabled)
+	assert.Equal(t, "warning", rule2.Severity)
+}
+
+func TestServer_BuildStyleConfig_OverridesTakePrecedence(t *testing.T) {
+	// Tests that overrides.rules takes precedence over engines.style.rules
+	server := NewServer(strings.NewReader(""), &bytes.Buffer{})
+	server.config = &config.Config{
+		Engines: config.Engines{
+			Style: config.StyleEngineConfig{
+				Rules: map[string]config.RuleConfig{
+					"style.terraform-block-first": {
+						Enabled:  true, // Enabled in engine config
+						Severity: "warning",
+					},
+					"style.blank-line-between-blocks": {
+						Enabled:  true,
+						Severity: "info",
+					},
+				},
+			},
+		},
+		Overrides: config.OverridesConfig{
+			Rules: map[string]config.RuleConfig{
+				"style.terraform-block-first": {
+					Enabled:  false, // Disabled in overrides - should take precedence
+					Severity: "error",
+				},
+			},
+		},
+	}
+
+	cfg := server.buildStyleConfig()
+
+	require.NotNil(t, cfg)
+	assert.Len(t, cfg.Rules, 2)
+
+	// This rule should be disabled because overrides take precedence
+	rule1 := cfg.Rules["style.terraform-block-first"]
+	assert.False(t, rule1.Enabled)
+	assert.Equal(t, "error", rule1.Severity)
+
+	// This rule was only in engine config, should be unchanged
+	rule2 := cfg.Rules["style.blank-line-between-blocks"]
+	assert.True(t, rule2.Enabled)
 	assert.Equal(t, "info", rule2.Severity)
 }
 

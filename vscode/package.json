@@ -36,9 +36,6 @@
 		"theme": "dark"
 	},
 	"activationEvents": [
-		"onLanguage:terraform",
-		"onLanguage:terraform-vars",
-		"onLanguage:hcl",
 		"workspaceContains:**/*.tf",
 		"workspaceContains:**/*.tfvars",
 		"workspaceContains:**/*.hcl",
@@ -140,32 +137,7 @@
 					"description": "Traces the communication between VS Code and the TerraTidy language server."
 				}
 			}
-		},
-		"languages": [
-			{
-				"id": "terraform",
-				"extensions": [
-					".tf",
-					".tfvars"
-				],
-				"aliases": [
-					"Terraform",
-					"terraform"
-				]
-			},
-			{
-				"id": "hcl",
-				"extensions": [
-					".hcl"
-				],
-				"aliases": [
-					"HCL",
-					"hcl",
-					"Terragrunt",
-					"terragrunt"
-				]
-			}
-		]
+		}
 	},
 	"scripts": {
 		"vscode:prepublish": "bun run bundle",

@@ -1045,14 +1045,14 @@ func TestConfigFromEngine(t *testing.T) {
 	})
 }
 
-// mockPluginRule is a simple rule implementation for testing plugin integration
-type mockPluginRule struct {
+// fakePluginRule is a simple rule implementation for testing plugin integration
+type fakePluginRule struct {
 	name string
 }
 
-func (r *mockPluginRule) Name() string        { return r.name }
-func (r *mockPluginRule) Description() string { return "Mock plugin rule for testing" }
-func (r *mockPluginRule) Check(_ *sdk.Context, _ *hcl.File) ([]sdk.Finding, error) {
+func (r *fakePluginRule) Name() string        { return r.name }
+func (r *fakePluginRule) Description() string { return "Fake plugin rule for testing" }
+func (r *fakePluginRule) Check(_ *sdk.Context, _ *hcl.File) ([]sdk.Finding, error) {
 	return nil, nil
 }
 
@@ -1066,7 +1066,7 @@ func TestNew_AcceptsPluginRules(t *testing.T) {
 	})
 
 	t.Run("with single plugin rule", func(t *testing.T) {
-		pluginRule := &mockPluginRule{name: "plugin.test-rule"}
+		pluginRule := &fakePluginRule{name: "plugin.test-rule"}
 		engine := New(nil, pluginRule)
 		rules := engine.GetAllRules()
 
@@ -1085,9 +1085,9 @@ func TestNew_AcceptsPluginRules(t *testing.T) {
 	})
 
 	t.Run("with multiple plugin rules", func(t *testing.T) {
-		plugin1 := &mockPluginRule{name: "plugin.rule-one"}
-		plugin2 := &mockPluginRule{name: "plugin.rule-two"}
-		plugin3 := &mockPluginRule{name: "plugin.rule-three"}
+		plugin1 := &fakePluginRule{name: "plugin.rule-one"}
+		plugin2 := &fakePluginRule{name: "plugin.rule-two"}
+		plugin3 := &fakePluginRule{name: "plugin.rule-three"}
 		engine := New(nil, plugin1, plugin2, plugin3)
 		rules := engine.GetAllRules()
 
@@ -1097,7 +1097,7 @@ func TestNew_AcceptsPluginRules(t *testing.T) {
 }
 
 func TestNew_PluginRulesAppendedAfterBuiltIn(t *testing.T) {
-	pluginRule := &mockPluginRule{name: "plugin.test-rule"}
+	pluginRule := &fakePluginRule{name: "plugin.test-rule"}
 	engine := New(nil, pluginRule)
 	rules := engine.GetAllRules()
 

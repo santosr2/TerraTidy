@@ -2160,6 +2160,37 @@ func TestServer_BuildStyleConfig_OverridesTakePrecedence(t *testing.T) {
 	assert.Equal(t, "info", rule2.Severity)
 }
 
+func TestServer_BuildStyleConfig_WithRuleOptions(t *testing.T) {
+	// Tests that Config options are passed through as Options
+	server := NewServer(strings.NewReader(""), &bytes.Buffer{})
+	server.config = &config.Config{
+		Engines: config.Engines{
+			Style: config.StyleEngineConfig{
+				Rules: map[string]config.RuleConfig{
+					"style.naming": {
+						Enabled:  true,
+						Severity: "warning",
+						Config: map[string]any{
+							"pattern": "^[a-z_]+$",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	cfg := server.buildStyleConfig()
+
+	require.NotNil(t, cfg)
+	require.Len(t, cfg.Rules, 1)
+
+	rule := cfg.Rules["style.naming"]
+	assert.True(t, rule.Enabled)
+	assert.Equal(t, "warning", rule.Severity)
+	require.NotNil(t, rule.Options)
+	assert.Equal(t, "^[a-z_]+$", rule.Options["pattern"])
+}
+
 func TestServer_GetSeverityThreshold(t *testing.T) {
 	tests := []struct {
 		name      string

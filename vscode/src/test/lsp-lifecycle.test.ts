@@ -1,21 +1,6 @@
 import * as assert from 'node:assert';
-import { execFileSync } from 'node:child_process';
 import * as vscode from 'vscode';
-
-function findBinary(): string | undefined {
-  // Check env var first, then PATH
-  const envBin = process.env.TERRATIDY_BIN;
-  if (envBin) {
-    return envBin;
-  }
-
-  try {
-    execFileSync('terratidy', ['version'], { stdio: 'ignore' });
-    return 'terratidy';
-  } catch {
-    return undefined;
-  }
-}
+import { findBinary, getExtension } from './helpers';
 
 suite('LSP Lifecycle', () => {
   const binary = findBinary();
@@ -26,7 +11,7 @@ suite('LSP Lifecycle', () => {
       return;
     }
 
-    const ext = vscode.extensions.getExtension('santosr2.vscode-terratidy');
+    const ext = getExtension();
     assert.ok(ext, 'Extension should be installed');
 
     // Activate the extension directly. Pattern-based activation (workspaceContains)
@@ -54,7 +39,7 @@ suite('LSP Lifecycle', () => {
     // Give time for restart
     await new Promise((resolve) => setTimeout(resolve, 3000));
 
-    const ext = vscode.extensions.getExtension('santosr2.vscode-terratidy');
+    const ext = getExtension();
     assert.ok(ext?.isActive, 'Extension should still be active after restart');
   });
 });

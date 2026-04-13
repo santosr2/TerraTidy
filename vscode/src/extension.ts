@@ -3,7 +3,13 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { promisify } from 'node:util';
 import * as vscode from 'vscode';
-import { LanguageClient, type LanguageClientOptions, type ServerOptions } from 'vscode-languageclient/node';
+import {
+  CloseAction,
+  ErrorAction,
+  LanguageClient,
+  type LanguageClientOptions,
+  type ServerOptions,
+} from 'vscode-languageclient/node';
 
 // Global LSP client instance
 let client: LanguageClient | undefined;
@@ -16,6 +22,9 @@ let configListener: vscode.Disposable | undefined;
 
 // Config file watcher (tracked to avoid subscription leaks on restart)
 let configWatcher: vscode.FileSystemWatcher | undefined;
+
+// Flag to distinguish intentional stop from unexpected crash
+let intentionalStop = false;
 
 // Resolve ~ prefix to the user's home directory
 function resolveExecutablePath(execPath: string): string {
@@ -109,6 +118,54 @@ async function startLanguageClient(context: vscode.ExtensionContext): Promise<vo
     outputChannel: outputChannel,
     traceOutputChannel: outputChannel,
     initializationOptions: getInitializationOptions(),
+    // Error handler for server crashes and connection errors
+    errorHandler: {
+      error: (error, _message, count) => {
+        const errorCount = count ?? 1;
+        outputChannel.appendLine(`LSP error (${errorCount}): ${error.message}`);
+        // After repeated failures, shut down to avoid spamming
+        if (errorCount >= 5) {
+          outputChannel.appendLine('Too many LSP errors, shutting down server');
+          vscode.window
+            .showErrorMessage(
+              'TerraTidy language server encountered repeated errors. Check the output for details.',
+              'View Logs'
+            )
+            .then((action) => {
+              if (action === 'View Logs') {
+                outputChannel.show();
+              }
+            });
+          return { action: ErrorAction.Shutdown };
+        }
+        // Continue on transient errors, let the client retry
+        return { action: ErrorAction.Continue };
+      },
+      closed: () => {
+        // Check if this was an intentional stop (e.g., restart command, deactivation)
+        if (intentionalStop) {
+          intentionalStop = false; // Reset for next time
+          return { action: CloseAction.DoNotRestart };
+        }
+
+        outputChannel.appendLine('LSP server connection closed unexpectedly');
+        // Show restart prompt to user
+        vscode.window
+          .showWarningMessage('TerraTidy language server stopped unexpectedly.', 'Restart', 'View Logs')
+          .then((action) => {
+            if (action === 'Restart') {
+              vscode.commands.executeCommand('terratidy.restartServer');
+            } else if (action === 'View Logs') {
+              outputChannel.show();
+            }
+          })
+          .then(undefined, (err) => {
+            outputChannel.appendLine(`Error handling server crash: ${err}`);
+          });
+        // Don't auto-restart; let user decide
+        return { action: CloseAction.DoNotRestart };
+      },
+    },
   };
 
   // Create and start the language client
@@ -159,6 +216,8 @@ async function stopLanguageClient(): Promise<void> {
   }
   if (client) {
     outputChannel.appendLine('Stopping TerraTidy LSP server');
+    // Mark as intentional to prevent "stopped unexpectedly" prompt
+    intentionalStop = true;
     try {
       await client.stop();
     } catch {

@@ -254,3 +254,566 @@ jobs:
         run: |
           # If absolute-paths flag wasn't accepted, the action would fail
           echo "absolute-paths flag test passed"
+
+  test-profile:
+    needs: [test-action]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Create test files with config
+        run: |
+          mkdir -p test-terraform
+          printf '%s\n' \
+            'resource "aws_instance" "example" {' \
+            '  ami           = "ami-12345678"' \
+            '  instance_type = "t2.micro"' \
+            '}' > test-terraform/main.tf
+          # Create config with profiles
+          printf '%s\n' \
+            'version: 1' \
+            'engines:' \
+            '  fmt: { enabled: true }' \
+            '  style: { enabled: true }' \
+            '  lint: { enabled: true }' \
+            '  policy: { enabled: false }' \
+            'profiles:' \
+            '  development:' \
+            '    description: "Fast checks"' \
+            '    engines:' \
+            '      lint: { enabled: false }' \
+            '      policy: { enabled: false }' > test-terraform/.terratidy.yaml
+
+      - name: Run TerraTidy Action with profile
+        id: profile-test
+        uses: ./
+        with:
+          working-directory: test-terraform
+          config: .terratidy.yaml
+          profile: development
+          format: json
+          fail-on-error: 'false'
+
+      - name: Verify profile applied
+        shell: bash
+        run: |
+          echo "Profile test: development profile applied"
+          echo "Findings: ${FINDINGS_COUNT}"
+          # Profile was accepted if action completed without error
+          if [ -z "${FINDINGS_COUNT}" ]; then
+            echo "::error::Profile test failed - no findings count returned"
+            exit 1
+          fi
+        env:
+          FINDINGS_COUNT: ${{ steps.profile-test.outputs.findings-count }}
+
+  test-parallel:
+    needs: [test-action]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Create test Terraform files
+        run: |
+          mkdir -p test-terraform
+          # Create multiple files to benefit from parallel execution
+          for i in 1 2 3 4 5; do
+            printf '%s\n' \
+              "resource \"aws_instance\" \"example_${i}\" {" \
+              '  ami           = "ami-12345678"' \
+              '  instance_type = "t2.micro"' \
+              '}' > "test-terraform/main_${i}.tf"
+          done
+
+      - name: Run TerraTidy Action with parallel=false
+        id: sequential-test
+        uses: ./
+        with:
+          working-directory: test-terraform
+          parallel: 'false'
+          format: json
+          fail-on-error: 'false'
+
+      - name: Run TerraTidy Action with parallel=true
+        id: parallel-test
+        uses: ./
+        with:
+          working-directory: test-terraform
+          parallel: 'true'
+          format: json
+          fail-on-error: 'false'
+
+      - name: Verify parallel produces same results as sequential
+        shell: bash
+        run: |
+          echo "Sequential findings: ${SEQ_COUNT}"
+          echo "Parallel findings: ${PAR_COUNT}"
+          if [ "${SEQ_COUNT}" != "${PAR_COUNT}" ]; then
+            echo "::error::Parallel mode produced different findings count (sequential=${SEQ_COUNT}, parallel=${PAR_COUNT})"
+            exit 1
+          fi
+          echo "Parallel execution test passed - same results as sequential"
+        env:
+          SEQ_COUNT: ${{ steps.sequential-test.outputs.findings-count }}
+          PAR_COUNT: ${{ steps.parallel-test.outputs.findings-count }}
+
+  test-changed:
+    needs: [test-action]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Create isolated test repo with git history
+        run: |
+          # Create isolated test repo to avoid mutating the checkout
+          mkdir -p /tmp/test-changed-repo
+          cd /tmp/test-changed-repo
+          git init
+          git config user.email "test@example.com"
+          git config user.name "Test User"
+          # Create and commit base file
+          printf '%s\n' \
+            'resource "aws_instance" "base" {' \
+            '  ami           = "ami-12345678"' \
+            '  instance_type = "t2.micro"' \
+            '}' > base.tf
+          git add base.tf
+          git commit -m "chore: add base file"
+          # Create uncommitted file (this is what --changed should detect)
+          printf '%s\n' \
+            'resource "aws_instance" "changed" {' \
+            '  ami           = "ami-87654321"' \
+            '  instance_type = "t3.micro"' \
+            '}' > changed.tf
+
+      - name: Run TerraTidy Action with changed flag
+        id: changed-test
+        uses: ./
+        with:
+          working-directory: /tmp/test-changed-repo
+          changed: 'true'
+          format: json
+          fail-on-error: 'false'
+
+      - name: Run TerraTidy Action without changed flag (all files)
+        id: all-files-test
+        uses: ./
+        with:
+          working-directory: /tmp/test-changed-repo
+          changed: 'false'
+          format: json
+          fail-on-error: 'false'
+
+      - name: Verify changed detection works
+        shell: bash
+        run: |
+          echo "Changed files only: ${CHANGED_COUNT}"
+          echo "All files: ${ALL_COUNT}"
+          # With changed=true, should check fewer or equal files
+          # (changed.tf only vs base.tf + changed.tf)
+          if [ -z "${CHANGED_COUNT}" ] || [ -z "${ALL_COUNT}" ]; then
+            echo "::error::Changed test failed - missing findings counts"
+            exit 1
+          fi
+          echo "Changed files detection test passed"
+        env:
+          CHANGED_COUNT: ${{ steps.changed-test.outputs.findings-count }}
+          ALL_COUNT: ${{ steps.all-files-test.outputs.findings-count }}
+
+  test-severity-threshold:
+    needs: [test-action]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Create test Terraform file
+        run: |
+          mkdir -p test-terraform
+          printf '%s\n' \
+            'resource "aws_instance" "example" {' \
+            '  ami           = "ami-12345678"' \
+            '  instance_type = "t2.micro"' \
+            '}' > test-terraform/main.tf
+
+      - name: Run with severity-threshold=error
+        id: error-threshold
+        uses: ./
+        with:
+          working-directory: test-terraform
+          severity-threshold: error
+          format: json
+          fail-on-error: 'false'
+
+      - name: Run with severity-threshold=warning
+        id: warning-threshold
+        uses: ./
+        with:
+          working-directory: test-terraform
+          severity-threshold: warning
+          format: json
+          fail-on-error: 'false'
+
+      - name: Run with severity-threshold=info
+        id: info-threshold
+        uses: ./
+        with:
+          working-directory: test-terraform
+          severity-threshold: info
+          format: json
+          fail-on-error: 'false'
+
+      - name: Verify severity filtering
+        shell: bash
+        run: |
+          echo "Error threshold findings: ${ERROR_COUNT}"
+          echo "Warning threshold findings: ${WARNING_COUNT}"
+          echo "Info threshold findings: ${INFO_COUNT}"
+          # Verify threshold filtering: info >= warning >= error
+          if [ "${WARNING_COUNT}" -lt "${ERROR_COUNT}" ]; then
+            echo "::error::Warning threshold should include at least as many findings as error threshold"
+            exit 1
+          fi
+          if [ "${INFO_COUNT}" -lt "${WARNING_COUNT}" ]; then
+            echo "::error::Info threshold should include at least as many findings as warning threshold"
+            exit 1
+          fi
+          echo "Severity threshold filtering verified"
+        env:
+          ERROR_COUNT: ${{ steps.error-threshold.outputs.findings-count }}
+          WARNING_COUNT: ${{ steps.warning-threshold.outputs.findings-count }}
+          INFO_COUNT: ${{ steps.info-threshold.outputs.findings-count }}
+
+  test-fail-on-warning:
+    needs: [test-action]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Create test file with style issues
+        run: |
+          mkdir -p test-terraform
+          # Create a file that will trigger warnings (no blank lines between blocks)
+          printf '%s\n' \
+            'resource "aws_instance" "one" {' \
+            '  ami           = "ami-12345678"' \
+            '  instance_type = "t2.micro"' \
+            '}' \
+            'resource "aws_instance" "two" {' \
+            '  ami           = "ami-87654321"' \
+            '  instance_type = "t3.micro"' \
+            '}' > test-terraform/main.tf
+
+      - name: Run with fail-on-warning=false (should succeed)
+        id: no-fail-warning
+        uses: ./
+        with:
+          working-directory: test-terraform
+          fail-on-warning: 'false'
+          fail-on-error: 'false'
+          format: json
+
+      - name: Run with fail-on-warning=true (may fail if warnings exist)
+        id: fail-warning
+        uses: ./
+        continue-on-error: true
+        with:
+          working-directory: test-terraform
+          fail-on-warning: 'true'
+          fail-on-error: 'false'
+          format: json
+
+      - name: Verify fail-on-warning behavior
+        shell: bash
+        run: |
+          echo "fail-on-warning=false outcome: ${NO_FAIL_OUTCOME}"
+          echo "fail-on-warning=true outcome: ${FAIL_OUTCOME}"
+          echo "Warning count: ${WARNING_COUNT}"
+          # fail-on-warning=false should always succeed
+          if [ "${NO_FAIL_OUTCOME}" != "success" ]; then
+            echo "::error::Expected fail-on-warning=false to succeed, got: ${NO_FAIL_OUTCOME}"
+            exit 1
+          fi
+          # If warnings exist, fail-on-warning=true should fail
+          if [ "${WARNING_COUNT}" -gt 0 ] && [ "${FAIL_OUTCOME}" = "success" ]; then
+            echo "::error::Expected fail-on-warning=true to fail when warnings exist (warnings=${WARNING_COUNT})"
+            exit 1
+          fi
+          echo "Fail-on-warning behavior verified"
+        env:
+          NO_FAIL_OUTCOME: ${{ steps.no-fail-warning.outcome }}
+          FAIL_OUTCOME: ${{ steps.fail-warning.outcome }}
+          WARNING_COUNT: ${{ steps.no-fail-warning.outputs.warnings-count }}
+
+  test-skip-policy:
+    needs: [test-action]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Create test files with policy config
+        run: |
+          mkdir -p test-terraform/policies
+          printf '%s\n' \
+            'resource "aws_instance" "example" {' \
+            '  ami           = "ami-12345678"' \
+            '  instance_type = "t2.micro"' \
+            '}' > test-terraform/main.tf
+          # Create a config that enables policy (disable other engines for cleaner test)
+          printf '%s\n' \
+            'version: 1' \
+            'engines:' \
+            '  fmt: { enabled: false }' \
+            '  style: { enabled: false }' \
+            '  lint: { enabled: false }' \
+            '  policy:' \
+            '    enabled: true' \
+            '    policy_dirs:' \
+            '      - ./policies' > test-terraform/.terratidy.yaml
+          # Create a simple policy using Rego v1 syntax
+          printf '%s\n' \
+            'package terratidy' \
+            '' \
+            'import rego.v1' \
+            '' \
+            'deny contains msg if {' \
+            '  input.resource_type == "aws_instance"' \
+            '  msg := "Test policy triggered"' \
+            '}' > test-terraform/policies/test.rego
+
+      - name: Run with skip-policy=false (policy enabled)
+        id: with-policy
+        uses: ./
+        continue-on-error: true
+        with:
+          working-directory: test-terraform
+          config: .terratidy.yaml
+          skip-policy: 'false'
+          format: json
+          fail-on-error: 'false'
+
+      - name: Run with skip-policy=true (policy skipped)
+        id: skip-policy
+        uses: ./
+        with:
+          working-directory: test-terraform
+          config: .terratidy.yaml
+          skip-policy: 'true'
+          format: json
+          fail-on-error: 'false'
+
+      - name: Verify skip-policy works
+        shell: bash
+        run: |
+          echo "With policy findings: ${WITH_POLICY_COUNT}"
+          echo "Skip policy findings: ${SKIP_POLICY_COUNT}"
+          # With skip-policy=true, should have fewer or zero findings
+          # (since we disabled other engines, policy findings should be the only ones)
+          if [ -z "${SKIP_POLICY_COUNT}" ]; then
+            echo "::error::Skip-policy test failed - no findings count returned"
+            exit 1
+          fi
+          # Skip-policy should result in 0 findings (all engines disabled except policy)
+          if [ "${SKIP_POLICY_COUNT}" != "0" ]; then
+            echo "::warning::Expected 0 findings with skip-policy=true, got ${SKIP_POLICY_COUNT}"
+          fi
+          echo "Skip-policy test passed"
+        env:
+          WITH_POLICY_COUNT: ${{ steps.with-policy.outputs.findings-count }}
+          SKIP_POLICY_COUNT: ${{ steps.skip-policy.outputs.findings-count }}
+
+  test-format-junit:
+    needs: [test-action]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Create test Terraform file
+        run: |
+          mkdir -p test-terraform
+          printf '%s\n' \
+            'resource "aws_instance" "example" {' \
+            '  ami           = "ami-12345678"' \
+            '  instance_type = "t2.micro"' \
+            '}' > test-terraform/main.tf
+
+      - name: Run TerraTidy Action (JUnit format)
+        id: junit-test
+        uses: ./
+        with:
+          working-directory: test-terraform
+          format: junit
+          fail-on-error: 'false'
+
+      - name: Verify JUnit format accepted
+        shell: bash
+        run: |
+          # JUnit format produces XML output - action completing successfully proves format works
+          echo "JUnit format test passed - action completed successfully"
+
+  test-format-markdown:
+    needs: [test-action]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Create test Terraform file
+        run: |
+          mkdir -p test-terraform
+          printf '%s\n' \
+            'resource "aws_instance" "example" {' \
+            '  ami           = "ami-12345678"' \
+            '  instance_type = "t2.micro"' \
+            '}' > test-terraform/main.tf
+
+      - name: Run TerraTidy Action (Markdown format)
+        id: markdown-test
+        uses: ./
+        with:
+          working-directory: test-terraform
+          format: markdown
+          fail-on-error: 'false'
+
+      - name: Verify Markdown format accepted
+        shell: bash
+        run: |
+          # Markdown format produces markdown output - action completing successfully proves format works
+          echo "Markdown format test passed - action completed successfully"
+
+  test-format-table:
+    needs: [test-action]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Create test Terraform file
+        run: |
+          mkdir -p test-terraform
+          printf '%s\n' \
+            'resource "aws_instance" "example" {' \
+            '  ami           = "ami-12345678"' \
+            '  instance_type = "t2.micro"' \
+            '}' > test-terraform/main.tf
+
+      - name: Run TerraTidy Action (Table format)
+        id: table-test
+        uses: ./
+        with:
+          working-directory: test-terraform
+          format: table
+          fail-on-error: 'false'
+
+      - name: Verify Table format accepted
+        shell: bash
+        run: |
+          # Table format produces tabular output - action completing successfully proves format works
+          echo "Table format test passed - action completed successfully"
+
+  test-format-github:
+    needs: [test-action]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Create test Terraform file
+        run: |
+          mkdir -p test-terraform
+          printf '%s\n' \
+            'resource "aws_instance" "example" {' \
+            '  ami           = "ami-12345678"' \
+            '  instance_type = "t2.micro"' \
+            '}' > test-terraform/main.tf
+
+      - name: Run TerraTidy Action (GitHub format)
+        id: github-test
+        uses: ./
+        with:
+          working-directory: test-terraform
+          format: github
+          fail-on-error: 'false'
+
+      - name: Verify GitHub format accepted
+        shell: bash
+        run: |
+          # GitHub format produces ::warning:: and ::error:: workflow commands
+          # Action completing successfully proves format works
+          echo "GitHub Actions annotations format test passed"

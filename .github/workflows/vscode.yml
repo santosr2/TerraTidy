@@ -57,7 +57,15 @@ jobs:
 
       - name: Install dependencies
         working-directory: vscode
-        run: bun install --frozen-lockfile
+        env:
+          GITHUB_ACTOR: ${{ github.actor }}
+        run: |
+          if [ "$GITHUB_ACTOR" = "dependabot[bot]" ]; then
+            # Dependabot can't update bun.lockb (binary), so regenerate it
+            bun install
+          else
+            bun install --frozen-lockfile
+          fi
 
       - name: Lint
         working-directory: vscode

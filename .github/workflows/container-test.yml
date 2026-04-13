@@ -94,7 +94,7 @@ jobs:
         run: |
           OUTPUT=$(docker run --rm "$IMAGE_NAME:latest" version)
           echo "Version output: $OUTPUT"
-          if ! echo "$OUTPUT" | grep -q "terratidy"; then
+          if ! echo "$OUTPUT" | grep -qi "terratidy"; then
             echo "::error::Expected 'terratidy' in version output"
             exit 1
           fi
@@ -178,7 +178,8 @@ jobs:
       - name: Run container and verify healthcheck
         run: |
           # Start container in background with a long-running command
-          CONTAINER_ID=$(docker run -d "$IMAGE_NAME:latest" sh -c "sleep 120")
+          # Override entrypoint since default is terratidy
+          CONTAINER_ID=$(docker run -d --entrypoint sh "$IMAGE_NAME:latest" -c "sleep 120")
           echo "Started container: $CONTAINER_ID"
 
           # Poll for healthcheck to complete (timeout after 60s)

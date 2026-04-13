@@ -93,7 +93,13 @@ func goldenPath(name string) string {
 	return filepath.Join("testdata", name+".golden")
 }
 
+// normalizeLineEndings converts \r\n to \n for cross-platform comparison.
+func normalizeLineEndings(b []byte) []byte {
+	return bytes.ReplaceAll(b, []byte("\r\n"), []byte("\n"))
+}
+
 // assertGolden compares actual output with golden file, optionally updating it.
+// Line endings are normalized to \n for cross-platform compatibility.
 func assertGolden(t *testing.T, name string, actual []byte) {
 	t.Helper()
 
@@ -111,7 +117,11 @@ func assertGolden(t *testing.T, name string, actual []byte) {
 	expected, err := os.ReadFile(path)
 	require.NoError(t, err, "failed to read golden file %s (run with UPDATE_GOLDEN=1 to create)", path)
 
-	assert.Equal(t, string(expected), string(actual),
+	// Normalize line endings for cross-platform comparison (Windows uses \r\n, Unix uses \n)
+	expectedNorm := normalizeLineEndings(expected)
+	actualNorm := normalizeLineEndings(actual)
+
+	assert.Equal(t, string(expectedNorm), string(actualNorm),
 		"output does not match golden file %s (run with UPDATE_GOLDEN=1 to update)", path)
 }
 

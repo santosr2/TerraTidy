@@ -109,7 +109,11 @@ jobs:
         working-directory: /tmp/test-precommit
         run: |
           # pre-commit returns 1 when hooks modify files, which is expected
-          pre-commit run terratidy-fmt --all-files && exit 1 || true
+          # Use proper if-then-else to satisfy shellcheck SC2015
+          if pre-commit run terratidy-fmt --all-files; then
+            echo "::error::Expected pre-commit to modify files and return non-zero"
+            exit 1
+          fi
           # Verify file was formatted (check for proper indentation)
           if ! grep -q '  ami' main.tf; then
             echo "::error::terratidy-fmt did not format the file"

@@ -57,6 +57,23 @@ The server runs lint and style engines to produce diagnostics. Rule overrides
 from `.terratidy.yaml` are respected, including plugin rules loaded from
 configured plugin directories (see [Configuration](../getting-started/configuration.md)).
 
+#### Debouncing
+
+To avoid running expensive diagnostics on every keystroke, the LSP server
+debounces document changes. When you type, diagnostics are deferred until
+typing pauses for 500ms. This provides a smooth editing experience while
+still catching issues quickly.
+
+#### Configuration Auto-Reload
+
+The LSP server watches your `.terratidy.yaml` and any imported configuration
+files. When you modify and save a config file, the server automatically
+reloads the configuration and republishes diagnostics for all open documents.
+No need to restart VS Code or the language server.
+
+Config file changes are also debounced (100ms) to handle rapid file events
+from some editors on save.
+
 ### Document Formatting
 
 Format Terraform and HCL files using `hclwrite`:
@@ -185,6 +202,17 @@ Set explicit path:
 2. Verify configuration file is valid
 3. Check severity threshold setting
 4. Look at output channel for errors
+
+### Language Server Stopped Unexpectedly
+
+If the LSP server crashes or exits unexpectedly, a warning notification appears with options:
+
+- **Restart** - restarts the language server immediately
+- **View Logs** - opens the output channel to inspect error details
+
+You can also restart manually using the `TerraTidy: Restart Language Server` command.
+
+If the server encounters repeated errors (5+ in quick succession), it will shut down automatically to avoid spamming the output channel. Check the logs for the underlying cause.
 
 ### Performance Issues
 

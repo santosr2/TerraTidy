@@ -66,7 +66,7 @@ jobs:
           GITHUB_ACTOR: ${{ github.actor }}
         run: |
           if [ "$GITHUB_ACTOR" = "dependabot[bot]" ]; then
-            # Dependabot can't update bun.lockb (binary), so regenerate it
+            # Dependabot can't update bun.lock (binary), so regenerate it
             bun install
           else
             bun install --frozen-lockfile
@@ -77,13 +77,13 @@ jobs:
         if: github.event_name == 'pull_request' && github.event.pull_request.user.login == 'dependabot[bot]' && matrix.os == 'ubuntu-latest'
         working-directory: vscode
         run: |
-          if git diff --quiet bun.lockb; then
+          if git diff --quiet bun.lock; then
             echo "No lockfile changes to commit"
           else
             git config user.name "dependabot[bot]"
             git config user.email "49699333+dependabot[bot]@users.noreply.github.com"
-            git add bun.lockb
-            git commit -m "chore(vscode): update bun.lockb for Dependabot PR"
+            git add bun.lock
+            git commit -m "chore(vscode): update bun.lock for Dependabot PR"
             git push
           fi
 

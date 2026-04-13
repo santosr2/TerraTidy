@@ -1,27 +1,17 @@
 name: Fuzz
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - '**/*.go'
-      - 'go.mod'
-      - 'go.sum'
-      - '.github/workflows/fuzz.yml'
-      - 'tools/scripts/fuzz.sh'
+  # Run on PRs when labeled, opened with label, or new commits to labeled PR
   pull_request:
+    types: [opened, labeled, synchronize]
     branches: [main]
-    paths:
-      - '**/*.go'
-      - 'go.mod'
-      - 'go.sum'
-      - '.github/workflows/fuzz.yml'
-      - 'tools/scripts/fuzz.sh'
+  # Weekly scheduled run for thorough coverage
   schedule:
     - cron: '0 4 * * 1'  # Weekly on Monday at 4am UTC
 
 permissions:
   contents: read
+  pull-requests: write
 
 concurrency:
   group: ci-fuzz-${{ github.head_ref || github.ref }}
@@ -29,6 +19,10 @@ concurrency:
 
 jobs:
   fuzz:
+    # Run on schedule, or on PR if 'fuzz' label exists
+    if: |
+      github.event_name == 'schedule' ||
+      (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'fuzz'))
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -43,12 +37,96 @@ jobs:
           go-version: '1.26.1'
 
       - name: Run fuzz tests
+        id: fuzz
         run: |
           if [ "$IS_SCHEDULED" = "true" ]; then
             FUZZTIME="5m"
           else
             FUZZTIME="30s"
           fi
-          ./tools/scripts/fuzz.sh "$FUZZTIME"
+          echo "fuzztime=$FUZZTIME" >> "$GITHUB_OUTPUT"
+
+          # Run fuzz and capture output
+          set +e
+          ./tools/scripts/fuzz.sh "$FUZZTIME" 2>&1 | tee fuzz-output.txt
+          EXIT_CODE=$?
+          set -e
+
+          if [ $EXIT_CODE -eq 0 ]; then
+            echo "status=passed" >> "$GITHUB_OUTPUT"
+          else
+            echo "status=failed" >> "$GITHUB_OUTPUT"
+          fi
+
+          # Write summary
+          {
+            echo "## Fuzz Test Results"
+            echo ""
+            echo "**Duration:** $FUZZTIME per target"
+            echo "**Status:** $([ $EXIT_CODE -eq 0 ] && echo '✅ Passed' || echo '❌ Failed')"
+            echo ""
+            echo '```'
+            cat fuzz-output.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          exit $EXIT_CODE
         env:
           IS_SCHEDULED: ${{ github.event_name == 'schedule' }}
+
+      - name: Comment on PR
+        if: github.event_name == 'pull_request' && always()
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+        env:
+          FUZZ_STATUS: ${{ steps.fuzz.outputs.status }}
+          FUZZ_TIME: ${{ steps.fuzz.outputs.fuzztime }}
+        with:
+          script: |
+            const fs = require('fs');
+            const output = fs.readFileSync('fuzz-output.txt', 'utf8');
+            const status = process.env.FUZZ_STATUS;
+            const fuzztime = process.env.FUZZ_TIME;
+            const passed = status === 'passed';
+            const marker = '<!-- fuzz-results -->';
+
+            const body = `${marker}
+            ## Fuzz Test Results
+
+            **Duration:** ${fuzztime} per target
+            **Status:** ${passed ? '✅ All fuzz tests passed' : '❌ Some fuzz tests failed'}
+
+            <details>
+            <summary>Fuzz output</summary>
+
+            \`\`\`
+            ${output}
+            \`\`\`
+
+            </details>
+
+            ${!passed ? '**Note:** Please review the fuzz failures before merging.' : ''}
+            `;
+
+            // Find existing comment
+            const { data: comments } = await github.rest.issues.listComments({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+            });
+            const existing = comments.find(c => c.body.includes(marker));
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                comment_id: existing.id,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: body
+              });
+            } else {
+              await github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: body
+              });
+            }

@@ -80,8 +80,8 @@ jobs:
           if git diff --quiet bun.lockb; then
             echo "No lockfile changes to commit"
           else
-            git config user.name "github-actions[bot]"
-            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git config user.name "dependabot[bot]"
+            git config user.email "49699333+dependabot[bot]@users.noreply.github.com"
             git add bun.lockb
             git commit -m "chore(vscode): update bun.lockb for Dependabot PR"
             git push

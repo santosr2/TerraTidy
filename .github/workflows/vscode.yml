@@ -25,6 +25,10 @@ concurrency:
 
 jobs:
   build-and-test:
+    # Dependabot PRs need write access to push lockfile updates
+    permissions:
+      contents: write
+
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest]
@@ -36,7 +40,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          persist-credentials: false
+          # Persist credentials for Dependabot lockfile commits
+          persist-credentials: ${{ github.actor == 'dependabot[bot]' }}
 
       - name: Set up Go
         uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
@@ -57,7 +62,30 @@ jobs:
 
       - name: Install dependencies
         working-directory: vscode
-        run: bun install --frozen-lockfile
+        env:
+          GITHUB_ACTOR: ${{ github.actor }}
+        run: |
+          if [ "$GITHUB_ACTOR" = "dependabot[bot]" ]; then
+            # Dependabot can't update bun.lockb (binary), so regenerate it
+            bun install
+          else
+            bun install --frozen-lockfile
+          fi
+
+      # zizmor: ignore[bot-conditions] - Dependabot PRs are trusted, actor check is intentional
+      - name: Commit updated lockfile (Dependabot only)
+        if: github.event_name == 'pull_request' && github.event.pull_request.user.login == 'dependabot[bot]' && matrix.os == 'ubuntu-latest'
+        working-directory: vscode
+        run: |
+          if git diff --quiet bun.lockb; then
+            echo "No lockfile changes to commit"
+          else
+            git config user.name "dependabot[bot]"
+            git config user.email "49699333+dependabot[bot]@users.noreply.github.com"
+            git add bun.lockb
+            git commit -m "chore(vscode): update bun.lockb for Dependabot PR"
+            git push
+          fi
 
       - name: Lint
         working-directory: vscode

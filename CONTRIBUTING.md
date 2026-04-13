@@ -32,6 +32,15 @@ mise run test:integration  # Run integration tests
 mise run lint           # Run linters
 ```
 
+### Benchmarks
+
+```bash
+mise run benchmark      # Run benchmarks and compare with baseline
+```
+
+For performance-sensitive changes, run benchmarks before and after. The CI checks for
+regressions > 15%. See [Performance Guide](docs/site/docs/development/performance.md).
+
 ### Commit Messages
 
 Follow [Conventional Commits](https://www.conventionalcommits.org/):

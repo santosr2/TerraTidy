@@ -333,7 +333,9 @@ FILE="$1"
 | `docs.yml` | push main | MkDocs build + GitHub Pages deploy |
 | `action-test.yml` | push/PR | GitHub Action self-test on 3 OSes |
 | `benchmark.yml` | push/PR (Go files) | Performance benchmarks with regression detection |
+| `container-test.yml` | push/PR (Dockerfile, Go) | Docker build, version, check, healthcheck, non-root |
 | `examples-test.yml` | push/PR (examples/) | Test example rules (Go, YAML, Bash) |
+| `precommit-test.yml` | push/PR (.pre-commit-hooks.yaml, Go) | Pre-commit hook validation |
 | `scorecard.yml` | weekly | OpenSSF security scorecard |
 
 PR requirements: conventional commit title, all tests pass on 3 OSes, coverage maintained.

@@ -15,6 +15,10 @@ coverage.*
 coverage/
 profile.cov
 
+# Profiling
+cpu.prof
+mem.prof
+
 # Go workspace file
 go.work
 go.work.sum
@@ -62,3 +66,6 @@ benchmarks/*
 
 # temp
 temp/
+
+# MkDocs build output
+docs/site/site

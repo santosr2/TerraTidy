@@ -1,0 +1,17 @@
+# Hadolint configuration
+# https://github.com/hadolint/hadolint#configure
+
+# Treat warnings as errors in CI
+failure-threshold: warning
+
+# Ignore rules that are too strict for our use case
+ignored:
+  # DL3018: Pin versions in apk add
+  # We pin the Alpine base image digest instead of individual packages.
+  # ca-certificates version changes with Alpine releases.
+  - DL3018
+
+# Trusted registries (default is any)
+trustedRegistries:
+  - docker.io
+  - ghcr.io

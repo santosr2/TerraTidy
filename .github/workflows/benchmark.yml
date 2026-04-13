@@ -51,21 +51,27 @@ jobs:
       - name: Compare with baseline
         id: compare
         run: |
-          echo "## Benchmark Comparison" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          benchstat benchmarks/baseline.txt benchmarks/current.txt | tee comparison.txt >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
+          {
+            echo "## Benchmark Comparison"
+            echo ""
+            echo '```'
+            benchstat benchmarks/baseline.txt benchmarks/current.txt | tee comparison.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
 
           # Check for significant regressions (>15% slower)
           if grep -E '\+[0-9]{2,}\.[0-9]+%' comparison.txt | grep -v '~'; then
-            echo "regression=true" >> $GITHUB_OUTPUT
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "**Warning:** Significant performance regression detected (>15%)" >> $GITHUB_STEP_SUMMARY
+            echo "regression=true" >> "$GITHUB_OUTPUT"
+            {
+              echo ""
+              echo "**Warning:** Significant performance regression detected (>15%)"
+            } >> "$GITHUB_STEP_SUMMARY"
           else
-            echo "regression=false" >> $GITHUB_OUTPUT
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "No significant regressions detected." >> $GITHUB_STEP_SUMMARY
+            echo "regression=false" >> "$GITHUB_OUTPUT"
+            {
+              echo ""
+              echo "No significant regressions detected."
+            } >> "$GITHUB_STEP_SUMMARY"
           fi
 
       - name: Comment on PR

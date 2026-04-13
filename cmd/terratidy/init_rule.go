@@ -358,6 +358,8 @@ tags:
 
 // toGoPackageName converts a rule name to a valid Go package name.
 func toGoPackageName(name string) string {
+	// Lowercase first (Go package names must be lowercase)
+	name = strings.ToLower(name)
 	// Replace hyphens with underscores
 	name = strings.ReplaceAll(name, "-", "_")
 	// Remove any non-alphanumeric characters except underscores

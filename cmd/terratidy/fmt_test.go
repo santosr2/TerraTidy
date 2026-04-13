@@ -3,8 +3,11 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 
+	"github.com/santosr2/TerraTidy/internal/config"
+	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -93,4 +96,225 @@ resource "aws_instance" "test2" {
 		// Reset flag
 		fmtAll = false
 	})
+}
+
+// TestBuildFmtConfig_CLICheckOverridesConfig verifies CLI --check flag overrides config.
+func TestBuildFmtConfig_CLICheckOverridesConfig(t *testing.T) {
+	tests := []struct {
+		name          string
+		configCheck   bool
+		cliCheckSet   bool
+		cliCheckValue bool
+		expectedCheck bool
+	}{
+		{
+			name:          "config check=true, CLI not set -> uses config (true)",
+			configCheck:   true,
+			cliCheckSet:   false,
+			cliCheckValue: false,
+			expectedCheck: true,
+		},
+		{
+			name:          "config check=false, CLI not set -> uses config (false)",
+			configCheck:   false,
+			cliCheckSet:   false,
+			cliCheckValue: false,
+			expectedCheck: false,
+		},
+		{
+			name:          "config check=false, CLI --check -> CLI overrides (true)",
+			configCheck:   false,
+			cliCheckSet:   true,
+			cliCheckValue: true,
+			expectedCheck: true,
+		},
+		{
+			name:          "config check=true, CLI --check=false -> CLI overrides (false)",
+			configCheck:   true,
+			cliCheckSet:   true,
+			cliCheckValue: false,
+			expectedCheck: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create a fresh cobra command to test flag changes
+			cmd := &cobra.Command{}
+			cmd.Flags().Bool("check", false, "")
+			cmd.Flags().Bool("diff", false, "")
+
+			// Set CLI flag if needed (sets both the flag value and marks it as changed)
+			if tt.cliCheckSet {
+				err := cmd.Flags().Set("check", strconv.FormatBool(tt.cliCheckValue))
+				require.NoError(t, err)
+			}
+
+			// Create config with the test value
+			cfg := &config.Config{
+				Engines: config.Engines{
+					Fmt: config.FmtEngineConfig{
+						Check: tt.configCheck,
+					},
+				},
+			}
+
+			result := buildFmtConfig(cmd, cfg)
+			assert.Equal(t, tt.expectedCheck, result.Check, "Check mode mismatch")
+		})
+	}
+}
+
+// TestBuildFmtConfig_CLIDiffOverridesConfig verifies CLI --diff flag overrides config.
+func TestBuildFmtConfig_CLIDiffOverridesConfig(t *testing.T) {
+	tests := []struct {
+		name         string
+		configDiff   bool
+		cliDiffSet   bool
+		cliDiffValue bool
+		expectedDiff bool
+	}{
+		{
+			name:         "config diff=true, CLI not set -> uses config (true)",
+			configDiff:   true,
+			cliDiffSet:   false,
+			cliDiffValue: false,
+			expectedDiff: true,
+		},
+		{
+			name:         "config diff=false, CLI not set -> uses config (false)",
+			configDiff:   false,
+			cliDiffSet:   false,
+			cliDiffValue: false,
+			expectedDiff: false,
+		},
+		{
+			name:         "config diff=false, CLI --diff -> CLI overrides (true)",
+			configDiff:   false,
+			cliDiffSet:   true,
+			cliDiffValue: true,
+			expectedDiff: true,
+		},
+		{
+			name:         "config diff=true, CLI --diff=false -> CLI overrides (false)",
+			configDiff:   true,
+			cliDiffSet:   true,
+			cliDiffValue: false,
+			expectedDiff: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create a fresh cobra command to test flag changes
+			cmd := &cobra.Command{}
+			cmd.Flags().Bool("check", false, "")
+			cmd.Flags().Bool("diff", false, "")
+
+			// Set CLI flag if needed (sets both the flag value and marks it as changed)
+			if tt.cliDiffSet {
+				err := cmd.Flags().Set("diff", strconv.FormatBool(tt.cliDiffValue))
+				require.NoError(t, err)
+			}
+
+			// Create config with the test value
+			cfg := &config.Config{
+				Engines: config.Engines{
+					Fmt: config.FmtEngineConfig{
+						Diff: tt.configDiff,
+					},
+				},
+			}
+
+			result := buildFmtConfig(cmd, cfg)
+			assert.Equal(t, tt.expectedDiff, result.Diff, "Diff mode mismatch")
+		})
+	}
+}
+
+// TestBuildFmtConfig_NilConfig verifies behavior when config is nil
+func TestBuildFmtConfig_NilConfig(t *testing.T) {
+	cmd := &cobra.Command{}
+	cmd.Flags().Bool("check", false, "")
+	cmd.Flags().Bool("diff", false, "")
+
+	result := buildFmtConfig(cmd, nil)
+	assert.False(t, result.Check, "Check should default to false")
+	assert.False(t, result.Diff, "Diff should default to false")
+}
+
+// TestFmtCheckMode_ReturnsError_UnformattedFiles verifies exit code 1 on unformatted files.
+// The complementary passing case (formatted files) is covered by TestFmtCmdExecution.
+func TestFmtCheckMode_ReturnsError_UnformattedFiles(t *testing.T) {
+	// Save and restore globals to avoid test pollution
+	oldFmtCheck := fmtCheck
+	oldFmtDiff := fmtDiff
+	oldFmtAll := fmtAll
+	oldChanged := changed
+
+	// Reset Cobra flag Changed state (prevents pollution from prior tests)
+	resetFmtFlags := func() {
+		for _, name := range []string{"check", "diff", "all"} {
+			if f := fmtCmd.Flags().Lookup(name); f != nil {
+				f.Changed = false
+			}
+		}
+	}
+	resetFmtFlags()
+
+	t.Cleanup(func() {
+		fmtCheck = oldFmtCheck
+		fmtDiff = oldFmtDiff
+		fmtAll = oldFmtAll
+		changed = oldChanged
+		rootCmd.SetArgs(nil)
+		resetFmtFlags()
+	})
+
+	// Create an unformatted Terraform file (inconsistent spacing, missing alignment)
+	dir := t.TempDir()
+	unformattedContent := `resource "aws_instance" "bad"   {
+ami="ami-123"
+instance_type="t2.micro"
+}`
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "unformatted.tf"), []byte(unformattedContent), 0o644))
+
+	// Reset flags for clean state
+	fmtCheck = false
+	fmtDiff = false
+	fmtAll = false
+	changed = false
+
+	// Run fmt --check on unformatted file
+	rootCmd.SetArgs([]string{"fmt", "--check", dir})
+	err := rootCmd.Execute()
+
+	// Should return error (exit code 1 equivalent)
+	assert.Error(t, err, "fmt --check should return error for unformatted files")
+	assert.Equal(t, "1 file(s) need formatting", err.Error())
+}
+
+// TestBuildFmtConfig_BothFlagsOverride verifies both flags can be overridden simultaneously
+func TestBuildFmtConfig_BothFlagsOverride(t *testing.T) {
+	cmd := &cobra.Command{}
+	cmd.Flags().Bool("check", false, "")
+	cmd.Flags().Bool("diff", false, "")
+
+	// Config has both set to true
+	cfg := &config.Config{
+		Engines: config.Engines{
+			Fmt: config.FmtEngineConfig{
+				Check: true,
+				Diff:  true,
+			},
+		},
+	}
+
+	// CLI sets both to false
+	require.NoError(t, cmd.Flags().Set("check", "false"))
+	require.NoError(t, cmd.Flags().Set("diff", "false"))
+
+	result := buildFmtConfig(cmd, cfg)
+	assert.False(t, result.Check, "CLI --check=false should override config check=true")
+	assert.False(t, result.Diff, "CLI --diff=false should override config diff=true")
 }

@@ -1,0 +1,11 @@
+# actionlint configuration
+# https://github.com/rhysd/actionlint/blob/main/docs/config.md
+
+self-hosted-runner:
+  # No self-hosted runners in this project
+  labels: []
+
+config-variables: []
+
+# Disable shellcheck info-level findings (SC2086, SC2035, SC2129)
+# These are style suggestions, not bugs. We can revisit later.

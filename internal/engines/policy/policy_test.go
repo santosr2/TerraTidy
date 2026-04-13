@@ -713,3 +713,136 @@ resource "aws_instance" "example" {
 		})
 	}
 }
+
+// TestBuiltinPolicy_RequiredTags verifies the built-in required-tags policy
+// detects missing tags on EC2 instances and S3 buckets.
+// NOTE: This test requires New(nil) to trigger the built-in policy fallback path.
+func TestBuiltinPolicy_RequiredTags(t *testing.T) {
+	tests := []struct {
+		name        string
+		content     string
+		expectRule  string
+		expectFound bool
+	}{
+		{
+			name: "EC2 instance without tags triggers required-tags",
+			content: `resource "aws_instance" "example" {
+  ami           = "ami-12345678"
+  instance_type = "t2.micro"
+}
+`,
+			expectRule:  "policy.required-tags",
+			expectFound: true,
+		},
+		{
+			name: "EC2 instance with tags does not trigger required-tags",
+			content: `resource "aws_instance" "example" {
+  ami           = "ami-12345678"
+  instance_type = "t2.micro"
+
+  tags = {
+    Name = "example"
+    Env  = "dev"
+  }
+}
+`,
+			expectRule:  "policy.required-tags",
+			expectFound: false,
+		},
+		{
+			name: "S3 bucket without tags triggers required-tags",
+			content: `resource "aws_s3_bucket" "example" {
+  bucket = "my-bucket"
+}
+`,
+			expectRule:  "policy.required-tags",
+			expectFound: true,
+		},
+		{
+			name: "S3 bucket with tags does not trigger required-tags",
+			content: `resource "aws_s3_bucket" "example" {
+  bucket = "my-bucket"
+
+  tags = {
+    Name = "my-bucket"
+  }
+}
+`,
+			expectRule:  "policy.required-tags",
+			expectFound: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tmpDir := t.TempDir()
+			tmpFile := filepath.Join(tmpDir, "main.tf")
+			require.NoError(t, os.WriteFile(tmpFile, []byte(tt.content), 0o644))
+
+			// Use nil config to run built-in policies
+			engine := New(nil)
+			findings, err := engine.Run(context.Background(), []string{tmpFile})
+			require.NoError(t, err)
+
+			// Check if the expected rule was found
+			found := false
+			for _, f := range findings {
+				if f.Rule == tt.expectRule {
+					found = true
+					break
+				}
+			}
+
+			if tt.expectFound {
+				assert.True(t, found, "expected to find %s finding but did not", tt.expectRule)
+			} else {
+				assert.False(t, found, "expected NOT to find %s finding but did", tt.expectRule)
+			}
+		})
+	}
+}
+
+// TestBuiltinPolicy_NoPublicSSH_CurrentlyBroken documents that the built-in
+// no-public-ssh policy does not fire because ingress is parsed as a map, not
+// a string. The policy uses `contains(resource.ingress, "0.0.0.0/0")` which
+// fails silently on map data.
+//
+// TODO: Fix the policy to handle nested blocks correctly. When fixed, replace
+// this test with proper assertions that verify detection of overly permissive
+// security groups.
+func TestBuiltinPolicy_NoPublicSSH_CurrentlyBroken(t *testing.T) {
+	// Create a security group that SHOULD trigger the no-public-ssh policy
+	// but doesn't due to the map vs string bug.
+	content := `resource "aws_security_group" "bad" {
+  name = "allow-all-ssh"
+
+  ingress {
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+`
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "main.tf")
+	require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0o644))
+
+	// Use nil config to run built-in policies
+	engine := New(nil)
+	findings, err := engine.Run(context.Background(), []string{tmpFile})
+	require.NoError(t, err)
+
+	// Check if the policy fired (it shouldn't due to the bug)
+	found := false
+	for _, f := range findings {
+		if f.Rule == "policy.no-public-ssh" {
+			found = true
+			break
+		}
+	}
+
+	// This assertion documents the broken state. When the policy is fixed,
+	// this test will fail and should be replaced with proper detection tests.
+	assert.False(t, found, "no-public-ssh policy unexpectedly fired - has the bug been fixed? Replace this test with proper detection assertions")
+}

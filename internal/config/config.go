@@ -372,18 +372,32 @@ func (p *PluginsConfig) ShouldVerifyIntegrity() bool {
 
 // Load loads the configuration from the specified path
 func Load(path string) (*Config, error) {
+	cfg, _, err := LoadWithFiles(path)
+	return cfg, err
+}
+
+// LoadWithFiles loads the configuration and returns all loaded file paths.
+// This includes the main config file and all imported files.
+// Useful for watching config files for changes.
+func LoadWithFiles(path string) (*Config, []string, error) {
 	if path == "" {
 		path = ".terratidy.yaml"
 	}
 
 	// Check if file exists
 	if _, err := os.Stat(path); os.IsNotExist(err) {
-		return DefaultConfig(), nil
+		return DefaultConfig(), nil, nil
 	}
 
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("reading config file %s: %w", path, err)
+		return nil, nil, fmt.Errorf("reading config file %s: %w", path, err)
+	}
+
+	// Handle empty or whitespace-only config files as defaults
+	trimmed := strings.TrimSpace(string(data))
+	if trimmed == "" {
+		return DefaultConfig(), []string{path}, nil
 	}
 
 	// Expand environment variables in the config
@@ -391,25 +405,33 @@ func Load(path string) (*Config, error) {
 
 	var cfg Config
 	if err := unmarshalStrict([]byte(expandedData), &cfg); err != nil {
-		return nil, fmt.Errorf("parsing config: %w", err)
+		return nil, nil, fmt.Errorf("parsing config: %w", err)
 	}
+
+	// Track all loaded files
+	absPath, _ := filepath.Abs(path)
+	visited := map[string]bool{absPath: true}
 
 	// Load imports if specified
 	if len(cfg.Imports) > 0 {
-		absPath, _ := filepath.Abs(path)
-		visited := map[string]bool{absPath: true}
 		if err := cfg.loadImports(filepath.Dir(path), visited); err != nil {
-			return nil, fmt.Errorf("loading imports: %w", err)
+			return nil, nil, fmt.Errorf("loading imports: %w", err)
 		}
 	}
 
 	// Apply defaults and validate
 	cfg.SetDefaults()
 	if err := cfg.Validate(); err != nil {
-		return nil, fmt.Errorf("invalid config: %w", err)
+		return nil, nil, fmt.Errorf("invalid config: %w", err)
 	}
 
-	return &cfg, nil
+	// Collect loaded file paths
+	loadedFiles := make([]string, 0, len(visited))
+	for filePath := range visited {
+		loadedFiles = append(loadedFiles, filePath)
+	}
+
+	return &cfg, loadedFiles, nil
 }
 
 // expandEnvVars expands environment variables in the config content

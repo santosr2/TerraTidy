@@ -222,6 +222,22 @@ The CI pipeline runs on every PR:
 
 All checks must pass before merging. See [Security](security.md) for details on the scanning pipeline.
 
+**Benchmark workflow** (`.github/workflows/benchmark.yml`):
+
+- Runs on main pushes (when baseline changes) or PRs with `benchmark` label
+- Compares against `benchmarks/baseline.txt`
+- 15% regression threshold triggers a warning and PR failure
+- Posts comparison results as PR comment
+
+See [Performance](performance.md) for the full benchmarking guide.
+
+**Pre-commit hook test workflow** (`.github/workflows/precommit-test.yml`):
+
+- Validates `.pre-commit-hooks.yaml` YAML syntax and structure
+- Tests all hooks (`terratidy-fmt`, `terratidy-check`, `terratidy-fix`, etc.) against real Terraform fixtures
+- Verifies hooks work with the actual hook definitions from the repository
+- Runs on Ubuntu and macOS (Windows excluded due to PATH/extension handling complexity)
+
 ### API Stability
 
 The `pkg/sdk` package is the public API for rule authors. Changes to exported types and functions

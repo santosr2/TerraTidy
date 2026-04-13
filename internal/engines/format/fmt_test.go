@@ -98,6 +98,36 @@ func TestFormat(t *testing.T) {
 		want  string
 	}{
 		{
+			name:  "empty file",
+			input: "",
+			want:  "",
+		},
+		{
+			name:  "whitespace only",
+			input: "   \n\t\n  ",
+			want:  "\n\n  ", // hclwrite normalizes but preserves some structure
+		},
+		{
+			name:  "only hash comment",
+			input: "# This is a comment\n",
+			want:  "# This is a comment\n",
+		},
+		{
+			name:  "only slash comment",
+			input: "// This is a comment\n",
+			want:  "// This is a comment\n",
+		},
+		{
+			name:  "only block comment",
+			input: "/* Block comment */\n",
+			want:  "/* Block comment */\n",
+		},
+		{
+			name:  "multiple comments only",
+			input: "# Comment 1\n# Comment 2\n",
+			want:  "# Comment 1\n# Comment 2\n",
+		},
+		{
 			name: "basic formatting",
 			input: `resource "aws_instance" "example"   {
 ami="ami-12345678"

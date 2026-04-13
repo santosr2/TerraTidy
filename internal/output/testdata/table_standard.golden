@@ -1,0 +1,10 @@
+SEVERITY   LOCATION                                           MESSAGE
+----------------------------------------------------------------------------------------------------
+ERROR      modules/network/main.tf:15:1                       Resource name does not follow naming convention
+WARNING    modules/network/main.tf:25:1                       Missing blank line between blocks
+WARNING    modules/compute/instances.tf:8:3                   Attribute 'instance_type' is deprecated, use 'size' instead
+ERROR      main.tf:1:1                                        Resource is missing required tag: Environment
+INFO       variables.tf:5:1                                   Variable should have a description
+
+----------------------------------------------------------------------------------------------------
+Summary: 2 error(s), 2 warning(s), 1 info

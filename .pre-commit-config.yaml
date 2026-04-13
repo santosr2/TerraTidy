@@ -53,6 +53,37 @@ repos:
         pass_filenames: false
 
   # =============================================================================
+  # Shell Scripts
+  # =============================================================================
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.10.0.1
+    hooks:
+      - id: shellcheck
+        args: [--severity=warning]
+        files: ^(tools/scripts/|examples/bash-rule/).*\.sh$
+
+  # =============================================================================
+  # Dockerfile
+  # =============================================================================
+  - repo: https://github.com/hadolint/hadolint
+    rev: v2.14.0
+    hooks:
+      - id: hadolint-docker
+
+  # =============================================================================
+  # GitHub Actions
+  # =============================================================================
+  - repo: https://github.com/rhysd/actionlint
+    rev: v1.7.12
+    hooks:
+      - id: actionlint
+
+  - repo: https://github.com/zizmorcore/zizmor-pre-commit
+    rev: v1.24.1
+    hooks:
+      - id: zizmor
+
+  # =============================================================================
   # Security
   # =============================================================================
   - repo: https://github.com/gitleaks/gitleaks

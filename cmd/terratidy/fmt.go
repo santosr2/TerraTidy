@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/santosr2/TerraTidy/internal/config"
 	fmtengine "github.com/santosr2/TerraTidy/internal/engines/format"
 	"github.com/santosr2/TerraTidy/internal/engines/style"
 	"github.com/spf13/cobra"
@@ -37,7 +38,7 @@ Use --all to also apply style fixes (equivalent to running fmt + style --fix).`,
 
   # Format and apply style fixes
   terratidy fmt --all`,
-	RunE: func(_ *cobra.Command, args []string) error {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		// Load configuration
 		cfg, err := loadConfig()
 		if err != nil {
@@ -55,11 +56,10 @@ Use --all to also apply style fixes (equivalent to running fmt + style --fix).`,
 			return nil
 		}
 
-		// Create formatter engine
-		engine := fmtengine.New(&fmtengine.Config{
-			Check: fmtCheck,
-			Diff:  fmtDiff,
-		})
+		// Create formatter engine with config+CLI merge
+		// CLI flags override config values when explicitly set
+		fmtCfg := buildFmtConfig(cmd, cfg)
+		engine := fmtengine.New(fmtCfg)
 
 		modeMsg := ""
 		if changed {
@@ -104,12 +104,12 @@ Use --all to also apply style fixes (equivalent to running fmt + style --fix).`,
 		}
 
 		// In check mode, return error if any file needs formatting
-		if fmtCheck && needsFormatting > 0 {
+		if fmtCfg.Check && needsFormatting > 0 {
 			return fmt.Errorf("%d file(s) need formatting", needsFormatting)
 		}
 
 		// Run style fixes if --all flag is set
-		if fmtAll && !fmtCheck {
+		if fmtAll && !fmtCfg.Check {
 			fmt.Println()
 			fmt.Println("Applying style fixes...")
 			fmt.Println()
@@ -164,4 +164,28 @@ func init() {
 	fmtCmd.Flags().BoolVar(&fmtDiff, "diff", false, "show diff of formatting changes")
 	fmtCmd.Flags().BoolVar(&fmtAll, "all", false, "also apply style fixes (equivalent to fmt + style --fix)")
 	rootCmd.AddCommand(fmtCmd)
+}
+
+// buildFmtConfig creates a format engine config by merging config file values
+// with CLI flags. CLI flags take precedence when explicitly set.
+func buildFmtConfig(cmd *cobra.Command, cfg *config.Config) *fmtengine.Config {
+	// Start with config values using the engine's ConfigFromEngine
+	var result *fmtengine.Config
+	if cfg != nil {
+		result = fmtengine.ConfigFromEngine(cfg.Engines.Fmt)
+	} else {
+		result = &fmtengine.Config{}
+	}
+
+	// CLI flags override config when explicitly set
+	if cmd.Flags().Changed("check") {
+		checkVal, _ := cmd.Flags().GetBool("check")
+		result.Check = checkVal
+	}
+	if cmd.Flags().Changed("diff") {
+		diffVal, _ := cmd.Flags().GetBool("diff")
+		result.Diff = diffVal
+	}
+
+	return result
 }

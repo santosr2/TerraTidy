@@ -262,6 +262,172 @@ output "web_instance_ids" {
   value       = [for instance in aws_instance.web : instance.id]
 }
 `
+
+	// deeplyNestedConfig contains HCL with 10+ levels of structural nesting
+	// (locals path reaches 11 levels) plus expression-level nesting in jsonencode
+	// calls. Used to stress test parsers and style checkers on deeply nested structures.
+	deeplyNestedConfig = `# Deeply nested Terraform configuration for benchmark testing
+# This tests parser and style engine performance with deep nesting
+
+resource "aws_lambda_function" "deeply_nested" {
+  function_name = "deeply-nested-lambda"
+  role          = aws_iam_role.lambda.arn
+  handler       = "index.handler"
+  runtime       = "nodejs18.x"
+
+  environment {
+    variables = {
+      CONFIG = jsonencode({
+        level1 = {
+          level2 = {
+            level3 = {
+              level4 = {
+                level5 = {
+                  level6 = {
+                    level7 = {
+                      level8 = {
+                        level9 = {
+                          level10 = {
+                            level11 = {
+                              level12 = {
+                                value = "deeply nested value"
+                                items = ["a", "b", "c"]
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      })
+    }
+  }
+
+  tags = {
+    Name        = "deeply-nested"
+    Environment = "benchmark"
+  }
+}
+
+resource "aws_iam_role" "lambda" {
+  name = "deeply-nested-lambda-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Action = "sts:AssumeRole"
+      Effect = "Allow"
+      Principal = {
+        Service = "lambda.amazonaws.com"
+      }
+      Condition = {
+        StringEquals = {
+          "aws:RequestTag/Project" = {
+            nested = {
+              deeply = {
+                value = ["benchmark"]
+              }
+            }
+          }
+        }
+      }
+    }]
+  })
+}
+
+locals {
+  nested_config = {
+    environments = {
+      production = {
+        settings = {
+          database = {
+            connection = {
+              pool = {
+                min = 5
+                max = 100
+                timeout = {
+                  connect = 30
+                  idle    = 60
+                  retry = {
+                    attempts = 3
+                    backoff = {
+                      initial = 100
+                      max     = 5000
+                      multiplier = 2
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+      staging = {
+        settings = {
+          database = {
+            connection = {
+              pool = {
+                min = 2
+                max = 20
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+variable "complex_object" {
+  type = object({
+    level1 = object({
+      level2 = object({
+        level3 = object({
+          level4 = object({
+            level5 = object({
+              level6 = object({
+                level7 = object({
+                  level8 = object({
+                    value = string
+                  })
+                })
+              })
+            })
+          })
+        })
+      })
+    })
+  })
+  default = {
+    level1 = {
+      level2 = {
+        level3 = {
+          level4 = {
+            level5 = {
+              level6 = {
+                level7 = {
+                  level8 = {
+                    value = "default"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+output "nested_value" {
+  value = var.complex_object.level1.level2.level3.level4.level5.level6.level7.level8.value
+}
+`
 )
 
 func BenchmarkStyleEngine_SimpleConfig(b *testing.B) {
@@ -423,6 +589,26 @@ func BenchmarkStyleEngine_SingleRuleEnabled(b *testing.B) {
 			// All other rules will use default enabled/disabled state
 		},
 	})
+	ctx := context.Background()
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := engine.Run(ctx, []string{tmpFile})
+		if err != nil {
+			b.Fatalf("Run() error = %v", err)
+		}
+	}
+}
+
+// BenchmarkStyleEngine_DeepNesting benchmarks the style engine against deeply nested HCL structures.
+func BenchmarkStyleEngine_DeepNesting(b *testing.B) {
+	tmpDir := b.TempDir()
+	tmpFile := filepath.Join(tmpDir, "deeply_nested.tf")
+	if err := os.WriteFile(tmpFile, []byte(deeplyNestedConfig), 0o644); err != nil {
+		b.Fatalf("failed to create temp file: %v", err)
+	}
+
+	engine := New(nil)
 	ctx := context.Background()
 
 	b.ResetTimer()

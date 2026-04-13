@@ -134,10 +134,12 @@ jobs:
           MINOR="${BASE_VERSION#*.}"
           MINOR="${MINOR%%.*}"
 
-          echo "tag=$TAG_NAME" >> "$GITHUB_OUTPUT"
-          echo "major=$MAJOR" >> "$GITHUB_OUTPUT"
-          echo "minor=$MINOR" >> "$GITHUB_OUTPUT"
-          echo "prerelease=$PRERELEASE" >> "$GITHUB_OUTPUT"
+          {
+            echo "tag=$TAG_NAME"
+            echo "major=$MAJOR"
+            echo "minor=$MINOR"
+            echo "prerelease=$PRERELEASE"
+          } >> "$GITHUB_OUTPUT"
 
           echo "Parsed: tag=$TAG_NAME major=$MAJOR minor=$MINOR prerelease=$PRERELEASE"
         env:

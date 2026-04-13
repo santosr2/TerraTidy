@@ -1,0 +1,264 @@
+{
+  "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
+  "version": "2.1.0",
+  "runs": [
+    {
+      "tool": {
+        "driver": {
+          "name": "TerraTidy",
+          "version": "1.0.0",
+          "informationUri": "https://github.com/santosr2/TerraTidy",
+          "rules": [
+            {
+              "id": "lint.deprecated-attribute",
+              "shortDescription": {
+                "text": "lint.deprecated-attribute"
+              },
+              "fullDescription": {
+                "text": ""
+              },
+              "properties": {
+                "tags": [
+                  "terraform",
+                  "terragrunt",
+                  "quality"
+                ]
+              }
+            },
+            {
+              "id": "policy.required-tags",
+              "shortDescription": {
+                "text": "policy.required-tags"
+              },
+              "fullDescription": {
+                "text": ""
+              },
+              "properties": {
+                "tags": [
+                  "terraform",
+                  "terragrunt",
+                  "quality"
+                ]
+              }
+            },
+            {
+              "id": "style.blank-lines",
+              "shortDescription": {
+                "text": "style.blank-lines"
+              },
+              "fullDescription": {
+                "text": ""
+              },
+              "properties": {
+                "tags": [
+                  "terraform",
+                  "terragrunt",
+                  "quality"
+                ]
+              }
+            },
+            {
+              "id": "style.description-present",
+              "shortDescription": {
+                "text": "style.description-present"
+              },
+              "fullDescription": {
+                "text": ""
+              },
+              "properties": {
+                "tags": [
+                  "terraform",
+                  "terragrunt",
+                  "quality"
+                ]
+              }
+            },
+            {
+              "id": "style.resource-naming",
+              "shortDescription": {
+                "text": "style.resource-naming"
+              },
+              "fullDescription": {
+                "text": ""
+              },
+              "properties": {
+                "tags": [
+                  "terraform",
+                  "terragrunt",
+                  "quality"
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "results": [
+        {
+          "ruleId": "style.resource-naming",
+          "level": "error",
+          "message": {
+            "text": "Resource name does not follow naming convention"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "modules/network/main.tf",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "startLine": 15,
+                  "startColumn": 1,
+                  "endLine": 15,
+                  "endColumn": 42
+                }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "style.blank-lines",
+          "level": "warning",
+          "message": {
+            "text": "Missing blank line between blocks"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "modules/network/main.tf",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "startLine": 25,
+                  "startColumn": 1,
+                  "endLine": 25,
+                  "endColumn": 1
+                }
+              }
+            }
+          ],
+          "fixes": [
+            {
+              "description": {
+                "text": "Auto-fix available for style.blank-lines"
+              },
+              "artifactChanges": [
+                {
+                  "artifactLocation": {
+                    "uri": "modules/network/main.tf",
+                    "uriBaseId": "%SRCROOT%"
+                  },
+                  "replacements": [
+                    {
+                      "deletedRegion": {
+                        "startLine": 25,
+                        "startColumn": 1,
+                        "endLine": 25,
+                        "endColumn": 1
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "ruleId": "lint.deprecated-attribute",
+          "level": "warning",
+          "message": {
+            "text": "Attribute 'instance_type' is deprecated, use 'size' instead"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "modules/compute/instances.tf",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "startLine": 8,
+                  "startColumn": 3,
+                  "endLine": 8,
+                  "endColumn": 28
+                }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "policy.required-tags",
+          "level": "error",
+          "message": {
+            "text": "Resource is missing required tag: Environment"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "main.tf",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "startLine": 1,
+                  "startColumn": 1,
+                  "endLine": 10,
+                  "endColumn": 2
+                }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "style.description-present",
+          "level": "note",
+          "message": {
+            "text": "Variable should have a description"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "variables.tf",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "startLine": 5,
+                  "startColumn": 1,
+                  "endLine": 7,
+                  "endColumn": 2
+                }
+              }
+            }
+          ],
+          "fixes": [
+            {
+              "description": {
+                "text": "Auto-fix available for style.description-present"
+              },
+              "artifactChanges": [
+                {
+                  "artifactLocation": {
+                    "uri": "variables.tf",
+                    "uriBaseId": "%SRCROOT%"
+                  },
+                  "replacements": [
+                    {
+                      "deletedRegion": {
+                        "startLine": 5,
+                        "startColumn": 1,
+                        "endLine": 7,
+                        "endColumn": 2
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

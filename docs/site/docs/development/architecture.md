@@ -305,6 +305,92 @@ func (s *Server) publishDiagnostics(uri string) {
 }
 ```
 
+### Debouncing
+
+The server debounces diagnostics to prevent running expensive checks on every keystroke, with an independent timer per open document:
+
+```go
+const DefaultDebounceDelay = 500 * time.Millisecond
+
+func (s *Server) scheduleDebouncedDiagnostics(uri string) {
+    s.debounceMu.Lock()
+    defer s.debounceMu.Unlock()
+
+    // Cancel any pending timer for this URI
+    if timer, ok := s.debounceTimers[uri]; ok {
+        timer.Stop()
+    }
+
+    s.debounceTimers[uri] = time.AfterFunc(s.debounceDelay, func() {
+        // Clean up timer from map before running diagnostics
+        s.debounceMu.Lock()
+        delete(s.debounceTimers, uri)
+        s.debounceMu.Unlock()
+
+        _ = s.publishDiagnostics(uri)
+    })
+}
+```
+
+### Config Auto-Reload
+
+The server watches config files for changes and auto-reloads:
+
+```text
+fsnotify event
+      │
+      ▼
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│  scheduleConfig │────▶│   reloadConfig  │────▶│   republishAll  │
+│  Reload (100ms) │     │   (engineMu)    │     │   Diagnostics   │
+└─────────────────┘     └─────────────────┘     └─────────────────┘
+     debounce            load + swap              async via WaitGroup
+```
+
+Key features:
+
+- Watches `.terratidy.yaml` and all imported config files
+- Debounces rapid file events (100ms) to coalesce editor writes
+- Swaps config and engines under `engineMu` to avoid partial state
+- Republishes diagnostics asynchronously via `republishWg` WaitGroup
+- On reload failure, keeps the previous config (bad save won't break session)
+- Skips scheduling if server is shutting down (`closing` flag)
+
+```go
+const ConfigReloadDebounceDelay = 100 * time.Millisecond
+
+// initConfigWatcher starts watching config files for changes (simplified)
+func (s *Server) initConfigWatcher(configPath string, configFiles []string) error {
+    watcher, _ := fsnotify.NewWatcher()
+    for _, file := range configFiles {
+        watcher.Add(file)  // errors logged, not fatal
+    }
+    go s.handleConfigWatchEvents()
+    return nil
+}
+
+// scheduleConfigReload debounces rapid file events (simplified)
+func (s *Server) scheduleConfigReload() {
+    s.configWatcherMu.Lock()
+    defer s.configWatcherMu.Unlock()
+
+    if s.closing {
+        return  // skip if shutting down
+    }
+    if s.configReloadTimer != nil {
+        s.configReloadTimer.Stop()
+    }
+    s.configReloadTimer = time.AfterFunc(s.configReloadDelay, func() {
+        if err := s.reloadConfig(); err == nil {
+            s.republishWg.Go(s.republishAllDiagnostics)
+        }
+    })
+}
+```
+
+The `workspace/didChangeConfiguration` notification triggers an immediate (non-debounced) config reload when the client pushes new settings.
+Unlike the fsnotify path, diagnostics are not automatically republished.
+
 ## Plugin System
 
 ### Plugin Loading

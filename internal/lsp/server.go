@@ -17,6 +17,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/fsnotify/fsnotify"
 	"github.com/santosr2/TerraTidy/internal/buildinfo"
 	"github.com/santosr2/TerraTidy/internal/config"
 	"github.com/santosr2/TerraTidy/internal/engines/format"
@@ -80,6 +81,14 @@ func ParseLogLevel(s string) LogLevel {
 	}
 }
 
+// DefaultDebounceDelay is the default delay before running diagnostics after a document change.
+// This prevents running expensive diagnostics on every keystroke.
+const DefaultDebounceDelay = 500 * time.Millisecond
+
+// ConfigReloadDebounceDelay is the delay before reloading config after a file change.
+// This coalesces rapid file events (e.g., editor save with multiple writes).
+const ConfigReloadDebounceDelay = 100 * time.Millisecond
+
 // Server represents an LSP server instance
 type Server struct {
 	reader         *bufio.Reader
@@ -100,6 +109,24 @@ type Server struct {
 	logFile        *os.File
 	diagSem        chan struct{} // semaphore for concurrent diagnostics
 	sessionTempDir string        // private temp directory for this session
+
+	// Debouncing: defer diagnostics until typing pauses
+	debounceTimers map[string]*time.Timer // URI -> pending timer
+	debounceMu     sync.Mutex             // protects debounceTimers
+	debounceDelay  time.Duration          // configurable delay (default: DefaultDebounceDelay)
+
+	// Config watching: auto-reload on file changes
+	configWatcher     *fsnotify.Watcher // watches config files for changes
+	configFiles       []string          // list of config files being watched
+	configWatcherMu   sync.Mutex        // protects configWatcher, configFiles, configReloadTimer, closing
+	configPath        string            // path to main config file (for reload)
+	configReloadTimer *time.Timer       // debounce timer for config reload
+	configReloadDelay time.Duration     // configurable delay (default: ConfigReloadDebounceDelay)
+	closing           bool              // true when server is shutting down
+	republishWg       sync.WaitGroup    // tracks in-flight republishAllDiagnostics goroutines
+
+	// Engine mutex: protects engine and config fields during reload
+	engineMu sync.RWMutex // protects config, lintEngine, styleEngine, pluginRules
 }
 
 // Document represents an open document
@@ -113,12 +140,15 @@ type Document struct {
 // NewServer creates a new LSP server
 func NewServer(in io.Reader, out io.Writer) *Server {
 	return &Server{
-		reader:    bufio.NewReader(in),
-		writer:    out,
-		documents: make(map[string]*Document),
-		logger:    log.New(os.Stderr, "terratidy-lsp: ", log.Ltime),
-		logLevel:  LogLevelInfo,
-		diagSem:   make(chan struct{}, maxConcurrentDiagnostics),
+		reader:            bufio.NewReader(in),
+		writer:            out,
+		documents:         make(map[string]*Document),
+		logger:            log.New(os.Stderr, "terratidy-lsp: ", log.Ltime),
+		logLevel:          LogLevelInfo,
+		diagSem:           make(chan struct{}, maxConcurrentDiagnostics),
+		debounceTimers:    make(map[string]*time.Timer),
+		debounceDelay:     DefaultDebounceDelay,
+		configReloadDelay: ConfigReloadDebounceDelay,
 	}
 }
 
@@ -140,6 +170,17 @@ func (s *Server) SetLogFile(path string) error {
 
 // Close releases resources held by the server (e.g., log file handle)
 func (s *Server) Close() error {
+	// Mark server as closing to prevent new operations
+	s.configWatcherMu.Lock()
+	s.closing = true
+	s.configWatcherMu.Unlock()
+
+	// Stop config watcher (cancels pending reload timer)
+	s.stopConfigWatcher()
+
+	// Wait for any in-flight republish operations to complete
+	s.republishWg.Wait()
+
 	// Clean up session temp directory
 	if s.sessionTempDir != "" {
 		_ = os.RemoveAll(s.sessionTempDir)
@@ -148,6 +189,259 @@ func (s *Server) Close() error {
 		return s.logFile.Close()
 	}
 	return nil
+}
+
+// initConfigWatcher starts watching config files for changes.
+// When a config file changes, the server reloads configuration and reinitializes engines.
+func (s *Server) initConfigWatcher(configPath string, configFiles []string) error {
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		return fmt.Errorf("creating config watcher: %w", err)
+	}
+
+	s.configWatcherMu.Lock()
+	s.configWatcher = watcher
+	s.configFiles = configFiles
+	s.configPath = configPath
+	s.configWatcherMu.Unlock()
+
+	// Add all config files to watcher
+	for _, file := range configFiles {
+		if err := watcher.Add(file); err != nil {
+			s.logWarn("failed to watch config file %s: %v", file, err)
+			// Continue watching other files
+		} else {
+			s.logDebug("watching config file: %s", file)
+		}
+	}
+
+	// Start event handler goroutine
+	go s.handleConfigWatchEvents()
+
+	return nil
+}
+
+// stopConfigWatcher stops watching config files and releases resources.
+func (s *Server) stopConfigWatcher() {
+	s.configWatcherMu.Lock()
+	defer s.configWatcherMu.Unlock()
+
+	// Cancel any pending reload
+	if s.configReloadTimer != nil {
+		s.configReloadTimer.Stop()
+		s.configReloadTimer = nil
+	}
+
+	if s.configWatcher != nil {
+		if err := s.configWatcher.Close(); err != nil {
+			s.logWarn("failed to close config watcher: %v", err)
+		}
+		s.configWatcher = nil
+		s.configFiles = nil
+	}
+}
+
+// handleConfigWatchEvents processes fsnotify events for config file changes.
+func (s *Server) handleConfigWatchEvents() {
+	s.configWatcherMu.Lock()
+	watcher := s.configWatcher
+	s.configWatcherMu.Unlock()
+
+	if watcher == nil {
+		return
+	}
+
+	for {
+		select {
+		case event, ok := <-watcher.Events:
+			if !ok {
+				return // Watcher closed
+			}
+
+			// Only handle Write and Create events (file modified or recreated)
+			if event.Op&(fsnotify.Write|fsnotify.Create) != 0 {
+				s.logDebug("config file changed: %s (debouncing)", event.Name)
+				s.scheduleConfigReload()
+			}
+
+		case err, ok := <-watcher.Errors:
+			if !ok {
+				return // Watcher closed
+			}
+			s.logError("config watcher error: %v", err)
+		}
+	}
+}
+
+// scheduleConfigReload schedules a config reload after a debounce delay.
+// This coalesces rapid file events from editors that write multiple times per save.
+func (s *Server) scheduleConfigReload() {
+	s.configWatcherMu.Lock()
+	defer s.configWatcherMu.Unlock()
+
+	// Don't schedule if server is closing
+	if s.closing {
+		return
+	}
+
+	// Cancel any pending reload
+	if s.configReloadTimer != nil {
+		s.configReloadTimer.Stop()
+	}
+
+	// Schedule new reload after debounce delay
+	s.configReloadTimer = time.AfterFunc(s.configReloadDelay, func() {
+		// Check closing flag again before executing reload
+		s.configWatcherMu.Lock()
+		isClosing := s.closing
+		s.configWatcherMu.Unlock()
+		if isClosing {
+			return
+		}
+
+		s.logInfo("config file changed, reloading...")
+		if err := s.reloadConfig(); err != nil {
+			s.logError("failed to reload config: %v", err)
+		} else {
+			s.logInfo("config reloaded successfully")
+			// Track the republish goroutine so Close() can wait for it
+			s.republishWg.Go(s.republishAllDiagnostics)
+		}
+	})
+}
+
+// reloadConfig reloads the configuration from disk and reinitializes engines.
+func (s *Server) reloadConfig() error {
+	s.configWatcherMu.Lock()
+	configPath := s.configPath
+	s.configWatcherMu.Unlock()
+
+	if configPath == "" {
+		return fmt.Errorf("no config path set")
+	}
+
+	// Snapshot initOptions under engineMu to avoid race with handleInitialize
+	// (initOptions is written once during initialize, but we need safe access)
+	s.engineMu.RLock()
+	initOpts := s.initOptions
+	s.engineMu.RUnlock()
+
+	// Load config with file list (outside lock - I/O bound)
+	cfg, configFiles, err := config.LoadWithFiles(configPath)
+	if err != nil {
+		// Keep using existing config on error
+		return fmt.Errorf("loading config: %w", err)
+	}
+
+	// Apply profile from init options
+	if initOpts != nil && initOpts.Profile != "" {
+		if profileErr := cfg.ApplyProfile(initOpts.Profile); profileErr != nil {
+			s.logInfo("profile %q not found: %v", initOpts.Profile, profileErr)
+		}
+	}
+
+	// Apply severity threshold from init options
+	if initOpts != nil && initOpts.SeverityThreshold != "" {
+		cfg.SeverityThreshold = initOpts.SeverityThreshold
+	}
+
+	// Reload plugin rules if plugins are enabled (outside lock - I/O bound)
+	var pluginRules []sdk.Rule
+	if cfg.Plugins.Enabled {
+		mgr := plugins.NewManager(cfg.Plugins.Directories, cfg.Plugins.ShouldVerifyIntegrity())
+		if err := mgr.LoadAll(); err != nil {
+			s.logWarn("failed to load plugins: %v", err)
+		} else {
+			rulesMap := mgr.GetRules()
+			pluginRules = make([]sdk.Rule, 0, len(rulesMap))
+			for _, rule := range rulesMap {
+				pluginRules = append(pluginRules, rule)
+			}
+		}
+	}
+
+	// Build style config before acquiring lock
+	styleConfig := buildStyleConfigFromCfg(cfg)
+
+	// Create new engines before acquiring lock
+	newLintEngine := lint.New(nil, pluginRules...)
+	newStyleEngine := style.New(styleConfig, pluginRules...)
+
+	// Update all engine-related fields atomically
+	s.engineMu.Lock()
+	s.config = cfg
+	s.pluginRules = pluginRules
+	s.lintEngine = newLintEngine
+	s.styleEngine = newStyleEngine
+	s.engineMu.Unlock()
+
+	// Update watched files (new imports may have been added)
+	s.updateConfigWatcher(configFiles)
+
+	return nil
+}
+
+// updateConfigWatcher updates the watched config files after a reload.
+func (s *Server) updateConfigWatcher(newFiles []string) {
+	s.configWatcherMu.Lock()
+	defer s.configWatcherMu.Unlock()
+
+	if s.configWatcher == nil {
+		return
+	}
+
+	// Build set of current files
+	currentSet := make(map[string]bool)
+	for _, f := range s.configFiles {
+		currentSet[f] = true
+	}
+
+	// Build set of new files
+	newSet := make(map[string]bool)
+	for _, f := range newFiles {
+		newSet[f] = true
+	}
+
+	// Remove watches for files no longer in config
+	for f := range currentSet {
+		if !newSet[f] {
+			if err := s.configWatcher.Remove(f); err != nil {
+				s.logWarn("failed to unwatch config file %s: %v", f, err)
+			} else {
+				s.logDebug("unwatched config file: %s", f)
+			}
+		}
+	}
+
+	// Add watches for new files
+	for f := range newSet {
+		if !currentSet[f] {
+			if err := s.configWatcher.Add(f); err != nil {
+				s.logWarn("failed to watch config file %s: %v", f, err)
+			} else {
+				s.logDebug("watching config file: %s", f)
+			}
+		}
+	}
+
+	s.configFiles = newFiles
+}
+
+// republishAllDiagnostics republishes diagnostics for all open documents.
+// Called after config reload to apply new settings.
+func (s *Server) republishAllDiagnostics() {
+	s.docMu.RLock()
+	uris := make([]string, 0, len(s.documents))
+	for uri := range s.documents {
+		uris = append(uris, uri)
+	}
+	s.docMu.RUnlock()
+
+	for _, uri := range uris {
+		if err := s.publishDiagnostics(uri); err != nil {
+			s.logError("failed to republish diagnostics for %s: %v", uri, err)
+		}
+	}
 }
 
 // initSessionTempDir creates a private temp directory for this server session.
@@ -367,6 +661,8 @@ func (s *Server) handleMessage(content json.RawMessage) error {
 		return s.handleCodeAction(msg)
 	case "textDocument/diagnostic":
 		return s.handleDiagnostic(msg)
+	case "workspace/didChangeConfiguration":
+		return s.handleDidChangeConfiguration(msg)
 	default:
 		// Unknown method - respond with method not found for requests
 		if msg.ID != nil {
@@ -409,10 +705,11 @@ func (s *Server) handleInitialize(msg RequestMessage) error {
 		configPath = s.initOptions.ConfigPath
 	}
 	s.logDebug("Loading config from: %s", configPath)
-	cfg, err := config.Load(configPath)
+	cfg, configFiles, err := config.LoadWithFiles(configPath)
 	if err != nil {
 		s.logDebug("Config load error (using defaults): %v", err)
 		cfg = config.DefaultConfig()
+		configFiles = nil
 	} else {
 		s.logDebug("Config loaded: severity_threshold=%s", cfg.SeverityThreshold)
 	}
@@ -458,6 +755,14 @@ func (s *Server) handleInitialize(msg RequestMessage) error {
 	s.lintEngine = lint.New(nil, s.pluginRules...)
 	s.styleEngine = style.New(s.buildStyleConfig(), s.pluginRules...)
 
+	// Start config file watcher if config files exist
+	if len(configFiles) > 0 {
+		if err := s.initConfigWatcher(configPath, configFiles); err != nil {
+			s.logWarn("failed to start config watcher: %v", err)
+			// Not fatal - continue without auto-reload
+		}
+	}
+
 	result := InitializeResult{
 		Capabilities: ServerCapabilities{
 			TextDocumentSync: &TextDocumentSyncOptions{
@@ -482,6 +787,39 @@ func (s *Server) handleInitialize(msg RequestMessage) error {
 // handleInitialized handles the initialized notification.
 func (s *Server) handleInitialized(_ RequestMessage) error {
 	s.initialized = true
+	return nil
+}
+
+// handleDidChangeConfiguration handles workspace/didChangeConfiguration notification.
+// This is called when the client pushes configuration changes to the server.
+func (s *Server) handleDidChangeConfiguration(msg RequestMessage) error {
+	var params DidChangeConfigurationParams
+	if err := json.Unmarshal(msg.Params, &params); err != nil {
+		return fmt.Errorf("parsing didChangeConfiguration params: %w", err)
+	}
+
+	// If no settings provided, nothing to do
+	if params.Settings == nil {
+		s.logDebug("configuration change received with no settings, skipping")
+		return nil
+	}
+
+	// Replace initOptions with new settings.
+	// LSP clients (including VSCode) send complete settings on every change,
+	// so we don't need partial merging. This avoids inconsistent behavior
+	// between string fields (which could be conditionally merged) and boolean
+	// fields (which can't distinguish zero from explicit false).
+	s.engineMu.Lock()
+	s.initOptions = params.Settings
+	s.engineMu.Unlock()
+
+	// Trigger a config reload to apply the new settings
+	if err := s.reloadConfig(); err != nil {
+		s.logError("failed to reload config after didChangeConfiguration: %v", err)
+		return nil // Don't return error for notifications
+	}
+
+	s.logInfo("configuration updated successfully")
 	return nil
 }
 
@@ -563,8 +901,44 @@ func (s *Server) handleDidChange(msg RequestMessage) error {
 	}
 	s.docMu.Unlock()
 
-	// Run diagnostics
-	return s.publishDiagnostics(params.TextDocument.URI)
+	// Debounce diagnostics: cancel any pending timer and schedule new one
+	s.scheduleDebouncedDiagnostics(params.TextDocument.URI)
+	return nil
+}
+
+// scheduleDebouncedDiagnostics schedules diagnostics to run after the debounce delay.
+// If called again before the delay expires, the previous timer is canceled.
+func (s *Server) scheduleDebouncedDiagnostics(uri string) {
+	s.debounceMu.Lock()
+	defer s.debounceMu.Unlock()
+
+	// Cancel any existing timer for this URI
+	if timer, ok := s.debounceTimers[uri]; ok {
+		timer.Stop()
+	}
+
+	// Schedule new timer
+	s.debounceTimers[uri] = time.AfterFunc(s.debounceDelay, func() {
+		// Clean up timer from map
+		s.debounceMu.Lock()
+		delete(s.debounceTimers, uri)
+		s.debounceMu.Unlock()
+
+		// Run diagnostics (ignore error, already logged internally)
+		_ = s.publishDiagnostics(uri)
+	})
+}
+
+// cancelDebouncedDiagnostics cancels any pending debounced diagnostics for a URI.
+// Called when a document is closed to prevent diagnostics for non-existent documents.
+func (s *Server) cancelDebouncedDiagnostics(uri string) {
+	s.debounceMu.Lock()
+	defer s.debounceMu.Unlock()
+
+	if timer, ok := s.debounceTimers[uri]; ok {
+		timer.Stop()
+		delete(s.debounceTimers, uri)
+	}
 }
 
 // handleDidClose handles textDocument/didClose notification
@@ -573,6 +947,9 @@ func (s *Server) handleDidClose(msg RequestMessage) error {
 	if err := json.Unmarshal(msg.Params, &params); err != nil {
 		return fmt.Errorf("parsing didClose params: %w", err)
 	}
+
+	// Cancel any pending debounced diagnostics for this document
+	s.cancelDebouncedDiagnostics(params.TextDocument.URI)
 
 	s.docMu.Lock()
 	if doc, ok := s.documents[params.TextDocument.URI]; ok {
@@ -832,15 +1209,21 @@ func (s *Server) getDiagnostics(uri string) []Diagnostic {
 	ctx := context.Background()
 	var findings []sdk.Finding
 
-	if s.lintEngine != nil && s.isEngineEnabled("lint") {
-		lintFindings, err := s.lintEngine.Run(ctx, []string{tempFile})
+	// Copy engine pointers under lock to avoid race with config reload
+	s.engineMu.RLock()
+	lintEng := s.lintEngine
+	styleEng := s.styleEngine
+	s.engineMu.RUnlock()
+
+	if lintEng != nil && s.isEngineEnabled("lint") {
+		lintFindings, err := lintEng.Run(ctx, []string{tempFile})
 		if err == nil {
 			findings = append(findings, lintFindings...)
 		}
 	}
 
-	if s.styleEngine != nil && s.isEngineEnabled("style") {
-		styleFindings, err := s.styleEngine.Run(ctx, []string{tempFile})
+	if styleEng != nil && s.isEngineEnabled("style") {
+		styleFindings, err := styleEng.Run(ctx, []string{tempFile})
 		if err == nil {
 			findings = append(findings, styleFindings...)
 		}
@@ -1002,8 +1385,12 @@ func severityToLSP(severity sdk.Severity) int {
 
 // getSeverityThreshold returns the configured severity threshold
 func (s *Server) getSeverityThreshold() sdk.Severity {
-	if s.config != nil && s.config.SeverityThreshold != "" {
-		return sdk.ParseSeverity(s.config.SeverityThreshold, sdk.SeverityInfo)
+	s.engineMu.RLock()
+	cfg := s.config
+	s.engineMu.RUnlock()
+
+	if cfg != nil && cfg.SeverityThreshold != "" {
+		return sdk.ParseSeverity(cfg.SeverityThreshold, sdk.SeverityInfo)
 	}
 	return sdk.SeverityInfo // Default: show all
 }
@@ -1044,16 +1431,25 @@ func meetsThreshold(severity, threshold sdk.Severity) bool {
 
 // buildStyleConfig creates a style.Config from the server's config
 func (s *Server) buildStyleConfig() *style.Config {
+	s.engineMu.RLock()
+	cfg := s.config
+	s.engineMu.RUnlock()
+	return buildStyleConfigFromCfg(cfg)
+}
+
+// buildStyleConfigFromCfg builds a style.Config from a config.Config.
+// This is a separate function to allow building config before acquiring locks.
+func buildStyleConfigFromCfg(cfg *config.Config) *style.Config {
 	styleCfg := &style.Config{
 		Rules: make(map[string]style.RuleConfig),
 	}
 
-	if s.config == nil {
+	if cfg == nil {
 		return styleCfg
 	}
 
 	// Apply engine-level style rules first (from engines.style.rules)
-	for ruleName, ruleCfg := range s.config.Engines.Style.Rules {
+	for ruleName, ruleCfg := range cfg.Engines.Style.Rules {
 		rc := style.RuleConfig{
 			Enabled:  ruleCfg.Enabled,
 			Severity: ruleCfg.Severity,
@@ -1065,7 +1461,7 @@ func (s *Server) buildStyleConfig() *style.Config {
 	}
 
 	// Apply override rules (from overrides.rules), which take precedence
-	for ruleName, ruleCfg := range s.config.Overrides.Rules {
+	for ruleName, ruleCfg := range cfg.Overrides.Rules {
 		rc := style.RuleConfig{
 			Enabled:  ruleCfg.Enabled,
 			Severity: ruleCfg.Severity,

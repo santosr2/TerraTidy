@@ -109,3 +109,74 @@ ami="ami-123"
 func TestEngine_Name(t *testing.T) {
 	assert.Equal(t, "fmt", New(nil).Name())
 }
+
+// TestRun_MalformedHCL_NoPanic verifies the engine handles malformed HCL gracefully without panic.
+// hclwrite.Format is lenient and doesn't panic on invalid input - it returns the input unchanged
+// or partially formatted. This test ensures we don't introduce panics in our wrapper code.
+func TestRun_MalformedHCL_NoPanic(t *testing.T) {
+	tests := []struct {
+		name    string
+		content string
+	}{
+		{
+			name:    "unclosed brace",
+			content: `resource "aws_instance" "test" {`,
+		},
+		{
+			name:    "unclosed quote",
+			content: `resource "aws_instance" "test`,
+		},
+		{
+			name:    "invalid syntax",
+			content: `{{{{{`,
+		},
+		{
+			name:    "random garbage",
+			content: `!@#$%^&*()_+`,
+		},
+		{
+			name:    "mixed valid and invalid",
+			content: "resource \"aws_instance\" \"test\" {\n  ami = \"ami-123\"\n  invalid syntax here !!!!\n}",
+		},
+		{
+			name:    "null bytes",
+			content: "resource \"test\" \"x\" {\x00\x00}",
+		},
+		{
+			name:    "truncated block",
+			content: `resource "aws_s3_bucket" "bucket" { bucket = "my-bucket" tags = { Name = "`,
+		},
+		{
+			name:    "whitespace only",
+			content: "   \n\t\n  \n",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			tmpFile := filepath.Join(dir, "malformed.tf")
+			require.NoError(t, os.WriteFile(tmpFile, []byte(tt.content), 0o644))
+
+			engine := New(&Config{Check: true})
+
+			// This should not panic - the test passing without panic is the assertion
+			findings, err := engine.Run(context.Background(), []string{tmpFile})
+			// hclwrite.Format is lenient - it may return the input unchanged
+			// or partially formatted. We don't require an error, just no panic.
+			if err != nil {
+				assert.NotContains(t, err.Error(), "panic", "should not mention panic in error")
+			}
+
+			// In check mode, the file should NOT be modified regardless of findings
+			afterContent, readErr := os.ReadFile(tmpFile)
+			require.NoError(t, readErr)
+			assert.Equal(t, tt.content, string(afterContent), "check mode should not modify file")
+
+			// Findings may or may not be present depending on whether hclwrite
+			// detected any formatting changes needed. We don't assert on findings
+			// count since hclwrite behavior with malformed input varies.
+			_ = findings
+		})
+	}
+}

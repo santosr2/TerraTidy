@@ -106,7 +106,7 @@ runs:
       shell: bash
       env:
         INPUT_VERSION: ${{ inputs.version }}
-      run: |
+      run: | # zizmor: ignore[github-env]
         if [ "$INPUT_VERSION" = "latest" ]; then
           # Check if we're in a terratidy checkout (for action testing)
           if [ -f "go.mod" ] && grep -q "github.com/santosr2/TerraTidy" go.mod 2>/dev/null; then

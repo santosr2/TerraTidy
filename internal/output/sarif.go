@@ -158,7 +158,8 @@ func buildSARIFRules(findings []sdk.Finding) []SARIFRule {
 }
 
 func (f *SARIFFormatter) buildSARIFResults(findings []sdk.Finding) []SARIFResult {
-	var results []SARIFResult
+	// Initialize as empty slice, not nil, so JSON encodes as [] not null
+	results := make([]SARIFResult, 0, len(findings))
 	for _, finding := range findings {
 		result := f.buildSARIFResult(finding)
 		results = append(results, result)

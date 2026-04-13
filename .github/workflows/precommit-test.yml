@@ -1,0 +1,376 @@
+name: Test Pre-commit Hooks
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.pre-commit-hooks.yaml'
+      - '**/*.go'
+      - 'go.mod'
+      - 'go.sum'
+      - '.github/workflows/precommit-test.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - '.pre-commit-hooks.yaml'
+      - '**/*.go'
+      - 'go.mod'
+      - 'go.sum'
+      - '.github/workflows/precommit-test.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-precommit-test-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Note: Windows excluded because pre-commit system hooks require the binary in PATH,
+  # and Windows needs .exe extension handling that complicates the test setup.
+  # The hooks themselves work on Windows when terratidy.exe is in PATH.
+  test-hooks:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: '3.12'
+
+      - name: Install pre-commit
+        run: |
+          pip install 'pre-commit>=3.2.0'
+          pre-commit --version
+
+      - name: Build TerraTidy
+        run: |
+          go build -trimpath -o bin/terratidy ./cmd/terratidy
+          echo "$PWD/bin" >> "$GITHUB_PATH"
+
+      - name: Verify terratidy is in PATH
+        run: terratidy version
+
+      - name: Create test repository
+        shell: bash
+        run: |
+          # Use /tmp to avoid nested git repo issues
+          mkdir -p /tmp/test-precommit
+          cd /tmp/test-precommit
+          git init -b main
+          git config user.email "test@example.com"
+          git config user.name "Test User"
+
+          # Create a file that needs formatting (bad indentation)
+          printf '%s\n' \
+            'resource "aws_instance" "example" {' \
+            'ami           = "ami-12345678"' \
+            'instance_type = "t2.micro"' \
+            '}' > main.tf
+          git add main.tf
+
+          # Create pre-commit config using actual hooks from repo
+          # This tests the real .pre-commit-hooks.yaml definitions
+          printf '%s\n' \
+            'repos:' \
+            "  - repo: $GITHUB_WORKSPACE" \
+            '    rev: HEAD' \
+            '    hooks:' \
+            '      - id: terratidy-fmt' \
+            '      - id: terratidy-fmt-check' \
+            '      - id: terratidy-style' \
+            '      - id: terratidy-style-fix' \
+            '      - id: terratidy-lint' \
+            '      - id: terratidy-check' \
+            '      - id: terratidy-fix' > .pre-commit-config.yaml
+
+      - name: Test pre-commit installs hooks from .pre-commit-hooks.yaml
+        working-directory: /tmp/test-precommit
+        run: |
+          pre-commit install
+          echo "Pre-commit hooks installed successfully from .pre-commit-hooks.yaml"
+
+      - name: Test terratidy-fmt hook formats files
+        working-directory: /tmp/test-precommit
+        run: |
+          # pre-commit returns 1 when hooks modify files, which is expected
+          # Use proper if-then-else to satisfy shellcheck SC2015
+          if pre-commit run terratidy-fmt --all-files; then
+            echo "::error::Expected pre-commit to modify files and return non-zero"
+            exit 1
+          fi
+          # Verify file was formatted (check for proper indentation)
+          if ! grep -q '  ami' main.tf; then
+            echo "::error::terratidy-fmt did not format the file"
+            exit 1
+          fi
+          git add main.tf
+          echo "terratidy-fmt hook formatted files correctly"
+
+      - name: Test terratidy-fmt-check detects unformatted files
+        working-directory: /tmp/test-precommit
+        run: |
+          # Reset file to bad formatting
+          printf '%s\n' \
+            'resource "aws_instance" "example" {' \
+            'ami           = "ami-12345678"' \
+            'instance_type = "t2.micro"' \
+            '}' > main.tf
+          git add main.tf
+          # Clear pre-commit cache to ensure fresh run
+          pre-commit clean
+          # fmt-check should fail on unformatted file
+          if pre-commit run terratidy-fmt-check --all-files; then
+            echo "::error::terratidy-fmt-check should have failed on unformatted file"
+            exit 1
+          fi
+          echo "terratidy-fmt-check correctly detected formatting issues"
+
+      - name: Test terratidy-style hook runs
+        working-directory: /tmp/test-precommit
+        run: |
+          # Format the file first
+          printf '%s\n' \
+            'resource "aws_instance" "example" {' \
+            '  ami           = "ami-12345678"' \
+            '  instance_type = "t2.micro"' \
+            '}' > main.tf
+          git add main.tf
+          pre-commit clean
+          # Style hook runs checks (exit code depends on findings)
+          pre-commit run terratidy-style --all-files || true
+          echo "terratidy-style hook executed"
+
+      - name: Test terratidy-style-fix hook runs
+        working-directory: /tmp/test-precommit
+        run: |
+          pre-commit clean
+          # Style-fix may modify files
+          pre-commit run terratidy-style-fix --all-files || true
+          git add main.tf
+          echo "terratidy-style-fix hook executed"
+
+      - name: Test terratidy-lint hook runs
+        working-directory: /tmp/test-precommit
+        run: |
+          pre-commit clean
+          # Lint hook runs checks
+          pre-commit run terratidy-lint --all-files || true
+          echo "terratidy-lint hook executed"
+
+      - name: Test terratidy-check hook runs all engines
+        working-directory: /tmp/test-precommit
+        run: |
+          pre-commit clean
+          # Check runs all engines - may find issues
+          pre-commit run terratidy-check --all-files || true
+          echo "terratidy-check hook executed"
+
+      - name: Test terratidy-fix hook fixes issues
+        working-directory: /tmp/test-precommit
+        run: |
+          # Reset to a file with fixable issues
+          printf '%s\n' \
+            'resource "aws_instance" "example" {' \
+            'ami           = "ami-12345678"' \
+            'instance_type = "t2.micro"' \
+            '}' > main.tf
+          git add main.tf
+          pre-commit clean
+          # Fix hook should fix issues (returns 1 when files modified)
+          pre-commit run terratidy-fix --all-files || true
+          # Verify file was fixed (proper formatting)
+          if ! grep -q '  ami' main.tf; then
+            echo "::error::terratidy-fix did not fix the file"
+            exit 1
+          fi
+          echo "terratidy-fix hook fixed issues correctly"
+
+  # Policy hook requires additional setup (policy directories)
+  # Tested separately to keep the main job simpler
+  test-policy-hook:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: '3.12'
+
+      - name: Install pre-commit
+        run: pip install 'pre-commit>=3.2.0'
+
+      - name: Build TerraTidy
+        run: |
+          go build -trimpath -o bin/terratidy ./cmd/terratidy
+          echo "$PWD/bin" >> "$GITHUB_PATH"
+
+      - name: Create test repository with policy
+        shell: bash
+        run: |
+          mkdir -p /tmp/test-policy
+          cd /tmp/test-policy
+          git init -b main
+          git config user.email "test@example.com"
+          git config user.name "Test User"
+
+          # Create Terraform file
+          printf '%s\n' \
+            'resource "aws_instance" "example" {' \
+            '  ami           = "ami-12345678"' \
+            '  instance_type = "t2.micro"' \
+            '}' > main.tf
+
+          # Create policy directory with a simple Rego policy
+          mkdir -p policies
+          printf '%s\n' \
+            'package terratidy' \
+            '' \
+            'import rego.v1' \
+            '' \
+            'deny contains msg if {' \
+            '  input.resource_type == "aws_instance"' \
+            '  not input.attributes.tags' \
+            '  msg := "EC2 instance must have tags"' \
+            '}' > policies/require_tags.rego
+
+          # Create TerraTidy config to enable policy engine
+          printf '%s\n' \
+            'version: 1' \
+            'engines:' \
+            '  fmt: { enabled: false }' \
+            '  style: { enabled: false }' \
+            '  lint: { enabled: false }' \
+            '  policy:' \
+            '    enabled: true' \
+            '    policy_dirs:' \
+            '      - ./policies' > .terratidy.yaml
+
+          git add main.tf policies/ .terratidy.yaml
+
+          # Create pre-commit config for policy hook
+          printf '%s\n' \
+            'repos:' \
+            "  - repo: $GITHUB_WORKSPACE" \
+            '    rev: HEAD' \
+            '    hooks:' \
+            '      - id: terratidy-policy' > .pre-commit-config.yaml
+
+      - name: Test terratidy-policy hook runs
+        working-directory: /tmp/test-policy
+        run: |
+          pre-commit install
+          # Policy hook should run and potentially find issues
+          pre-commit run terratidy-policy --all-files || true
+          echo "terratidy-policy hook executed with policy configuration"
+
+  validate-hooks-yaml:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install pyyaml
+
+      - name: Validate .pre-commit-hooks.yaml structure
+        run: |
+          python3 << 'EOF'
+          import yaml
+          import sys
+
+          with open('.pre-commit-hooks.yaml') as f:
+              hooks = yaml.safe_load(f)
+
+          if not isinstance(hooks, list):
+              print("::error::.pre-commit-hooks.yaml must be a list of hooks")
+              sys.exit(1)
+
+          required_fields = {'id', 'name', 'entry', 'language'}
+          seen_ids = set()
+          errors = []
+
+          for i, hook in enumerate(hooks):
+              if not isinstance(hook, dict):
+                  errors.append(f"Hook {i} is not a dictionary")
+                  continue
+
+              hook_id = hook.get('id', f'<unnamed hook {i}>')
+
+              # Check for duplicate IDs
+              if hook_id in seen_ids:
+                  errors.append(f"Duplicate hook ID: {hook_id}")
+              seen_ids.add(hook_id)
+
+              # Check required fields
+              missing = required_fields - set(hook.keys())
+              if missing:
+                  errors.append(f"Hook '{hook_id}' missing required fields: {missing}")
+
+              # Validate minimum_pre_commit_version if present
+              if 'minimum_pre_commit_version' in hook:
+                  version = hook['minimum_pre_commit_version']
+                  if not isinstance(version, str):
+                      errors.append(f"Hook '{hook_id}' minimum_pre_commit_version must be a string")
+
+          if errors:
+              for err in errors:
+                  print(f"::error::{err}")
+              sys.exit(1)
+
+          print(f"Validated {len(hooks)} hooks successfully")
+          for hook in hooks:
+              print(f"  - {hook['id']}: {hook['name']}")
+          EOF
+
+      - name: Verify hook entries match terratidy commands
+        run: |
+          python3 << 'EOF'
+          import yaml
+
+          with open('.pre-commit-hooks.yaml') as f:
+              hooks = yaml.safe_load(f)
+
+          for hook in hooks:
+              entry = hook.get('entry', '')
+              if not entry.startswith('terratidy '):
+                  print(f"::warning::Hook '{hook['id']}' entry does not start with 'terratidy ': {entry}")
+              else:
+                  print(f"Hook '{hook['id']}' entry: {entry}")
+          EOF

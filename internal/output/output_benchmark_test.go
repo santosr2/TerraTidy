@@ -91,3 +91,92 @@ func BenchmarkTextOutput(b *testing.B) {
 		require.NoError(b, err)
 	}
 }
+
+func BenchmarkJUnitOutput(b *testing.B) {
+	findings := generateFindings(1000)
+	formatter := &JUnitFormatter{Version: "1.0.0"}
+	var buf bytes.Buffer
+
+	b.ResetTimer()
+	b.ReportAllocs()
+	for range b.N {
+		buf.Reset()
+		err := formatter.Format(findings, &buf)
+		require.NoError(b, err)
+	}
+}
+
+func BenchmarkMarkdownOutput(b *testing.B) {
+	findings := generateFindings(1000)
+	formatter := &MarkdownFormatter{Version: "1.0.0", Title: "Benchmark Report"}
+	var buf bytes.Buffer
+
+	b.ResetTimer()
+	b.ReportAllocs()
+	for range b.N {
+		buf.Reset()
+		err := formatter.Format(findings, &buf)
+		require.NoError(b, err)
+	}
+}
+
+func BenchmarkTableOutput(b *testing.B) {
+	findings := generateFindings(1000)
+	formatter := &TableFormatter{Color: false, Verbose: true}
+	var buf bytes.Buffer
+
+	b.ResetTimer()
+	b.ReportAllocs()
+	for range b.N {
+		buf.Reset()
+		err := formatter.Format(findings, &buf)
+		require.NoError(b, err)
+	}
+}
+
+func BenchmarkGitHubActionsOutput(b *testing.B) {
+	findings := generateFindings(1000)
+	formatter := &GitHubActionsFormatter{}
+	var buf bytes.Buffer
+
+	b.ResetTimer()
+	b.ReportAllocs()
+	for range b.N {
+		buf.Reset()
+		err := formatter.Format(findings, &buf)
+		require.NoError(b, err)
+	}
+}
+
+// BenchmarkOutputManyFindings stress tests all formatters with 5000+ findings.
+func BenchmarkOutputManyFindings(b *testing.B) {
+	findings := generateFindings(5000)
+
+	formatters := []struct {
+		name      string
+		formatter Formatter
+	}{
+		{"Text", &TextFormatter{Verbose: true}},
+		{"JSON", &JSONFormatter{Pretty: true}},
+		{"SARIF", &SARIFFormatter{Version: "1.0.0"}},
+		{"JUnit", &JUnitFormatter{Version: "1.0.0"}},
+		{"Markdown", &MarkdownFormatter{Version: "1.0.0", Title: "Benchmark Report"}},
+		{"HTML", &HTMLFormatter{Version: "1.0.0"}},
+		{"Table", &TableFormatter{Color: false, Verbose: true}},
+		{"GitHubActions", &GitHubActionsFormatter{}},
+	}
+
+	for _, tc := range formatters {
+		b.Run(tc.name, func(b *testing.B) {
+			var buf bytes.Buffer
+
+			b.ResetTimer()
+			b.ReportAllocs()
+			for range b.N {
+				buf.Reset()
+				err := tc.formatter.Format(findings, &buf)
+				require.NoError(b, err)
+			}
+		})
+	}
+}

@@ -14,6 +14,10 @@ bun = "1"  # VS Code extension development
 "go:github.com/google/go-licenses" = "1"
 "go:golang.org/x/exp/cmd/gorelease" = "latest"  # uses date-based versions, not semver
 zizmor = "1"
+actionlint = "1"
+shellcheck = "0"
+hadolint = "2"
+yamllint = "1"
 
 # =============================================================================
 # Build & Install
@@ -105,6 +109,36 @@ run = "bash tools/scripts/benchmark.sh"
 description = "Regenerate benchmark baseline"
 run = "go test -bench=. -benchmem -count=6 -run=^$ ./internal/... | tee benchmarks/baseline.txt"
 hide = true
+
+[tasks."profile:cpu"]
+description = "Generate CPU profile for a benchmark"
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+BENCH="${1:-BenchmarkRunnerParallel}"
+PKG="${2:-./internal/runner/...}"
+echo "Profiling CPU for $BENCH in $PKG..."
+go test -bench="$BENCH" -cpuprofile=cpu.prof -run=^$ "$PKG"
+echo "CPU profile saved to cpu.prof"
+echo "View with: go tool pprof -http=:8080 cpu.prof"
+"""
+
+[tasks."profile:mem"]
+description = "Generate memory profile for a benchmark"
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+BENCH="${1:-BenchmarkRunnerParallel}"
+PKG="${2:-./internal/runner/...}"
+echo "Profiling memory for $BENCH in $PKG..."
+go test -bench="$BENCH" -memprofile=mem.prof -run=^$ "$PKG"
+echo "Memory profile saved to mem.prof"
+echo "View with: go tool pprof -http=:8080 mem.prof"
+"""
+
+[tasks.fuzz]
+description = "Run fuzz tests with auto-discovery"
+run = "bash tools/scripts/fuzz.sh ${1:-30s}"
 
 # =============================================================================
 # Code Quality

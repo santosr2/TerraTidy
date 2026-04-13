@@ -3,13 +3,16 @@ package lsp
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/santosr2/TerraTidy/internal/config"
 	"github.com/santosr2/TerraTidy/internal/engines/lint"
@@ -19,6 +22,24 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// safeBuffer is a thread-safe bytes.Buffer for use in concurrent tests.
+type safeBuffer struct {
+	buf bytes.Buffer
+	mu  sync.Mutex
+}
+
+func (b *safeBuffer) Write(p []byte) (n int, err error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+func (b *safeBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
+}
 
 // pathToFileURI converts a file path to a file:// URI.
 // Handles Windows paths correctly (C:\path -> file:///C:/path).
@@ -2810,4 +2831,634 @@ func TestServer_GetDiagnostics_EnginesDisabledViaToggles(t *testing.T) {
 	// Both engines are disabled, so no diagnostics should be produced even
 	// though the engines are initialized and the file would otherwise trigger findings.
 	assert.Empty(t, diagnostics, "disabled engines should produce no diagnostics")
+}
+
+func TestServer_Debounce_RapidChanges(t *testing.T) {
+	// Test that rapid changes within debounce window trigger single diagnostics
+	out := &safeBuffer{}
+	server := NewServer(strings.NewReader(""), out)
+	server.initialized = true
+	server.debounceDelay = 50 * time.Millisecond // Short delay for test
+
+	// Add document
+	uri := "file:///test.tf"
+	server.documents[uri] = &Document{
+		URI:     uri,
+		Content: "initial",
+		Version: 1,
+	}
+
+	// Simulate 5 rapid changes (within debounce window)
+	for i := range 5 {
+		msgJSON := fmt.Sprintf(`{
+			"jsonrpc": "2.0",
+			"method": "textDocument/didChange",
+			"params": {
+				"textDocument": {"uri": "%s", "version": %d},
+				"contentChanges": [{"text": "content %d"}]
+			}
+		}`, uri, i+2, i)
+		msg := RequestMessage{}
+		require.NoError(t, json.Unmarshal([]byte(msgJSON), &msg))
+		require.NoError(t, server.handleDidChange(msg))
+	}
+
+	// Verify timer is pending
+	server.debounceMu.Lock()
+	_, hasPending := server.debounceTimers[uri]
+	server.debounceMu.Unlock()
+	assert.True(t, hasPending, "should have pending debounce timer")
+
+	// Wait for debounce to fire
+	time.Sleep(100 * time.Millisecond)
+
+	// Verify timer was cleaned up
+	server.debounceMu.Lock()
+	_, stillPending := server.debounceTimers[uri]
+	server.debounceMu.Unlock()
+	assert.False(t, stillPending, "debounce timer should be cleaned up after firing")
+
+	// Verify only one publishDiagnostics notification was sent
+	// (count occurrences of "publishDiagnostics" in output)
+	output := out.String()
+	count := strings.Count(output, "textDocument/publishDiagnostics")
+	assert.Equal(t, 1, count, "rapid changes should trigger single diagnostics")
+}
+
+func TestServer_Debounce_SlowChanges(t *testing.T) {
+	// Test that changes separated by more than debounce delay trigger separate diagnostics
+	out := &safeBuffer{}
+	server := NewServer(strings.NewReader(""), out)
+	server.initialized = true
+	server.debounceDelay = 30 * time.Millisecond // Short delay for test
+
+	// Add document
+	uri := "file:///test.tf"
+	server.documents[uri] = &Document{
+		URI:     uri,
+		Content: "initial",
+		Version: 1,
+	}
+
+	// First change
+	msg1JSON := fmt.Sprintf(`{
+		"jsonrpc": "2.0",
+		"method": "textDocument/didChange",
+		"params": {
+			"textDocument": {"uri": "%s", "version": 2},
+			"contentChanges": [{"text": "content 1"}]
+		}
+	}`, uri)
+	msg1 := RequestMessage{}
+	require.NoError(t, json.Unmarshal([]byte(msg1JSON), &msg1))
+	require.NoError(t, server.handleDidChange(msg1))
+
+	// Wait for first debounce to fire
+	time.Sleep(50 * time.Millisecond)
+
+	// Second change (after first debounce completed)
+	msg2JSON := fmt.Sprintf(`{
+		"jsonrpc": "2.0",
+		"method": "textDocument/didChange",
+		"params": {
+			"textDocument": {"uri": "%s", "version": 3},
+			"contentChanges": [{"text": "content 2"}]
+		}
+	}`, uri)
+	msg2 := RequestMessage{}
+	require.NoError(t, json.Unmarshal([]byte(msg2JSON), &msg2))
+	require.NoError(t, server.handleDidChange(msg2))
+
+	// Wait for second debounce to fire
+	time.Sleep(50 * time.Millisecond)
+
+	// Verify two publishDiagnostics notifications were sent
+	output := out.String()
+	count := strings.Count(output, "textDocument/publishDiagnostics")
+	assert.Equal(t, 2, count, "slow changes should trigger separate diagnostics")
+}
+
+func TestServer_Debounce_CancelOnClose(t *testing.T) {
+	// Test that closing document cancels pending diagnostics
+	out := &safeBuffer{}
+	server := NewServer(strings.NewReader(""), out)
+	server.initialized = true
+	server.debounceDelay = 100 * time.Millisecond // Long enough to close before firing
+
+	// Add document
+	uri := "file:///test.tf"
+	server.documents[uri] = &Document{
+		URI:     uri,
+		Content: "initial",
+		Version: 1,
+	}
+
+	// Trigger change (starts debounce timer)
+	changeJSON := fmt.Sprintf(`{
+		"jsonrpc": "2.0",
+		"method": "textDocument/didChange",
+		"params": {
+			"textDocument": {"uri": "%s", "version": 2},
+			"contentChanges": [{"text": "new content"}]
+		}
+	}`, uri)
+	changeMsg := RequestMessage{}
+	require.NoError(t, json.Unmarshal([]byte(changeJSON), &changeMsg))
+	require.NoError(t, server.handleDidChange(changeMsg))
+
+	// Verify timer is pending
+	server.debounceMu.Lock()
+	_, hasPending := server.debounceTimers[uri]
+	server.debounceMu.Unlock()
+	assert.True(t, hasPending, "should have pending debounce timer")
+
+	// Close document immediately (before debounce fires)
+	closeJSON := fmt.Sprintf(`{
+		"jsonrpc": "2.0",
+		"method": "textDocument/didClose",
+		"params": {
+			"textDocument": {"uri": "%s"}
+		}
+	}`, uri)
+	closeMsg := RequestMessage{}
+	require.NoError(t, json.Unmarshal([]byte(closeJSON), &closeMsg))
+	require.NoError(t, server.handleDidClose(closeMsg))
+
+	// Verify timer was canceled
+	server.debounceMu.Lock()
+	_, stillPending := server.debounceTimers[uri]
+	server.debounceMu.Unlock()
+	assert.False(t, stillPending, "debounce timer should be canceled on close")
+
+	// Wait past debounce delay
+	time.Sleep(150 * time.Millisecond)
+
+	// Verify no diagnostics were published (only clear diagnostics on close)
+	output := out.String()
+	// The didClose sends a clear diagnostics message, but we should NOT have the debounced one
+	// Count only content-type headers followed by publishDiagnostics
+	publishCount := strings.Count(output, "textDocument/publishDiagnostics")
+	// The close sends one publishDiagnostics with empty diagnostics
+	assert.Equal(t, 1, publishCount, "should only have clear diagnostics from close, not debounced diagnostics")
+}
+
+// TestServer_ConfigReload_FileChange tests that modifying the config file
+// triggers an automatic reload of the configuration.
+func TestServer_ConfigReload_FileChange(t *testing.T) {
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, ".terratidy.yaml")
+
+	// Initial config
+	initialConfig := `version: 1
+severity_threshold: info
+`
+	err := os.WriteFile(configPath, []byte(initialConfig), 0o644)
+	require.NoError(t, err)
+
+	// Initialize server with config
+	out := &safeBuffer{}
+	server := NewServer(strings.NewReader(""), out)
+
+	params := InitializeParams{RootURI: pathToFileURI(tmpDir)}
+	paramsJSON, _ := json.Marshal(params)
+	msg := RequestMessage{
+		JSONRPC: "2.0",
+		ID:      json.RawMessage(`1`),
+		Method:  "initialize",
+		Params:  paramsJSON,
+	}
+
+	err = server.handleInitialize(msg)
+	require.NoError(t, err)
+	defer server.Close()
+
+	// Verify initial config (use mutex to avoid race)
+	server.engineMu.RLock()
+	initialThreshold := server.config.SeverityThreshold
+	server.engineMu.RUnlock()
+	require.Equal(t, "info", initialThreshold)
+
+	// Verify config watcher is running
+	server.configWatcherMu.Lock()
+	hasWatcher := server.configWatcher != nil
+	server.configWatcherMu.Unlock()
+	require.True(t, hasWatcher, "config watcher should be initialized")
+
+	// Modify config file
+	updatedConfig := `version: 1
+severity_threshold: error
+`
+	err = os.WriteFile(configPath, []byte(updatedConfig), 0o644)
+	require.NoError(t, err)
+
+	// Wait for fsnotify to detect and process the change (use Eventually for reliability)
+	require.Eventually(t, func() bool {
+		server.engineMu.RLock()
+		threshold := server.config.SeverityThreshold
+		server.engineMu.RUnlock()
+		return threshold == "error"
+	}, 2*time.Second, 10*time.Millisecond, "config should reload with new severity_threshold")
+}
+
+// TestServer_ConfigReload_ImportedFile tests that modifying an imported config file
+// triggers a reload of the configuration.
+func TestServer_ConfigReload_ImportedFile(t *testing.T) {
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, ".terratidy.yaml")
+	importedPath := filepath.Join(tmpDir, "imported.yaml")
+
+	// Create imported config
+	importedConfig := `severity_threshold: info
+`
+	err := os.WriteFile(importedPath, []byte(importedConfig), 0o644)
+	require.NoError(t, err)
+
+	// Main config imports the other file
+	mainConfig := `version: 1
+imports:
+  - imported.yaml
+`
+	err = os.WriteFile(configPath, []byte(mainConfig), 0o644)
+	require.NoError(t, err)
+
+	// Initialize server
+	out := &safeBuffer{}
+	server := NewServer(strings.NewReader(""), out)
+
+	params := InitializeParams{RootURI: pathToFileURI(tmpDir)}
+	paramsJSON, _ := json.Marshal(params)
+	msg := RequestMessage{
+		JSONRPC: "2.0",
+		ID:      json.RawMessage(`1`),
+		Method:  "initialize",
+		Params:  paramsJSON,
+	}
+
+	err = server.handleInitialize(msg)
+	require.NoError(t, err)
+	defer server.Close()
+
+	// Verify initial config loaded from import (use mutex to avoid race)
+	server.engineMu.RLock()
+	initialThreshold := server.config.SeverityThreshold
+	server.engineMu.RUnlock()
+	require.Equal(t, "info", initialThreshold)
+
+	// Verify both files are being watched
+	server.configWatcherMu.Lock()
+	watchedFiles := server.configFiles
+	server.configWatcherMu.Unlock()
+	require.Len(t, watchedFiles, 2, "should watch main config and imported file")
+
+	// Modify imported config file
+	updatedImport := `severity_threshold: warning
+`
+	err = os.WriteFile(importedPath, []byte(updatedImport), 0o644)
+	require.NoError(t, err)
+
+	// Wait for fsnotify to detect and process the change (use Eventually for reliability)
+	require.Eventually(t, func() bool {
+		server.engineMu.RLock()
+		threshold := server.config.SeverityThreshold
+		server.engineMu.RUnlock()
+		return threshold == "warning"
+	}, 2*time.Second, 10*time.Millisecond, "config should reload with new severity from imported file")
+}
+
+// TestServer_ConfigReload_EnginesReinitialized tests that when config is reloaded,
+// the engines are reinitialized with the new configuration.
+func TestServer_ConfigReload_EnginesReinitialized(t *testing.T) {
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, ".terratidy.yaml")
+
+	// Initial config with style enabled
+	initialConfig := `version: 1
+engines:
+  style:
+    enabled: true
+overrides:
+  rules:
+    style.blank-line-between-blocks:
+      enabled: true
+`
+	err := os.WriteFile(configPath, []byte(initialConfig), 0o644)
+	require.NoError(t, err)
+
+	// Create a test document
+	tfFile := filepath.Join(tmpDir, "main.tf")
+	err = os.WriteFile(tfFile, []byte(`resource "null" "a" {}
+resource "null" "b" {}`), 0o644)
+	require.NoError(t, err)
+
+	// Initialize server
+	out := &safeBuffer{}
+	server := NewServer(strings.NewReader(""), out)
+
+	params := InitializeParams{RootURI: pathToFileURI(tmpDir)}
+	paramsJSON, _ := json.Marshal(params)
+	msg := RequestMessage{
+		JSONRPC: "2.0",
+		ID:      json.RawMessage(`1`),
+		Method:  "initialize",
+		Params:  paramsJSON,
+	}
+
+	err = server.handleInitialize(msg)
+	require.NoError(t, err)
+	defer server.Close()
+
+	// Verify style engine is initialized (use mutex to avoid race)
+	server.engineMu.RLock()
+	require.NotNil(t, server.styleEngine)
+	// Save reference to old style engine
+	oldStyleEngine := server.styleEngine
+	server.engineMu.RUnlock()
+
+	// Update config to change style rule settings
+	updatedConfig := `version: 1
+engines:
+  style:
+    enabled: true
+overrides:
+  rules:
+    style.blank-line-between-blocks:
+      enabled: false
+`
+	err = os.WriteFile(configPath, []byte(updatedConfig), 0o644)
+	require.NoError(t, err)
+
+	// Wait for reload (use Eventually for reliability)
+	require.Eventually(t, func() bool {
+		server.engineMu.RLock()
+		newStyleEngine := server.styleEngine
+		server.engineMu.RUnlock()
+		return newStyleEngine != oldStyleEngine
+	}, 2*time.Second, 10*time.Millisecond, "style engine should be reinitialized")
+}
+
+// TestServer_ConfigReload_Debounce tests that rapid config file changes are debounced.
+func TestServer_ConfigReload_Debounce(t *testing.T) {
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, ".terratidy.yaml")
+	logFile := filepath.Join(tmpDir, "server.log")
+
+	// Initial config
+	initialConfig := `version: 1
+severity_threshold: info
+`
+	err := os.WriteFile(configPath, []byte(initialConfig), 0o644)
+	require.NoError(t, err)
+
+	// Initialize server with log file to capture reload messages
+	out := &safeBuffer{}
+	server := NewServer(strings.NewReader(""), out)
+	require.NoError(t, server.SetLogFile(logFile))
+	// Use longer debounce delay for test reliability
+	server.configReloadDelay = 200 * time.Millisecond
+
+	params := InitializeParams{RootURI: pathToFileURI(tmpDir)}
+	paramsJSON, _ := json.Marshal(params)
+	msg := RequestMessage{
+		JSONRPC: "2.0",
+		ID:      json.RawMessage(`1`),
+		Method:  "initialize",
+		Params:  paramsJSON,
+	}
+
+	err = server.handleInitialize(msg)
+	require.NoError(t, err)
+	defer server.Close()
+
+	// Write to config file multiple times rapidly (simulating editor save with multiple events)
+	// All writes happen within the 200ms debounce window
+	for i := range 5 {
+		config := fmt.Sprintf(`version: 1
+severity_threshold: warning
+# change %d
+`, i)
+		err = os.WriteFile(configPath, []byte(config), 0o644)
+		require.NoError(t, err)
+		time.Sleep(20 * time.Millisecond) // Small delay between writes, total ~100ms
+	}
+
+	// Wait for debounced reload to complete
+	require.Eventually(t, func() bool {
+		server.engineMu.RLock()
+		threshold := server.config.SeverityThreshold
+		server.engineMu.RUnlock()
+		return threshold == "warning"
+	}, 2*time.Second, 10*time.Millisecond, "config should reload with final value")
+
+	// Verify that only one "config reloaded successfully" message appears
+	// (The debouncing should coalesce the 5 writes into 1 reload)
+	logContent, err := os.ReadFile(logFile)
+	require.NoError(t, err)
+	reloadCount := strings.Count(string(logContent), "config reloaded successfully")
+	assert.Equal(t, 1, reloadCount, "should have exactly one reload for multiple rapid writes, got log: %s", string(logContent))
+}
+
+// TestServer_DidChangeConfiguration tests that workspace/didChangeConfiguration
+// updates server settings and triggers a config reload.
+func TestServer_DidChangeConfiguration(t *testing.T) {
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, ".terratidy.yaml")
+
+	// Initial config with info threshold
+	initialConfig := `version: 1
+severity_threshold: info
+`
+	err := os.WriteFile(configPath, []byte(initialConfig), 0o644)
+	require.NoError(t, err)
+
+	// Initialize server
+	out := &safeBuffer{}
+	server := NewServer(strings.NewReader(""), out)
+
+	params := InitializeParams{
+		RootURI: pathToFileURI(tmpDir),
+		InitializationOptions: &InitializationOptions{
+			SeverityThreshold: "info",
+		},
+	}
+	paramsJSON, _ := json.Marshal(params)
+	msg := RequestMessage{
+		JSONRPC: "2.0",
+		ID:      json.RawMessage(`1`),
+		Method:  "initialize",
+		Params:  paramsJSON,
+	}
+
+	err = server.handleInitialize(msg)
+	require.NoError(t, err)
+	defer server.Close()
+
+	// Verify initial threshold
+	server.engineMu.RLock()
+	initialThreshold := server.initOptions.SeverityThreshold
+	server.engineMu.RUnlock()
+	assert.Equal(t, "info", initialThreshold)
+
+	// Send didChangeConfiguration with new settings
+	changeParams := DidChangeConfigurationParams{
+		Settings: &InitializationOptions{
+			SeverityThreshold: "warning",
+			Profile:           "production",
+		},
+	}
+	changeParamsJSON, _ := json.Marshal(changeParams)
+	changeMsg := RequestMessage{
+		JSONRPC: "2.0",
+		Method:  "workspace/didChangeConfiguration",
+		Params:  changeParamsJSON,
+	}
+
+	err = server.handleDidChangeConfiguration(changeMsg)
+	require.NoError(t, err)
+
+	// Verify initOptions were updated
+	server.engineMu.RLock()
+	newThreshold := server.initOptions.SeverityThreshold
+	newProfile := server.initOptions.Profile
+	// Also verify that reloadConfig was called and config was updated
+	configThreshold := server.config.SeverityThreshold
+	server.engineMu.RUnlock()
+
+	assert.Equal(t, "warning", newThreshold, "initOptions severity threshold should be updated")
+	assert.Equal(t, "production", newProfile, "initOptions profile should be updated")
+	assert.Equal(t, "warning", configThreshold, "config severity threshold should be updated via reloadConfig")
+}
+
+// TestServer_DidChangeConfiguration_NilSettings tests that nil settings are handled gracefully.
+func TestServer_DidChangeConfiguration_NilSettings(t *testing.T) {
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, ".terratidy.yaml")
+
+	err := os.WriteFile(configPath, []byte("version: 1\n"), 0o644)
+	require.NoError(t, err)
+
+	out := &safeBuffer{}
+	server := NewServer(strings.NewReader(""), out)
+
+	params := InitializeParams{RootURI: pathToFileURI(tmpDir)}
+	paramsJSON, _ := json.Marshal(params)
+	msg := RequestMessage{
+		JSONRPC: "2.0",
+		ID:      json.RawMessage(`1`),
+		Method:  "initialize",
+		Params:  paramsJSON,
+	}
+
+	err = server.handleInitialize(msg)
+	require.NoError(t, err)
+	defer server.Close()
+
+	// Send didChangeConfiguration with nil settings
+	changeParams := DidChangeConfigurationParams{Settings: nil}
+	changeParamsJSON, _ := json.Marshal(changeParams)
+	changeMsg := RequestMessage{
+		JSONRPC: "2.0",
+		Method:  "workspace/didChangeConfiguration",
+		Params:  changeParamsJSON,
+	}
+
+	// Should not error
+	err = server.handleDidChangeConfiguration(changeMsg)
+	assert.NoError(t, err, "nil settings should be handled gracefully")
+}
+
+// TestServer_DidChangeConfiguration_InvalidJSON tests that invalid JSON params return an error.
+func TestServer_DidChangeConfiguration_InvalidJSON(t *testing.T) {
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, ".terratidy.yaml")
+
+	err := os.WriteFile(configPath, []byte("version: 1\n"), 0o644)
+	require.NoError(t, err)
+
+	out := &safeBuffer{}
+	server := NewServer(strings.NewReader(""), out)
+
+	params := InitializeParams{RootURI: pathToFileURI(tmpDir)}
+	paramsJSON, _ := json.Marshal(params)
+	msg := RequestMessage{
+		JSONRPC: "2.0",
+		ID:      json.RawMessage(`1`),
+		Method:  "initialize",
+		Params:  paramsJSON,
+	}
+
+	err = server.handleInitialize(msg)
+	require.NoError(t, err)
+	defer server.Close()
+
+	// Send didChangeConfiguration with invalid JSON
+	changeMsg := RequestMessage{
+		JSONRPC: "2.0",
+		Method:  "workspace/didChangeConfiguration",
+		Params:  json.RawMessage(`{invalid json`),
+	}
+
+	// Should return an error
+	err = server.handleDidChangeConfiguration(changeMsg)
+	require.Error(t, err, "invalid JSON should return an error")
+	assert.Contains(t, err.Error(), "parsing didChangeConfiguration params")
+}
+
+// TestServer_DidChangeConfiguration_EngineToggles tests that engine toggles are updated.
+func TestServer_DidChangeConfiguration_EngineToggles(t *testing.T) {
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, ".terratidy.yaml")
+
+	err := os.WriteFile(configPath, []byte("version: 1\n"), 0o644)
+	require.NoError(t, err)
+
+	out := &safeBuffer{}
+	server := NewServer(strings.NewReader(""), out)
+
+	params := InitializeParams{
+		RootURI: pathToFileURI(tmpDir),
+		InitializationOptions: &InitializationOptions{
+			Engines: EngineToggles{
+				Style: true,
+				Lint:  true,
+			},
+		},
+	}
+	paramsJSON, _ := json.Marshal(params)
+	msg := RequestMessage{
+		JSONRPC: "2.0",
+		ID:      json.RawMessage(`1`),
+		Method:  "initialize",
+		Params:  paramsJSON,
+	}
+
+	err = server.handleInitialize(msg)
+	require.NoError(t, err)
+	defer server.Close()
+
+	// Send didChangeConfiguration to disable lint
+	changeParams := DidChangeConfigurationParams{
+		Settings: &InitializationOptions{
+			Engines: EngineToggles{
+				Style: true,
+				Lint:  false,
+			},
+		},
+	}
+	changeParamsJSON, _ := json.Marshal(changeParams)
+	changeMsg := RequestMessage{
+		JSONRPC: "2.0",
+		Method:  "workspace/didChangeConfiguration",
+		Params:  changeParamsJSON,
+	}
+
+	err = server.handleDidChangeConfiguration(changeMsg)
+	require.NoError(t, err)
+
+	// Verify engine toggles were updated
+	server.engineMu.RLock()
+	engines := server.initOptions.Engines
+	server.engineMu.RUnlock()
+
+	assert.True(t, engines.Style, "style should remain enabled")
+	assert.False(t, engines.Lint, "lint should be disabled")
 }

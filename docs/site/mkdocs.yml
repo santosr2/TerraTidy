@@ -110,6 +110,7 @@ nav:
       - Architecture: development/architecture.md
       - SDK Reference: development/sdk.md
       - Plugin System: development/plugins.md
+      - Performance: development/performance.md
       - Contributing: development/contributing.md
       - Security: development/security.md
   - Changelog: changelog.md

@@ -304,3 +304,11 @@ type Command struct {
 	Command   string `json:"command"`
 	Arguments []any  `json:"arguments,omitempty"`
 }
+
+// DidChangeConfigurationParams represents workspace/didChangeConfiguration parameters.
+// The settings field contains client configuration pushed to the server.
+type DidChangeConfigurationParams struct {
+	// Settings contains the actual configuration values.
+	// For TerraTidy, this has the same shape as InitializationOptions.
+	Settings *InitializationOptions `json:"settings,omitempty"`
+}

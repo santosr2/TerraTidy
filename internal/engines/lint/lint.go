@@ -46,9 +46,18 @@ type Config struct {
 
 // RuleConfig holds configuration for a single rule
 type RuleConfig struct {
-	Enabled  bool
+	Enabled  *bool
 	Severity string
 	Options  map[string]any
+}
+
+// IsEnabled returns whether the rule is enabled.
+// If Enabled is nil (not explicitly set), returns defaultEnabled.
+func (r RuleConfig) IsEnabled(defaultEnabled bool) bool {
+	if r.Enabled == nil {
+		return defaultEnabled
+	}
+	return *r.Enabled
 }
 
 // ConfigFromEngine creates a lint.Config from the config package's LintEngineConfig.
@@ -229,7 +238,7 @@ func (e *Engine) lintModule(ctx context.Context, dir string, files []string) ([]
 		var fileFindings []sdk.Finding
 		for _, rule := range e.rules {
 			ruleConfig := e.getRuleConfig(rule.Name())
-			if !ruleConfig.Enabled {
+			if !ruleConfig.IsEnabled(true) { // Default enabled if not explicitly set
 				continue
 			}
 
@@ -265,7 +274,7 @@ func (e *Engine) getRuleConfig(ruleName string) RuleConfig {
 
 	// Return default config (enabled by default)
 	return RuleConfig{
-		Enabled:  true,
+		Enabled:  config.BoolPtr(true),
 		Severity: "warning",
 		Options:  make(map[string]any),
 	}

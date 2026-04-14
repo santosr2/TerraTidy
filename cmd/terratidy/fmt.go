@@ -7,6 +7,7 @@ import (
 	"github.com/santosr2/TerraTidy/internal/config"
 	fmtengine "github.com/santosr2/TerraTidy/internal/engines/format"
 	"github.com/santosr2/TerraTidy/internal/engines/style"
+	"github.com/santosr2/TerraTidy/pkg/sdk"
 	"github.com/spf13/cobra"
 )
 
@@ -42,13 +43,13 @@ Use --all to also apply style fixes (equivalent to running fmt + style --fix).`,
 		// Load configuration
 		cfg, err := loadConfig()
 		if err != nil {
-			return err
+			return err // Already wrapped as ExitConfig by loadConfig
 		}
 
 		// Get target files (respecting --changed flag and excludes)
 		files, err := getTargetFilesWithExcludes(args, changed, cfg.Exclude, cfg)
 		if err != nil {
-			return fmt.Errorf("finding files: %w", err)
+			return sdk.NewInternalError(fmt.Errorf("finding files: %w", err))
 		}
 
 		if len(files) == 0 {
@@ -74,7 +75,7 @@ Use --all to also apply style fixes (equivalent to running fmt + style --fix).`,
 		// Run formatter
 		findings, err := engine.Run(context.Background(), files)
 		if err != nil {
-			return fmt.Errorf("formatting files: %w", err)
+			return sdk.NewInternalError(fmt.Errorf("formatting files: %w", err))
 		}
 
 		// Apply severity threshold filtering
@@ -103,9 +104,9 @@ Use --all to also apply style fixes (equivalent to running fmt + style --fix).`,
 			fmt.Printf("Formatted %s\n", formatFileCount(formatted))
 		}
 
-		// In check mode, return error if any file needs formatting
+		// In check mode, return findings error if any file needs formatting
 		if fmtCfg.Check && needsFormatting > 0 {
-			return fmt.Errorf("%d file(s) need formatting", needsFormatting)
+			return sdk.NewFindingsError()
 		}
 
 		// Run style fixes if --all flag is set
@@ -117,7 +118,7 @@ Use --all to also apply style fixes (equivalent to running fmt + style --fix).`,
 			// Load plugin rules if plugins are enabled
 			pluginRules, err := loadPluginRules(cfg)
 			if err != nil {
-				return fmt.Errorf("loading plugins: %w", err)
+				return sdk.NewConfigError(fmt.Errorf("loading plugins: %w", err))
 			}
 
 			// Use config-based style engine with plugin rules
@@ -125,7 +126,7 @@ Use --all to also apply style fixes (equivalent to running fmt + style --fix).`,
 
 			styleFindings, err := styleEngine.Run(context.Background(), files)
 			if err != nil {
-				return fmt.Errorf("applying style fixes: %w", err)
+				return sdk.NewInternalError(fmt.Errorf("applying style fixes: %w", err))
 			}
 
 			styleFixed := 0
@@ -147,7 +148,7 @@ Use --all to also apply style fixes (equivalent to running fmt + style --fix).`,
 					Diff:  false,
 				})
 				if _, err := rerunEngine.Run(context.Background(), files); err != nil {
-					return fmt.Errorf("re-formatting files: %w", err)
+					return sdk.NewInternalError(fmt.Errorf("re-formatting files: %w", err))
 				}
 				fmt.Println("Done")
 			} else {

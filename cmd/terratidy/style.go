@@ -41,19 +41,19 @@ Use --fix to automatically fix fixable style issues.`,
 		// Load configuration
 		cfg, err := loadConfig()
 		if err != nil {
-			return err
+			return err // Already wrapped as ExitConfig by loadConfig
 		}
 
 		// Load plugin rules if plugins are enabled
 		pluginRules, err := loadPluginRules(cfg)
 		if err != nil {
-			return fmt.Errorf("loading plugins: %w", err)
+			return sdk.NewConfigError(fmt.Errorf("loading plugins: %w", err))
 		}
 
 		// Get target files (respecting --changed flag and excludes)
 		files, err := getTargetFilesWithExcludes(args, changed, cfg.Exclude, cfg)
 		if err != nil {
-			return fmt.Errorf("finding files: %w", err)
+			return sdk.NewInternalError(fmt.Errorf("finding files: %w", err))
 		}
 
 		if len(files) == 0 {
@@ -78,7 +78,7 @@ Use --fix to automatically fix fixable style issues.`,
 		// Run style checks
 		findings, err := engine.Run(context.Background(), files)
 		if err != nil {
-			return fmt.Errorf("checking style: %w", err)
+			return sdk.NewInternalError(fmt.Errorf("checking style: %w", err))
 		}
 
 		// Apply severity threshold filtering
@@ -95,8 +95,9 @@ func outputStyleResults(findings []sdk.Finding, checkMode bool, cfg *config.Conf
 		return err
 	}
 
+	// In check mode, return findings error if any issues found
 	if checkMode && len(findings) > 0 {
-		return fmt.Errorf("found %d style issue(s)", len(findings))
+		return sdk.NewFindingsError()
 	}
 
 	return nil

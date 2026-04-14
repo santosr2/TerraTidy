@@ -427,7 +427,7 @@ func TestEngine_RuleDisabling(t *testing.T) {
 	engine := New(&Config{
 		Rules: map[string]RuleConfig{
 			"lint.terraform-required-version": {
-				Enabled: false,
+				Enabled: config.BoolPtr(false),
 			},
 		},
 	})
@@ -709,7 +709,7 @@ resource "test" "example" {
 		engine := New(&Config{
 			UseTFLint: false,
 			Rules: map[string]RuleConfig{
-				"lint.terraform-unused-declarations": {Enabled: true},
+				"lint.terraform-unused-declarations": {Enabled: config.BoolPtr(true)},
 			},
 		})
 
@@ -742,7 +742,7 @@ resource "test" "example" {
 		engine := New(&Config{
 			UseTFLint: false,
 			Rules: map[string]RuleConfig{
-				"lint.terraform-unused-declarations": {Enabled: true},
+				"lint.terraform-unused-declarations": {Enabled: config.BoolPtr(true)},
 			},
 		})
 
@@ -778,7 +778,7 @@ resource "test" "example" {
 		engine := New(&Config{
 			UseTFLint: false,
 			Rules: map[string]RuleConfig{
-				"lint.terraform-unused-declarations": {Enabled: true},
+				"lint.terraform-unused-declarations": {Enabled: config.BoolPtr(true)},
 			},
 		})
 
@@ -863,11 +863,11 @@ func TestConfigFromEngine(t *testing.T) {
 		engineCfg := config.LintEngineConfig{
 			Rules: map[string]config.RuleConfig{
 				"terraform-required-version": {
-					Enabled:  true,
+					Enabled:  config.BoolPtr(true),
 					Severity: "error",
 				},
 				"terraform-required-providers": {
-					Enabled:  false,
+					Enabled:  config.BoolPtr(false),
 					Severity: "warning",
 					Config:   map[string]any{"source_required": true},
 				},
@@ -878,11 +878,11 @@ func TestConfigFromEngine(t *testing.T) {
 		require.Len(t, cfg.Rules, 2)
 
 		versionRule := cfg.Rules["terraform-required-version"]
-		assert.True(t, versionRule.Enabled)
+		assert.True(t, *versionRule.Enabled)
 		assert.Equal(t, "error", versionRule.Severity)
 
 		providersRule := cfg.Rules["terraform-required-providers"]
-		assert.False(t, providersRule.Enabled)
+		assert.False(t, *providersRule.Enabled)
 		assert.Equal(t, "warning", providersRule.Severity)
 		assert.Equal(t, true, providersRule.Options["source_required"])
 	})
@@ -1258,7 +1258,7 @@ func TestLintModule_RuleError(t *testing.T) {
 	// Disable all built-in rules so only our error rule runs.
 	for _, r := range engine.GetAllRules() {
 		if r.Name() != errRule.Name() {
-			engine.config.Rules[r.Name()] = RuleConfig{Enabled: false}
+			engine.config.Rules[r.Name()] = RuleConfig{Enabled: config.BoolPtr(false)}
 		}
 	}
 
@@ -1276,7 +1276,7 @@ func TestLintModule_SeverityOverride(t *testing.T) {
 	engine := New(&Config{
 		Rules: map[string]RuleConfig{
 			"plugin.finding-rule": {
-				Enabled:  true,
+				Enabled:  config.BoolPtr(true),
 				Severity: "error", // Override the warning severity from the rule
 			},
 		},
@@ -1285,14 +1285,14 @@ func TestLintModule_SeverityOverride(t *testing.T) {
 	for name := range engine.config.Rules {
 		if name != "plugin.finding-rule" {
 			rc := engine.config.Rules[name]
-			rc.Enabled = false
+			rc.Enabled = config.BoolPtr(false)
 			engine.config.Rules[name] = rc
 		}
 	}
 	for _, r := range engine.GetAllRules() {
 		if r.Name() != findingRule.Name() {
 			if _, exists := engine.config.Rules[r.Name()]; !exists {
-				engine.config.Rules[r.Name()] = RuleConfig{Enabled: false}
+				engine.config.Rules[r.Name()] = RuleConfig{Enabled: config.BoolPtr(false)}
 			}
 		}
 	}
@@ -1374,14 +1374,14 @@ resource "aws_instance" "example" {
 			// Create engine with only required-version rule enabled
 			engine := New(&Config{
 				Rules: map[string]RuleConfig{
-					"lint.terraform-required-version": {Enabled: true},
+					"lint.terraform-required-version": {Enabled: config.BoolPtr(true)},
 				},
 			})
 
 			// Disable all other rules
 			for _, r := range engine.GetAllRules() {
 				if r.Name() != "lint.terraform-required-version" {
-					engine.config.Rules[r.Name()] = RuleConfig{Enabled: false}
+					engine.config.Rules[r.Name()] = RuleConfig{Enabled: config.BoolPtr(false)}
 				}
 			}
 
@@ -1418,13 +1418,13 @@ func TestLintModule_InlineSuppressionOnNamingFinding(t *testing.T) {
 
 	engine := New(&Config{
 		Rules: map[string]RuleConfig{
-			"lint.terraform-naming-convention": {Enabled: true},
+			"lint.terraform-naming-convention": {Enabled: config.BoolPtr(true)},
 		},
 	})
 	// Disable all other rules so only naming-convention runs.
 	for _, r := range engine.GetAllRules() {
 		if r.Name() != "lint.terraform-naming-convention" {
-			engine.config.Rules[r.Name()] = RuleConfig{Enabled: false}
+			engine.config.Rules[r.Name()] = RuleConfig{Enabled: config.BoolPtr(false)}
 		}
 	}
 
@@ -1452,12 +1452,12 @@ resource "aws_instance" "anotherBadName" {}
 
 	engine := New(&Config{
 		Rules: map[string]RuleConfig{
-			"lint.terraform-naming-convention": {Enabled: true},
+			"lint.terraform-naming-convention": {Enabled: config.BoolPtr(true)},
 		},
 	})
 	for _, r := range engine.GetAllRules() {
 		if r.Name() != "lint.terraform-naming-convention" {
-			engine.config.Rules[r.Name()] = RuleConfig{Enabled: false}
+			engine.config.Rules[r.Name()] = RuleConfig{Enabled: config.BoolPtr(false)}
 		}
 	}
 

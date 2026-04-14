@@ -18,10 +18,19 @@ type YAMLRuleConfig struct {
 	Name        string       `yaml:"name"`
 	Description string       `yaml:"description"`
 	Severity    string       `yaml:"severity"`
-	Enabled     bool         `yaml:"enabled"`
+	Enabled     *bool        `yaml:"enabled,omitempty"`
 	Message     string       `yaml:"message"`
 	Patterns    YAMLPatterns `yaml:"patterns"`
 	Tags        []string     `yaml:"tags"`
+}
+
+// IsEnabled returns whether the rule is enabled.
+// If Enabled is nil (not explicitly set), returns defaultEnabled.
+func (c YAMLRuleConfig) IsEnabled(defaultEnabled bool) bool {
+	if c.Enabled == nil {
+		return defaultEnabled
+	}
+	return *c.Enabled
 }
 
 // YAMLPatterns defines pattern-based matching for YAML rules.
@@ -72,7 +81,7 @@ func (r *YAMLRule) Tags() []string { return r.config.Tags }
 
 // Check evaluates HCL files against the YAML-defined patterns.
 func (r *YAMLRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Finding, error) {
-	if !r.config.Enabled {
+	if !r.config.IsEnabled(true) {
 		return nil, nil
 	}
 

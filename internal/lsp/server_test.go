@@ -713,7 +713,7 @@ func TestServer_HandleInitialize_WithProfile(t *testing.T) {
 
 	// Write a config file with profiles
 	// Note: Profile can override engine settings but not severity_threshold
-	// (Profile struct has Engines and Overrides fields only)
+	// (Profile struct has Engines field only)
 	configContent := `
 version: 1
 severity_threshold: info
@@ -916,24 +916,26 @@ func TestServer_IsEngineEnabled_WithOptions(t *testing.T) {
 	assert.False(t, server.isEngineEnabled("policy"))
 }
 
-func TestServer_HandleInitialize_OverridesRulesFromConfig(t *testing.T) {
-	// Create a temp directory with a config file that has overrides.rules
+func TestServer_HandleInitialize_StyleRulesFromConfig(t *testing.T) {
+	// Create a temp directory with a config file that has engines.style.rules
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, ".terratidy.yaml")
 
-	// Config file with overrides.rules to disable a style rule
+	// Config file with engines.style.rules to configure style rules
 	configContent := `
 version: 1
-overrides:
-  rules:
-    style.block-label-case:
-      enabled: false
-      severity: info
-    style.blank-lines-between-blocks:
-      enabled: true
-      severity: error
-      config:
-        min_lines: 2
+engines:
+  style:
+    enabled: true
+    rules:
+      style.block-label-case:
+        enabled: false
+        severity: info
+      style.blank-lines-between-blocks:
+        enabled: true
+        severity: error
+        config:
+          min_lines: 2
 `
 	err := os.WriteFile(configPath, []byte(configContent), 0o644)
 	require.NoError(t, err)
@@ -956,38 +958,39 @@ overrides:
 	err = server.handleInitialize(msg)
 	require.NoError(t, err)
 
-	// Verify overrides were loaded into config
+	// Verify style rules were loaded into config
 	require.NotNil(t, server.config)
-	assert.Len(t, server.config.Overrides.Rules, 2)
+	assert.Len(t, server.config.Engines.Style.Rules, 2)
 
 	// Verify block-label-case is disabled
-	blockLabelRule := server.config.Overrides.Rules["style.block-label-case"]
-	assert.False(t, blockLabelRule.Enabled)
+	blockLabelRule := server.config.Engines.Style.Rules["style.block-label-case"]
+	assert.False(t, *blockLabelRule.Enabled)
 	assert.Equal(t, "info", blockLabelRule.Severity)
 
 	// Verify blank-lines-between-blocks is enabled with error severity
-	blankLinesRule := server.config.Overrides.Rules["style.blank-lines-between-blocks"]
-	assert.True(t, blankLinesRule.Enabled)
+	blankLinesRule := server.config.Engines.Style.Rules["style.blank-lines-between-blocks"]
+	assert.True(t, *blankLinesRule.Enabled)
 	assert.Equal(t, "error", blankLinesRule.Severity)
 	assert.Equal(t, 2, blankLinesRule.Config["min_lines"])
 
-	// Verify style engine was configured with overrides
+	// Verify style engine was configured with rules
 	require.NotNil(t, server.styleEngine)
-	// The style engine should have been initialized with buildStyleConfig() which uses overrides
 }
 
-func TestServer_HandleInitialize_OverridesRulesAffectStyleEngine(t *testing.T) {
-	// This test verifies that overrides.rules from config are passed to the style engine
+func TestServer_HandleInitialize_StyleRulesAffectStyleEngine(t *testing.T) {
+	// This test verifies that engines.style.rules from config are passed to the style engine
 	// through buildStyleConfig()
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, ".terratidy.yaml")
 
 	configContent := `
 version: 1
-overrides:
-  rules:
-    style.resource-name-matches-type:
-      enabled: false
+engines:
+  style:
+    enabled: true
+    rules:
+      style.resource-name-matches-type:
+        enabled: false
 `
 	err := os.WriteFile(configPath, []byte(configContent), 0o644)
 	require.NoError(t, err)
@@ -1010,14 +1013,14 @@ overrides:
 	err = server.handleInitialize(msg)
 	require.NoError(t, err)
 
-	// Verify the style config was built with overrides
+	// Verify the style config was built with engine rules
 	styleCfg := server.buildStyleConfig()
 	require.NotNil(t, styleCfg)
 
 	// The disabled rule should be in the style config
 	ruleConfig, exists := styleCfg.Rules["style.resource-name-matches-type"]
 	require.True(t, exists, "rule should be in style config")
-	assert.False(t, ruleConfig.Enabled, "rule should be disabled")
+	assert.False(t, *ruleConfig.Enabled, "rule should be disabled")
 }
 
 // TestVSCodeSettings_MapsToLSPOptions verifies that the JSON field names in
@@ -2069,41 +2072,6 @@ func TestServer_BuildStyleConfig_NilConfig(t *testing.T) {
 	assert.Empty(t, cfg.Rules)
 }
 
-func TestServer_BuildStyleConfig_WithOverrides(t *testing.T) {
-	server := NewServer(strings.NewReader(""), &bytes.Buffer{})
-	server.config = &config.Config{
-		Overrides: config.OverridesConfig{
-			Rules: map[string]config.RuleConfig{
-				"style.resource-name-matches-type": {
-					Enabled:  true,
-					Severity: "warning",
-					Config: map[string]any{
-						"option1": "value1",
-					},
-				},
-				"style.blank-lines-between-blocks": {
-					Enabled:  false,
-					Severity: "info",
-				},
-			},
-		},
-	}
-
-	cfg := server.buildStyleConfig()
-
-	require.NotNil(t, cfg)
-	assert.Len(t, cfg.Rules, 2)
-
-	rule1 := cfg.Rules["style.resource-name-matches-type"]
-	assert.True(t, rule1.Enabled)
-	assert.Equal(t, "warning", rule1.Severity)
-	assert.Equal(t, "value1", rule1.Options["option1"])
-
-	rule2 := cfg.Rules["style.blank-lines-between-blocks"]
-	assert.False(t, rule2.Enabled)
-	assert.Equal(t, "info", rule2.Severity)
-}
-
 func TestServer_BuildStyleConfig_WithEngineStyleRules(t *testing.T) {
 	server := NewServer(strings.NewReader(""), &bytes.Buffer{})
 	server.config = &config.Config{
@@ -2111,11 +2079,11 @@ func TestServer_BuildStyleConfig_WithEngineStyleRules(t *testing.T) {
 			Style: config.StyleEngineConfig{
 				Rules: map[string]config.RuleConfig{
 					"style.terraform-block-first": {
-						Enabled:  false,
+						Enabled:  config.BoolPtr(false),
 						Severity: "info",
 					},
 					"style.blank-line-between-blocks": {
-						Enabled:  true,
+						Enabled:  config.BoolPtr(true),
 						Severity: "warning",
 					},
 				},
@@ -2129,56 +2097,12 @@ func TestServer_BuildStyleConfig_WithEngineStyleRules(t *testing.T) {
 	assert.Len(t, cfg.Rules, 2)
 
 	rule1 := cfg.Rules["style.terraform-block-first"]
-	assert.False(t, rule1.Enabled)
+	assert.False(t, *rule1.Enabled)
 	assert.Equal(t, "info", rule1.Severity)
 
 	rule2 := cfg.Rules["style.blank-line-between-blocks"]
-	assert.True(t, rule2.Enabled)
+	assert.True(t, *rule2.Enabled)
 	assert.Equal(t, "warning", rule2.Severity)
-}
-
-func TestServer_BuildStyleConfig_OverridesTakePrecedence(t *testing.T) {
-	// Tests that overrides.rules takes precedence over engines.style.rules
-	server := NewServer(strings.NewReader(""), &bytes.Buffer{})
-	server.config = &config.Config{
-		Engines: config.Engines{
-			Style: config.StyleEngineConfig{
-				Rules: map[string]config.RuleConfig{
-					"style.terraform-block-first": {
-						Enabled:  true, // Enabled in engine config
-						Severity: "warning",
-					},
-					"style.blank-line-between-blocks": {
-						Enabled:  true,
-						Severity: "info",
-					},
-				},
-			},
-		},
-		Overrides: config.OverridesConfig{
-			Rules: map[string]config.RuleConfig{
-				"style.terraform-block-first": {
-					Enabled:  false, // Disabled in overrides - should take precedence
-					Severity: "error",
-				},
-			},
-		},
-	}
-
-	cfg := server.buildStyleConfig()
-
-	require.NotNil(t, cfg)
-	assert.Len(t, cfg.Rules, 2)
-
-	// This rule should be disabled because overrides take precedence
-	rule1 := cfg.Rules["style.terraform-block-first"]
-	assert.False(t, rule1.Enabled)
-	assert.Equal(t, "error", rule1.Severity)
-
-	// This rule was only in engine config, should be unchanged
-	rule2 := cfg.Rules["style.blank-line-between-blocks"]
-	assert.True(t, rule2.Enabled)
-	assert.Equal(t, "info", rule2.Severity)
 }
 
 func TestServer_BuildStyleConfig_WithRuleOptions(t *testing.T) {
@@ -2189,7 +2113,7 @@ func TestServer_BuildStyleConfig_WithRuleOptions(t *testing.T) {
 			Style: config.StyleEngineConfig{
 				Rules: map[string]config.RuleConfig{
 					"style.naming": {
-						Enabled:  true,
+						Enabled:  config.BoolPtr(true),
 						Severity: "warning",
 						Config: map[string]any{
 							"pattern": "^[a-z_]+$",
@@ -2206,7 +2130,7 @@ func TestServer_BuildStyleConfig_WithRuleOptions(t *testing.T) {
 	require.Len(t, cfg.Rules, 1)
 
 	rule := cfg.Rules["style.naming"]
-	assert.True(t, rule.Enabled)
+	assert.True(t, *rule.Enabled)
 	assert.Equal(t, "warning", rule.Severity)
 	require.NotNil(t, rule.Options)
 	assert.Equal(t, "^[a-z_]+$", rule.Options["pattern"])
@@ -3131,15 +3055,14 @@ func TestServer_ConfigReload_EnginesReinitialized(t *testing.T) {
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, ".terratidy.yaml")
 
-	// Initial config with style enabled
+	// Initial config with style enabled and a rule configured
 	initialConfig := `version: 1
 engines:
   style:
     enabled: true
-overrides:
-  rules:
-    style.blank-line-between-blocks:
-      enabled: true
+    rules:
+      style.blank-line-between-blocks:
+        enabled: true
 `
 	err := os.WriteFile(configPath, []byte(initialConfig), 0o644)
 	require.NoError(t, err)
@@ -3179,10 +3102,9 @@ resource "null" "b" {}`), 0o644)
 engines:
   style:
     enabled: true
-overrides:
-  rules:
-    style.blank-line-between-blocks:
-      enabled: false
+    rules:
+      style.blank-line-between-blocks:
+        enabled: false
 `
 	err = os.WriteFile(configPath, []byte(updatedConfig), 0o644)
 	require.NoError(t, err)

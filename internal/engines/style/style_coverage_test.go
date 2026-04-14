@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/santosr2/TerraTidy/internal/config"
 	"github.com/santosr2/TerraTidy/pkg/sdk"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -209,7 +210,7 @@ resource "aws_instance" "test2" {
 	// Disable the blank line rule
 	engine := New(&Config{
 		Rules: map[string]RuleConfig{
-			"style.blank-line-between-blocks": {Enabled: false},
+			"style.blank-line-between-blocks": {Enabled: config.BoolPtr(false)},
 		},
 	})
 

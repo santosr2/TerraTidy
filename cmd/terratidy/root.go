@@ -28,9 +28,9 @@ in a single binary with no external dependencies.`,
 }
 
 func init() {
-	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is .terratidy.yaml)")
-	rootCmd.PersistentFlags().StringVar(&profile, "profile", "", "profile to use from config")
-	rootCmd.PersistentFlags().StringVar(&format, "format", "text", "output format (text|table|json|json-compact|sarif|html|junit|markdown|github)")
+	rootCmd.PersistentFlags().StringVarP(&cfgFile, "config", "c", "", "config file (default is .terratidy.yaml)")
+	rootCmd.PersistentFlags().StringVarP(&profile, "profile", "p", "", "profile to use from config")
+	rootCmd.PersistentFlags().StringVarP(&format, "format", "f", "text", "output format (text|table|json|json-compact|sarif|html|junit|markdown|github)")
 	rootCmd.PersistentFlags().BoolVar(&changed, "changed", false, "only check changed files")
 	rootCmd.PersistentFlags().BoolVar(&noRecurse, "no-recurse", false, "disable recursive directory traversal")
 	rootCmd.PersistentFlags().BoolVar(&absolutePaths, "absolute-paths", false, "output absolute file paths instead of relative")

@@ -123,7 +123,6 @@ func TestInitCmd_MonorepoTemplate(t *testing.T) {
 	assert.Contains(t, string(content), "profiles:")
 	assert.Contains(t, string(content), "ci:")
 	assert.Contains(t, string(content), "development:")
-	assert.Contains(t, string(content), "overrides:")
 
 	var parsed map[string]any
 	require.NoError(t, yaml.Unmarshal(content, &parsed))

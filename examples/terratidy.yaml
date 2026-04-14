@@ -47,10 +47,26 @@ engines:
     enabled: true
     # fix: false     # Auto-fix mode - apply fixes automatically
     # diff: false    # Show diff when fixing
-    # rules:         # Engine-level rule configuration
-    #   style.blank-line-between-blocks:
-    #     enabled: true
-    #     severity: warning
+    # Rule-specific configuration
+    rules:
+      # Enable a rule that's disabled by default
+      style.resource-name-matches-type:
+        enabled: true
+        severity: warning
+      # Change severity of a rule
+      style.blank-line-between-blocks:
+        enabled: true
+        severity: error
+      # Disable a rule
+      style.no-empty-blocks:
+        enabled: false
+      # Rule with custom config options
+      style.variable-naming:
+        enabled: true
+        severity: warning
+        config:
+          options:
+            case: snake_case  # Options: snake_case, camelCase, kebab-case, PascalCase
 
   # Lint engine - 11 built-in AST rules, optional TFLint integration (subprocess)
   lint:
@@ -104,11 +120,12 @@ profiles:
   strict:
     description: "Strict mode inheriting from ci"
     inherits: ci
-    overrides:
-      rules:
-        style.resource-name-matches-type:
-          enabled: true
-          severity: error
+    engines:
+      style:
+        rules:
+          style.resource-name-matches-type:
+            enabled: true
+            severity: error
 
   minimal:
     description: "Minimal checks"
@@ -116,40 +133,6 @@ profiles:
     engines:
       lint: { enabled: false }
       policy: { enabled: false }
-
-# Rule overrides - enable/disable rules, change severity
-# This is the correct place for per-rule configuration
-# Note: 'enabled' defaults to false if omitted. Always set it explicitly.
-overrides:
-  rules:
-    # Enable a rule that's disabled by default
-    style.resource-name-matches-type:
-      enabled: true
-      severity: warning
-
-    # Change severity of a rule
-    style.blank-line-between-blocks:
-      enabled: true
-      severity: error
-
-    # Disable a rule
-    style.no-empty-blocks:
-      enabled: false
-
-    # Rule with custom config options (note the nested 'options' key)
-    style.variable-naming:
-      enabled: true
-      severity: warning
-      config:
-        options:
-          case: snake_case  # Options: snake_case, camelCase, kebab-case, PascalCase
-
-    # Rule with numeric config options
-    # style.blank-line-between-blocks:
-    #   config:
-    #     options:
-    #       min_lines: 1
-    #       max_lines: 2
 
 # Plugin configuration
 plugins:

@@ -75,12 +75,13 @@ engines:
 	configsDir := filepath.Join(tmpDir, "configs")
 	require.NoError(t, os.MkdirAll(configsDir, 0o755))
 
-	// Create imported config
-	importedConfig := `overrides:
-  rules:
-    my-rule:
-      enabled: true
-      severity: warning
+	// Create imported config with engine rules
+	importedConfig := `engines:
+  style:
+    rules:
+      style.my-rule:
+        enabled: true
+        severity: warning
 `
 	importPath := filepath.Join(configsDir, "rules.yaml")
 	require.NoError(t, os.WriteFile(importPath, []byte(importedConfig), 0o644))
@@ -88,9 +89,9 @@ engines:
 	cfg, err := Load(mainPath)
 	require.NoError(t, err)
 
-	// Check that override rule was imported
-	assert.Contains(t, cfg.Overrides.Rules, "my-rule")
-	assert.True(t, cfg.Overrides.Rules["my-rule"].Enabled)
+	// Check that engine rule was imported
+	assert.Contains(t, cfg.Engines.Style.Rules, "style.my-rule")
+	assert.True(t, *cfg.Engines.Style.Rules["style.my-rule"].Enabled)
 }
 
 func TestLoad_WithImports_EnvVarExpansion(t *testing.T) {
@@ -222,7 +223,7 @@ engines:
 	assert.Equal(t, "override.tflint.hcl", cfg.Engines.Lint.ConfigFile)
 	assert.True(t, cfg.Engines.Style.Fix)
 	assert.Contains(t, cfg.Engines.Style.Rules, "naming-convention")
-	assert.True(t, cfg.Engines.Style.Rules["naming-convention"].Enabled)
+	assert.True(t, *cfg.Engines.Style.Rules["naming-convention"].Enabled)
 	assert.Equal(t, "error", cfg.Engines.Style.Rules["naming-convention"].Severity)
 }
 
@@ -592,9 +593,12 @@ output: {}
 
 func TestConfig_merge(t *testing.T) {
 	cfg := &Config{
-		Overrides: OverridesConfig{
-			Rules: map[string]RuleConfig{
-				"rule1": {Enabled: true},
+		Engines: Engines{
+			Style: StyleEngineConfig{
+				Enabled: BoolPtr(true),
+				Rules: map[string]RuleConfig{
+					"rule1": {Enabled: BoolPtr(true)},
+				},
 			},
 		},
 		Profiles: map[string]Profile{
@@ -603,9 +607,12 @@ func TestConfig_merge(t *testing.T) {
 	}
 
 	other := &Config{
-		Overrides: OverridesConfig{
-			Rules: map[string]RuleConfig{
-				"rule2": {Enabled: true},
+		Engines: Engines{
+			Style: StyleEngineConfig{
+				Enabled: BoolPtr(true),
+				Rules: map[string]RuleConfig{
+					"rule2": {Enabled: BoolPtr(true)},
+				},
 			},
 		},
 		Profiles: map[string]Profile{
@@ -615,9 +622,9 @@ func TestConfig_merge(t *testing.T) {
 
 	cfg.merge(other)
 
-	// Check that overrides were merged
-	assert.Contains(t, cfg.Overrides.Rules, "rule1")
-	assert.Contains(t, cfg.Overrides.Rules, "rule2")
+	// Check that engine style rules were merged (both base and other rules present)
+	assert.Contains(t, cfg.Engines.Style.Rules, "rule1")
+	assert.Contains(t, cfg.Engines.Style.Rules, "rule2")
 
 	// Check that profiles were merged
 	assert.Contains(t, cfg.Profiles, "profile1")
@@ -627,17 +634,62 @@ func TestConfig_merge(t *testing.T) {
 func TestConfig_merge_NilMaps(t *testing.T) {
 	cfg := &Config{} // All maps are nil
 	other := &Config{
-		Overrides: OverridesConfig{
-			Rules: map[string]RuleConfig{
-				"rule": {Enabled: true},
+		Engines: Engines{
+			Style: StyleEngineConfig{
+				Enabled: BoolPtr(true),
+				Rules: map[string]RuleConfig{
+					"rule": {Enabled: BoolPtr(true)},
+				},
 			},
 		},
 	}
 
 	cfg.merge(other)
 
-	assert.NotNil(t, cfg.Overrides.Rules)
-	assert.Contains(t, cfg.Overrides.Rules, "rule")
+	assert.NotNil(t, cfg.Engines.Style.Rules)
+	assert.Contains(t, cfg.Engines.Style.Rules, "rule")
+}
+
+func TestRuleConfig_IsEnabled(t *testing.T) {
+	tests := []struct {
+		name           string
+		enabled        *bool
+		defaultEnabled bool
+		want           bool
+	}{
+		{
+			name:           "nil inherits default true",
+			enabled:        nil,
+			defaultEnabled: true,
+			want:           true,
+		},
+		{
+			name:           "nil inherits default false",
+			enabled:        nil,
+			defaultEnabled: false,
+			want:           false,
+		},
+		{
+			name:           "explicit true ignores default",
+			enabled:        BoolPtr(true),
+			defaultEnabled: false,
+			want:           true,
+		},
+		{
+			name:           "explicit false ignores default",
+			enabled:        BoolPtr(false),
+			defaultEnabled: true,
+			want:           false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rc := RuleConfig{Enabled: tt.enabled}
+			got := rc.IsEnabled(tt.defaultEnabled)
+			assert.Equal(t, tt.want, got)
+		})
+	}
 }
 
 func TestLoad_NonExistentFile(t *testing.T) {
@@ -650,16 +702,17 @@ func TestLoadPartialConfig(t *testing.T) {
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "partial.yaml")
 
-	content := `overrides:
-  rules:
-    partial-rule:
-      enabled: true
+	content := `engines:
+  style:
+    rules:
+      style.partial-rule:
+        enabled: true
 `
 	require.NoError(t, os.WriteFile(configPath, []byte(content), 0o644))
 
 	cfg, err := loadPartialConfig(configPath)
 	require.NoError(t, err)
-	assert.Contains(t, cfg.Overrides.Rules, "partial-rule")
+	assert.Contains(t, cfg.Engines.Style.Rules, "style.partial-rule")
 }
 
 func TestLoad_WithProfiles(t *testing.T) {
@@ -758,55 +811,6 @@ func TestValidate_NonExistentInheritedProfile(t *testing.T) {
 	err := cfg.Validate()
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "inherits from non-existent profile")
-}
-
-func TestValidate_RuleOverrideSeverity(t *testing.T) {
-	tests := []struct {
-		name     string
-		severity string
-		wantErr  bool
-	}{
-		{"valid error", "error", false},
-		{"valid warning", "warning", false},
-		{"valid info", "info", false},
-		{"empty allowed", "", false},
-		{"invalid fatal", "fatal", true},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			cfg := &Config{
-				Version: 1,
-				Overrides: OverridesConfig{
-					Rules: map[string]RuleConfig{
-						"my-rule": {Enabled: true, Severity: tt.severity},
-					},
-				},
-			}
-			err := cfg.Validate()
-			if tt.wantErr {
-				assert.Error(t, err)
-				assert.Contains(t, err.Error(), "invalid severity")
-			} else {
-				assert.NoError(t, err)
-			}
-		})
-	}
-}
-
-func TestValidate_OverrideRuleSeverity(t *testing.T) {
-	cfg := &Config{
-		Version: 1,
-		Overrides: OverridesConfig{
-			Rules: map[string]RuleConfig{
-				"some-rule": {Enabled: true, Severity: "invalid"},
-			},
-		},
-	}
-
-	err := cfg.Validate()
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "invalid severity")
 }
 
 func TestValidate_EmptyPluginDirectory(t *testing.T) {
@@ -1007,18 +1011,15 @@ func TestGetProfile_MultiLevelInheritance(t *testing.T) {
 					Lint:   LintEngineConfig{Enabled: BoolPtr(true)},
 					Policy: PolicyEngineConfig{Enabled: BoolPtr(true)},
 				},
-				Overrides: OverridesConfig{
-					Rules: map[string]RuleConfig{
-						"rule1": {Enabled: true},
-					},
-				},
 			},
 			"ci": {
 				Name:     "ci",
 				Inherits: "base",
-				Overrides: OverridesConfig{
-					Rules: map[string]RuleConfig{
-						"rule2": {Enabled: true},
+				Engines: Engines{
+					Style: StyleEngineConfig{
+						Rules: map[string]RuleConfig{
+							"rule2": {Enabled: BoolPtr(true)},
+						},
 					},
 				},
 			},
@@ -1027,10 +1028,10 @@ func TestGetProfile_MultiLevelInheritance(t *testing.T) {
 				Inherits: "ci",
 				Engines: Engines{
 					Policy: PolicyEngineConfig{Enabled: BoolPtr(false)}, // Explicitly disable policy
-				},
-				Overrides: OverridesConfig{
-					Rules: map[string]RuleConfig{
-						"rule3": {Enabled: true},
+					Style: StyleEngineConfig{
+						Rules: map[string]RuleConfig{
+							"rule3": {Enabled: BoolPtr(true)},
+						},
 					},
 				},
 			},
@@ -1044,10 +1045,10 @@ func TestGetProfile_MultiLevelInheritance(t *testing.T) {
 	assert.True(t, profile.Engines.Fmt.IsEnabled())
 	assert.False(t, profile.Engines.Policy.IsEnabled())
 
-	// Should have merged overrides from all levels
-	assert.Contains(t, profile.Overrides.Rules, "rule1")
-	assert.Contains(t, profile.Overrides.Rules, "rule2")
-	assert.Contains(t, profile.Overrides.Rules, "rule3")
+	// Child style engine replaces parent (not merged)
+	// So staging's style.rules should only contain rule3
+	assert.Contains(t, profile.Engines.Style.Rules, "rule3")
+	assert.NotContains(t, profile.Engines.Style.Rules, "rule2") // Verify ci's rule was replaced, not merged
 }
 
 func TestGetProfile_NotFound(t *testing.T) {
@@ -1384,7 +1385,7 @@ engines:
 	assert.True(t, cfg.Engines.Style.Fix)
 	assert.True(t, cfg.Engines.Style.Diff)
 	assert.Contains(t, cfg.Engines.Style.Rules, "blank-line-between-blocks")
-	assert.True(t, cfg.Engines.Style.Rules["blank-line-between-blocks"].Enabled)
+	assert.True(t, *cfg.Engines.Style.Rules["blank-line-between-blocks"].Enabled)
 	assert.Equal(t, "warning", cfg.Engines.Style.Rules["blank-line-between-blocks"].Severity)
 
 	// Verify LintEngineConfig
@@ -1396,7 +1397,7 @@ engines:
 	assert.Equal(t, "/usr/local/bin/tflint", cfg.Engines.Lint.TFLintPath)
 	assert.True(t, cfg.Engines.Lint.FallbackBuiltin)
 	assert.Contains(t, cfg.Engines.Lint.Rules, "empty-block")
-	assert.False(t, cfg.Engines.Lint.Rules["empty-block"].Enabled)
+	assert.False(t, *cfg.Engines.Lint.Rules["empty-block"].Enabled)
 
 	// Verify PolicyEngineConfig
 	assert.True(t, cfg.Engines.Policy.IsEnabled())
@@ -1404,7 +1405,7 @@ engines:
 	assert.Equal(t, []string{"special.rego"}, cfg.Engines.Policy.PolicyFiles)
 	assert.Equal(t, []string{"data.json"}, cfg.Engines.Policy.DataFiles)
 	assert.Contains(t, cfg.Engines.Policy.Rules, "require-tags")
-	assert.True(t, cfg.Engines.Policy.Rules["require-tags"].Enabled)
+	assert.True(t, *cfg.Engines.Policy.Rules["require-tags"].Enabled)
 	assert.Equal(t, "error", cfg.Engines.Policy.Rules["require-tags"].Severity)
 }
 
@@ -1500,7 +1501,7 @@ func TestTypedEngineConfig_MergeFrom(t *testing.T) {
 			Fix:     true,
 			Diff:    true,
 			Rules: map[string]RuleConfig{
-				"test-rule": {Enabled: true, Severity: "error"},
+				"test-rule": {Enabled: BoolPtr(true), Severity: "error"},
 			},
 		}
 		base.mergeFrom(other)
@@ -1513,12 +1514,12 @@ func TestTypedEngineConfig_MergeFrom(t *testing.T) {
 	t.Run("StyleEngineConfig appends to existing rules", func(t *testing.T) {
 		base := &StyleEngineConfig{
 			Rules: map[string]RuleConfig{
-				"existing-rule": {Enabled: true},
+				"existing-rule": {Enabled: BoolPtr(true)},
 			},
 		}
 		other := &StyleEngineConfig{
 			Rules: map[string]RuleConfig{
-				"new-rule": {Enabled: false},
+				"new-rule": {Enabled: BoolPtr(false)},
 			},
 		}
 		base.mergeFrom(other)
@@ -1546,7 +1547,7 @@ func TestTypedEngineConfig_MergeFrom(t *testing.T) {
 			TFLintPath:      "/usr/bin/tflint",
 			FallbackBuiltin: true,
 			Rules: map[string]RuleConfig{
-				"lint-rule": {Enabled: true},
+				"lint-rule": {Enabled: BoolPtr(true)},
 			},
 		}
 		base.mergeFrom(other)
@@ -1595,7 +1596,7 @@ func TestTypedEngineConfig_MergeFrom(t *testing.T) {
 			PolicyFiles: []string{"main.rego"},
 			DataFiles:   []string{"data.json"},
 			Rules: map[string]RuleConfig{
-				"policy-rule": {Enabled: true},
+				"policy-rule": {Enabled: BoolPtr(true)},
 			},
 		}
 		base.mergeFrom(other)
@@ -1660,6 +1661,86 @@ func TestEngineConfig_IsEnabled_TruePath(t *testing.T) {
 	assert.False(t, ec2.IsEnabled())
 }
 
+func TestEngines_mergeFrom(t *testing.T) {
+	t.Run("merges non-zero values from all engines", func(t *testing.T) {
+		base := Engines{
+			Fmt:    FmtEngineConfig{Enabled: BoolPtr(true), Check: false},
+			Style:  StyleEngineConfig{Enabled: BoolPtr(true)},
+			Lint:   LintEngineConfig{Enabled: BoolPtr(true), ConfigFile: "base.hcl"},
+			Policy: PolicyEngineConfig{Enabled: BoolPtr(false)},
+		}
+
+		other := Engines{
+			Fmt:    FmtEngineConfig{Check: true, Diff: true},                                     // adds check and diff
+			Style:  StyleEngineConfig{Fix: true},                                                 // adds fix
+			Lint:   LintEngineConfig{ConfigFile: "override.hcl"},                                 // overrides config_file
+			Policy: PolicyEngineConfig{Enabled: BoolPtr(true), PolicyDirs: []string{"./policy"}}, // enables and adds dirs
+		}
+
+		base.mergeFrom(&other)
+
+		// Fmt: base.Enabled preserved, other.Check and Diff applied
+		assert.True(t, base.Fmt.IsEnabled())
+		assert.True(t, base.Fmt.Check)
+		assert.True(t, base.Fmt.Diff)
+
+		// Style: base.Enabled preserved, other.Fix applied
+		assert.True(t, base.Style.IsEnabled())
+		assert.True(t, base.Style.Fix)
+
+		// Lint: base.Enabled preserved, config_file overridden
+		assert.True(t, base.Lint.IsEnabled())
+		assert.Equal(t, "override.hcl", base.Lint.ConfigFile)
+
+		// Policy: other.Enabled and PolicyDirs applied
+		assert.True(t, base.Policy.IsEnabled())
+		assert.Equal(t, []string{"./policy"}, base.Policy.PolicyDirs)
+	})
+
+	t.Run("preserves base values when other is empty", func(t *testing.T) {
+		base := Engines{
+			Fmt:    FmtEngineConfig{Enabled: BoolPtr(true), Check: true},
+			Style:  StyleEngineConfig{Enabled: BoolPtr(true), Fix: true},
+			Lint:   LintEngineConfig{Enabled: BoolPtr(true), ConfigFile: "custom.hcl"},
+			Policy: PolicyEngineConfig{Enabled: BoolPtr(false)},
+		}
+
+		empty := Engines{}
+		base.mergeFrom(&empty)
+
+		// All base values should be preserved
+		assert.True(t, base.Fmt.IsEnabled())
+		assert.True(t, base.Fmt.Check)
+		assert.True(t, base.Style.IsEnabled())
+		assert.True(t, base.Style.Fix)
+		assert.True(t, base.Lint.IsEnabled())
+		assert.Equal(t, "custom.hcl", base.Lint.ConfigFile)
+		assert.False(t, base.Policy.IsEnabled())
+	})
+
+	t.Run("explicit false overrides true", func(t *testing.T) {
+		// A profile that explicitly disables an engine should work.
+		base := Engines{
+			Fmt:   FmtEngineConfig{Enabled: BoolPtr(true), Check: true},
+			Style: StyleEngineConfig{Enabled: BoolPtr(true)},
+			Lint:  LintEngineConfig{Enabled: BoolPtr(true)},
+		}
+
+		disableAll := Engines{
+			Fmt:   FmtEngineConfig{Enabled: BoolPtr(false)},
+			Style: StyleEngineConfig{Enabled: BoolPtr(false)},
+			Lint:  LintEngineConfig{Enabled: BoolPtr(false)},
+		}
+
+		base.mergeFrom(&disableAll)
+
+		assert.False(t, base.Fmt.IsEnabled(), "fmt should be disabled")
+		assert.True(t, base.Fmt.Check, "fmt.check should still be true (not affected)")
+		assert.False(t, base.Style.IsEnabled(), "style should be disabled")
+		assert.False(t, base.Lint.IsEnabled(), "lint should be disabled")
+	})
+}
+
 func TestConfig_merge_GlobalSettings(t *testing.T) {
 	// Covers the FailFast, Parallel, and Plugins merge branches in merge().
 	base := &Config{
@@ -1712,21 +1793,6 @@ func TestConfig_merge_PluginDirectoriesAppended(t *testing.T) {
 	base.merge(other)
 
 	assert.Equal(t, []string{"./base-plugins", "./extra-plugins"}, base.Plugins.Directories)
-}
-
-func TestValidateRuleOverrides_EmptyOverrideName(t *testing.T) {
-	// The empty override rule name check path.
-	cfg := &Config{
-		Version: 1,
-		Overrides: OverridesConfig{
-			Rules: map[string]RuleConfig{
-				"": {Enabled: true},
-			},
-		},
-	}
-	err := cfg.Validate()
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "override rule name cannot be empty")
 }
 
 func TestLoadPartialConfig_ReadError(t *testing.T) {
@@ -1802,7 +1868,7 @@ func TestMergeProfiles_StyleWithFixOrDiffOrRules(t *testing.T) {
 			Style: StyleEngineConfig{
 				Fix: true,
 				Rules: map[string]RuleConfig{
-					"some-rule": {Enabled: true},
+					"some-rule": {Enabled: BoolPtr(true)},
 				},
 			},
 		},
@@ -1842,34 +1908,45 @@ func TestApplyProfile_Error(t *testing.T) {
 	assert.Contains(t, err.Error(), "not found")
 }
 
-func TestApplyProfile_WithExistingOverrides(t *testing.T) {
-	// Covers the path where c.Overrides.Rules is already non-nil.
+func TestApplyProfile_MergesEnginesInsteadOfReplacing(t *testing.T) {
+	// Verifies that ApplyProfile merges engine settings instead of replacing.
+	// A profile that only specifies policy.enabled should not reset other engines.
 	cfg := &Config{
 		Version: 1,
-		Overrides: OverridesConfig{
-			Rules: map[string]RuleConfig{
-				"pre-existing": {Enabled: true},
-			},
+		Engines: Engines{
+			Fmt:    FmtEngineConfig{Enabled: BoolPtr(true), Check: true},
+			Style:  StyleEngineConfig{Enabled: BoolPtr(true), Fix: true},
+			Lint:   LintEngineConfig{Enabled: BoolPtr(true), ConfigFile: "custom.hcl"},
+			Policy: PolicyEngineConfig{Enabled: BoolPtr(false)},
 		},
 		Profiles: map[string]Profile{
-			"ci": {
-				Name: "ci",
+			"with-policy": {
+				Name: "with-policy",
 				Engines: Engines{
-					Fmt: FmtEngineConfig{Enabled: BoolPtr(true)},
-				},
-				Overrides: OverridesConfig{
-					Rules: map[string]RuleConfig{
-						"from-profile": {Enabled: true, Severity: "error"},
+					// Only enables policy, doesn't touch other engines
+					Policy: PolicyEngineConfig{
+						Enabled:    BoolPtr(true),
+						PolicyDirs: []string{"./policies"},
 					},
 				},
 			},
 		},
 	}
 
-	err := cfg.ApplyProfile("ci")
+	err := cfg.ApplyProfile("with-policy")
 	require.NoError(t, err)
-	assert.Contains(t, cfg.Overrides.Rules, "pre-existing")
-	assert.Contains(t, cfg.Overrides.Rules, "from-profile")
+
+	// Policy should be updated from profile
+	assert.True(t, cfg.Engines.Policy.IsEnabled())
+	assert.Equal(t, []string{"./policies"}, cfg.Engines.Policy.PolicyDirs)
+
+	// Other engines should preserve base config (not be reset to zero values)
+	assert.True(t, cfg.Engines.Fmt.IsEnabled(), "fmt should remain enabled")
+	assert.True(t, cfg.Engines.Fmt.Check, "fmt.check should remain true")
+	assert.True(t, cfg.Engines.Style.IsEnabled(), "style should remain enabled")
+	assert.True(t, cfg.Engines.Style.Fix, "style.fix should remain true")
+	assert.True(t, cfg.Engines.Lint.IsEnabled(), "lint should remain enabled")
+	assert.Equal(t, "custom.hcl", cfg.Engines.Lint.ConfigFile, "lint.config_file should remain")
 }
 
 func TestLoad_ReadError(t *testing.T) {
@@ -1909,9 +1986,9 @@ plugins:
 	assert.Contains(t, cfg.Plugins.Rules, "my-custom-rule")
 
 	// Verify rule settings
-	assert.True(t, cfg.Plugins.Rules["require-description"].Enabled)
+	assert.True(t, *cfg.Plugins.Rules["require-description"].Enabled)
 	assert.Equal(t, "error", cfg.Plugins.Rules["require-description"].Severity)
-	assert.False(t, cfg.Plugins.Rules["my-custom-rule"].Enabled)
+	assert.False(t, *cfg.Plugins.Rules["my-custom-rule"].Enabled)
 	assert.Equal(t, "warning", cfg.Plugins.Rules["my-custom-rule"].Severity)
 }
 
@@ -1921,14 +1998,14 @@ func TestConfig_merge_PluginRules(t *testing.T) {
 			Plugins: PluginsConfig{
 				Enabled: true,
 				Rules: map[string]RuleConfig{
-					"base-rule": {Enabled: true, Severity: "warning"},
+					"base-rule": {Enabled: BoolPtr(true), Severity: "warning"},
 				},
 			},
 		}
 		other := &Config{
 			Plugins: PluginsConfig{
 				Rules: map[string]RuleConfig{
-					"other-rule": {Enabled: false, Severity: "error"},
+					"other-rule": {Enabled: BoolPtr(false), Severity: "error"},
 				},
 			},
 		}
@@ -1945,14 +2022,14 @@ func TestConfig_merge_PluginRules(t *testing.T) {
 			Plugins: PluginsConfig{
 				Enabled: true,
 				Rules: map[string]RuleConfig{
-					"shared-rule": {Enabled: true, Severity: "warning"},
+					"shared-rule": {Enabled: BoolPtr(true), Severity: "warning"},
 				},
 			},
 		}
 		other := &Config{
 			Plugins: PluginsConfig{
 				Rules: map[string]RuleConfig{
-					"shared-rule": {Enabled: false, Severity: "error"},
+					"shared-rule": {Enabled: BoolPtr(false), Severity: "error"},
 				},
 			},
 		}
@@ -1960,7 +2037,7 @@ func TestConfig_merge_PluginRules(t *testing.T) {
 		base.merge(other)
 
 		assert.Len(t, base.Plugins.Rules, 1)
-		assert.False(t, base.Plugins.Rules["shared-rule"].Enabled)
+		assert.False(t, *base.Plugins.Rules["shared-rule"].Enabled)
 		assert.Equal(t, "error", base.Plugins.Rules["shared-rule"].Severity)
 	})
 
@@ -1974,7 +2051,7 @@ func TestConfig_merge_PluginRules(t *testing.T) {
 		other := &Config{
 			Plugins: PluginsConfig{
 				Rules: map[string]RuleConfig{
-					"new-rule": {Enabled: true},
+					"new-rule": {Enabled: BoolPtr(true)},
 				},
 			},
 		}
@@ -1992,7 +2069,7 @@ func TestValidatePlugins_InvalidRuleSeverity(t *testing.T) {
 		Plugins: PluginsConfig{
 			Enabled: true,
 			Rules: map[string]RuleConfig{
-				"my-rule": {Enabled: true, Severity: "invalid"},
+				"my-rule": {Enabled: BoolPtr(true), Severity: "invalid"},
 			},
 		},
 	}
@@ -2007,7 +2084,7 @@ func TestValidatePlugins_EmptyRuleName(t *testing.T) {
 		Plugins: PluginsConfig{
 			Enabled: true,
 			Rules: map[string]RuleConfig{
-				"": {Enabled: true},
+				"": {Enabled: BoolPtr(true)},
 			},
 		},
 	}
@@ -2034,7 +2111,7 @@ func TestValidatePlugins_ValidSeverities(t *testing.T) {
 				Plugins: PluginsConfig{
 					Enabled: true,
 					Rules: map[string]RuleConfig{
-						"my-rule": {Enabled: true, Severity: tc.severity},
+						"my-rule": {Enabled: BoolPtr(true), Severity: tc.severity},
 					},
 				},
 			}

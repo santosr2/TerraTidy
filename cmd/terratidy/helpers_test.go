@@ -868,7 +868,7 @@ profiles:
 	}
 }
 
-func TestProfileOverridesIntegration_FromYAML(t *testing.T) {
+func TestProfileEngineRulesIntegration_FromYAML(t *testing.T) {
 	// Save and restore global state
 	oldCfgFile := cfgFile
 	oldProfile := profile
@@ -879,20 +879,22 @@ func TestProfileOverridesIntegration_FromYAML(t *testing.T) {
 
 	yaml := `
 version: 1
-overrides:
-  rules:
-    base-rule:
-      enabled: true
-      severity: warning
+engines:
+  style:
+    rules:
+      base-rule:
+        enabled: true
+        severity: warning
 profiles:
   strict:
-    overrides:
-      rules:
-        profile-rule:
-          enabled: true
-          severity: error
-        base-rule:
-          severity: error
+    engines:
+      style:
+        rules:
+          profile-rule:
+            enabled: true
+            severity: error
+          base-rule:
+            severity: error
 `
 	// Write config file
 	dir := t.TempDir()
@@ -907,18 +909,18 @@ profiles:
 	cfg, err := loadConfig()
 	require.NoError(t, err)
 
-	// Profile overrides should be merged into config
-	assert.Contains(t, cfg.Overrides.Rules, "base-rule", "base rule should still exist")
-	assert.Contains(t, cfg.Overrides.Rules, "profile-rule", "profile rule should be added")
+	// Profile rules should be merged into config
+	assert.Contains(t, cfg.Engines.Style.Rules, "base-rule", "base rule should still exist")
+	assert.Contains(t, cfg.Engines.Style.Rules, "profile-rule", "profile rule should be added")
 
-	// Profile override should take precedence for severity
-	assert.Equal(t, "error", cfg.Overrides.Rules["base-rule"].Severity, "profile should override base severity")
-	assert.Equal(t, "error", cfg.Overrides.Rules["profile-rule"].Severity, "profile rule severity should be set")
+	// Profile rule should take precedence for severity
+	assert.Equal(t, "error", cfg.Engines.Style.Rules["base-rule"].Severity, "profile should override base severity")
+	assert.Equal(t, "error", cfg.Engines.Style.Rules["profile-rule"].Severity, "profile rule severity should be set")
 }
 
-// TestOverridesRulesEnabled_DisablesRule verifies that overrides.rules.<name>.enabled: false
+// TestEngineRulesEnabled_DisablesRule verifies that engines.style.rules.<name>.enabled: false
 // from YAML config prevents the rule from producing findings.
-func TestOverridesRulesEnabled_DisablesRule(t *testing.T) {
+func TestEngineRulesEnabled_DisablesRule(t *testing.T) {
 	// Save and restore global state
 	oldCfgFile := cfgFile
 	oldProfile := profile
@@ -954,25 +956,23 @@ version: 1
 engines:
   style:
     enabled: true
-overrides:
-  rules:
-    style.blank-line-between-blocks:
-      enabled: true
+    rules:
+      style.blank-line-between-blocks:
+        enabled: true
 `,
 			ruleDisabled:  false,
 			expectFinding: true,
 		},
 		{
-			name: "rule disabled via overrides produces no findings",
+			name: "rule disabled via engine rules produces no findings",
 			yaml: `
 version: 1
 engines:
   style:
     enabled: true
-overrides:
-  rules:
-    style.blank-line-between-blocks:
-      enabled: false
+    rules:
+      style.blank-line-between-blocks:
+        enabled: false
 `,
 			ruleDisabled:  true,
 			expectFinding: false,
@@ -995,8 +995,8 @@ overrides:
 
 			// Verify rule config is correctly loaded
 			if tc.ruleDisabled {
-				require.Contains(t, cfg.Overrides.Rules, "style.blank-line-between-blocks")
-				assert.False(t, cfg.Overrides.Rules["style.blank-line-between-blocks"].Enabled,
+				require.Contains(t, cfg.Engines.Style.Rules, "style.blank-line-between-blocks")
+				assert.False(t, *cfg.Engines.Style.Rules["style.blank-line-between-blocks"].Enabled,
 					"rule should be disabled in config")
 			}
 
@@ -1026,9 +1026,9 @@ overrides:
 	}
 }
 
-// TestOverridesRulesSeverity_ChangesFindingSeverity verifies that overrides.rules.<name>.severity
+// TestEngineRulesSeverity_ChangesFindingSeverity verifies that engines.style.rules.<name>.severity
 // from YAML config changes the severity of findings produced by that rule.
-func TestOverridesRulesSeverity_ChangesFindingSeverity(t *testing.T) {
+func TestEngineRulesSeverity_ChangesFindingSeverity(t *testing.T) {
 	// Save and restore global state
 	oldCfgFile := cfgFile
 	oldProfile := profile
@@ -1062,40 +1062,37 @@ version: 1
 engines:
   style:
     enabled: true
-overrides:
-  rules:
-    style.blank-line-between-blocks:
-      enabled: true
+    rules:
+      style.blank-line-between-blocks:
+        enabled: true
 `,
 			expectedSeverity: sdk.SeverityWarning,
 		},
 		{
-			name: "severity overridden to error",
+			name: "severity changed to error",
 			yaml: `
 version: 1
 engines:
   style:
     enabled: true
-overrides:
-  rules:
-    style.blank-line-between-blocks:
-      enabled: true
-      severity: error
+    rules:
+      style.blank-line-between-blocks:
+        enabled: true
+        severity: error
 `,
 			expectedSeverity: sdk.SeverityError,
 		},
 		{
-			name: "severity overridden to info",
+			name: "severity changed to info",
 			yaml: `
 version: 1
 engines:
   style:
     enabled: true
-overrides:
-  rules:
-    style.blank-line-between-blocks:
-      enabled: true
-      severity: info
+    rules:
+      style.blank-line-between-blocks:
+        enabled: true
+        severity: info
 `,
 			expectedSeverity: sdk.SeverityInfo,
 		},
@@ -1137,9 +1134,9 @@ overrides:
 	}
 }
 
-// TestOverridesRulesConfig_AppliesRuleOptions verifies that overrides.rules.<name>.config
+// TestEngineRulesConfig_AppliesRuleOptions verifies that engines.style.rules.<name>.config
 // from YAML config applies rule-specific options.
-func TestOverridesRulesConfig_AppliesRuleOptions(t *testing.T) {
+func TestEngineRulesConfig_AppliesRuleOptions(t *testing.T) {
 	// Save and restore global state
 	oldCfgFile := cfgFile
 	oldProfile := profile
@@ -1171,10 +1168,9 @@ version: 1
 engines:
   style:
     enabled: true
-overrides:
-  rules:
-    style.blank-line-between-blocks:
-      enabled: true
+    rules:
+      style.blank-line-between-blocks:
+        enabled: true
 `,
 			expectFinding: true,
 			description:   "0 blank lines should trigger finding with default config",
@@ -1193,14 +1189,13 @@ version: 1
 engines:
   style:
     enabled: true
-overrides:
-  rules:
-    style.blank-line-between-blocks:
-      enabled: true
-      config:
-        options:
-          min_lines: 0
-          max_lines: 1
+    rules:
+      style.blank-line-between-blocks:
+        enabled: true
+        config:
+          options:
+            min_lines: 0
+            max_lines: 1
 `,
 			expectFinding: false,
 			description:   "0 blank lines should be valid when min_lines=0",
@@ -1220,14 +1215,13 @@ version: 1
 engines:
   style:
     enabled: true
-overrides:
-  rules:
-    style.blank-line-between-blocks:
-      enabled: true
-      config:
-        options:
-          min_lines: 2
-          max_lines: 3
+    rules:
+      style.blank-line-between-blocks:
+        enabled: true
+        config:
+          options:
+            min_lines: 2
+            max_lines: 3
 `,
 			expectFinding: true,
 			description:   "1 blank line should trigger finding when min_lines=2",
@@ -1248,14 +1242,13 @@ version: 1
 engines:
   style:
     enabled: true
-overrides:
-  rules:
-    style.blank-line-between-blocks:
-      enabled: true
-      config:
-        options:
-          min_lines: 2
-          max_lines: 3
+    rules:
+      style.blank-line-between-blocks:
+        enabled: true
+        config:
+          options:
+            min_lines: 2
+            max_lines: 3
 `,
 			expectFinding: false,
 			description:   "2 blank lines should be valid when min_lines=2",
@@ -1336,10 +1329,9 @@ version: 1
 engines:
   style:
     enabled: true
-overrides:
-  rules:
-    style.variable-naming:
-      enabled: true
+    rules:
+      style.variable-naming:
+        enabled: true
 `,
 			expectFinding: true,
 			description:   "camelCase variable should trigger finding with default snake_case convention",
@@ -1356,10 +1348,9 @@ version: 1
 engines:
   style:
     enabled: true
-overrides:
-  rules:
-    style.variable-naming:
-      enabled: true
+    rules:
+      style.variable-naming:
+        enabled: true
 `,
 			expectFinding: false,
 			description:   "snake_case variable should be valid with default convention",
@@ -1376,13 +1367,12 @@ version: 1
 engines:
   style:
     enabled: true
-overrides:
-  rules:
-    style.variable-naming:
-      enabled: true
-      config:
-        options:
-          case: camelCase
+    rules:
+      style.variable-naming:
+        enabled: true
+        config:
+          options:
+            case: camelCase
 `,
 			expectFinding: false,
 			description:   "camelCase variable should be valid when convention is camelCase",
@@ -1399,13 +1389,12 @@ version: 1
 engines:
   style:
     enabled: true
-overrides:
-  rules:
-    style.variable-naming:
-      enabled: true
-      config:
-        options:
-          case: camelCase
+    rules:
+      style.variable-naming:
+        enabled: true
+        config:
+          options:
+            case: camelCase
 `,
 			expectFinding: true,
 			description:   "snake_case variable should trigger finding when convention is camelCase",

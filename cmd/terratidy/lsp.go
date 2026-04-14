@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/santosr2/TerraTidy/internal/lsp"
+	"github.com/santosr2/TerraTidy/pkg/sdk"
 	"github.com/spf13/cobra"
 )
 
@@ -51,12 +52,12 @@ The server provides:
 
 		if lspLogFile != "" {
 			if err := server.SetLogFile(lspLogFile); err != nil {
-				return fmt.Errorf("setting log file: %w", err)
+				return sdk.NewInternalError(fmt.Errorf("setting log file: %w", err))
 			}
 		}
 
 		if err := server.Run(); err != nil {
-			return fmt.Errorf("running LSP server: %w", err)
+			return sdk.NewInternalError(fmt.Errorf("running LSP server: %w", err))
 		}
 		return nil
 	},

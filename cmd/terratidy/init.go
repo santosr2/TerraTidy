@@ -4,10 +4,12 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
 
+	"github.com/santosr2/TerraTidy/pkg/sdk"
 	"github.com/spf13/cobra"
 )
 
@@ -53,7 +55,7 @@ func init() {
 	initCmd.Flags().BoolVarP(&initInteractive, "interactive", "i", false, "interactive configuration setup")
 	initCmd.Flags().BoolVar(&initSplit, "split", false, "create modular split configuration")
 	initCmd.Flags().BoolVar(&initMonorepo, "monorepo", false, "set up for monorepo")
-	initCmd.Flags().BoolVarP(&initForce, "force", "f", false, "overwrite existing configuration")
+	initCmd.Flags().BoolVar(&initForce, "force", false, "overwrite existing configuration")
 	rootCmd.AddCommand(initCmd)
 }
 
@@ -62,7 +64,7 @@ func runInit(_ *cobra.Command, _ []string) error {
 
 	// Check if config already exists
 	if _, err := os.Stat(configPath); err == nil && !initForce {
-		return fmt.Errorf("configuration file already exists: %s (use --force to overwrite)", configPath)
+		return sdk.NewConfigError(fmt.Errorf("configuration file already exists: %s (use --force to overwrite)", configPath))
 	}
 
 	fmt.Println("Initializing TerraTidy configuration...")
@@ -74,7 +76,8 @@ func runInit(_ *cobra.Command, _ []string) error {
 		var err error
 		config, err = interactiveInit()
 		if err != nil {
-			return fmt.Errorf("interactive setup failed: %w", err)
+			// I/O failure (broken stdin, etc.), not user-correctable config issue.
+			return sdk.NewInternalError(fmt.Errorf("interactive setup failed: %w", err))
 		}
 	} else if initSplit {
 		return initSplitConfig()
@@ -86,7 +89,7 @@ func runInit(_ *cobra.Command, _ []string) error {
 
 	// Write configuration file
 	if err := os.WriteFile(configPath, []byte(config), 0o600); err != nil {
-		return fmt.Errorf("writing config file: %w", err)
+		return sdk.NewInternalError(fmt.Errorf("writing config file: %w", err))
 	}
 
 	fmt.Printf("Created %s\n\n", configPath)
@@ -108,27 +111,45 @@ func interactiveInit() (string, error) {
 
 	// Ask about engines
 	fmt.Print("Enable formatting checks? [Y/n]: ")
-	fmtEnabled := readYesNo(reader, true)
+	fmtEnabled, err := readYesNo(reader, true)
+	if err != nil {
+		return "", fmt.Errorf("reading format preference: %w", err)
+	}
 
 	fmt.Print("Enable style checks? [Y/n]: ")
-	styleEnabled := readYesNo(reader, true)
+	styleEnabled, err := readYesNo(reader, true)
+	if err != nil {
+		return "", fmt.Errorf("reading style preference: %w", err)
+	}
 
 	fmt.Print("Enable linting? [Y/n]: ")
-	lintEnabled := readYesNo(reader, true)
+	lintEnabled, err := readYesNo(reader, true)
+	if err != nil {
+		return "", fmt.Errorf("reading lint preference: %w", err)
+	}
 
 	fmt.Print("Enable policy checks? [y/N]: ")
-	policyEnabled := readYesNo(reader, false)
+	policyEnabled, err := readYesNo(reader, false)
+	if err != nil {
+		return "", fmt.Errorf("reading policy preference: %w", err)
+	}
 
 	// Ask about severity
 	fmt.Print("Minimum severity threshold (info/warning/error) [warning]: ")
-	severity := readLine(reader)
+	severity, err := readLine(reader)
+	if err != nil {
+		return "", fmt.Errorf("reading severity: %w", err)
+	}
 	if severity == "" {
 		severity = "warning"
 	}
 
 	// Ask about fail-fast
 	fmt.Print("Stop on first error? [y/N]: ")
-	failFast := readYesNo(reader, false)
+	failFast, err := readYesNo(reader, false)
+	if err != nil {
+		return "", fmt.Errorf("reading fail-fast preference: %w", err)
+	}
 
 	fmt.Println()
 
@@ -143,17 +164,25 @@ func interactiveInit() (string, error) {
 	return generateCustomConfig(opts), nil
 }
 
-func readYesNo(reader *bufio.Reader, defaultYes bool) bool {
-	line := readLine(reader)
-	if line == "" {
-		return defaultYes
+func readYesNo(reader *bufio.Reader, defaultYes bool) (bool, error) {
+	line, err := readLine(reader)
+	if err != nil {
+		return false, err
 	}
-	return strings.EqualFold(line, "y") || strings.EqualFold(line, "yes")
+	if line == "" {
+		return defaultYes, nil
+	}
+	return strings.EqualFold(line, "y") || strings.EqualFold(line, "yes"), nil
 }
 
-func readLine(reader *bufio.Reader) string {
-	line, _ := reader.ReadString('\n')
-	return strings.TrimSpace(line)
+func readLine(reader *bufio.Reader) (string, error) {
+	line, err := reader.ReadString('\n')
+	// ReadString returns data AND error when EOF is hit without delimiter.
+	// Accept partial data if present (e.g., "echo -n y | terratidy init -i").
+	if err != nil && (err != io.EOF || len(line) == 0) {
+		return "", fmt.Errorf("reading input: %w", err)
+	}
+	return strings.TrimSpace(line), nil
 }
 
 // initSplitConfig creates a modular split configuration.
@@ -161,7 +190,7 @@ func initSplitConfig() error {
 	// Create .terratidy directory
 	configDir := ".terratidy"
 	if err := os.MkdirAll(configDir, 0o750); err != nil {
-		return fmt.Errorf("creating config directory: %w", err)
+		return sdk.NewInternalError(fmt.Errorf("creating config directory: %w", err))
 	}
 
 	// Create main config file
@@ -189,13 +218,11 @@ engines:
 engines:
   style:
     enabled: true
-
-overrides:
-  rules:
     # Customize style rules here
-    # style.blank-line-between-blocks:
-    #   enabled: true
-    #   severity: warning
+    # rules:
+    #   style.blank-line-between-blocks:
+    #     enabled: true
+    #     severity: warning
 `
 
 	lintConfig := `# Linting Configuration
@@ -228,7 +255,7 @@ engines:
 
 	for path, content := range files {
 		if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
-			return fmt.Errorf("writing %s: %w", path, err)
+			return sdk.NewInternalError(fmt.Errorf("writing %s: %w", path, err))
 		}
 		fmt.Printf("Created %s\n", path)
 	}
@@ -268,15 +295,18 @@ engines:
     # policy_dirs:
     #   - ./policies
 
-# Override specific rules
-# overrides:
-#   rules:
-#     style.blank-line-between-blocks:
-#       enabled: true
-#       severity: warning
-#     lint.terraform-required-version:
-#       enabled: true
-#       severity: error
+# Per-engine rule configuration
+# engines:
+#   style:
+#     rules:
+#       style.blank-line-between-blocks:
+#         enabled: true
+#         severity: warning
+#   lint:
+#     rules:
+#       lint.terraform-required-version:
+#         enabled: true
+#         severity: error
 `
 }
 
@@ -337,17 +367,18 @@ profiles:
       policy:
         enabled: false
 
-# Override rules globally
-overrides:
-  rules:
-    # Enforce terraform version in all modules
-    lint.terraform-required-version:
-      enabled: true
-      severity: error
-    # Enforce provider version constraints
-    lint.terraform-required-providers:
-      enabled: true
-      severity: error
+# Lint engine rule configuration
+# engines:
+#   lint:
+#     rules:
+#       # Enforce terraform version in all modules
+#       lint.terraform-required-version:
+#         enabled: true
+#         severity: error
+#       # Enforce provider version constraints
+#       lint.terraform-required-providers:
+#         enabled: true
+#         severity: error
 `
 }
 

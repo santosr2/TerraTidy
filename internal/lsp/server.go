@@ -1448,20 +1448,8 @@ func buildStyleConfigFromCfg(cfg *config.Config) *style.Config {
 		return styleCfg
 	}
 
-	// Apply engine-level style rules first (from engines.style.rules)
+	// Apply style rules from engines.style.rules
 	for ruleName, ruleCfg := range cfg.Engines.Style.Rules {
-		rc := style.RuleConfig{
-			Enabled:  ruleCfg.Enabled,
-			Severity: ruleCfg.Severity,
-		}
-		if ruleCfg.Config != nil {
-			rc.Options = ruleCfg.Config
-		}
-		styleCfg.Rules[ruleName] = rc
-	}
-
-	// Apply override rules (from overrides.rules), which take precedence
-	for ruleName, ruleCfg := range cfg.Overrides.Rules {
 		rc := style.RuleConfig{
 			Enabled:  ruleCfg.Enabled,
 			Severity: ruleCfg.Severity,

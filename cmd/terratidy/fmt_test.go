@@ -1,12 +1,14 @@
 package main
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strconv"
 	"testing"
 
 	"github.com/santosr2/TerraTidy/internal/config"
+	"github.com/santosr2/TerraTidy/pkg/sdk"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -289,9 +291,12 @@ instance_type="t2.micro"
 	rootCmd.SetArgs([]string{"fmt", "--check", dir})
 	err := rootCmd.Execute()
 
-	// Should return error (exit code 1 equivalent)
-	assert.Error(t, err, "fmt --check should return error for unformatted files")
-	assert.Equal(t, "1 file(s) need formatting", err.Error())
+	// Should return ExitError with findings code (exit code 1)
+	require.Error(t, err, "fmt --check should return error for unformatted files")
+
+	var exitErr *sdk.ExitError
+	require.True(t, errors.As(err, &exitErr), "should be an ExitError, got: %v", err)
+	assert.Equal(t, sdk.ExitFindings, exitErr.Code, "should have findings exit code")
 }
 
 // TestBuildFmtConfig_BothFlagsOverride verifies both flags can be overridden simultaneously

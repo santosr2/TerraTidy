@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/santosr2/TerraTidy/pkg/sdk"
 	"github.com/spf13/cobra"
 )
 
@@ -48,15 +49,21 @@ func init() {
 func runInitRule(_ *cobra.Command, _ []string) error {
 	// Normalize name (Cobra validates --name is required via MarkFlagRequired)
 	normalizedName := strings.ToLower(strings.ReplaceAll(initRuleName, " ", "-"))
+	normalizedType := strings.ToLower(initRuleType)
+
+	// Validate rule type before any side effects (directory creation, output)
+	if normalizedType != "go" && normalizedType != "rego" && normalizedType != "yaml" {
+		return sdk.NewConfigError(fmt.Errorf("unsupported rule type: %s (use go, rego, or yaml)", initRuleType))
+	}
 
 	// Create output directory
 	if err := os.MkdirAll(initRuleOutput, 0o750); err != nil {
-		return fmt.Errorf("creating output directory: %w", err)
+		return sdk.NewInternalError(fmt.Errorf("creating output directory: %w", err))
 	}
 
-	fmt.Printf("Creating %s rule: %s\n\n", initRuleType, normalizedName)
+	fmt.Printf("Creating %s rule: %s\n\n", normalizedType, normalizedName)
 
-	switch strings.ToLower(initRuleType) {
+	switch normalizedType {
 	case "go":
 		return createGoRule(normalizedName)
 	case "rego":
@@ -64,14 +71,14 @@ func runInitRule(_ *cobra.Command, _ []string) error {
 	case "yaml":
 		return createYAMLRule(normalizedName)
 	default:
-		return fmt.Errorf("unsupported rule type: %s (use go, rego, or yaml)", initRuleType)
+		panic("unreachable: rule type validated above")
 	}
 }
 
 func createGoRule(name string) error {
 	ruleDir := filepath.Join(initRuleOutput, "rules", name)
 	if err := os.MkdirAll(ruleDir, 0o750); err != nil {
-		return fmt.Errorf("creating rule directory: %w", err)
+		return sdk.NewInternalError(fmt.Errorf("creating rule directory: %w", err))
 	}
 
 	if err := writeGoRuleFile(ruleDir, name); err != nil {
@@ -90,7 +97,7 @@ func writeGoRuleFile(ruleDir, name string) error {
 	goContent := goRuleTemplate(name)
 	goFile := filepath.Join(ruleDir, "rule.go")
 	if err := os.WriteFile(goFile, []byte(goContent), 0o600); err != nil {
-		return fmt.Errorf("writing rule.go: %w", err)
+		return sdk.NewInternalError(fmt.Errorf("writing rule.go: %w", err))
 	}
 	fmt.Printf("  Created %s\n", goFile)
 	return nil
@@ -100,7 +107,7 @@ func writeGoTestFile(ruleDir, name string) error {
 	testContent := goTestTemplate(name)
 	testFile := filepath.Join(ruleDir, "rule_test.go")
 	if err := os.WriteFile(testFile, []byte(testContent), 0o600); err != nil {
-		return fmt.Errorf("writing rule_test.go: %w", err)
+		return sdk.NewInternalError(fmt.Errorf("writing rule_test.go: %w", err))
 	}
 	fmt.Printf("  Created %s\n", testFile)
 	return nil
@@ -199,7 +206,7 @@ func createRegoRule(name string) error {
 	// Create policies directory
 	policyDir := filepath.Join(initRuleOutput, "policies")
 	if err := os.MkdirAll(policyDir, 0o750); err != nil {
-		return fmt.Errorf("creating policies directory: %w", err)
+		return sdk.NewInternalError(fmt.Errorf("creating policies directory: %w", err))
 	}
 
 	// Generate Rego file
@@ -243,7 +250,7 @@ warn[msg] {
 
 	regoFile := filepath.Join(policyDir, name+".rego")
 	if err := os.WriteFile(regoFile, []byte(regoContent), 0o600); err != nil {
-		return fmt.Errorf("writing %s.rego: %w", name, err)
+		return sdk.NewInternalError(fmt.Errorf("writing %s.rego: %w", name, err))
 	}
 	fmt.Printf("  Created %s\n", regoFile)
 
@@ -268,7 +275,7 @@ test_invalid_config {
 
 	testFile := filepath.Join(policyDir, name+"_test.rego")
 	if err := os.WriteFile(testFile, []byte(testContent), 0o600); err != nil {
-		return fmt.Errorf("writing %s_test.rego: %w", name, err)
+		return sdk.NewInternalError(fmt.Errorf("writing %s_test.rego: %w", name, err))
 	}
 	fmt.Printf("  Created %s\n", testFile)
 
@@ -287,7 +294,7 @@ func createYAMLRule(name string) error {
 	// Create rules directory
 	rulesDir := filepath.Join(initRuleOutput, "rules")
 	if err := os.MkdirAll(rulesDir, 0o750); err != nil {
-		return fmt.Errorf("creating rules directory: %w", err)
+		return sdk.NewInternalError(fmt.Errorf("creating rules directory: %w", err))
 	}
 
 	// Generate YAML file
@@ -338,7 +345,7 @@ tags:
 
 	yamlFile := filepath.Join(rulesDir, name+".yaml")
 	if err := os.WriteFile(yamlFile, []byte(yamlContent), 0o600); err != nil {
-		return fmt.Errorf("writing %s.yaml: %w", name, err)
+		return sdk.NewInternalError(fmt.Errorf("writing %s.yaml: %w", name, err))
 	}
 	fmt.Printf("  Created %s\n", yamlFile)
 

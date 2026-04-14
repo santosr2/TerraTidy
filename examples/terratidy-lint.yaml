@@ -30,39 +30,28 @@ engines:
     # use_tflint: true          # Enable TFLint subprocess integration
     # tflint_path: tflint       # Custom TFLint binary path
     # fallback_builtin: true    # Use built-in rules if TFLint unavailable
-    # Engine-level rule configuration
-    # rules:
-    #   lint.terraform-deprecated-syntax:
-    #     enabled: true
-    #     severity: error
+    # Rule-specific configuration
+    rules:
+      # Terraform core rules
+      lint.terraform-required-version:
+        enabled: true
+        severity: error
+      lint.terraform-deprecated-syntax:
+        enabled: true
+        severity: warning
+      lint.terraform-unused-declarations:
+        enabled: true
+        severity: warning
+      lint.terraform-documented-variables:
+        enabled: true
+        severity: warning
+      # AWS-specific rules (requires aws plugin)
+      # aws_instance_invalid_type:
+      #   enabled: true
+      #   severity: error
 
   policy:
     enabled: false
-
-# Rule overrides (applies to style and lint engines)
-overrides:
-  rules:
-    # Terraform core rules (lint engine)
-    lint.terraform-required-version:
-      enabled: true
-      severity: error
-
-    lint.terraform-deprecated-syntax:
-      enabled: true
-      severity: warning
-
-    lint.terraform-unused-declarations:
-      enabled: true
-      severity: warning
-
-    lint.terraform-documented-variables:
-      enabled: true
-      severity: warning
-
-    # AWS-specific rules (requires aws plugin)
-    # aws_instance_invalid_type:
-    #   enabled: true
-    #   severity: error
 
 # Global settings
 severity_threshold: warning

@@ -31,14 +31,23 @@ type Config struct {
 
 // RuleConfig holds configuration for a single rule
 type RuleConfig struct {
-	Enabled  bool
+	Enabled  *bool
 	Severity string
 	Options  map[string]any
 }
 
+// IsEnabled returns whether the rule is enabled.
+// If Enabled is nil (not explicitly set), returns defaultEnabled.
+func (r RuleConfig) IsEnabled(defaultEnabled bool) bool {
+	if r.Enabled == nil {
+		return defaultEnabled
+	}
+	return *r.Enabled
+}
+
 // ConfigFromEngine creates a style.Config from the config package's StyleEngineConfig.
 // This converts the typed config struct used for YAML parsing into the engine's
-// internal Config type. CLI flag overrides and global rule overrides should be
+// internal Config type. CLI flag overrides (fix, diff) and plugin rules should be
 // applied by the caller after this conversion.
 func ConfigFromEngine(engineCfg config.StyleEngineConfig) *Config {
 	cfg := &Config{
@@ -175,7 +184,7 @@ func (e *Engine) checkFile(parser *hclparse.Parser, path string) ([]sdk.Finding,
 		var findings []sdk.Finding
 		for _, rule := range e.rules {
 			ruleConfig := e.getRuleConfig(rule.Name())
-			if !ruleConfig.Enabled {
+			if !ruleConfig.IsEnabled(true) { // Default enabled if not explicitly set
 				continue
 			}
 
@@ -317,7 +326,7 @@ func (e *Engine) getRuleConfig(ruleName string) RuleConfig {
 
 	if disabledByDefault[ruleName] {
 		return RuleConfig{
-			Enabled:  false,
+			Enabled:  config.BoolPtr(false),
 			Severity: "info",
 			Options:  make(map[string]any),
 		}
@@ -325,7 +334,7 @@ func (e *Engine) getRuleConfig(ruleName string) RuleConfig {
 
 	// Return default config (enabled by default)
 	return RuleConfig{
-		Enabled:  true,
+		Enabled:  config.BoolPtr(true),
 		Severity: "warning",
 		Options:  make(map[string]any),
 	}

@@ -459,11 +459,11 @@ func printNoFilesMessage() {
 func outputResults(findings []sdk.Finding, label string, cfg *config.Config) error {
 	formatter, err := output.GetFormatterWithColor(format, true, version, color, getEffectiveAbsolutePaths(cfg))
 	if err != nil {
-		return fmt.Errorf("getting formatter: %w", err)
+		return sdk.NewInternalError(fmt.Errorf("getting formatter: %w", err))
 	}
 
 	if err := formatter.Format(findings, os.Stdout); err != nil {
-		return fmt.Errorf("formatting output: %w", err)
+		return sdk.NewInternalError(fmt.Errorf("formatting output: %w", err))
 	}
 
 	// For text format, add summary
@@ -477,13 +477,13 @@ func outputResults(findings []sdk.Finding, label string, cfg *config.Config) err
 		}
 
 		if errors > 0 {
-			return &sdk.ExitError{Code: 1}
+			return sdk.NewFindingsError()
 		}
 	} else {
 		// Return exit error if there are errors (for structured output)
 		for _, finding := range findings {
 			if finding.Severity == sdk.SeverityError {
-				return &sdk.ExitError{Code: 1}
+				return sdk.NewFindingsError()
 			}
 		}
 	}
@@ -494,16 +494,17 @@ func outputResults(findings []sdk.Finding, label string, cfg *config.Config) err
 // loadConfig loads the configuration from the config file and applies the profile if specified.
 // It uses the global cfgFile and profile variables from root.go.
 // Returns the default config if no config file is found.
+// Returns sdk.ExitError with ExitConfig code on configuration errors.
 func loadConfig() (*config.Config, error) {
 	cfg, err := config.Load(cfgFile)
 	if err != nil {
-		return nil, fmt.Errorf("loading config: %w", err)
+		return nil, sdk.NewConfigError(fmt.Errorf("loading config: %w", err))
 	}
 
 	// Apply profile if specified
 	if profile != "" {
 		if err := cfg.ApplyProfile(profile); err != nil {
-			return nil, fmt.Errorf("applying profile %q: %w", profile, err)
+			return nil, sdk.NewConfigError(fmt.Errorf("applying profile %q: %w", profile, err))
 		}
 	}
 

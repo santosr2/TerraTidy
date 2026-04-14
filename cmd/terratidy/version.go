@@ -8,25 +8,42 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var (
-	versionShort bool
-	versionJSON  bool
-)
+var versionShort bool
 
 var versionCmd = &cobra.Command{
 	Use:   "version",
 	Short: "Print version information",
 	Long:  `Display version, build, and runtime information for TerraTidy.`,
 	RunE: func(_ *cobra.Command, _ []string) error {
-		if versionJSON {
+		isJSON := format == "json" || format == "json-compact"
+
+		// Detect conflicting flags
+		if versionShort && isJSON {
+			return fmt.Errorf("--short cannot be combined with --format %s", format)
+		}
+
+		// Reject unsupported formats (version only supports text and JSON variants)
+		if format != "text" && !isJSON {
+			return fmt.Errorf("unsupported format %q for version command (supported: text, json, json-compact)", format)
+		}
+
+		// Use global format flag (json or json-compact)
+		if isJSON {
 			versionInfo := map[string]string{
-				"version":   version,
-				"commit":    commit,
-				"date":      date,
-				"goVersion": runtime.Version(),
-				"platform":  fmt.Sprintf("%s/%s", runtime.GOOS, runtime.GOARCH),
+				"version":    version,
+				"commit":     commit,
+				"date":       date,
+				"go_version": runtime.Version(),
+				"platform":   fmt.Sprintf("%s/%s", runtime.GOOS, runtime.GOARCH),
 			}
-			data, err := json.MarshalIndent(versionInfo, "", "  ")
+
+			var data []byte
+			var err error
+			if format == "json-compact" {
+				data, err = json.Marshal(versionInfo)
+			} else {
+				data, err = json.MarshalIndent(versionInfo, "", "  ")
+			}
 			if err != nil {
 				return fmt.Errorf("marshaling version info: %w", err)
 			}
@@ -52,6 +69,5 @@ var versionCmd = &cobra.Command{
 
 func init() {
 	versionCmd.Flags().BoolVar(&versionShort, "short", false, "print only version number")
-	versionCmd.Flags().BoolVar(&versionJSON, "json", false, "output in JSON format")
 	rootCmd.AddCommand(versionCmd)
 }

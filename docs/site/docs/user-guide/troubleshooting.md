@@ -131,11 +131,25 @@ curl -s https://raw.githubusercontent.com/terraform-linters/tflint/master/instal
 
 ## Exit Codes
 
-| Code | Meaning |
-|------|---------|
-| `0`  | Success, no errors found |
-| `1`  | Errors found or check mode violations |
+| Code | Meaning | Action |
+|------|---------|--------|
+| `0`  | Success, no findings | All good |
+| `1`  | Findings found | Run `terratidy fix` or review findings |
+| `2`  | Configuration error | Check `.terratidy.yaml` syntax and required fields |
+| `3`  | Internal error | Check permissions, disk space, or report a bug |
 
-If you're getting unexpected exit code 1, check the severity of your findings. Only
-error-severity findings cause a non-zero exit. Use `--severity-threshold error` to
-ignore warnings and info.
+**Exit code 1 (findings found):** Check the severity of your findings. Only error-severity
+findings cause exit code 1. Use `--severity-threshold error` to ignore warnings and info.
+
+**Exit code 2 (configuration error):** Common causes:
+
+- Malformed YAML in `.terratidy.yaml`
+- Invalid profile name
+- Plugin loading failure (missing or incompatible plugin)
+- Missing required configuration fields
+
+**Exit code 3 (internal error):** These are unexpected failures. Check:
+
+- File permissions
+- Disk space
+- Report persistent issues at <https://github.com/santosr2/TerraTidy/issues>

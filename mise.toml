@@ -263,3 +263,21 @@ run = "uv tool run bump-my-version bump pre_l"
 [tasks."version:show"]
 description = "Show current version and possible bumps"
 run = "uv tool run bump-my-version show-bump"
+
+# VSCode extension versioning (independent from Go project)
+# See vscode/.bumpversion.toml for version scheme documentation
+[tasks."vscode:bump:patch"]
+description = "Bump VSCode extension patch version (e.g., 0.2.0 -> 0.2.1)"
+run = "cd vscode && uv tool run bump-my-version bump patch --config-file .bumpversion.toml"
+
+[tasks."vscode:bump:minor"]
+description = "Bump VSCode extension minor version (e.g., 0.2.0 -> 0.3.0, resets patch)"
+run = "cd vscode && uv tool run bump-my-version bump minor --config-file .bumpversion.toml"
+
+[tasks."vscode:bump:major"]
+description = "Bump VSCode extension major version (e.g., 0.2.0 -> 1.0.0, resets patch)"
+run = "cd vscode && uv tool run bump-my-version bump major --config-file .bumpversion.toml"
+
+[tasks."vscode:version:show"]
+description = "Show current VSCode extension version"
+run = "cd vscode && uv tool run bump-my-version show-bump --config-file .bumpversion.toml"

@@ -34,7 +34,7 @@ engines:
     data_files:                     # Additional data files for policies
       - ./policy-data.json
     rules:                          # Rule-specific configuration
-      required-tags:
+      policy.required-tags:
         enabled: true
         severity: error
 ```
@@ -44,7 +44,7 @@ engines:
 | `enabled` | bool | `false` | Enable/disable the policy engine (opt-in) |
 | `policy_dirs` | list | `[]` | Directories containing Rego policy files |
 | `policy_files` | list | `[]` | Individual policy files to load |
-| `data_files` | list | `[]` | Additional JSON/YAML data files for policies |
+| `data_files` | list | `[]` | JSON data files loaded into OPA storage (accessible as `data.<key>` in Rego) |
 | `rules` | map | `{}` | Rule-specific configuration |
 
 ## Writing Policies
@@ -171,10 +171,11 @@ resource "aws_s3_bucket" "logs" { } # terratidy:ignore:policy.no-public-s3
 Or disable globally in configuration:
 
 ```yaml
-overrides:
-  rules:
-    policy.required-tags:
-      enabled: false
+engines:
+  policy:
+    rules:
+      policy.required-tags:
+        enabled: false
 ```
 
 ## Example Policies

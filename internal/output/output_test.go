@@ -18,13 +18,11 @@ func TestTextFormatter(t *testing.T) {
 	tests := []struct {
 		name     string
 		findings []sdk.Finding
-		verbose  bool
 		want     string
 	}{
 		{
 			name:     "no findings",
 			findings: []sdk.Finding{},
-			verbose:  false,
 			want:     "✓ No issues found\n",
 		},
 		{
@@ -43,8 +41,7 @@ func TestTextFormatter(t *testing.T) {
 					},
 				},
 			},
-			verbose: false,
-			want:    "✗ test.tf: Test error message (test.error)\n",
+			want: "✗ test.tf:1:1: Test error message (test.error)\n",
 		},
 		{
 			name: "multiple findings",
@@ -54,28 +51,43 @@ func TestTextFormatter(t *testing.T) {
 					Message:  "Error",
 					File:     "test.tf",
 					Severity: sdk.SeverityError,
+					Location: sdk.Location{StartLine: 1, StartColumn: 1},
 				},
 				{
 					Rule:     "test.warning",
 					Message:  "Warning",
 					File:     "test.tf",
 					Severity: sdk.SeverityWarning,
+					Location: sdk.Location{StartLine: 5, StartColumn: 3},
 				},
 				{
 					Rule:     "test.info",
 					Message:  "Info",
 					File:     "test.tf",
 					Severity: sdk.SeverityInfo,
+					Location: sdk.Location{StartLine: 10, StartColumn: 1},
 				},
 			},
-			verbose: false,
-			want:    "✗ test.tf: Error (test.error)\n⚠ test.tf: Warning (test.warning)\nℹ test.tf: Info (test.info)\n",
+			want: "✗ test.tf:1:1: Error (test.error)\n⚠ test.tf:5:3: Warning (test.warning)\nℹ test.tf:10:1: Info (test.info)\n",
+		},
+		{
+			name: "finding without location (file-level)",
+			findings: []sdk.Finding{
+				{
+					Rule:     "policy.required-tags",
+					Message:  "File is missing required tags",
+					File:     "main.tf",
+					Severity: sdk.SeverityError,
+					// No Location set - StartLine defaults to 0
+				},
+			},
+			want: "✗ main.tf: File is missing required tags (policy.required-tags)\n",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			formatter := &TextFormatter{Verbose: tt.verbose}
+			formatter := &TextFormatter{}
 			var buf bytes.Buffer
 			err := formatter.Format(tt.findings, &buf)
 			require.NoError(t, err)
@@ -1039,6 +1051,41 @@ func TestSARIFFormatterPathBehavior(t *testing.T) {
 		// Parse SARIF output and check the artifact location contains the absolute path
 		assert.Contains(t, buf.String(), absPath)
 	})
+}
+
+func TestHTMLFormatterSeverityIcons(t *testing.T) {
+	tests := []struct {
+		name     string
+		severity sdk.Severity
+		wantIcon string
+	}{
+		{"error shows ✗", sdk.SeverityError, "✗"},
+		{"warning shows ⚠", sdk.SeverityWarning, "⚠"},
+		{"info shows ℹ", sdk.SeverityInfo, "ℹ"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			findings := []sdk.Finding{
+				{
+					Rule:     "test.rule",
+					Message:  "Test message",
+					File:     "test.tf",
+					Severity: tt.severity,
+					Location: sdk.Location{StartLine: 1, StartColumn: 1},
+				},
+			}
+
+			formatter := &HTMLFormatter{Title: "Test", Version: "1.0.0"}
+			var buf bytes.Buffer
+			err := formatter.Format(findings, &buf)
+			require.NoError(t, err)
+
+			output := buf.String()
+			assert.Contains(t, output, tt.wantIcon,
+				"HTML output for %s severity should contain %s icon", tt.severity, tt.wantIcon)
+		})
+	}
 }
 
 // TestHTMLFormatterDeterministic verifies that HTML output is deterministic across runs

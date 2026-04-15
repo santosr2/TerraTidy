@@ -355,3 +355,66 @@ func TestValidateConfig_InvalidSeverity(t *testing.T) {
 	require.NotEmpty(t, issues)
 	assert.Contains(t, issues[0], "invalid severity_threshold")
 }
+
+func TestRunConfigShow_InvalidProfile(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, ".terratidy.yaml")
+	content := `version: 1
+engines:
+  fmt:
+    enabled: true
+profiles:
+  production:
+    engines:
+      fmt:
+        enabled: true
+`
+	require.NoError(t, os.WriteFile(cfgPath, []byte(content), 0o644))
+
+	oldCfgFile := cfgFile
+	oldProfile := profile
+	cfgFile = cfgPath
+	profile = "nonexistent"
+	defer func() {
+		cfgFile = oldCfgFile
+		profile = oldProfile
+	}()
+
+	err := runConfigShow(nil, nil)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "nonexistent")
+}
+
+func TestRunConfigShow_UnsupportedFormat(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, ".terratidy.yaml")
+	require.NoError(t, os.WriteFile(cfgPath, []byte("version: 1\nengines:\n  fmt:\n    enabled: true\n"), 0o644))
+
+	oldCfgFile := cfgFile
+	oldFormat := configSerializeFormat
+	cfgFile = cfgPath
+	configSerializeFormat = "xml" // Unsupported format
+	defer func() {
+		cfgFile = oldCfgFile
+		configSerializeFormat = oldFormat
+	}()
+
+	err := runConfigShow(nil, nil)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "unsupported format")
+}
+
+func TestLoadConfig_Error(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, ".terratidy.yaml")
+
+	// Create invalid YAML
+	require.NoError(t, os.WriteFile(cfgPath, []byte("invalid: yaml: ["), 0o600))
+
+	oldCfgFile := cfgFile
+	cfgFile = cfgPath
+	defer func() { cfgFile = oldCfgFile }()
+
+	_, err := loadConfig()
+	require.Error(t, err)
+}

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -15,7 +16,7 @@ import (
 )
 
 // TestOutputStyleResults_CheckMode verifies that outputStyleResults returns an
-// error in check mode when findings are present.
+// ExitError with ExitFindings code in check mode when findings are present.
 func TestOutputStyleResults_CheckMode(t *testing.T) {
 	old := format
 	format = "text"
@@ -26,8 +27,12 @@ func TestOutputStyleResults_CheckMode(t *testing.T) {
 	}
 
 	err := outputStyleResults(findings, true, nil)
-	assert.Error(t, err, "check mode with findings should return error")
-	assert.Contains(t, err.Error(), "style issue")
+	require.Error(t, err, "check mode with findings should return error")
+
+	// Should be an ExitError with findings code
+	var exitErr *sdk.ExitError
+	require.True(t, errors.As(err, &exitErr), "should be an ExitError")
+	assert.Equal(t, sdk.ExitFindings, exitErr.Code, "should have findings exit code")
 }
 
 func TestOutputStyleResults_NoCheckMode(t *testing.T) {
@@ -135,27 +140,27 @@ func TestBuildStyleConfig(t *testing.T) {
 	t.Run("with engine config rules", func(t *testing.T) {
 		appCfg := &config.Config{}
 		appCfg.Engines.Style.Rules = map[string]config.RuleConfig{
-			"blank-line-between-blocks": {
-				Enabled:  true,
+			"style.blank-line-between-blocks": {
+				Enabled:  config.BoolPtr(true),
 				Severity: "warning",
 			},
 		}
 
 		cfg := buildStyleConfig(appCfg, false)
-		require.Contains(t, cfg.Rules, "blank-line-between-blocks")
-		assert.True(t, cfg.Rules["blank-line-between-blocks"].Enabled)
-		assert.Equal(t, "warning", cfg.Rules["blank-line-between-blocks"].Severity)
+		require.Contains(t, cfg.Rules, "style.blank-line-between-blocks")
+		assert.True(t, *cfg.Rules["style.blank-line-between-blocks"].Enabled)
+		assert.Equal(t, "warning", cfg.Rules["style.blank-line-between-blocks"].Severity)
 	})
 
-	t.Run("with overrides", func(t *testing.T) {
+	t.Run("with engine rules", func(t *testing.T) {
 		appCfg := config.DefaultConfig()
-		appCfg.Overrides.Rules = map[string]config.RuleConfig{
-			"my-rule": {Enabled: true, Severity: "error", Config: map[string]any{"key": "val"}},
+		appCfg.Engines.Style.Rules = map[string]config.RuleConfig{
+			"my-rule": {Enabled: config.BoolPtr(true), Severity: "error", Config: map[string]any{"key": "val"}},
 		}
 
 		cfg := buildStyleConfig(appCfg, false)
 		require.Contains(t, cfg.Rules, "my-rule")
-		assert.True(t, cfg.Rules["my-rule"].Enabled)
+		assert.True(t, *cfg.Rules["my-rule"].Enabled)
 		assert.Equal(t, "error", cfg.Rules["my-rule"].Severity)
 		assert.Equal(t, map[string]any{"key": "val"}, cfg.Rules["my-rule"].Options)
 	})
@@ -206,7 +211,7 @@ func TestBuildStyleConfig_RuleConfigTypes(t *testing.T) {
 	appCfg := &config.Config{}
 	appCfg.Engines.Style.Rules = map[string]config.RuleConfig{
 		"rule-with-options": {
-			Enabled:  true,
+			Enabled:  config.BoolPtr(true),
 			Severity: "error",
 			Config:   map[string]any{"max_lines": 100},
 		},
@@ -214,7 +219,7 @@ func TestBuildStyleConfig_RuleConfigTypes(t *testing.T) {
 
 	cfg := buildStyleConfig(appCfg, false)
 	rc := cfg.Rules["rule-with-options"]
-	assert.True(t, rc.Enabled)
+	assert.True(t, *rc.Enabled)
 	assert.Equal(t, "error", rc.Severity)
 	assert.Equal(t, 100, rc.Options["max_lines"])
 }
@@ -315,7 +320,7 @@ enabled: true
 	cfg.Plugins.Enabled = true
 	cfg.Plugins.Directories = []string{pluginDir}
 	cfg.Plugins.Rules = map[string]config.RuleConfig{
-		"disabled-rule": {Enabled: false},
+		"disabled-rule": {Enabled: config.BoolPtr(false)},
 	}
 
 	rules, err := loadPluginRules(cfg)
@@ -398,7 +403,7 @@ func TestBuildStyleConfig_WithPluginRules(t *testing.T) {
 	cfg := config.DefaultConfig()
 	cfg.Plugins.Rules = map[string]config.RuleConfig{
 		"my-plugin-rule": {
-			Enabled:  true,
+			Enabled:  config.BoolPtr(true),
 			Severity: "error",
 			Config:   map[string]any{"threshold": 5},
 		},
@@ -407,23 +412,23 @@ func TestBuildStyleConfig_WithPluginRules(t *testing.T) {
 	styleCfg := buildStyleConfig(cfg, false)
 	require.Contains(t, styleCfg.Rules, "my-plugin-rule")
 	rc := styleCfg.Rules["my-plugin-rule"]
-	assert.True(t, rc.Enabled)
+	assert.True(t, *rc.Enabled)
 	assert.Equal(t, "error", rc.Severity)
 	assert.Equal(t, 5, rc.Options["threshold"])
 }
 
-func TestBuildLintConfig_WithOverridesAndPluginRules(t *testing.T) {
+func TestBuildLintConfig_WithEngineAndPluginRules(t *testing.T) {
 	cfg := config.DefaultConfig()
-	cfg.Overrides.Rules = map[string]config.RuleConfig{
-		"override-rule": {Enabled: true, Severity: "warning"},
+	cfg.Engines.Lint.Rules = map[string]config.RuleConfig{
+		"engine-rule": {Enabled: config.BoolPtr(true), Severity: "warning"},
 	}
 	cfg.Plugins.Rules = map[string]config.RuleConfig{
-		"plugin-rule": {Enabled: true, Severity: "error", Config: map[string]any{"key": "val"}},
+		"plugin-rule": {Enabled: config.BoolPtr(true), Severity: "error", Config: map[string]any{"key": "val"}},
 	}
 
 	lintCfg := buildLintConfig(cfg)
-	require.Contains(t, lintCfg.Rules, "override-rule")
-	assert.Equal(t, "warning", lintCfg.Rules["override-rule"].Severity)
+	require.Contains(t, lintCfg.Rules, "engine-rule")
+	assert.Equal(t, "warning", lintCfg.Rules["engine-rule"].Severity)
 
 	require.Contains(t, lintCfg.Rules, "plugin-rule")
 	assert.Equal(t, "error", lintCfg.Rules["plugin-rule"].Severity)

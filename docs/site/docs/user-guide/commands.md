@@ -8,9 +8,9 @@ These flags are available for all commands:
 
 | Flag                   | Description                                                                                              |
 | ---------------------- | -------------------------------------------------------------------------------------------------------- |
-| `--config`             | Path to configuration file (default: `.terratidy.yaml`)                                                  |
-| `--profile`            | Configuration profile to use                                                                             |
-| `--format`             | Output format: `text`, `json`, `json-compact`, `sarif`, `html`, `github`, `table`, `junit`, `markdown`   |
+| `--config`, `-c`       | Path to configuration file (default: `.terratidy.yaml`)                                                  |
+| `--profile`, `-p`      | Configuration profile to use                                                                             |
+| `--format`, `-f`       | Output format: `text`, `json`, `json-compact`, `sarif`, `html`, `github`, `table`, `junit`, `markdown`   |
 | `--changed`            | Only check files changed in git                                                                          |
 | `--no-recurse`         | Disable recursive directory traversal (scan only specified directories, not subdirectories)             |
 | `--exclude`            | Glob patterns to exclude (repeatable or comma-separated)                                                 |
@@ -20,15 +20,29 @@ These flags are available for all commands:
 
 ## Exit Codes
 
-All commands use consistent exit codes:
+All commands use consistent exit codes for scripting and CI/CD:
 
 | Code | Meaning |
 |------|---------|
 | `0`  | Success, no issues found |
-| `1`  | Issues found, configuration error, or internal error |
+| `1`  | Findings found (formatting issues, style violations, lint errors, policy failures) |
+| `2`  | Configuration error (invalid config file, missing required config, plugin loading failure) |
+| `3`  | Internal error (engine failure, filesystem errors, unexpected issues) |
 
-The `--check` flag on `fmt` and `style` exits with code 1 if any issues are found, regardless of severity.
-The `check` command exits with code 1 when error-severity findings are present or when any error occurs.
+The `--check` flag on `fmt` and `style` exits with code 1 if any issues are found.
+The `check` command exits with code 1 when error-severity findings are present.
+
+**Scripting example:**
+
+```bash
+terratidy check ./modules
+case $? in
+  0) echo "All checks passed" ;;
+  1) echo "Found issues to fix" ;;
+  2) echo "Configuration problem - check .terratidy.yaml" ;;
+  3) echo "Internal error - please report a bug" ;;
+esac
+```
 
 ## VCS Integration (`--changed`)
 
@@ -201,7 +215,6 @@ terratidy check [paths...] [flags]
 | Flag            | Description                     |
 | --------------- | ------------------------------- |
 | `--parallel`    | Run engines in parallel         |
-| `-p`            | Short for --parallel            |
 | `--skip-fmt`    | Skip formatting checks          |
 | `--skip-style`  | Skip style checks               |
 | `--skip-lint`   | Skip linting checks             |
@@ -417,11 +430,9 @@ terratidy init [flags]
 
 | Flag            | Description                         |
 | --------------- | ----------------------------------- |
-| `--interactive` | Interactive configuration setup     |
-| `-i`            | Short for --interactive             |
-| `--force`       | Overwrite existing configuration    |
-| `-f`            | Short for --force                   |
-| `--split`       | Create modular split configuration  |
+| `--interactive`, `-i` | Interactive configuration setup     |
+| `--force`             | Overwrite existing configuration    |
+| `--split`             | Create modular split configuration  |
 | `--monorepo`    | Set up for monorepo                 |
 
 **`--split`** creates a modular `.terratidy/` directory with separate config files per engine:
@@ -719,7 +730,8 @@ terratidy version [flags]
 | Flag      | Description                |
 | --------- | -------------------------- |
 | `--short` | Print only version number  |
-| `--json`  | Output in JSON format      |
+
+The version command respects the global `--format` flag but only supports `text`, `json`, and `json-compact` formats.
 
 **Examples:**
 
@@ -730,8 +742,11 @@ terratidy version
 # Show only version number
 terratidy version --short
 
-# Output as JSON
-terratidy version --json
+# Output as JSON (pretty-printed)
+terratidy version --format json
+
+# Output as compact JSON
+terratidy version --format json-compact
 ```
 
 **Output:**

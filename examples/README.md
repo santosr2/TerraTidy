@@ -273,7 +273,7 @@ Want to check only a specific module without descending into submodules?
 terratidy check --no-recurse modules/vpc/
 ```
 
-### Scenario 6: Rule Overrides
+### Scenario 6: Per-Rule Configuration
 
 Want to customize rule behavior?
 
@@ -284,17 +284,14 @@ version: 1
 engines:
   style:
     enabled: true
-
-# Rule overrides - enable/disable rules, change severity
-overrides:
-  rules:
-    style.blank-line-between-blocks:
-      enabled: true
-      severity: warning
-
-    style.block-label-case:
-      enabled: true
-      severity: error
+    # Per-rule configuration - enable/disable rules, change severity
+    rules:
+      style.blank-line-between-blocks:
+        enabled: true
+        severity: warning
+      style.block-label-case:
+        enabled: true
+        severity: error
 ```
 
 ## Output Formats

@@ -37,34 +37,40 @@ func TestExpandEnvVars_DefaultSyntax(t *testing.T) {
 	})
 }
 
-func TestMerge_KeyOverride(t *testing.T) {
+func TestMerge_EngineRules(t *testing.T) {
 	base := &Config{
 		Version:           1,
 		SeverityThreshold: "warning",
-		Overrides: OverridesConfig{
-			Rules: map[string]RuleConfig{
-				"rule-a": {Enabled: true, Severity: "warning"},
+		Engines: Engines{
+			Style: StyleEngineConfig{
+				Enabled: BoolPtr(true),
+				Rules: map[string]RuleConfig{
+					"rule-a": {Enabled: BoolPtr(true), Severity: "warning"},
+				},
 			},
 		},
 	}
 
 	other := &Config{
-		Overrides: OverridesConfig{
-			Rules: map[string]RuleConfig{
-				"rule-a": {Enabled: false, Severity: "error"}, // override
-				"rule-b": {Enabled: true},                     // new
+		Engines: Engines{
+			Style: StyleEngineConfig{
+				Enabled: BoolPtr(true),
+				Rules: map[string]RuleConfig{
+					"rule-a": {Enabled: BoolPtr(false), Severity: "error"}, // override
+					"rule-b": {Enabled: BoolPtr(true)},                     // new
+				},
 			},
 		},
 	}
 
 	base.merge(other)
 
-	// Override rules should be merged
-	require.Contains(t, base.Overrides.Rules, "rule-a")
-	assert.False(t, base.Overrides.Rules["rule-a"].Enabled, "rule-a should be overridden to disabled")
-	assert.Equal(t, "error", base.Overrides.Rules["rule-a"].Severity)
-	require.Contains(t, base.Overrides.Rules, "rule-b")
-	assert.True(t, base.Overrides.Rules["rule-b"].Enabled)
+	// Engine rules should be replaced (not merged) when style config has values
+	require.Contains(t, base.Engines.Style.Rules, "rule-a")
+	assert.False(t, *base.Engines.Style.Rules["rule-a"].Enabled, "rule-a should be overridden to disabled")
+	assert.Equal(t, "error", base.Engines.Style.Rules["rule-a"].Severity)
+	require.Contains(t, base.Engines.Style.Rules, "rule-b")
+	assert.True(t, *base.Engines.Style.Rules["rule-b"].Enabled)
 }
 
 func TestLoad_EmptyPath_ReturnsDefaults(t *testing.T) {

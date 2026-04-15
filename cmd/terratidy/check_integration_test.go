@@ -45,11 +45,6 @@ func TestPrintSeverityCounts(t *testing.T) {
 	printSeverityCounts(0, 5, 0)
 }
 
-func TestPrintCheckHints(t *testing.T) {
-	// Verify it doesn't panic
-	printCheckHints()
-}
-
 func TestRunFmtCheckWithConfig(t *testing.T) {
 	dir := t.TempDir()
 	content := `resource "aws_instance" "test"   {
@@ -467,7 +462,7 @@ patterns:
 		cfg.Plugins.Enabled = true
 		cfg.Plugins.Directories = []string{dir}
 		cfg.Plugins.Rules = map[string]config.RuleConfig{
-			"lint-disabled-rule": {Enabled: false},
+			"lint-disabled-rule": {Enabled: config.BoolPtr(false)},
 		}
 
 		// Load plugin rules (should be filtered out)
@@ -515,7 +510,7 @@ patterns:
 		cfg.Plugins.Enabled = true
 		cfg.Plugins.Directories = []string{dir}
 		cfg.Plugins.Rules = map[string]config.RuleConfig{
-			"lint-severity-rule": {Enabled: true, Severity: "error"},
+			"lint-severity-rule": {Enabled: config.BoolPtr(true), Severity: "error"},
 		}
 
 		// Load plugin rules
@@ -562,7 +557,7 @@ patterns:
 	cfg.Plugins.Enabled = true
 	cfg.Plugins.Directories = []string{dir}
 	cfg.Plugins.Rules = map[string]config.RuleConfig{
-		"disabled-rule": {Enabled: false},
+		"disabled-rule": {Enabled: config.BoolPtr(false)},
 	}
 
 	// Load plugin rules (should be filtered out)
@@ -592,7 +587,7 @@ patterns:
 	cfg.Plugins.Enabled = true
 	cfg.Plugins.Directories = []string{dir}
 	cfg.Plugins.Rules = map[string]config.RuleConfig{
-		"enabled-rule": {Enabled: true},
+		"enabled-rule": {Enabled: config.BoolPtr(true)},
 	}
 
 	// Load plugin rules (should be included)
@@ -632,7 +627,7 @@ patterns:
 	cfg.Plugins.Enabled = true
 	cfg.Plugins.Directories = []string{dir}
 	cfg.Plugins.Rules = map[string]config.RuleConfig{
-		"severity-test-rule": {Enabled: true, Severity: "error"},
+		"severity-test-rule": {Enabled: config.BoolPtr(true), Severity: "error"},
 	}
 
 	// Load plugin rules
@@ -775,7 +770,7 @@ patterns:
 	cfg.Plugins.Directories = []string{pluginDir}
 	// Override the rule severity to error so fail-fast fires after style.
 	cfg.Plugins.Rules = map[string]config.RuleConfig{
-		"always-finds-rule": {Enabled: true, Severity: "error"},
+		"always-finds-rule": {Enabled: config.BoolPtr(true), Severity: "error"},
 	}
 
 	pluginRules, err := loadPluginRules(cfg)
@@ -806,14 +801,14 @@ patterns:
 func TestBuildLintConfig_PluginRules(t *testing.T) {
 	cfg := config.DefaultConfig()
 	cfg.Plugins.Rules = map[string]config.RuleConfig{
-		"my-plugin-rule": {Enabled: true, Severity: "error", Config: map[string]any{"key": "val"}},
+		"my-plugin-rule": {Enabled: config.BoolPtr(true), Severity: "error", Config: map[string]any{"key": "val"}},
 	}
 
 	lintCfg := buildLintConfig(cfg)
 
 	require.Contains(t, lintCfg.Rules, "my-plugin-rule")
 	rc := lintCfg.Rules["my-plugin-rule"]
-	assert.True(t, rc.Enabled)
+	assert.True(t, *rc.Enabled)
 	assert.Equal(t, "error", rc.Severity)
 	assert.Equal(t, map[string]any{"key": "val"}, rc.Options)
 }
@@ -823,34 +818,34 @@ func TestBuildLintConfig_PluginRules(t *testing.T) {
 func TestBuildStyleConfig_PluginRules(t *testing.T) {
 	cfg := config.DefaultConfig()
 	cfg.Plugins.Rules = map[string]config.RuleConfig{
-		"my-plugin-style-rule": {Enabled: true, Severity: "warning", Config: map[string]any{"option": 42}},
+		"my-plugin-style-rule": {Enabled: config.BoolPtr(true), Severity: "warning", Config: map[string]any{"option": 42}},
 	}
 
 	styleCfg := buildStyleConfig(cfg, false)
 
 	require.Contains(t, styleCfg.Rules, "my-plugin-style-rule")
 	rc := styleCfg.Rules["my-plugin-style-rule"]
-	assert.True(t, rc.Enabled)
+	assert.True(t, *rc.Enabled)
 	assert.Equal(t, "warning", rc.Severity)
 	assert.Equal(t, 42, rc.Options["option"])
 }
 
-// TestBuildStyleConfig_PluginRules_OverridesPrecedence verifies that plugins.rules
-// takes precedence over overrides.rules when both configure the same rule name.
-func TestBuildStyleConfig_PluginRules_OverridesPrecedence(t *testing.T) {
+// TestBuildStyleConfig_PluginRules_EnginePrecedence verifies that plugins.rules
+// takes precedence over engines.style.rules when both configure the same rule name.
+func TestBuildStyleConfig_PluginRules_EnginePrecedence(t *testing.T) {
 	cfg := config.DefaultConfig()
-	cfg.Overrides.Rules = map[string]config.RuleConfig{
-		"shared-rule": {Enabled: true, Severity: "warning"},
+	cfg.Engines.Style.Rules = map[string]config.RuleConfig{
+		"shared-rule": {Enabled: config.BoolPtr(true), Severity: "warning"},
 	}
 	cfg.Plugins.Rules = map[string]config.RuleConfig{
-		"shared-rule": {Enabled: false, Severity: "error"},
+		"shared-rule": {Enabled: config.BoolPtr(false), Severity: "error"},
 	}
 
 	styleCfg := buildStyleConfig(cfg, false)
 
 	// plugins.rules is applied last, so it wins.
 	rc := styleCfg.Rules["shared-rule"]
-	assert.False(t, rc.Enabled, "plugins.rules should override overrides.rules")
+	assert.False(t, *rc.Enabled, "plugins.rules should override engines.style.rules")
 	assert.Equal(t, "error", rc.Severity)
 }
 
@@ -1105,11 +1100,12 @@ engines:
 		require.NoError(t, os.MkdirAll(importsDir, 0o755))
 
 		importedConfig := `severity_threshold: error
-overrides:
-  rules:
-    imported-rule:
-      enabled: true
-      severity: warning
+engines:
+  style:
+    rules:
+      imported-rule:
+        enabled: true
+        severity: warning
 `
 		require.NoError(t, os.WriteFile(filepath.Join(importsDir, "rules.yaml"), []byte(importedConfig), 0o644))
 
@@ -1120,9 +1116,9 @@ overrides:
 		// Imported severity_threshold should be merged
 		assert.Equal(t, "error", cfg.SeverityThreshold, "imported severity_threshold should be merged")
 
-		// Imported rule override should be present
-		assert.Contains(t, cfg.Overrides.Rules, "imported-rule", "imported rule should be present")
-		assert.True(t, cfg.Overrides.Rules["imported-rule"].Enabled, "imported rule should be enabled")
+		// Imported rule should be present in engines.style.rules
+		assert.Contains(t, cfg.Engines.Style.Rules, "imported-rule", "imported rule should be present")
+		assert.True(t, *cfg.Engines.Style.Rules["imported-rule"].Enabled, "imported rule should be enabled")
 	})
 
 	t.Run("all fields work together in runAllChecksWithConfig", func(t *testing.T) {
@@ -1346,7 +1342,7 @@ resource "aws_instance" "two" {
 		cfg.Engines.Style.Enabled = config.BoolPtr(true)
 		cfg.Engines.Style.Rules = map[string]config.RuleConfig{
 			"style.blank-line-between-blocks": {
-				Enabled:  false, // Disable the rule
+				Enabled:  config.BoolPtr(false), // Disable the rule
 				Severity: "warning",
 			},
 		}
@@ -1369,7 +1365,7 @@ resource "aws_instance" "two" {
 		cfg.Engines.Style.Enabled = config.BoolPtr(true)
 		cfg.Engines.Style.Rules = map[string]config.RuleConfig{
 			"style.blank-line-between-blocks": {
-				Enabled:  true,
+				Enabled:  config.BoolPtr(true),
 				Severity: "error", // Change severity from default warning to error
 			},
 		}
@@ -1403,7 +1399,7 @@ resource "aws_instance" "two" {
 		cfg.Engines.Style.Enabled = config.BoolPtr(true)
 		cfg.Engines.Style.Rules = map[string]config.RuleConfig{
 			"style.no-trailing-whitespace": {
-				Enabled:  true, // Enable this opt-in rule
+				Enabled:  config.BoolPtr(true), // Enable this opt-in rule
 				Severity: "warning",
 			},
 		}
@@ -1515,7 +1511,7 @@ func TestEngineLintConfigFields(t *testing.T) {
 					Enabled: config.BoolPtr(true),
 					Rules: map[string]config.RuleConfig{
 						"terraform_deprecated_interpolation": {
-							Enabled:  true,
+							Enabled:  config.BoolPtr(true),
 							Severity: "error",
 							Config:   map[string]any{"strict": true},
 						},
@@ -1527,7 +1523,7 @@ func TestEngineLintConfigFields(t *testing.T) {
 		lintCfg := buildLintConfig(cfg)
 		require.Contains(t, lintCfg.Rules, "terraform_deprecated_interpolation")
 		rule := lintCfg.Rules["terraform_deprecated_interpolation"]
-		assert.True(t, rule.Enabled, "rule enabled should be propagated")
+		assert.True(t, *rule.Enabled, "rule enabled should be propagated")
 		assert.Equal(t, "error", rule.Severity, "rule severity should be propagated")
 		assert.Equal(t, map[string]any{"strict": true}, rule.Options, "rule options should be propagated")
 	})
@@ -1608,7 +1604,7 @@ func TestEnginePolicyConfigFields(t *testing.T) {
 					Enabled: config.BoolPtr(true),
 					Rules: map[string]config.RuleConfig{
 						"require_tags": {
-							Enabled:  true,
+							Enabled:  config.BoolPtr(true),
 							Severity: "error",
 						},
 					},
@@ -1619,7 +1615,7 @@ func TestEnginePolicyConfigFields(t *testing.T) {
 		policyCfg := buildPolicyConfig(cfg)
 		require.Contains(t, policyCfg.Rules, "require_tags")
 		rule := policyCfg.Rules["require_tags"]
-		assert.True(t, rule.Enabled, "rule enabled should be propagated")
+		assert.True(t, *rule.Enabled, "rule enabled should be propagated")
 		assert.Equal(t, "error", rule.Severity, "rule severity should be propagated")
 	})
 
@@ -1641,7 +1637,7 @@ func TestEnginePolicyConfigFields(t *testing.T) {
 					PolicyFiles: []string{"extra.rego"},
 					DataFiles:   []string{"vars.json"},
 					Rules: map[string]config.RuleConfig{
-						"custom_rule": {Enabled: true, Severity: "warning"},
+						"custom_rule": {Enabled: config.BoolPtr(true), Severity: "warning"},
 					},
 				},
 			},

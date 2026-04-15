@@ -37,6 +37,10 @@ engines:
   style:
     enabled: true
     fix: false  # Auto-fix mode
+    rules:      # Rule configuration goes under each engine
+      style.block-label-case:
+        enabled: true
+        severity: warning
 
   lint:
     enabled: true
@@ -46,13 +50,6 @@ engines:
     enabled: true
     policy_dirs:
       - ./policies
-
-# Rule overrides go here, NOT under engines.*.config
-overrides:
-  rules:
-    style.block-label-case:
-      enabled: true
-      severity: warning
 ```
 
 ## Configuration Precedence
@@ -152,36 +149,39 @@ profiles:
       policy: { enabled: false }
 ```
 
-## Rule Overrides
+## Rule Configuration
 
-Override specific rule configurations:
+Configure rules under each engine's `rules` block:
 
 ```yaml
-overrides:
-  rules:
-    # Disable a rule
-    style.blank-line-between-blocks:
-      enabled: false
+engines:
+  style:
+    rules:
+      # Disable a rule
+      style.blank-line-between-blocks:
+        enabled: false
 
-    # Change severity (note: must include enabled: true)
-    lint.terraform-required-version:
-      enabled: true
-      severity: error
+      # Style rule with options (note the nested 'options' key)
+      style.variable-naming:
+        enabled: true
+        config:
+          options:
+            case: camelCase  # Options: snake_case, camelCase, kebab-case, PascalCase
 
-    # Style rule with options (note the nested 'options' key)
-    style.variable-naming:
-      enabled: true
-      config:
-        options:
-          case: camelCase  # Options: snake_case, camelCase, kebab-case, PascalCase
+      # Style rule with numeric options
+      style.blank-line-between-blocks:
+        enabled: true
+        config:
+          options:
+            min_lines: 1
+            max_lines: 2
 
-    # Style rule with numeric options
-    style.blank-line-between-blocks:
-      enabled: true
-      config:
-        options:
-          min_lines: 1
-          max_lines: 2
+  lint:
+    rules:
+      # Change severity
+      lint.terraform-required-version:
+        enabled: true
+        severity: error
 ```
 
 ## Plugins
@@ -275,9 +275,16 @@ engines:
     enabled: true
   style:
     enabled: true
+    rules:
+      style.block-label-case:
+        enabled: true
+        severity: warning
   lint:
     enabled: true
     config_file: .tflint.hcl
+    rules:
+      lint.terraform-required-providers:
+        severity: error
   policy:
     enabled: true
     policy_dirs:
@@ -297,15 +304,6 @@ profiles:
     engines:
       fmt: { enabled: true }
       style: { enabled: true }
-
-# Rule overrides - enable/disable rules, change severity
-overrides:
-  rules:
-    style.block-label-case:
-      enabled: true
-      severity: warning
-    lint.terraform-required-providers:
-      severity: error
 
 plugins:
   enabled: true

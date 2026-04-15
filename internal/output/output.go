@@ -49,7 +49,6 @@ type Formatter interface {
 
 // TextFormatter outputs findings in human-readable text format
 type TextFormatter struct {
-	Verbose       bool
 	Color         bool
 	AbsolutePaths bool
 }
@@ -81,8 +80,12 @@ func (f *TextFormatter) Format(findings []sdk.Finding, w io.Writer) error {
 		}
 
 		displayFile := displayPath(finding.File, f.AbsolutePaths)
+
+		// Include line:col when available (StartLine > 0), matching compiler/linter conventions.
+		// Omit for file-level findings without position to avoid confusing `:0:0` output.
+		hasLocation := finding.Location.StartLine > 0
 		if f.Color {
-			if f.Verbose {
+			if hasLocation {
 				_, _ = fmt.Fprintf(w, "%s%s%s %s:%d:%d: %s %s(%s)%s\n",
 					iconColor, icon, colorReset,
 					displayFile,
@@ -100,7 +103,7 @@ func (f *TextFormatter) Format(findings []sdk.Finding, w io.Writer) error {
 				)
 			}
 		} else {
-			if f.Verbose {
+			if hasLocation {
 				_, _ = fmt.Fprintf(w, "%s %s:%d:%d: %s (%s)\n",
 					icon,
 					displayFile,
@@ -216,7 +219,8 @@ func (f *JSONFormatter) Format(findings []sdk.Finding, w io.Writer) error {
 func GetFormatterWithColor(format string, verbose bool, version string, color bool, absolutePaths bool) (Formatter, error) {
 	switch format {
 	case "text", "":
-		return &TextFormatter{Verbose: verbose, Color: color, AbsolutePaths: absolutePaths}, nil
+		// verbose param only applies to TableFormatter; TextFormatter always includes rule names
+		return &TextFormatter{Color: color, AbsolutePaths: absolutePaths}, nil
 	case "json":
 		return &JSONFormatter{Pretty: true, AbsolutePaths: absolutePaths}, nil
 	case "json-compact":
@@ -660,14 +664,17 @@ func (f *HTMLFormatter) generateFileSection(file string, findings []sdk.Finding)
 
 func (f *HTMLFormatter) generateFindingHTML(finding sdk.Finding) string {
 	iconClass := "info"
-	iconSymbol := "i"
+	iconSymbol := "ℹ"
 	switch finding.Severity {
 	case sdk.SeverityError:
 		iconClass = "error"
-		iconSymbol = "!"
+		iconSymbol = "✗"
 	case sdk.SeverityWarning:
 		iconClass = "warning"
-		iconSymbol = "!"
+		iconSymbol = "⚠"
+	case sdk.SeverityInfo:
+		iconClass = "info"
+		iconSymbol = "ℹ"
 	}
 
 	fixableBadge := ""

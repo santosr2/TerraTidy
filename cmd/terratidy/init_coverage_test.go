@@ -1,10 +1,17 @@
 package main
 
 import (
+	"bufio"
+	"bytes"
+	"errors"
+	"io"
 	"os"
 	"path/filepath"
+	"runtime"
+	"strings"
 	"testing"
 
+	"github.com/santosr2/TerraTidy/pkg/sdk"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
@@ -174,17 +181,43 @@ func setupInitRuleTest(t *testing.T) {
 	})
 }
 
-// TestInitRuleCmd_InvalidType verifies that init-rule rejects unsupported rule types.
+// TestInitRuleCmd_InvalidType verifies that init-rule rejects unsupported rule types
+// BEFORE any side effects (directory creation, progress output).
 func TestInitRuleCmd_InvalidType(t *testing.T) {
-	dir := t.TempDir()
+	// Use non-existent subdirectory to detect if MkdirAll is called
+	dir := filepath.Join(t.TempDir(), "should-not-exist")
 	setupInitRuleTest(t)
+
+	// Capture stdout to verify no progress message is printed
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
 
 	rootCmd.SetArgs([]string{"init-rule", "--name", "test-rule", "--type", "bash", "--output", dir})
 	err := rootCmd.Execute()
 
+	// Restore stdout and read captured output
+	w.Close()
+	os.Stdout = oldStdout
+	var buf bytes.Buffer
+	_, _ = buf.ReadFrom(r)
+	output := buf.String()
+
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "unsupported rule type")
 	assert.Contains(t, err.Error(), "bash")
+
+	// Verify exit code is ConfigError (user-correctable input)
+	var exitErr *sdk.ExitError
+	require.True(t, errors.As(err, &exitErr), "error should be ExitError")
+	assert.Equal(t, sdk.ExitConfig, exitErr.Code, "invalid type should return ExitConfig (code 2)")
+
+	// Verify no side effects: directory should not exist
+	_, statErr := os.Stat(dir)
+	assert.True(t, os.IsNotExist(statErr), "output directory should not be created for invalid type")
+
+	// Verify no "Creating" progress message was printed
+	assert.NotContains(t, output, "Creating", "no progress message should be printed for invalid type")
 }
 
 // TestInitRuleCmd_ExistingFile verifies that init-rule overwrites existing files.
@@ -226,4 +259,211 @@ func TestInitRuleCmd_InvalidName(t *testing.T) {
 	require.Error(t, err)
 	// Cobra's MarkFlagRequired produces: required flag(s) "name" not set
 	assert.Contains(t, err.Error(), `"name" not set`)
+}
+
+func TestReadLine_Success(t *testing.T) {
+	reader := bufio.NewReader(strings.NewReader("hello world\n"))
+	line, err := readLine(reader)
+	require.NoError(t, err)
+	assert.Equal(t, "hello world", line)
+}
+
+func TestReadLine_TrimsWhitespace(t *testing.T) {
+	reader := bufio.NewReader(strings.NewReader("  trimmed  \n"))
+	line, err := readLine(reader)
+	require.NoError(t, err)
+	assert.Equal(t, "trimmed", line)
+}
+
+func TestReadLine_EmptyInput(t *testing.T) {
+	reader := bufio.NewReader(strings.NewReader("\n"))
+	line, err := readLine(reader)
+	require.NoError(t, err)
+	assert.Equal(t, "", line)
+}
+
+func TestReadLine_PartialAtEOF(t *testing.T) {
+	// Input without trailing newline (e.g., "echo -n y | terratidy init -i")
+	// Should succeed and return the partial data
+	reader := bufio.NewReader(strings.NewReader("partial"))
+	line, err := readLine(reader)
+	require.NoError(t, err)
+	assert.Equal(t, "partial", line)
+}
+
+func TestReadLine_Error(t *testing.T) {
+	// Completely empty input returns EOF error (no data at all)
+	reader := bufio.NewReader(strings.NewReader(""))
+	_, err := readLine(reader)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "reading input")
+	assert.ErrorIs(t, err, io.EOF)
+}
+
+func TestReadYesNo_Yes(t *testing.T) {
+	tests := []struct {
+		input string
+		want  bool
+	}{
+		{"y\n", true},
+		{"Y\n", true},
+		{"yes\n", true},
+		{"YES\n", true},
+		{"Yes\n", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			reader := bufio.NewReader(strings.NewReader(tt.input))
+			got, err := readYesNo(reader, false)
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestReadYesNo_No(t *testing.T) {
+	tests := []struct {
+		input string
+		want  bool
+	}{
+		{"n\n", false},
+		{"N\n", false},
+		{"no\n", false},
+		{"NO\n", false},
+		{"anything\n", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			reader := bufio.NewReader(strings.NewReader(tt.input))
+			got, err := readYesNo(reader, true) // default true but input says no
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestReadYesNo_DefaultYes(t *testing.T) {
+	reader := bufio.NewReader(strings.NewReader("\n"))
+	got, err := readYesNo(reader, true)
+	require.NoError(t, err)
+	assert.True(t, got)
+}
+
+func TestReadYesNo_DefaultNo(t *testing.T) {
+	reader := bufio.NewReader(strings.NewReader("\n"))
+	got, err := readYesNo(reader, false)
+	require.NoError(t, err)
+	assert.False(t, got)
+}
+
+func TestReadYesNo_Error(t *testing.T) {
+	// Empty reader returns EOF on ReadString
+	reader := bufio.NewReader(strings.NewReader(""))
+	_, err := readYesNo(reader, true)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, io.EOF)
+}
+
+// TestRunInit_ConfigExists verifies that init returns ExitConfig when config exists without --force.
+func TestRunInit_ConfigExists(t *testing.T) {
+	dir := t.TempDir()
+	oldWd, _ := os.Getwd()
+	require.NoError(t, os.Chdir(dir))
+	defer func() { _ = os.Chdir(oldWd) }()
+
+	// Create existing config file
+	require.NoError(t, os.WriteFile(".terratidy.yaml", []byte("version: 1"), 0o600))
+
+	// Reset flags
+	initForce = false
+	initInteractive = false
+	initSplit = false
+	initMonorepo = false
+
+	err := runInit(nil, nil)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "already exists")
+
+	var exitErr *sdk.ExitError
+	require.True(t, errors.As(err, &exitErr), "should be ExitError")
+	assert.Equal(t, sdk.ExitConfig, exitErr.Code, "should return ExitConfig (code 2)")
+}
+
+// TestRunInit_ForceOverwrite verifies that init with --force overwrites existing config.
+func TestRunInit_ForceOverwrite(t *testing.T) {
+	dir := t.TempDir()
+	oldWd, _ := os.Getwd()
+	require.NoError(t, os.Chdir(dir))
+	defer func() { _ = os.Chdir(oldWd) }()
+
+	// Create existing config file
+	require.NoError(t, os.WriteFile(".terratidy.yaml", []byte("# old"), 0o600))
+
+	// Reset flags and set --force
+	initForce = true
+	initInteractive = false
+	initSplit = false
+	initMonorepo = false
+	defer func() { initForce = false }()
+
+	err := runInit(nil, nil)
+	require.NoError(t, err)
+
+	// Verify file was overwritten
+	content, err := os.ReadFile(".terratidy.yaml")
+	require.NoError(t, err)
+	assert.Contains(t, string(content), "version: 1")
+	assert.NotContains(t, string(content), "# old")
+}
+
+// TestRunInit_WriteFailure verifies that init returns ExitInternal on write failure.
+// Skipped on Windows because os.Chmod doesn't restrict write permissions the same way.
+func TestRunInit_WriteFailure(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping on Windows: os.Chmod doesn't restrict write permissions")
+	}
+
+	dir := t.TempDir()
+	oldWd, _ := os.Getwd()
+	require.NoError(t, os.Chdir(dir))
+	defer func() { _ = os.Chdir(oldWd) }()
+
+	// Make directory read-only to cause write failure
+	require.NoError(t, os.Chmod(dir, 0o500))
+	defer func() { _ = os.Chmod(dir, 0o700) }()
+
+	// Reset flags
+	initForce = false
+	initInteractive = false
+	initSplit = false
+	initMonorepo = false
+
+	err := runInit(nil, nil)
+	require.Error(t, err)
+
+	var exitErr *sdk.ExitError
+	require.True(t, errors.As(err, &exitErr), "should be ExitError")
+	assert.Equal(t, sdk.ExitInternal, exitErr.Code, "write failure should return ExitInternal (code 3)")
+}
+
+// TestRunInit_Monorepo verifies that init --monorepo generates monorepo config.
+func TestRunInit_Monorepo(t *testing.T) {
+	dir := t.TempDir()
+	oldWd, _ := os.Getwd()
+	require.NoError(t, os.Chdir(dir))
+	defer func() { _ = os.Chdir(oldWd) }()
+
+	// Reset flags and set --monorepo
+	initForce = false
+	initInteractive = false
+	initSplit = false
+	initMonorepo = true
+	defer func() { initMonorepo = false }()
+
+	err := runInit(nil, nil)
+	require.NoError(t, err)
+
+	content, err := os.ReadFile(".terratidy.yaml")
+	require.NoError(t, err)
+	assert.Contains(t, string(content), "version: 1")
 }

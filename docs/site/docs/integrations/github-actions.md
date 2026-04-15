@@ -89,9 +89,16 @@ jobs:
 | `warnings-count`   | Number of warning-level findings     |
 | `sarif-file`       | Path to SARIF file (if sarif format) |
 
-**Note:** Accurate counts for `findings-count`, `errors-count`, and `warnings-count` require
-`format: json` or `format: json-compact`. For other formats, `findings-count` reflects the
-exit code and error/warning counts are estimates.
+**Note:** Accurate counts for `findings-count`, `errors-count`, and `warnings-count` are
+available when using `format: json`, `format: json-compact`, or when `fail-on-warning: true`
+is set (triggers a JSON pre-run). For other configurations, output values are based on the
+exit code:
+
+- `findings-count`: the exit code (0 = clean, 1 = findings exist, 2 = config error, 3 = internal error)
+- `errors-count`: same as `findings-count` when non-zero (exit 1 means findings of any severity, not error-level specifically)
+- `warnings-count`: 0 (not tracked in fallback mode)
+
+Exit codes 2 and 3 indicate errors, not finding counts.
 
 ## Examples
 
@@ -221,17 +228,18 @@ jobs:
           profile: ci
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
+      # Note: findings-count with sarif format is the exit code (0/1/2/3), not
+      # the actual count. For accurate counts, use format: json or add fail-on-warning: true.
       - name: Comment on PR
-        if: github.event_name == 'pull_request'
+        if: github.event_name == 'pull_request' && steps.terratidy.outputs.findings-count != '0'
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
         with:
           script: |
-            const findings = '${{ steps.terratidy.outputs.findings-count }}';
             github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: `TerraTidy found ${findings} issue(s).`
+              body: 'TerraTidy found issues. See the SARIF results in the Security tab.'
             })
 ```
 

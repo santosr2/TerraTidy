@@ -109,11 +109,12 @@ engines:
 ```
 
 ```yaml
-# modules/networking/.terratidy-overrides.yaml
-overrides:
-  rules:
-    style.terraform-files-structure:
-      enabled: false  # Networking module uses a different structure
+# modules/networking/.terratidy.yaml
+engines:
+  style:
+    rules:
+      style.terraform-files-structure:
+        enabled: false  # Networking module uses a different structure
 ```
 
 ## CI Integration

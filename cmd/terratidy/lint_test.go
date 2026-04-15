@@ -1,10 +1,12 @@
 package main
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
 
+	"github.com/santosr2/TerraTidy/pkg/sdk"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -88,5 +90,58 @@ func TestLintCmdExecution(t *testing.T) {
 		err := rootCmd.Execute()
 		// May error if plugin not available, but the flag parsing path is covered
 		_ = err
+	})
+
+	t.Run("lint with explicit rule flag", func(t *testing.T) {
+		// Test that --rule flag creates rule config (coverage for lines 75-83)
+		changed = false
+		format = "text"
+
+		rootCmd.SetArgs([]string{"lint", "--rule", "terraform_required_version", tmpDir})
+		err := rootCmd.Execute()
+		// The rule path is exercised regardless of outcome
+		_ = err
+	})
+}
+
+func TestLintCmd_ErrorPaths(t *testing.T) {
+	t.Run("invalid config file returns ExitConfig", func(t *testing.T) {
+		tmpDir := t.TempDir()
+
+		// Create invalid config
+		invalidConfig := "invalid: yaml: ["
+		require.NoError(t, os.WriteFile(filepath.Join(tmpDir, ".terratidy.yaml"), []byte(invalidConfig), 0o600))
+
+		oldWd, _ := os.Getwd()
+		require.NoError(t, os.Chdir(tmpDir))
+		defer func() { _ = os.Chdir(oldWd) }()
+
+		// Reset global flags
+		cfgFile = ""
+		changed = false
+		format = "text"
+
+		rootCmd.SetArgs([]string{"lint", "."})
+		err := rootCmd.Execute()
+		require.Error(t, err)
+
+		var exitErr *sdk.ExitError
+		if errors.As(err, &exitErr) {
+			assert.Equal(t, sdk.ExitConfig, exitErr.Code, "invalid config should return ExitConfig")
+		}
+	})
+
+	t.Run("structured output mode", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		content := `resource "null_resource" "test" {}`
+		require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "main.tf"), []byte(content), 0o644))
+
+		changed = false
+		format = "json" // Structured output
+
+		rootCmd.SetArgs([]string{"lint", tmpDir})
+		err := rootCmd.Execute()
+		// Should not error, just use structured output
+		assert.NoError(t, err)
 	})
 }

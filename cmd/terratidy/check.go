@@ -55,7 +55,7 @@ func init() {
 	checkCmd.Flags().BoolVar(&checkSkipStyle, "skip-style", false, "skip style checks")
 	checkCmd.Flags().BoolVar(&checkSkipLint, "skip-lint", false, "skip linting")
 	checkCmd.Flags().BoolVar(&checkSkipPolicy, "skip-policy", false, "skip policy checks")
-	checkCmd.Flags().BoolVarP(&checkParallel, "parallel", "p", false, "run engines in parallel")
+	checkCmd.Flags().BoolVar(&checkParallel, "parallel", false, "run engines in parallel")
 	rootCmd.AddCommand(checkCmd)
 }
 
@@ -63,18 +63,20 @@ func runCheck(_ *cobra.Command, args []string) error {
 	// Load configuration
 	cfg, err := loadConfig()
 	if err != nil {
-		return err
+		return err // Already wrapped as ExitConfig by loadConfig
 	}
 
 	// Load plugin rules if plugins are enabled
 	pluginRules, err := loadPluginRules(cfg)
 	if err != nil {
-		return fmt.Errorf("loading plugins: %w", err)
+		// Plugin loading is a configuration error (user-correctable)
+		return sdk.NewConfigError(fmt.Errorf("loading plugins: %w", err))
 	}
 
 	files, err := getTargetFilesWithExcludes(args, changed, cfg.Exclude, cfg)
 	if err != nil {
-		return fmt.Errorf("finding files: %w", err)
+		// File discovery errors are internal errors (filesystem issues)
+		return sdk.NewInternalError(fmt.Errorf("finding files: %w", err))
 	}
 
 	if len(files) == 0 {
@@ -91,7 +93,8 @@ func runCheck(_ *cobra.Command, args []string) error {
 
 	allFindings, err := runAllChecksWithConfig(cfg, files, useStructuredOutput, pluginRules)
 	if err != nil {
-		return err
+		// Engine errors are internal errors
+		return sdk.NewInternalError(err)
 	}
 
 	// Apply severity threshold filtering
@@ -104,7 +107,7 @@ func runCheck(_ *cobra.Command, args []string) error {
 // loadPluginRules loads plugin rules from the configured plugin directories.
 // Returns an empty slice if plugins are not enabled.
 // Filters rules based on plugins.rules config (enabled/disabled).
-// Severity overrides are applied by the style engine via buildStyleConfig.
+// Severity configuration from engines.style.rules and plugins.rules is applied by buildStyleConfig.
 // TaggedRule is an optional interface for rules that have tags.
 type TaggedRule interface {
 	Tags() []string
@@ -126,7 +129,7 @@ func loadPluginRules(cfg *config.Config) ([]sdk.Rule, error) {
 	for _, rule := range rulesMap {
 		// Check if rule is disabled in config
 		if ruleConfig, exists := cfg.Plugins.Rules[rule.Name()]; exists {
-			if !ruleConfig.Enabled {
+			if !ruleConfig.IsEnabled(true) { // Default enabled if not explicitly set
 				continue // Skip disabled rules
 			}
 		}
@@ -369,15 +372,6 @@ func buildStyleConfig(cfg *config.Config, fix bool, diff ...bool) *style.Config 
 		styleCfg.Diff = true
 	}
 
-	// Merge override rules (overrides take precedence over engine config)
-	for ruleName, ruleCfg := range cfg.Overrides.Rules {
-		styleCfg.Rules[ruleName] = style.RuleConfig{
-			Enabled:  ruleCfg.Enabled,
-			Severity: ruleCfg.Severity,
-			Options:  ruleCfg.Config,
-		}
-	}
-
 	// Merge plugin rule configs (plugins.rules takes precedence for plugin rules)
 	for ruleName, ruleCfg := range cfg.Plugins.Rules {
 		styleCfg.Rules[ruleName] = style.RuleConfig{
@@ -401,15 +395,6 @@ func buildLintConfig(cfg *config.Config) *lint.Config {
 
 	// Use engine's ConfigFromEngine for base conversion
 	lintCfg := lint.ConfigFromEngine(cfg.Engines.Lint)
-
-	// Merge override rules (overrides take precedence over engine config)
-	for ruleName, ruleCfg := range cfg.Overrides.Rules {
-		lintCfg.Rules[ruleName] = lint.RuleConfig{
-			Enabled:  ruleCfg.Enabled,
-			Severity: ruleCfg.Severity,
-			Options:  ruleCfg.Config,
-		}
-	}
 
 	// Merge plugin rule configs (plugins.rules takes precedence for plugin rules)
 	for ruleName, ruleCfg := range cfg.Plugins.Rules {
@@ -440,11 +425,11 @@ func buildPolicyConfig(cfg *config.Config) *policy.Config {
 func outputCheckResults(allFindings []sdk.Finding, cfg *config.Config) error {
 	formatter, err := output.GetFormatterWithColor(format, true, version, color, getEffectiveAbsolutePaths(cfg))
 	if err != nil {
-		return fmt.Errorf("getting formatter: %w", err)
+		return sdk.NewInternalError(fmt.Errorf("getting formatter: %w", err))
 	}
 
 	if err := formatter.Format(allFindings, os.Stdout); err != nil {
-		return fmt.Errorf("formatting output: %w", err)
+		return sdk.NewInternalError(fmt.Errorf("formatting output: %w", err))
 	}
 
 	// For text format, add summary
@@ -455,7 +440,7 @@ func outputCheckResults(allFindings []sdk.Finding, cfg *config.Config) error {
 	// Return exit error if there are errors (for structured output)
 	for i := range allFindings {
 		if allFindings[i].Severity == sdk.SeverityError {
-			return &sdk.ExitError{Code: 1}
+			return sdk.NewFindingsError()
 		}
 	}
 	return nil
@@ -472,10 +457,9 @@ func printCheckSummary(allFindings []sdk.Finding) error {
 
 	errors, warnings, info := countBySeverity(allFindings)
 	printSeverityCounts(errors, warnings, info)
-	printCheckHints()
 
 	if errors > 0 {
-		return &sdk.ExitError{Code: 1}
+		return sdk.NewFindingsError()
 	}
 	return nil
 }
@@ -491,13 +475,4 @@ func printSeverityCounts(errors, warnings, info int) {
 	if info > 0 {
 		fmt.Printf("  Info:     %d\n", info)
 	}
-}
-
-func printCheckHints() {
-	fmt.Println()
-	fmt.Println("Run individual commands for details:")
-	fmt.Println("  terratidy fmt --check")
-	fmt.Println("  terratidy style")
-	fmt.Println("  terratidy lint")
-	fmt.Println("  terratidy policy")
 }

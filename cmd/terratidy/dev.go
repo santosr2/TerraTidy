@@ -54,15 +54,18 @@ func runDev(_ *cobra.Command, _ []string) error {
 
 	targetFiles, err := getTargetFiles([]string{devTarget}, false)
 	if err != nil {
-		return fmt.Errorf("finding target files: %w", err)
+		return sdk.NewInternalError(fmt.Errorf("finding target files: %w", err))
 	}
 
 	if len(targetFiles) == 0 {
-		return fmt.Errorf("no HCL files found in target directory: %s", devTarget)
+		// User-correctable: wrong directory or missing files.
+		return sdk.NewConfigError(fmt.Errorf("no HCL files found in target directory: %s", devTarget))
 	}
 
 	fmt.Printf("Found %d target file(s)\n\n", len(targetFiles))
 
+	// Intentionally swallow errors: dev mode is interactive, transient failures
+	// should not kill the session. User sees the error in output.
 	if err := runDevCheck(targetFiles); err != nil {
 		fmt.Printf("Initial check error: %v\n", err)
 	}
@@ -93,12 +96,12 @@ func printWatchDirMissingHelp() {
 func runFileWatcher() error {
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
-		return fmt.Errorf("creating watcher: %w", err)
+		return sdk.NewInternalError(fmt.Errorf("creating watcher: %w", err))
 	}
 	defer func() { _ = watcher.Close() }()
 
 	if err := setupWatchDirs(watcher); err != nil {
-		return err
+		return err // Already wrapped as ExitInternal by setupWatchDirs.
 	}
 
 	fmt.Println("Watching for changes... (Ctrl+C to stop)")
@@ -118,7 +121,7 @@ func setupWatchDirs(watcher *fsnotify.Watcher) error {
 		return nil
 	})
 	if err != nil {
-		return fmt.Errorf("setting up watch: %w", err)
+		return sdk.NewInternalError(fmt.Errorf("setting up watch: %w", err))
 	}
 
 	// Also watch target directory (non-fatal if fails)
@@ -230,14 +233,7 @@ func runDevCheck(targetFiles []string) error {
 
 	// Display findings
 	for i := range findings {
-		icon := "i"
-		switch findings[i].Severity {
-		case sdk.SeverityError:
-			icon = "!"
-		case sdk.SeverityWarning:
-			icon = "!"
-		}
-
+		icon := devSeverityIcon(findings[i].Severity)
 		fmt.Printf("  [%s] %s\n", icon, findings[i].Rule)
 		fmt.Printf("      %s\n", findings[i].Message)
 		if findings[i].File != "" {
@@ -271,4 +267,19 @@ func findPolicyFiles(dir string) ([]string, error) {
 	})
 
 	return files, err
+}
+
+// devSeverityIcon returns a single-character icon for the given severity.
+// Lowercase 'i' visually de-emphasizes info-level findings.
+func devSeverityIcon(severity sdk.Severity) string {
+	switch severity {
+	case sdk.SeverityError:
+		return "E"
+	case sdk.SeverityWarning:
+		return "W"
+	case sdk.SeverityInfo:
+		return "i"
+	default:
+		return "?"
+	}
 }

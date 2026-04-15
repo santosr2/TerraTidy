@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/santosr2/TerraTidy/pkg/sdk"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -110,4 +111,24 @@ func TestPrintWatchDirMissingHelp_QuotesPathWithSpecialChars(t *testing.T) {
 	// %q produces: "/path/with spaces/and'quotes"
 	assert.Contains(t, output, `mkdir -p "/path/with spaces/and'quotes"`,
 		"path with special chars should be properly quoted in shell hint")
+}
+
+func TestDevSeverityIcon(t *testing.T) {
+	tests := []struct {
+		name     string
+		severity sdk.Severity
+		want     string
+	}{
+		{"error severity", sdk.SeverityError, "E"},
+		{"warning severity", sdk.SeverityWarning, "W"},
+		{"info severity", sdk.SeverityInfo, "i"},
+		{"unknown severity returns ?", sdk.Severity("unknown"), "?"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := devSeverityIcon(tt.severity)
+			assert.Equal(t, tt.want, got)
+		})
+	}
 }

@@ -817,3 +817,244 @@ jobs:
           # GitHub format produces ::warning:: and ::error:: workflow commands
           # Action completing successfully proves format works
           echo "GitHub Actions annotations format test passed"
+
+  # Windows-specific path handling tests
+  # Tests that path separators, glob patterns, and absolute paths work correctly on Windows
+  test-windows-paths:
+    needs: [test-action]
+    runs-on: windows-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Create test files with subdirectories
+        shell: bash
+        run: |
+          mkdir -p test-terraform/submodule
+          # Root file
+          printf '%s\n' \
+            'resource "aws_instance" "root" {' \
+            '  ami           = "ami-12345678"' \
+            '  instance_type = "t2.micro"' \
+            '}' > test-terraform/main.tf
+          # Submodule file (for no-recurse test)
+          printf '%s\n' \
+            'resource "aws_instance" "sub" {' \
+            '  ami           = "ami-87654321"' \
+            '  instance_type = "t3.micro"' \
+            '}' > test-terraform/submodule/sub.tf
+          # Generated file (for exclude test, intentionally bad formatting)
+          printf '%s\n' \
+            'resource "aws_instance" "gen"   {' \
+            'ami="ami-gen"' \
+            'instance_type="t2.small"' \
+            '}' > test-terraform/auto.generated.tf
+
+      - name: Test exclude patterns on Windows
+        id: exclude-windows
+        uses: ./
+        with:
+          working-directory: test-terraform
+          format: json
+          exclude: '**/*.generated.tf,submodule/**'
+          fail-on-error: 'false'
+
+      - name: Test no-recurse on Windows
+        id: no-recurse-windows
+        uses: ./
+        with:
+          working-directory: test-terraform
+          format: json
+          no-recurse: 'true'
+          fail-on-error: 'false'
+
+      - name: Test absolute-paths on Windows
+        id: absolute-paths-windows
+        uses: ./
+        with:
+          working-directory: test-terraform
+          format: text
+          absolute-paths: 'true'
+          fail-on-error: 'false'
+
+      - name: Verify Windows path handling
+        shell: bash
+        run: |
+          echo "Exclude test findings: $EXCLUDE_COUNT"
+          echo "No-recurse test findings: $NO_RECURSE_COUNT"
+          echo "Absolute-paths outcome: $ABSOLUTE_PATHS_OUTCOME"
+          # All tests should complete successfully (findings count returned)
+          if [ -z "$EXCLUDE_COUNT" ]; then
+            echo "::error::Exclude pattern test failed on Windows - no findings count returned"
+            exit 1
+          fi
+          if [ -z "$NO_RECURSE_COUNT" ]; then
+            echo "::error::No-recurse test failed on Windows - no findings count returned"
+            exit 1
+          fi
+          # Verify absolute-paths step completed successfully
+          if [ "$ABSOLUTE_PATHS_OUTCOME" != "success" ]; then
+            echo "::error::Absolute-paths test failed on Windows - step outcome: $ABSOLUTE_PATHS_OUTCOME"
+            exit 1
+          fi
+          echo "Windows path handling tests passed"
+        env:
+          EXCLUDE_COUNT: ${{ steps.exclude-windows.outputs.findings-count }}
+          NO_RECURSE_COUNT: ${{ steps.no-recurse-windows.outputs.findings-count }}
+          ABSOLUTE_PATHS_OUTCOME: ${{ steps.absolute-paths-windows.outcome }}
+
+  # Windows git integration test (--changed flag with Windows git)
+  test-windows-changed:
+    needs: [test-action]
+    runs-on: windows-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Create isolated test repo with git history
+        shell: bash
+        run: |
+          # Create isolated test repo in workspace subdirectory (avoids path mismatch issues)
+          TEST_DIR="${GITHUB_WORKSPACE}/test-changed-repo"
+          mkdir -p "$TEST_DIR"
+          cd "$TEST_DIR"
+          git init
+          git config user.email "test@example.com"
+          git config user.name "Test User"
+          # Create and commit base file
+          printf '%s\n' \
+            'resource "aws_instance" "base" {' \
+            '  ami           = "ami-12345678"' \
+            '  instance_type = "t2.micro"' \
+            '}' > base.tf
+          git add base.tf
+          git commit -m "chore: add base file"
+          # Create uncommitted file (this is what --changed should detect)
+          printf '%s\n' \
+            'resource "aws_instance" "changed" {' \
+            '  ami           = "ami-87654321"' \
+            '  instance_type = "t3.micro"' \
+            '}' > changed.tf
+
+      - name: Test changed flag on Windows
+        id: changed-windows
+        uses: ./
+        with:
+          working-directory: test-changed-repo
+          changed: 'true'
+          format: json
+          fail-on-error: 'false'
+
+      - name: Test all files on Windows (baseline)
+        id: all-files-windows
+        uses: ./
+        with:
+          working-directory: test-changed-repo
+          changed: 'false'
+          format: json
+          fail-on-error: 'false'
+
+      - name: Verify changed detection on Windows
+        shell: bash
+        run: |
+          echo "Changed files only: $CHANGED_COUNT"
+          echo "All files: $ALL_COUNT"
+          # Both should return findings counts
+          if [ -z "$CHANGED_COUNT" ] || [ -z "$ALL_COUNT" ]; then
+            echo "::error::Changed flag test failed on Windows - missing findings counts"
+            exit 1
+          fi
+          # With changed=true, should check fewer or equal files (changed.tf only vs base.tf + changed.tf)
+          if [ "$CHANGED_COUNT" -gt "$ALL_COUNT" ]; then
+            echo "::error::Changed flag produced more findings than all files (changed=$CHANGED_COUNT, all=$ALL_COUNT)"
+            exit 1
+          fi
+          echo "Windows git integration test passed"
+        env:
+          CHANGED_COUNT: ${{ steps.changed-windows.outputs.findings-count }}
+          ALL_COUNT: ${{ steps.all-files-windows.outputs.findings-count }}
+
+  # Windows fail-on-warning test (verifies pre-run JSON logic on Windows)
+  test-windows-fail-on-warning:
+    needs: [test-action]
+    runs-on: windows-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Create test file with style issues
+        shell: bash
+        run: |
+          mkdir -p test-terraform
+          # Create a file that will trigger warnings (no blank lines between blocks)
+          printf '%s\n' \
+            'resource "aws_instance" "one" {' \
+            '  ami           = "ami-12345678"' \
+            '  instance_type = "t2.micro"' \
+            '}' \
+            'resource "aws_instance" "two" {' \
+            '  ami           = "ami-87654321"' \
+            '  instance_type = "t3.micro"' \
+            '}' > test-terraform/main.tf
+
+      - name: Test fail-on-warning=false on Windows
+        id: no-fail-warning-windows
+        uses: ./
+        with:
+          working-directory: test-terraform
+          fail-on-warning: 'false'
+          fail-on-error: 'false'
+          format: json
+
+      - name: Test fail-on-warning=true on Windows
+        id: fail-warning-windows
+        uses: ./
+        continue-on-error: true
+        with:
+          working-directory: test-terraform
+          fail-on-warning: 'true'
+          fail-on-error: 'false'
+          format: json
+
+      - name: Verify fail-on-warning behavior on Windows
+        shell: bash
+        run: |
+          echo "fail-on-warning=false outcome: $NO_FAIL_OUTCOME"
+          echo "fail-on-warning=true outcome: $FAIL_OUTCOME"
+          echo "Warning count: $WARNING_COUNT"
+          # fail-on-warning=false should always succeed
+          if [ "$NO_FAIL_OUTCOME" != "success" ]; then
+            echo "::error::Expected fail-on-warning=false to succeed on Windows, got: $NO_FAIL_OUTCOME"
+            exit 1
+          fi
+          # If warnings exist, fail-on-warning=true should fail
+          if [ "$WARNING_COUNT" -gt 0 ] && [ "$FAIL_OUTCOME" = "success" ]; then
+            echo "::error::Expected fail-on-warning=true to fail when warnings exist (warnings=$WARNING_COUNT)"
+            exit 1
+          fi
+          echo "Windows fail-on-warning test passed"
+        env:
+          NO_FAIL_OUTCOME: ${{ steps.no-fail-warning-windows.outcome }}
+          FAIL_OUTCOME: ${{ steps.fail-warning-windows.outcome }}
+          WARNING_COUNT: ${{ steps.no-fail-warning-windows.outputs.warnings-count }}

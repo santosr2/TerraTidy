@@ -46,16 +46,6 @@ engines:
         enabled: true
         severity: warning
 
-# Override individual style rules (alternative location)
-overrides:
-  rules:
-    style.block-label-case:
-      enabled: true
-      severity: warning
-    style.meta-arguments-order:
-      enabled: true
-    style.variable-naming:
-      enabled: true
 ```
 
 | Option | Type | Default | Description |
@@ -63,7 +53,7 @@ overrides:
 | `enabled` | bool | `true` | Enable/disable the style engine |
 | `fix` | bool | `false` | Auto-fix mode - apply fixes automatically |
 | `diff` | bool | `false` | Show unified diff when fixes are applied |
-| `rules` | map | `{}` | Engine-level rule configuration (same as `overrides.rules`) |
+| `rules` | map | `{}` | Rule configuration (enabled, severity, options) |
 
 ## Rules
 
@@ -192,8 +182,9 @@ resource "aws_s3_bucket" "Test" { } # terratidy:ignore:style.block-label-case
 Or disable globally in configuration:
 
 ```yaml
-overrides:
-  rules:
-    style.block-label-case:
-      enabled: false
+engines:
+  style:
+    rules:
+      style.block-label-case:
+        enabled: false
 ```

@@ -37,18 +37,18 @@ func runFix(_ *cobra.Command, args []string) error {
 	// Load configuration
 	cfg, err := loadConfig()
 	if err != nil {
-		return err
+		return err // Already wrapped as ExitConfig by loadConfig
 	}
 
 	// Load plugin rules if plugins are enabled
 	pluginRules, err := loadPluginRules(cfg)
 	if err != nil {
-		return fmt.Errorf("loading plugins: %w", err)
+		return sdk.NewConfigError(fmt.Errorf("loading plugins: %w", err))
 	}
 
 	files, err := getTargetFilesWithExcludes(args, changed, cfg.Exclude, cfg)
 	if err != nil {
-		return fmt.Errorf("finding files: %w", err)
+		return sdk.NewInternalError(fmt.Errorf("finding files: %w", err))
 	}
 
 	if len(files) == 0 {
@@ -65,7 +65,7 @@ func runFix(_ *cobra.Command, args []string) error {
 
 	allFindings, totalFixed, err := runAllFixesWithConfig(cfg, files, pluginRules, useStructuredOutput)
 	if err != nil {
-		return err
+		return sdk.NewInternalError(err)
 	}
 
 	// For structured formats, use the formatter pipeline

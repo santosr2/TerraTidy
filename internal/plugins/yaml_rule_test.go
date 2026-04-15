@@ -8,6 +8,7 @@ import (
 
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/hclsyntax"
+	"github.com/santosr2/TerraTidy/internal/config"
 	"github.com/santosr2/TerraTidy/pkg/sdk"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -23,8 +24,48 @@ func TestYAMLRule_Description(t *testing.T) {
 	assert.Equal(t, "A test rule", rule.Description())
 }
 
+func TestYAMLRuleConfig_IsEnabled(t *testing.T) {
+	tests := []struct {
+		name           string
+		enabled        *bool
+		defaultEnabled bool
+		want           bool
+	}{
+		{
+			name:           "nil returns default true",
+			enabled:        nil,
+			defaultEnabled: true,
+			want:           true,
+		},
+		{
+			name:           "nil returns default false",
+			enabled:        nil,
+			defaultEnabled: false,
+			want:           false,
+		},
+		{
+			name:           "explicit true overrides default",
+			enabled:        config.BoolPtr(true),
+			defaultEnabled: false,
+			want:           true,
+		},
+		{
+			name:           "explicit false overrides default",
+			enabled:        config.BoolPtr(false),
+			defaultEnabled: true,
+			want:           false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := YAMLRuleConfig{Enabled: tt.enabled}
+			assert.Equal(t, tt.want, c.IsEnabled(tt.defaultEnabled))
+		})
+	}
+}
+
 func TestYAMLRule_Check_Disabled(t *testing.T) {
-	rule := &YAMLRule{config: YAMLRuleConfig{Enabled: false}}
+	rule := &YAMLRule{config: YAMLRuleConfig{Enabled: config.BoolPtr(false)}}
 	ctx := &sdk.Context{File: "test.tf"}
 	findings, err := rule.Check(ctx, &hcl.File{})
 	require.NoError(t, err)
@@ -34,7 +75,7 @@ func TestYAMLRule_Check_Disabled(t *testing.T) {
 func TestYAMLRule_Check_RequiredAttribute(t *testing.T) {
 	rule := &YAMLRule{config: YAMLRuleConfig{
 		Name:     "require-tags",
-		Enabled:  true,
+		Enabled:  config.BoolPtr(true),
 		Severity: "warning",
 		Message:  "Resource must have tags",
 		Patterns: YAMLPatterns{
@@ -62,7 +103,7 @@ func TestYAMLRule_Check_RequiredAttribute(t *testing.T) {
 func TestYAMLRule_Check_RequiredAttributePresent(t *testing.T) {
 	rule := &YAMLRule{config: YAMLRuleConfig{
 		Name:     "require-tags",
-		Enabled:  true,
+		Enabled:  config.BoolPtr(true),
 		Severity: "warning",
 		Patterns: YAMLPatterns{
 			RequiredAttributes: []string{"tags"},
@@ -89,7 +130,7 @@ func TestYAMLRule_Check_RequiredAttributePresent(t *testing.T) {
 func TestYAMLRule_Check_ResourceTypeFilter(t *testing.T) {
 	rule := &YAMLRule{config: YAMLRuleConfig{
 		Name:     "s3-encryption",
-		Enabled:  true,
+		Enabled:  config.BoolPtr(true),
 		Severity: "error",
 		Patterns: YAMLPatterns{
 			ResourceTypes:      []string{"aws_s3_bucket"},
@@ -119,7 +160,7 @@ resource "aws_s3_bucket" "example" {
 func TestYAMLRule_Check_DefaultMessage(t *testing.T) {
 	rule := &YAMLRule{config: YAMLRuleConfig{
 		Name:    "require-desc",
-		Enabled: true,
+		Enabled: config.BoolPtr(true),
 		Patterns: YAMLPatterns{
 			RequiredAttributes: []string{"description"},
 		},
@@ -149,7 +190,7 @@ func TestYAMLRule_Fix_ReturnsNil(t *testing.T) {
 func TestYAMLRule_Check_ForbiddenAttribute(t *testing.T) {
 	rule := &YAMLRule{config: YAMLRuleConfig{
 		Name:     "no-acl",
-		Enabled:  true,
+		Enabled:  config.BoolPtr(true),
 		Severity: "error",
 		Patterns: YAMLPatterns{
 			ResourceTypes:       []string{"aws_s3_bucket"},
@@ -177,7 +218,7 @@ func TestYAMLRule_Check_ForbiddenAttribute(t *testing.T) {
 func TestYAMLRule_Check_ForbiddenAttributeNotPresent(t *testing.T) {
 	rule := &YAMLRule{config: YAMLRuleConfig{
 		Name:     "no-acl",
-		Enabled:  true,
+		Enabled:  config.BoolPtr(true),
 		Severity: "error",
 		Patterns: YAMLPatterns{
 			ResourceTypes:       []string{"aws_s3_bucket"},
@@ -201,7 +242,7 @@ func TestYAMLRule_Check_ForbiddenAttributeNotPresent(t *testing.T) {
 func TestYAMLRule_Check_ForbiddenAttributeCustomMessage(t *testing.T) {
 	rule := &YAMLRule{config: YAMLRuleConfig{
 		Name:     "no-acl",
-		Enabled:  true,
+		Enabled:  config.BoolPtr(true),
 		Severity: "warning",
 		Message:  "Use aws_s3_bucket_acl resource instead of acl argument",
 		Patterns: YAMLPatterns{
@@ -227,7 +268,7 @@ func TestYAMLRule_Check_ForbiddenAttributeCustomMessage(t *testing.T) {
 func TestYAMLRule_Check_ForbiddenAttributeLocation(t *testing.T) {
 	rule := &YAMLRule{config: YAMLRuleConfig{
 		Name:    "no-acl",
-		Enabled: true,
+		Enabled: config.BoolPtr(true),
 		Patterns: YAMLPatterns{
 			ForbiddenAttributes: []string{"acl"},
 		},
@@ -269,7 +310,8 @@ patterns:
 	require.NoError(t, err)
 	assert.Equal(t, "test-rule", rule.Name())
 	assert.Equal(t, "A test rule", rule.Description())
-	assert.True(t, rule.config.Enabled)
+	require.NotNil(t, rule.config.Enabled)
+	assert.True(t, *rule.config.Enabled)
 	assert.Equal(t, "error", rule.config.Severity)
 }
 
@@ -320,7 +362,7 @@ func TestYAMLRule_Tags(t *testing.T) {
 func TestYAMLRule_Check_NonHclsyntaxBody(t *testing.T) {
 	rule := &YAMLRule{config: YAMLRuleConfig{
 		Name:    "test",
-		Enabled: true,
+		Enabled: config.BoolPtr(true),
 	}}
 	// hcl.File with nil Body (not *hclsyntax.Body)
 	file := &hcl.File{Body: hcl.EmptyBody()}
@@ -334,7 +376,7 @@ func TestYAMLRule_Check_BlockTypeFiltering(t *testing.T) {
 	// With explicit block_types, only matching blocks are checked
 	rule := &YAMLRule{config: YAMLRuleConfig{
 		Name:    "test",
-		Enabled: true,
+		Enabled: config.BoolPtr(true),
 		Patterns: YAMLPatterns{
 			BlockTypes:         []string{"resource"}, // Only check resources
 			RequiredAttributes: []string{"tags"},
@@ -355,7 +397,7 @@ func TestYAMLRule_Check_BlockTypeFiltering(t *testing.T) {
 func TestYAMLRule_Check_BlockTypes_VariableOnly(t *testing.T) {
 	rule := &YAMLRule{config: YAMLRuleConfig{
 		Name:    "require-variable-desc",
-		Enabled: true,
+		Enabled: config.BoolPtr(true),
 		Patterns: YAMLPatterns{
 			BlockTypes:         []string{"variable"},
 			RequiredAttributes: []string{"description"},
@@ -384,7 +426,7 @@ resource "aws_instance" "example" {
 func TestYAMLRule_Check_BlockTypes_MultipleTypes(t *testing.T) {
 	rule := &YAMLRule{config: YAMLRuleConfig{
 		Name:    "require-desc",
-		Enabled: true,
+		Enabled: config.BoolPtr(true),
 		Patterns: YAMLPatterns{
 			BlockTypes:         []string{"resource", "data"},
 			RequiredAttributes: []string{"tags"},
@@ -417,7 +459,7 @@ func TestYAMLRule_Check_BlockTypes_EmptyMatchesAll(t *testing.T) {
 	// When block_types is empty, should match all block types
 	rule := &YAMLRule{config: YAMLRuleConfig{
 		Name:    "require-tags",
-		Enabled: true,
+		Enabled: config.BoolPtr(true),
 		Patterns: YAMLPatterns{
 			// BlockTypes intentionally empty = match all
 			RequiredAttributes: []string{"tags"},
@@ -598,7 +640,7 @@ func TestYAMLRule_Check_AttributePattern_Matches(t *testing.T) {
 	rule := &YAMLRule{
 		config: YAMLRuleConfig{
 			Name:     "bucket-naming",
-			Enabled:  true,
+			Enabled:  config.BoolPtr(true),
 			Severity: "warning",
 			Patterns: YAMLPatterns{
 				ResourceTypes: []string{"aws_s3_bucket"},
@@ -632,7 +674,7 @@ func TestYAMLRule_Check_AttributePattern_NoMatch(t *testing.T) {
 	rule := &YAMLRule{
 		config: YAMLRuleConfig{
 			Name:     "bucket-naming",
-			Enabled:  true,
+			Enabled:  config.BoolPtr(true),
 			Severity: "warning",
 			Patterns: YAMLPatterns{
 				ResourceTypes: []string{"aws_s3_bucket"},
@@ -668,7 +710,7 @@ func TestYAMLRule_Check_AttributePattern_CustomMessage(t *testing.T) {
 	rule := &YAMLRule{
 		config: YAMLRuleConfig{
 			Name:     "bucket-naming",
-			Enabled:  true,
+			Enabled:  config.BoolPtr(true),
 			Severity: "error",
 			Patterns: YAMLPatterns{},
 		},
@@ -702,7 +744,7 @@ func TestYAMLRule_Check_AttributePattern_MissingAttribute(t *testing.T) {
 	rule := &YAMLRule{
 		config: YAMLRuleConfig{
 			Name:     "bucket-naming",
-			Enabled:  true,
+			Enabled:  config.BoolPtr(true),
 			Patterns: YAMLPatterns{},
 		},
 		compiledPatterns: []compiledPattern{
@@ -831,7 +873,7 @@ output "result" {
 func TestYAMLRule_matchesResourceType_NoLabels(t *testing.T) {
 	rule := &YAMLRule{config: YAMLRuleConfig{
 		Name:    "test",
-		Enabled: true,
+		Enabled: config.BoolPtr(true),
 		Patterns: YAMLPatterns{
 			ResourceTypes:      []string{"aws_s3_bucket"},
 			RequiredAttributes: []string{"tags"},
@@ -917,7 +959,7 @@ func TestYAMLRule_Check_AttributePattern_NonStringValue(t *testing.T) {
 	rule := &YAMLRule{
 		config: YAMLRuleConfig{
 			Name:     "bucket-naming",
-			Enabled:  true,
+			Enabled:  config.BoolPtr(true),
 			Severity: "warning",
 			Patterns: YAMLPatterns{},
 		},

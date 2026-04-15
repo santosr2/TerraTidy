@@ -127,9 +127,6 @@ type Config struct {
 	Cache             CacheConfig  `yaml:"cache,omitempty"`
 	Output            OutputConfig `yaml:"output,omitempty"`
 
-	// Overrides
-	Overrides OverridesConfig `yaml:"overrides,omitempty"`
-
 	// Plugin settings
 	Plugins PluginsConfig `yaml:"plugins,omitempty"`
 }
@@ -141,6 +138,15 @@ type Engines struct {
 	Style  StyleEngineConfig  `yaml:"style"`
 	Lint   LintEngineConfig   `yaml:"lint"`
 	Policy PolicyEngineConfig `yaml:"policy"`
+}
+
+// mergeFrom merges settings from another Engines config.
+// Only non-zero values from other are applied to preserve existing settings.
+func (e *Engines) mergeFrom(other *Engines) {
+	e.Fmt.mergeFrom(&other.Fmt)
+	e.Style.mergeFrom(&other.Style)
+	e.Lint.mergeFrom(&other.Lint)
+	e.Policy.mergeFrom(&other.Policy)
 }
 
 // EngineConfig represents configuration for a single engine
@@ -333,23 +339,26 @@ func BoolPtr(b bool) *bool {
 
 // Profile represents a configuration profile
 type Profile struct {
-	Name        string          `yaml:"profile"`
-	Description string          `yaml:"description"`
-	Inherits    string          `yaml:"inherits,omitempty"`
-	Engines     Engines         `yaml:"engines"`
-	Overrides   OverridesConfig `yaml:"overrides,omitempty"`
-}
-
-// OverridesConfig allows overriding specific settings
-type OverridesConfig struct {
-	Rules map[string]RuleConfig `yaml:"rules,omitempty"`
+	Name        string  `yaml:"profile"`
+	Description string  `yaml:"description"`
+	Inherits    string  `yaml:"inherits,omitempty"`
+	Engines     Engines `yaml:"engines"`
 }
 
 // RuleConfig represents configuration for a single rule
 type RuleConfig struct {
-	Enabled  bool           `yaml:"enabled"`
+	Enabled  *bool          `yaml:"enabled,omitempty"`
 	Severity string         `yaml:"severity,omitempty"`
 	Config   map[string]any `yaml:"config,omitempty"`
+}
+
+// IsEnabled returns whether the rule is enabled.
+// If Enabled is nil (not explicitly set), returns defaultEnabled (inherit from engine).
+func (r RuleConfig) IsEnabled(defaultEnabled bool) bool {
+	if r.Enabled == nil {
+		return defaultEnabled
+	}
+	return *r.Enabled
 }
 
 // PluginsConfig represents plugin settings
@@ -588,14 +597,6 @@ func (c *Config) merge(other *Config) {
 	c.Engines.Lint.mergeFrom(&other.Engines.Lint)
 	c.Engines.Policy.mergeFrom(&other.Engines.Policy)
 
-	// Merge override rules
-	if c.Overrides.Rules == nil {
-		c.Overrides.Rules = make(map[string]RuleConfig)
-	}
-	for k, v := range other.Overrides.Rules {
-		c.Overrides.Rules[k] = v
-	}
-
 	// Merge profiles
 	if c.Profiles == nil {
 		c.Profiles = make(map[string]Profile)
@@ -710,11 +711,6 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("profile validation: %w", err)
 	}
 
-	// Validate rule overrides
-	if err := c.validateRuleOverrides(); err != nil {
-		return fmt.Errorf("rule overrides validation: %w", err)
-	}
-
 	// Validate plugin configuration
 	if err := c.validatePlugins(); err != nil {
 		return fmt.Errorf("plugins validation: %w", err)
@@ -758,28 +754,6 @@ func (c *Config) checkCircularInheritance(name string, visited map[string]bool) 
 
 	if profile.Inherits != "" {
 		return c.checkCircularInheritance(profile.Inherits, visited)
-	}
-
-	return nil
-}
-
-// validateRuleOverrides validates rule override configurations
-func (c *Config) validateRuleOverrides() error {
-	validSeverities := map[string]bool{
-		"error":   true,
-		"warning": true,
-		"info":    true,
-		"":        true, // Allow empty (default)
-	}
-
-	for name, rule := range c.Overrides.Rules {
-		if name == "" {
-			return fmt.Errorf("override rule name cannot be empty")
-		}
-
-		if !validSeverities[rule.Severity] {
-			return fmt.Errorf("override rule %q has invalid severity: %s", name, rule.Severity)
-		}
 	}
 
 	return nil
@@ -873,6 +847,13 @@ func (c *Config) resolveProfileInheritance(name string, visited map[string]bool)
 
 // mergeProfiles merges a child profile into a parent, with child taking precedence.
 // Child profile can override any engine setting from parent using engines.<name>.enabled.
+//
+// NOTE: Unlike Engines.mergeFrom (used by ApplyProfile), this uses whole-block replacement.
+// When a child profile sets any field in an engine block, the entire block replaces the parent's.
+// This preserves explicit intent: a child that sets only "enabled: false" clears inherited
+// settings like "check: true" from the parent. ApplyProfile needs field-level merge because
+// base config and profile are independent; profile inheritance needs block-level replacement
+// because the child is explicitly overriding the parent's configuration.
 func (c *Config) mergeProfiles(parent, child *Profile) *Profile {
 	result := &Profile{
 		Name:        child.Name,
@@ -904,17 +885,6 @@ func (c *Config) mergeProfiles(parent, child *Profile) *Profile {
 		result.Engines.Policy = child.Engines.Policy
 	}
 
-	// Merge overrides - child overrides win
-	result.Overrides.Rules = make(map[string]RuleConfig)
-	if parent != nil {
-		for k, v := range parent.Overrides.Rules {
-			result.Overrides.Rules[k] = v
-		}
-	}
-	for k, v := range child.Overrides.Rules {
-		result.Overrides.Rules[k] = v
-	}
-
 	return result
 }
 
@@ -925,16 +895,8 @@ func (c *Config) ApplyProfile(name string) error {
 		return err
 	}
 
-	// Apply engine settings from profile
-	c.Engines = profile.Engines
-
-	// Merge overrides
-	if c.Overrides.Rules == nil {
-		c.Overrides.Rules = make(map[string]RuleConfig)
-	}
-	for k, v := range profile.Overrides.Rules {
-		c.Overrides.Rules[k] = v
-	}
+	// Apply engine settings from profile (merge, don't replace)
+	c.Engines.mergeFrom(&profile.Engines)
 
 	return nil
 }

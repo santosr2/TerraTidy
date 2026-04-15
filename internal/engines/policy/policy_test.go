@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -574,12 +575,12 @@ func TestConfigFromEngine(t *testing.T) {
 		engineCfg := config.PolicyEngineConfig{
 			Rules: map[string]config.RuleConfig{
 				"require-tags": {
-					Enabled:  true,
+					Enabled:  config.BoolPtr(true),
 					Severity: "error",
 					Config:   map[string]any{"required_tags": []string{"env", "team"}},
 				},
 				"no-public-s3": {
-					Enabled:  false,
+					Enabled:  config.BoolPtr(false),
 					Severity: "warning",
 				},
 			},
@@ -589,12 +590,12 @@ func TestConfigFromEngine(t *testing.T) {
 		require.Len(t, cfg.Rules, 2)
 
 		tagsRule := cfg.Rules["require-tags"]
-		assert.True(t, tagsRule.Enabled)
+		assert.True(t, *tagsRule.Enabled)
 		assert.Equal(t, "error", tagsRule.Severity)
 		assert.NotNil(t, tagsRule.Options["required_tags"])
 
 		s3Rule := cfg.Rules["no-public-s3"]
-		assert.False(t, s3Rule.Enabled)
+		assert.False(t, *s3Rule.Enabled)
 		assert.Equal(t, "warning", s3Rule.Severity)
 	})
 
@@ -802,18 +803,17 @@ func TestBuiltinPolicy_RequiredTags(t *testing.T) {
 	}
 }
 
-// TestBuiltinPolicy_NoPublicSSH_CurrentlyBroken documents that the built-in
-// no-public-ssh policy does not fire because ingress is parsed as a map, not
-// a string. The policy uses `contains(resource.ingress, "0.0.0.0/0")` which
-// fails silently on map data.
-//
-// TODO: Fix the policy to handle nested blocks correctly. When fixed, replace
-// this test with proper assertions that verify detection of overly permissive
-// security groups.
-func TestBuiltinPolicy_NoPublicSSH_CurrentlyBroken(t *testing.T) {
-	// Create a security group that SHOULD trigger the no-public-ssh policy
-	// but doesn't due to the map vs string bug.
-	content := `resource "aws_security_group" "bad" {
+// TestBuiltinPolicy_NoPublicSSH verifies that the no-public-ssh policy
+// correctly detects security groups allowing SSH from 0.0.0.0/0.
+func TestBuiltinPolicy_NoPublicSSH(t *testing.T) {
+	tests := []struct {
+		name        string
+		content     string
+		expectFound bool
+	}{
+		{
+			name: "SSH port 22 open to world triggers policy",
+			content: `resource "aws_security_group" "bad" {
   name = "allow-all-ssh"
 
   ingress {
@@ -823,26 +823,374 @@ func TestBuiltinPolicy_NoPublicSSH_CurrentlyBroken(t *testing.T) {
     cidr_blocks = ["0.0.0.0/0"]
   }
 }
-`
-	tmpDir := t.TempDir()
-	tmpFile := filepath.Join(tmpDir, "main.tf")
-	require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0o644))
+`,
+			expectFound: true,
+		},
+		{
+			name: "SSH open to specific IP does not trigger",
+			content: `resource "aws_security_group" "ok" {
+  name = "restricted-ssh"
 
-	// Use nil config to run built-in policies
-	engine := New(nil)
-	findings, err := engine.Run(context.Background(), []string{tmpFile})
+  ingress {
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["10.0.0.0/8"]
+  }
+}
+`,
+			expectFound: false,
+		},
+		{
+			name: "CIDR 10.0.0.0/0 does not trigger (false positive check)",
+			content: `resource "aws_security_group" "not_public" {
+  name = "class-a-all"
+
+  ingress {
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["10.0.0.0/0"]
+  }
+}
+`,
+			expectFound: false,
+		},
+		{
+			name: "HTTPS port 443 open to world does not trigger",
+			content: `resource "aws_security_group" "web" {
+  name = "allow-https"
+
+  ingress {
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+`,
+			expectFound: false,
+		},
+		{
+			name: "Port range including 22 triggers policy",
+			content: `resource "aws_security_group" "wide" {
+  name = "wide-range"
+
+  ingress {
+    from_port   = 0
+    to_port     = 1000
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+`,
+			expectFound: true,
+		},
+		{
+			name: "Multiple ingress blocks with one unsafe triggers",
+			content: `resource "aws_security_group" "mixed" {
+  name = "mixed-rules"
+
+  ingress {
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+`,
+			expectFound: true,
+		},
+		{
+			name: "No ingress block does not trigger",
+			content: `resource "aws_security_group" "empty" {
+  name = "no-rules"
+}
+`,
+			expectFound: false,
+		},
+		{
+			name: "Non-security-group resource does not trigger",
+			content: `resource "aws_instance" "example" {
+  ami = "ami-12345"
+}
+`,
+			expectFound: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tmpDir := t.TempDir()
+			tmpFile := filepath.Join(tmpDir, "main.tf")
+			require.NoError(t, os.WriteFile(tmpFile, []byte(tt.content), 0o644))
+
+			engine := New(nil)
+			findings, err := engine.Run(context.Background(), []string{tmpFile})
+			require.NoError(t, err)
+
+			found := false
+			for _, f := range findings {
+				if f.Rule == "policy.no-public-ssh" {
+					found = true
+					break
+				}
+			}
+
+			if tt.expectFound {
+				assert.True(t, found, "expected no-public-ssh finding")
+			} else {
+				assert.False(t, found, "unexpected no-public-ssh finding")
+			}
+		})
+	}
+}
+
+// Tests for DataFiles feature
+
+func TestEngine_LoadDataFiles_Empty(t *testing.T) {
+	engine := New(&Config{
+		DataFiles: []string{},
+	})
+
+	store, err := engine.loadDataFiles()
+	require.NoError(t, err)
+	assert.Nil(t, store, "empty data files should return nil store")
+}
+
+func TestEngine_LoadDataFiles_NotFound(t *testing.T) {
+	engine := New(&Config{
+		DataFiles: []string{"/nonexistent/file.json"},
+	})
+
+	// Non-existent files are skipped, not errors
+	store, err := engine.loadDataFiles()
+	require.NoError(t, err)
+	assert.Nil(t, store, "non-existent files should be skipped")
+}
+
+func TestEngine_LoadDataFiles_InvalidJSON(t *testing.T) {
+	tmpDir := t.TempDir()
+	dataFile := filepath.Join(tmpDir, "invalid.json")
+	require.NoError(t, os.WriteFile(dataFile, []byte("not valid json"), 0o644))
+
+	engine := New(&Config{
+		DataFiles: []string{dataFile},
+	})
+
+	_, err := engine.loadDataFiles()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "parsing data file")
+}
+
+// TestEngine_LoadDataFiles_ReadError tests that read errors are properly reported.
+// Skipped on Windows because os.Chmod doesn't restrict read permissions the same way.
+func TestEngine_LoadDataFiles_ReadError(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping on Windows: os.Chmod doesn't restrict read permissions")
+	}
+
+	tmpDir := t.TempDir()
+	dataFile := filepath.Join(tmpDir, "unreadable.json")
+	require.NoError(t, os.WriteFile(dataFile, []byte(`{"key": "value"}`), 0o644))
+
+	// Make file unreadable
+	require.NoError(t, os.Chmod(dataFile, 0o000))
+	defer func() { _ = os.Chmod(dataFile, 0o644) }()
+
+	engine := New(&Config{
+		DataFiles: []string{dataFile},
+	})
+
+	_, err := engine.loadDataFiles()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "reading data file")
+}
+
+func TestEngine_LoadDataFiles_ValidJSON(t *testing.T) {
+	tmpDir := t.TempDir()
+	dataFile := filepath.Join(tmpDir, "data.json")
+	require.NoError(t, os.WriteFile(dataFile, []byte(`{"allowed_regions": ["us-east-1", "us-west-2"]}`), 0o644))
+
+	engine := New(&Config{
+		DataFiles: []string{dataFile},
+	})
+
+	store, err := engine.loadDataFiles()
+	require.NoError(t, err)
+	assert.NotNil(t, store, "valid JSON should return non-nil store")
+}
+
+func TestEngine_LoadDataFiles_MergesBehavior(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// First file
+	file1 := filepath.Join(tmpDir, "data1.json")
+	require.NoError(t, os.WriteFile(file1, []byte(`{"key1": "value1", "key2": "original"}`), 0o644))
+
+	// Second file overrides key2
+	file2 := filepath.Join(tmpDir, "data2.json")
+	require.NoError(t, os.WriteFile(file2, []byte(`{"key2": "overridden", "key3": "value3"}`), 0o644))
+
+	engine := New(&Config{
+		DataFiles: []string{file1, file2},
+	})
+
+	store, err := engine.loadDataFiles()
+	require.NoError(t, err)
+	require.NotNil(t, store)
+
+	// Verify merge semantics by evaluating a policy that reads the data
+	// key2 should be "overridden" (from file2), not "original" (from file1)
+	policyContent := `package terraform
+
+import rego.v1
+
+deny contains msg if {
+    data.key2 == "overridden"
+    data.key1 == "value1"
+    data.key3 == "value3"
+    msg := {
+        "msg": "merge verified",
+        "rule": "merge-test",
+        "severity": "info"
+    }
+}
+`
+	evalCtx := &policyEvalContext{
+		ctx:        context.Background(),
+		moduleData: map[string]any{},
+		dir:        tmpDir,
+		dataStore:  store,
+	}
+
+	findings := engine.evaluatePolicyWithPrepare(evalCtx, policyContent)
+	require.Len(t, findings, 1, "merge verification policy should fire")
+	assert.Equal(t, "policy.merge-test", findings[0].Rule)
+}
+
+func TestEngine_DataFiles_IntegrationWithPolicy(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create Terraform file with an EC2 instance using forbidden type
+	tfFile := filepath.Join(tmpDir, "main.tf")
+	tfContent := `resource "aws_instance" "example" {
+  ami           = "ami-12345"
+  instance_type = "t2.xlarge"
+}
+`
+	require.NoError(t, os.WriteFile(tfFile, []byte(tfContent), 0o644))
+
+	// Create data file with allowed instance types
+	dataFile := filepath.Join(tmpDir, "allowed_types.json")
+	require.NoError(t, os.WriteFile(dataFile, []byte(`{"allowed_instance_types": ["t2.micro", "t2.small", "t3.micro"]}`), 0o644))
+
+	// Create policy that checks instance types against allowed list from data file
+	policyDir := filepath.Join(tmpDir, "policies")
+	require.NoError(t, os.MkdirAll(policyDir, 0o755))
+
+	// Note: resource.instance_type is raw HCL text with quotes, e.g., "\"t2.xlarge\""
+	policyContent := `package terraform
+
+import rego.v1
+
+deny contains msg if {
+    some resource in input.resources
+    resource.type == "aws_instance"
+    instance_type := trim(resource.instance_type, "\"")
+    not instance_type_allowed(instance_type)
+    msg := {
+        "msg": sprintf("EC2 instance using disallowed type: %s", [instance_type]),
+        "rule": "allowed-instance-types",
+        "severity": "error"
+    }
+}
+
+instance_type_allowed(itype) if {
+    itype in data.allowed_instance_types
+}
+`
+	require.NoError(t, os.WriteFile(filepath.Join(policyDir, "types.rego"), []byte(policyContent), 0o644))
+
+	engine := New(&Config{
+		PolicyDirs: []string{policyDir},
+		DataFiles:  []string{dataFile},
+	})
+
+	findings, err := engine.Run(context.Background(), []string{tfFile})
 	require.NoError(t, err)
 
-	// Check if the policy fired (it shouldn't due to the bug)
+	// Should find violation because t2.xlarge is not in allowed_instance_types
 	found := false
 	for _, f := range findings {
-		if f.Rule == "policy.no-public-ssh" {
+		if f.Rule == "policy.allowed-instance-types" {
 			found = true
+			assert.Contains(t, f.Message, "t2.xlarge")
 			break
 		}
 	}
+	assert.True(t, found, "should find allowed-instance-types violation for t2.xlarge")
+}
 
-	// This assertion documents the broken state. When the policy is fixed,
-	// this test will fail and should be replaced with proper detection tests.
-	assert.False(t, found, "no-public-ssh policy unexpectedly fired - has the bug been fixed? Replace this test with proper detection assertions")
+func TestEngine_DataFiles_NoViolationWhenAllowed(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create Terraform file with an EC2 instance using allowed type
+	tfFile := filepath.Join(tmpDir, "main.tf")
+	tfContent := `resource "aws_instance" "example" {
+  ami           = "ami-12345"
+  instance_type = "t2.micro"
+}
+`
+	require.NoError(t, os.WriteFile(tfFile, []byte(tfContent), 0o644))
+
+	// Create data file with allowed instance types
+	dataFile := filepath.Join(tmpDir, "allowed_types.json")
+	require.NoError(t, os.WriteFile(dataFile, []byte(`{"allowed_instance_types": ["t2.micro", "t2.small", "t3.micro"]}`), 0o644))
+
+	// Create policy that checks instance types against allowed list from data file
+	policyDir := filepath.Join(tmpDir, "policies")
+	require.NoError(t, os.MkdirAll(policyDir, 0o755))
+
+	policyContent := `package terraform
+
+import rego.v1
+
+deny contains msg if {
+    some resource in input.resources
+    resource.type == "aws_instance"
+    instance_type := trim(resource.instance_type, "\"")
+    not instance_type_allowed(instance_type)
+    msg := {
+        "msg": sprintf("EC2 instance using disallowed type: %s", [instance_type]),
+        "rule": "allowed-instance-types",
+        "severity": "error"
+    }
+}
+
+instance_type_allowed(itype) if {
+    itype in data.allowed_instance_types
+}
+`
+	require.NoError(t, os.WriteFile(filepath.Join(policyDir, "types.rego"), []byte(policyContent), 0o644))
+
+	engine := New(&Config{
+		PolicyDirs: []string{policyDir},
+		DataFiles:  []string{dataFile},
+	})
+
+	findings, err := engine.Run(context.Background(), []string{tfFile})
+	require.NoError(t, err)
+
+	// Should NOT find violation because t2.micro IS in allowed_instance_types
+	for _, f := range findings {
+		assert.NotEqual(t, "policy.allowed-instance-types", f.Rule, "should not find allowed-instance-types violation for t2.micro")
+	}
 }

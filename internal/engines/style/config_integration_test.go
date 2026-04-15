@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/santosr2/TerraTidy/internal/config"
 	"github.com/santosr2/TerraTidy/pkg/sdk"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -24,7 +25,7 @@ func TestStyleEngineWithConfiguredRule(t *testing.T) {
 	cfg := &Config{
 		Rules: map[string]RuleConfig{
 			"style.resource-name-matches-type": {
-				Enabled:  true,
+				Enabled:  config.BoolPtr(true),
 				Severity: "info",
 			},
 		},
@@ -87,7 +88,7 @@ func TestStyleEngineAppliesSeverityOverride(t *testing.T) {
 			cfg := &Config{
 				Rules: map[string]RuleConfig{
 					"style.resource-name-matches-type": {
-						Enabled:  true,
+						Enabled:  config.BoolPtr(true),
 						Severity: tt.configSeverity,
 					},
 				},

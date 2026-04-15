@@ -1,0 +1,34 @@
+# VSCode Extension Versioning
+#
+# VSCode Marketplace requires numeric-only versions (X.Y.Z) without semver
+# pre-release suffixes. This config manages VSCode versions independently
+# from the main Go project versioning.
+#
+# Version scheme:
+# - major.minor always matches Go project (synchronized manually)
+# - patch increments with each VSCode publish
+# - Pre-release status tracked via --pre-release flag, not version string
+#
+# Examples:
+#   Go 0.2.0-alpha.4 → VSCode 0.2.0 (--pre-release)
+#   Go 0.2.0-alpha.5 → VSCode 0.2.1 (--pre-release)
+#   Go 0.2.0         → VSCode 0.2.2 (stable)
+#   Go 0.3.0-alpha.1 → VSCode 0.3.0 (--pre-release)
+#
+# Usage:
+#   mise run vscode:bump:patch   # Increment patch for next publish
+#   mise run vscode:bump:minor   # Reset patch when Go bumps minor
+#   mise run vscode:bump:major   # Reset patch when Go bumps major
+
+[tool.bumpversion]
+current_version = "0.2.0"
+parse = "(?P<major>\\d+)\\.(?P<minor>\\d+)\\.(?P<patch>\\d+)"
+serialize = ["{major}.{minor}.{patch}"]
+commit = true
+tag = false
+message = "chore(vscode): bump extension version to {new_version}"
+
+[[tool.bumpversion.files]]
+filename = "package.json"
+search = "\"version\": \"{current_version}\""
+replace = "\"version\": \"{new_version}\""

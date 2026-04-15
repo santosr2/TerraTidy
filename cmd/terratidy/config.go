@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/santosr2/TerraTidy/internal/config"
+	"github.com/santosr2/TerraTidy/pkg/sdk"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 )
@@ -113,13 +114,13 @@ func init() {
 func runConfigShow(_ *cobra.Command, _ []string) error {
 	cfg, err := config.Load(cfgFile)
 	if err != nil {
-		return fmt.Errorf("loading config: %w", err)
+		return sdk.NewConfigError(fmt.Errorf("loading config: %w", err))
 	}
 
 	// Apply profile if specified via --profile flag
 	if profile != "" {
 		if profileErr := cfg.ApplyProfile(profile); profileErr != nil {
-			return fmt.Errorf("applying profile %q: %w", profile, profileErr)
+			return sdk.NewConfigError(fmt.Errorf("applying profile %q: %w", profile, profileErr))
 		}
 	}
 
@@ -130,11 +131,11 @@ func runConfigShow(_ *cobra.Command, _ []string) error {
 	case "yaml":
 		output, err = yaml.Marshal(cfg)
 	default:
-		return fmt.Errorf("unsupported format: %s (use yaml or json)", configSerializeFormat)
+		return sdk.NewConfigError(fmt.Errorf("unsupported format: %s (use yaml or json)", configSerializeFormat))
 	}
 
 	if err != nil {
-		return fmt.Errorf("marshaling config: %w", err)
+		return sdk.NewInternalError(fmt.Errorf("marshaling config: %w", err))
 	}
 
 	fmt.Println(string(output))
@@ -151,13 +152,13 @@ func runConfigValidate(_ *cobra.Command, _ []string) error {
 
 	// Check if file exists
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
-		return fmt.Errorf("configuration file not found: %s (run 'terratidy init' to create one)", configPath)
+		return sdk.NewConfigError(fmt.Errorf("configuration file not found: %s (run 'terratidy init' to create one)", configPath))
 	}
 
 	// Load and validate
 	cfg, err := config.Load(configPath)
 	if err != nil {
-		return fmt.Errorf("validation failed: %w", err)
+		return sdk.NewConfigError(fmt.Errorf("validation failed: %w", err))
 	}
 
 	// Additional validation
@@ -234,17 +235,17 @@ func runConfigSplit(_ *cobra.Command, _ []string) error {
 	configPath := getConfigPath()
 
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
-		return fmt.Errorf("configuration file not found: %s (run 'terratidy init' to create one)", configPath)
+		return sdk.NewConfigError(fmt.Errorf("configuration file not found: %s (run 'terratidy init' to create one)", configPath))
 	}
 
 	cfg, err := config.Load(configPath)
 	if err != nil {
-		return fmt.Errorf("loading config: %w", err)
+		return sdk.NewConfigError(fmt.Errorf("loading config: %w", err))
 	}
 
 	configDir := ".terratidy"
 	if err := os.MkdirAll(configDir, 0o750); err != nil {
-		return fmt.Errorf("creating config directory: %w", err)
+		return sdk.NewInternalError(fmt.Errorf("creating config directory: %w", err))
 	}
 
 	fmt.Println("Splitting configuration...")
@@ -321,7 +322,7 @@ parallel: %t
 `, cfg.Version, cfg.SeverityThreshold, cfg.IsFailFast(), cfg.IsParallel())
 
 	if err := os.WriteFile(configPath, []byte(mainCfg), 0o600); err != nil {
-		return fmt.Errorf("writing main config: %w", err)
+		return sdk.NewInternalError(fmt.Errorf("writing main config: %w", err))
 	}
 	fmt.Printf("  Updated %s\n", configPath)
 	return nil
@@ -338,7 +339,7 @@ func runConfigMerge(_ *cobra.Command, _ []string) error {
 	// Load and resolve all imports
 	cfg, err := config.Load(configPath)
 	if err != nil {
-		return fmt.Errorf("loading config: %w", err)
+		return sdk.NewConfigError(fmt.Errorf("loading config: %w", err))
 	}
 
 	// Clear imports since we're merging
@@ -347,7 +348,7 @@ func runConfigMerge(_ *cobra.Command, _ []string) error {
 	// Write merged config
 	output, err := yaml.Marshal(cfg)
 	if err != nil {
-		return fmt.Errorf("marshaling config: %w", err)
+		return sdk.NewInternalError(fmt.Errorf("marshaling config: %w", err))
 	}
 
 	// Add header comment
@@ -357,7 +358,7 @@ func runConfigMerge(_ *cobra.Command, _ []string) error {
 	finalOutput := header + string(output)
 
 	if err := os.WriteFile(configPath, []byte(finalOutput), 0o600); err != nil {
-		return fmt.Errorf("writing merged config: %w", err)
+		return sdk.NewInternalError(fmt.Errorf("writing merged config: %w", err))
 	}
 
 	fmt.Printf("Merged configuration written to %s\n", configPath)
@@ -385,7 +386,7 @@ func runConfigInitProfile(_ *cobra.Command, args []string) error {
 	}
 
 	if _, exists := cfg.Profiles[profileName]; exists {
-		return fmt.Errorf("profile '%s' already exists", profileName)
+		return sdk.NewConfigError(fmt.Errorf("profile '%s' already exists", profileName))
 	}
 
 	// Create new profile
@@ -403,11 +404,11 @@ func runConfigInitProfile(_ *cobra.Command, args []string) error {
 	// Write updated config
 	output, err := yaml.Marshal(cfg)
 	if err != nil {
-		return fmt.Errorf("marshaling config: %w", err)
+		return sdk.NewInternalError(fmt.Errorf("marshaling config: %w", err))
 	}
 
 	if err := os.WriteFile(configPath, output, 0o600); err != nil {
-		return fmt.Errorf("writing config: %w", err)
+		return sdk.NewInternalError(fmt.Errorf("writing config: %w", err))
 	}
 
 	fmt.Printf("Created profile '%s' in %s\n", profileName, configPath)
@@ -421,7 +422,10 @@ func runConfigInitProfile(_ *cobra.Command, args []string) error {
 func writeYAMLFile(path string, data any) error {
 	output, err := yaml.Marshal(data)
 	if err != nil {
-		return fmt.Errorf("marshaling %s: %w", path, err)
+		return sdk.NewInternalError(fmt.Errorf("marshaling %s: %w", path, err))
 	}
-	return os.WriteFile(path, output, 0o600)
+	if err := os.WriteFile(path, output, 0o600); err != nil {
+		return sdk.NewInternalError(fmt.Errorf("writing %s: %w", path, err))
+	}
+	return nil
 }

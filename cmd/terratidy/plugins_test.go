@@ -2,10 +2,12 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
 
+	"github.com/santosr2/TerraTidy/pkg/sdk"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -259,23 +261,18 @@ plugins:
 	t.Cleanup(func() { cfgFile = oldCfgFile })
 	cfgFile = configPath
 
-	// Capture stdout for consistency with other tests (even though not used)
-	oldStdout := os.Stdout
-	_, w, err := os.Pipe()
-	require.NoError(t, err, "creating stdout pipe")
-	os.Stdout = w
-	t.Cleanup(func() {
-		os.Stdout = oldStdout
-	})
-
-	// Run the command with non-existent plugin name
+	// Run the command with non-existent plugin name (no stdout capture needed, only error checked)
 	err = pluginsInfoCmd.RunE(pluginsInfoCmd, []string{"nonexistent-plugin"})
-	w.Close()
 
 	// Should return error for plugin not found
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "plugin not found")
 	assert.Contains(t, err.Error(), "nonexistent-plugin")
+
+	// Plugin not found is user-correctable input, so ConfigError (exit code 2)
+	var exitErr *sdk.ExitError
+	require.True(t, errors.As(err, &exitErr), "should be an ExitError, got: %v", err)
+	assert.Equal(t, sdk.ExitConfig, exitErr.Code, "should have config exit code")
 }
 
 func TestPluginsInitCmd(t *testing.T) {
@@ -395,4 +392,9 @@ func TestPluginsInitCmd_ExistingFile(t *testing.T) {
 	// Should return error because os.MkdirAll will fail on existing file
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "creating directory")
+
+	// Filesystem error is InternalError (exit code 3)
+	var exitErr *sdk.ExitError
+	require.True(t, errors.As(err, &exitErr), "should be an ExitError, got: %v", err)
+	assert.Equal(t, sdk.ExitInternal, exitErr.Code, "should have internal exit code")
 }

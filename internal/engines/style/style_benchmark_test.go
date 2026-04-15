@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/santosr2/TerraTidy/internal/config"
 )
 
 // Sample Terraform configurations of varying complexity for benchmarks
@@ -585,7 +587,7 @@ func BenchmarkStyleEngine_SingleRuleEnabled(b *testing.B) {
 	// Only enable one rule - blank-line-between-blocks
 	engine := New(&Config{
 		Rules: map[string]RuleConfig{
-			"style.blank-line-between-blocks": {Enabled: true},
+			"style.blank-line-between-blocks": {Enabled: config.BoolPtr(true)},
 			// All other rules will use default enabled/disabled state
 		},
 	})
@@ -629,39 +631,39 @@ func BenchmarkStyleEngine_AllRulesEnabled(b *testing.B) {
 
 	// Enable all rules explicitly
 	allRules := map[string]RuleConfig{
-		"style.blank-line-between-blocks":       {Enabled: true},
-		"style.no-leading-trailing-blank-lines": {Enabled: true},
-		"style.no-empty-blocks":                 {Enabled: true},
-		"style.block-label-case":                {Enabled: true},
-		"style.variable-naming":                 {Enabled: true},
-		"style.output-naming":                   {Enabled: true},
-		"style.local-naming":                    {Enabled: true},
-		"style.for-each-count-first":            {Enabled: true},
-		"style.lifecycle-at-end":                {Enabled: true},
-		"style.tags-at-end":                     {Enabled: true},
-		"style.depends-on-order":                {Enabled: true},
-		"style.source-version-grouped":          {Enabled: true},
-		"style.variable-order":                  {Enabled: true},
-		"style.output-order":                    {Enabled: true},
-		"style.terraform-block-first":           {Enabled: true},
-		"style.provider-block-order":            {Enabled: true},
-		"style.attribute-group-spacing":         {Enabled: true},
-		"style.variables-in-file":               {Enabled: true},
-		"style.outputs-in-file":                 {Enabled: true},
-		"style.providers-in-file":               {Enabled: true},
-		"style.scoped-file-organization":        {Enabled: true},
-		"style.terraform-files-structure":       {Enabled: true},
-		"style.resource-name-matches-type":      {Enabled: true},
-		"style.output-prefix":                   {Enabled: true},
-		"style.module-name-convention":          {Enabled: true},
-		"style.meta-arguments-order":            {Enabled: true},
-		"style.lifecycle-attribute-order":       {Enabled: true},
-		"style.nested-block-order":              {Enabled: true},
-		"style.one-line-attribute-spacing":      {Enabled: true},
-		"style.comment-syntax":                  {Enabled: true},
-		"style.no-trailing-whitespace":          {Enabled: true},
-		"style.consistent-quotes":               {Enabled: true},
-		"style.no-consecutive-blank-lines":      {Enabled: true},
+		"style.blank-line-between-blocks":       {Enabled: config.BoolPtr(true)},
+		"style.no-leading-trailing-blank-lines": {Enabled: config.BoolPtr(true)},
+		"style.no-empty-blocks":                 {Enabled: config.BoolPtr(true)},
+		"style.block-label-case":                {Enabled: config.BoolPtr(true)},
+		"style.variable-naming":                 {Enabled: config.BoolPtr(true)},
+		"style.output-naming":                   {Enabled: config.BoolPtr(true)},
+		"style.local-naming":                    {Enabled: config.BoolPtr(true)},
+		"style.for-each-count-first":            {Enabled: config.BoolPtr(true)},
+		"style.lifecycle-at-end":                {Enabled: config.BoolPtr(true)},
+		"style.tags-at-end":                     {Enabled: config.BoolPtr(true)},
+		"style.depends-on-order":                {Enabled: config.BoolPtr(true)},
+		"style.source-version-grouped":          {Enabled: config.BoolPtr(true)},
+		"style.variable-order":                  {Enabled: config.BoolPtr(true)},
+		"style.output-order":                    {Enabled: config.BoolPtr(true)},
+		"style.terraform-block-first":           {Enabled: config.BoolPtr(true)},
+		"style.provider-block-order":            {Enabled: config.BoolPtr(true)},
+		"style.attribute-group-spacing":         {Enabled: config.BoolPtr(true)},
+		"style.variables-in-file":               {Enabled: config.BoolPtr(true)},
+		"style.outputs-in-file":                 {Enabled: config.BoolPtr(true)},
+		"style.providers-in-file":               {Enabled: config.BoolPtr(true)},
+		"style.scoped-file-organization":        {Enabled: config.BoolPtr(true)},
+		"style.terraform-files-structure":       {Enabled: config.BoolPtr(true)},
+		"style.resource-name-matches-type":      {Enabled: config.BoolPtr(true)},
+		"style.output-prefix":                   {Enabled: config.BoolPtr(true)},
+		"style.module-name-convention":          {Enabled: config.BoolPtr(true)},
+		"style.meta-arguments-order":            {Enabled: config.BoolPtr(true)},
+		"style.lifecycle-attribute-order":       {Enabled: config.BoolPtr(true)},
+		"style.nested-block-order":              {Enabled: config.BoolPtr(true)},
+		"style.one-line-attribute-spacing":      {Enabled: config.BoolPtr(true)},
+		"style.comment-syntax":                  {Enabled: config.BoolPtr(true)},
+		"style.no-trailing-whitespace":          {Enabled: config.BoolPtr(true)},
+		"style.consistent-quotes":               {Enabled: config.BoolPtr(true)},
+		"style.no-consecutive-blank-lines":      {Enabled: config.BoolPtr(true)},
 	}
 
 	engine := New(&Config{

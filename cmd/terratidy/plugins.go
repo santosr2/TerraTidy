@@ -9,6 +9,7 @@ import (
 	"github.com/santosr2/TerraTidy/internal/buildinfo"
 	"github.com/santosr2/TerraTidy/internal/config"
 	"github.com/santosr2/TerraTidy/internal/plugins"
+	"github.com/santosr2/TerraTidy/pkg/sdk"
 	"github.com/spf13/cobra"
 )
 
@@ -35,7 +36,7 @@ var pluginsListCmd = &cobra.Command{
 	RunE: func(_ *cobra.Command, _ []string) error {
 		cfg, err := config.Load(cfgFile)
 		if err != nil {
-			return fmt.Errorf("loading config: %w", err)
+			return sdk.NewConfigError(fmt.Errorf("loading config: %w", err))
 		}
 
 		if !cfg.Plugins.Enabled {
@@ -45,7 +46,7 @@ var pluginsListCmd = &cobra.Command{
 
 		manager := plugins.NewManager(cfg.Plugins.Directories, cfg.Plugins.ShouldVerifyIntegrity())
 		if err := manager.LoadAll(); err != nil {
-			return fmt.Errorf("loading plugins: %w", err)
+			return sdk.NewConfigError(fmt.Errorf("loading plugins: %w", err))
 		}
 
 		pluginList := manager.ListPlugins()
@@ -84,12 +85,12 @@ var pluginsInfoCmd = &cobra.Command{
 
 		cfg, err := config.Load(cfgFile)
 		if err != nil {
-			return fmt.Errorf("loading config: %w", err)
+			return sdk.NewConfigError(fmt.Errorf("loading config: %w", err))
 		}
 
 		manager := plugins.NewManager(cfg.Plugins.Directories, cfg.Plugins.ShouldVerifyIntegrity())
 		if err := manager.LoadAll(); err != nil {
-			return fmt.Errorf("loading plugins: %w", err)
+			return sdk.NewConfigError(fmt.Errorf("loading plugins: %w", err))
 		}
 
 		var found *plugins.Plugin
@@ -101,7 +102,8 @@ var pluginsInfoCmd = &cobra.Command{
 		}
 
 		if found == nil {
-			return fmt.Errorf("plugin not found: %s", pluginName)
+			// Plugin name came from user input; user-correctable, so ConfigError.
+			return sdk.NewConfigError(fmt.Errorf("plugin not found: %s", pluginName))
 		}
 
 		fmt.Printf("Name:        %s\n", found.Metadata.Name)
@@ -144,7 +146,7 @@ var pluginsInitCmd = &cobra.Command{
 		// Create plugin directory
 		dir := filepath.Join(".", pluginName)
 		if err := os.MkdirAll(dir, 0o750); err != nil {
-			return fmt.Errorf("creating directory: %w", err)
+			return sdk.NewInternalError(fmt.Errorf("creating directory: %w", err))
 		}
 
 		// Create main.go
@@ -211,7 +213,7 @@ func (r *ExampleRule) Fix(ctx *sdk.Context, file *hcl.File) ([]byte, error) {
 
 		mainPath := filepath.Join(dir, "main.go")
 		if err := os.WriteFile(mainPath, []byte(mainContent), 0o600); err != nil {
-			return fmt.Errorf("writing main.go: %w", err)
+			return sdk.NewInternalError(fmt.Errorf("writing main.go: %w", err))
 		}
 
 		// Create go.mod
@@ -224,7 +226,7 @@ require github.com/santosr2/TerraTidy v%s
 
 		goModPath := filepath.Join(dir, "go.mod")
 		if err := os.WriteFile(goModPath, []byte(goModContent), 0o600); err != nil {
-			return fmt.Errorf("writing go.mod: %w", err)
+			return sdk.NewInternalError(fmt.Errorf("writing go.mod: %w", err))
 		}
 
 		// Create Makefile
@@ -245,10 +247,10 @@ clean:
 
 		makefilePath := filepath.Join(dir, "Makefile")
 		if err := os.WriteFile(makefilePath, []byte(makefileContent), 0o600); err != nil {
-			return fmt.Errorf("writing Makefile: %w", err)
+			return sdk.NewInternalError(fmt.Errorf("writing Makefile: %w", err))
 		}
 
-		fmt.Printf("Plugin project created: %s/\n", dir)
+		fmt.Printf("Plugin project created: %s\n", dir)
 		fmt.Println("\nNext steps:")
 		fmt.Printf("  1. cd %s\n", pluginName)
 		fmt.Println("  2. Edit main.go to implement your rules")

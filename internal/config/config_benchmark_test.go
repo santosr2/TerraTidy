@@ -108,14 +108,15 @@ func BenchmarkLoadConfigWithImports(b *testing.B) {
 		b.Fatal(err)
 	}
 
-	importContent := `overrides:
-  rules:
-    style.blank-lines:
-      enabled: true
-      severity: warning
-    style.block-label-case:
-      enabled: true
-      severity: error
+	importContent := `engines:
+  style:
+    rules:
+      style.blank-lines:
+        enabled: true
+        severity: warning
+      style.block-label-case:
+        enabled: true
+        severity: error
 `
 	importPath := filepath.Join(importDir, "style-rules.yaml")
 	if err := os.WriteFile(importPath, []byte(importContent), 0o644); err != nil {

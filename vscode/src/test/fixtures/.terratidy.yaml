@@ -5,6 +5,11 @@ engines:
     enabled: true
   style:
     enabled: true
+    # Rule configuration for testing
+    rules:
+      style.block-label-case:
+        enabled: true
+        severity: warning
   lint:
     enabled: false
   policy:
@@ -20,10 +25,3 @@ profiles:
         enabled: true
       policy:
         enabled: true
-
-# Override example for testing rule configuration
-overrides:
-  rules:
-    style.block-label-case:
-      enabled: true
-      severity: warning

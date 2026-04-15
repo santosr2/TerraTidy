@@ -777,7 +777,7 @@ resource "aws_instance" "example2" {
 	engine := New(&Config{
 		Rules: map[string]RuleConfig{
 			"style.blank-line-between-blocks": {
-				Enabled: false,
+				Enabled: config.BoolPtr(false),
 			},
 		},
 	})
@@ -959,7 +959,7 @@ resource "aws_instance" "three" {
 	engine := New(&Config{
 		Fix: true,
 		Rules: map[string]RuleConfig{
-			"style.blank-line-between-blocks": {Enabled: true},
+			"style.blank-line-between-blocks": {Enabled: config.BoolPtr(true)},
 		},
 	})
 
@@ -1008,11 +1008,11 @@ func TestConfigFromEngine(t *testing.T) {
 		engineCfg := config.StyleEngineConfig{
 			Rules: map[string]config.RuleConfig{
 				"blank-line-between-blocks": {
-					Enabled:  true,
+					Enabled:  config.BoolPtr(true),
 					Severity: "warning",
 				},
 				"block-label-case": {
-					Enabled:  false,
+					Enabled:  config.BoolPtr(false),
 					Severity: "error",
 					Config:   map[string]any{"case": "snake"},
 				},
@@ -1023,12 +1023,12 @@ func TestConfigFromEngine(t *testing.T) {
 		require.Len(t, cfg.Rules, 2)
 
 		blankLineRule := cfg.Rules["blank-line-between-blocks"]
-		assert.True(t, blankLineRule.Enabled)
+		assert.True(t, *blankLineRule.Enabled)
 		assert.Equal(t, "warning", blankLineRule.Severity)
 		assert.Nil(t, blankLineRule.Options)
 
 		caseRule := cfg.Rules["block-label-case"]
-		assert.False(t, caseRule.Enabled)
+		assert.False(t, *caseRule.Enabled)
 		assert.Equal(t, "error", caseRule.Severity)
 		assert.Equal(t, "snake", caseRule.Options["case"])
 	})
@@ -1184,7 +1184,7 @@ resource "aws_instance" "MyServer" { }
 			// Create engine with block-label-case rule enabled
 			engine := New(&Config{
 				Rules: map[string]RuleConfig{
-					"style.block-label-case": {Enabled: true},
+					"style.block-label-case": {Enabled: config.BoolPtr(true)},
 				},
 			})
 

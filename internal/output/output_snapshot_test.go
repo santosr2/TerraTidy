@@ -130,32 +130,23 @@ func TestOutput_TextSnapshot(t *testing.T) {
 	tests := []struct {
 		name     string
 		findings []sdk.Finding
-		verbose  bool
 		golden   string
 	}{
 		{
 			name:     "empty findings",
 			findings: []sdk.Finding{},
-			verbose:  false,
 			golden:   "text_empty",
 		},
 		{
 			name:     "standard findings",
 			findings: snapshotFindings(),
-			verbose:  false,
 			golden:   "text_standard",
-		},
-		{
-			name:     "verbose findings",
-			findings: snapshotFindings(),
-			verbose:  true,
-			golden:   "text_verbose",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			formatter := &TextFormatter{Verbose: tt.verbose, Color: false}
+			formatter := &TextFormatter{Color: false}
 			var buf bytes.Buffer
 			err := formatter.Format(tt.findings, &buf)
 			require.NoError(t, err)

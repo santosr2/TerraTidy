@@ -49,13 +49,13 @@ Use --changed to only check files that have been modified in git.`,
 		// Load configuration
 		cfg, err := loadConfig()
 		if err != nil {
-			return err
+			return err // Already wrapped as ExitConfig by loadConfig
 		}
 
 		// Get target files (respecting --changed flag and excludes)
 		files, err := getTargetFilesWithExcludes(args, changed, cfg.Exclude, cfg)
 		if err != nil {
-			return fmt.Errorf("finding files: %w", err)
+			return sdk.NewInternalError(fmt.Errorf("finding files: %w", err))
 		}
 
 		if len(files) == 0 {
@@ -81,7 +81,7 @@ Use --changed to only check files that have been modified in git.`,
 		if policyShowJSON {
 			jsonData, jsonErr := engine.GetInput(files)
 			if jsonErr != nil {
-				return fmt.Errorf("generating input JSON: %w", jsonErr)
+				return sdk.NewInternalError(fmt.Errorf("generating input JSON: %w", jsonErr))
 			}
 			fmt.Println(string(jsonData))
 			return nil
@@ -102,7 +102,7 @@ Use --changed to only check files that have been modified in git.`,
 		ctx := context.Background()
 		findings, err := engine.Run(ctx, files)
 		if err != nil {
-			return fmt.Errorf("policy check failed: %w", err)
+			return sdk.NewInternalError(fmt.Errorf("policy check failed: %w", err))
 		}
 
 		// Apply severity threshold filtering

@@ -40,13 +40,13 @@ Use --changed to only lint files that have been modified in git.`,
 		// Load configuration
 		cfg, err := loadConfig()
 		if err != nil {
-			return err
+			return err // Already wrapped as ExitConfig by loadConfig
 		}
 
 		// Get target files (respecting --changed flag and excludes)
 		files, err := getTargetFilesWithExcludes(args, changed, cfg.Exclude, cfg)
 		if err != nil {
-			return fmt.Errorf("finding files: %w", err)
+			return sdk.NewInternalError(fmt.Errorf("finding files: %w", err))
 		}
 
 		if len(files) == 0 {
@@ -57,7 +57,7 @@ Use --changed to only lint files that have been modified in git.`,
 		// Load plugin rules
 		pluginRules, err := loadPluginRules(cfg)
 		if err != nil {
-			return err
+			return sdk.NewConfigError(fmt.Errorf("loading plugins: %w", err))
 		}
 
 		// Build lint config from terratidy config, then apply CLI overrides
@@ -76,7 +76,7 @@ Use --changed to only lint files that have been modified in git.`,
 			lintCfg.Rules = make(map[string]lint.RuleConfig)
 			for _, rule := range lintRules {
 				lintCfg.Rules[rule] = lint.RuleConfig{
-					Enabled:  true,
+					Enabled:  config.BoolPtr(true),
 					Severity: "warning",
 				}
 			}
@@ -98,7 +98,7 @@ Use --changed to only lint files that have been modified in git.`,
 
 		findings, err := engine.Run(context.Background(), files)
 		if err != nil {
-			return fmt.Errorf("running linter: %w", err)
+			return sdk.NewInternalError(fmt.Errorf("running linter: %w", err))
 		}
 
 		// Apply severity threshold filtering

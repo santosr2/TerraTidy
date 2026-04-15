@@ -122,9 +122,9 @@ engines:
 	assert.Equal(t, 1, exitErr.Code, "exit code should be 1 for findings")
 }
 
-// TestExitCode_Error verifies that config parse failures return a plain error (not ExitError).
-// Config loading errors are not findings, so they should not use the ExitError mechanism.
-func TestExitCode_Error(t *testing.T) {
+// TestExitCode_ConfigError verifies that config parse failures return ExitError with code 2.
+// Config errors are distinct from findings (code 1) and internal errors (code 3).
+func TestExitCode_ConfigError(t *testing.T) {
 	resetCheckGlobals(t)
 
 	// Create a directory with invalid config to trigger an error.
@@ -152,9 +152,10 @@ engines:
 	// Should return an error (config parse failure).
 	require.Error(t, err, "check command should fail with invalid config")
 
-	// Config errors should NOT be wrapped as ExitError (they are not findings).
+	// Config errors should be wrapped as ExitError with code 2.
 	var exitErr *sdk.ExitError
-	assert.False(t, errors.As(err, &exitErr), "config error should not be an ExitError")
+	require.True(t, errors.As(err, &exitErr), "config error should be an ExitError")
+	assert.Equal(t, sdk.ExitConfig, exitErr.Code, "config error should have exit code 2")
 
 	// Verify it's a config loading error.
 	assert.Contains(t, err.Error(), "loading config", "error should mention config loading")
@@ -209,6 +210,41 @@ engines:
 	// The file has two blank lines between blocks which triggers the blank-line-between-blocks
 	// style rule (a warning), but warnings should not cause exit failure.
 	assert.NoError(t, err, "warnings should not cause exit 1")
+}
+
+// TestExitCode_InternalError verifies that internal errors (like invalid formatter)
+// return ExitError with code 3 (ExitInternal).
+func TestExitCode_InternalError(t *testing.T) {
+	resetCheckGlobals(t)
+
+	// Create a valid Terraform file so we pass config/file discovery.
+	dir := t.TempDir()
+	content := `resource "aws_instance" "example" {
+  ami = "ami-123"
+}
+`
+	tfFile := filepath.Join(dir, "main.tf")
+	require.NoError(t, os.WriteFile(tfFile, []byte(content), 0o644))
+
+	// Use an invalid format to trigger internal error during output.
+	// This bypasses config loading and engine execution, failing only at output.
+	format = "invalidformat"
+	cfgFile = ""
+	changed = false
+
+	// Run the check command (skip all engines to reach output faster).
+	rootCmd.SetArgs([]string{"check", "--skip-fmt", "--skip-style", "--skip-lint", "--skip-policy", dir})
+	err := rootCmd.Execute()
+
+	// Should return ExitError with code 3 (ExitInternal).
+	require.Error(t, err, "check command should fail with invalid format")
+	var exitErr *sdk.ExitError
+	require.True(t, errors.As(err, &exitErr), "internal error should be an ExitError, got: %v", err)
+	assert.Equal(t, sdk.ExitInternal, exitErr.Code, "internal error should have exit code 3")
+
+	// Verify the error message mentions the formatter and the bad format value.
+	assert.Contains(t, err.Error(), "unsupported output format", "error should mention unsupported format")
+	assert.Contains(t, err.Error(), "invalidformat", "error should include the bad format value")
 }
 
 // TestExitCode_SeverityThreshold_Error verifies that --severity-threshold=error

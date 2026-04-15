@@ -13,6 +13,8 @@ import (
 	"github.com/hashicorp/hcl/v2/hclparse"
 	"github.com/hashicorp/hcl/v2/hclsyntax"
 	"github.com/open-policy-agent/opa/v1/rego"
+	"github.com/open-policy-agent/opa/v1/storage"
+	"github.com/open-policy-agent/opa/v1/storage/inmem"
 	"github.com/santosr2/TerraTidy/internal/annotations"
 	"github.com/santosr2/TerraTidy/internal/config"
 	"github.com/santosr2/TerraTidy/pkg/sdk"
@@ -35,9 +37,18 @@ type Config struct {
 
 // RuleConfig holds configuration for a single policy rule
 type RuleConfig struct {
-	Enabled  bool
+	Enabled  *bool
 	Severity string
 	Options  map[string]any
+}
+
+// IsEnabled returns whether the rule is enabled.
+// If Enabled is nil (not explicitly set), returns defaultEnabled.
+func (r RuleConfig) IsEnabled(defaultEnabled bool) bool {
+	if r.Enabled == nil {
+		return defaultEnabled
+	}
+	return *r.Enabled
 }
 
 // ConfigFromEngine creates a policy.Config from the config package's PolicyEngineConfig.
@@ -112,6 +123,12 @@ func (e *Engine) Run(ctx context.Context, files []string) ([]sdk.Finding, error)
 		return allFindings, nil
 	}
 
+	// Load data files (external data accessible via data.<key> in Rego)
+	dataStore, err := e.loadDataFiles()
+	if err != nil {
+		return nil, fmt.Errorf("loading data files: %w", err)
+	}
+
 	// Group files by directory for module-level analysis
 	dirFiles := e.groupFilesByDirectory(files)
 
@@ -136,7 +153,7 @@ func (e *Engine) Run(ctx context.Context, files []string) ([]sdk.Finding, error)
 		}
 
 		// Evaluate policies against the module data
-		findings, err := e.evaluatePolicies(ctx, policies, moduleData, dir)
+		findings, err := e.evaluatePolicies(ctx, policies, moduleData, dir, dataStore)
 		if err != nil {
 			return nil, fmt.Errorf("evaluating policies for %s: %w", dir, err)
 		}
@@ -192,6 +209,40 @@ func (e *Engine) loadPolicies() ([]string, error) {
 	}
 
 	return policies, nil
+}
+
+// loadDataFiles loads JSON data files and returns an OPA store.
+// Data files are merged into a single store. Later files override earlier ones.
+// Data is accessible in Rego policies via `data.<key>`.
+func (e *Engine) loadDataFiles() (storage.Store, error) {
+	mergedData := make(map[string]any)
+
+	for _, file := range e.config.DataFiles {
+		content, err := os.ReadFile(file)
+		if err != nil {
+			if os.IsNotExist(err) {
+				continue
+			}
+			return nil, fmt.Errorf("reading data file %s: %w", file, err)
+		}
+
+		var data map[string]any
+		if err := json.Unmarshal(content, &data); err != nil {
+			return nil, fmt.Errorf("parsing data file %s: %w", file, err)
+		}
+
+		// Merge data (later files override earlier ones)
+		for k, v := range data {
+			mergedData[k] = v
+		}
+	}
+
+	// Return nil store if no data files configured (avoids empty store overhead)
+	if len(mergedData) == 0 {
+		return nil, nil
+	}
+
+	return inmem.NewFromObject(mergedData), nil
 }
 
 // parseModuleToJSON parses Terraform files and converts to JSON representation for OPA
@@ -375,6 +426,7 @@ type policyEvalContext struct {
 	ctx        context.Context
 	moduleData map[string]any
 	dir        string
+	dataStore  storage.Store // External data files loaded into OPA store
 }
 
 // evaluatePolicies evaluates all policies against the module data.
@@ -383,10 +435,16 @@ func (e *Engine) evaluatePolicies(
 	policies []string,
 	moduleData map[string]any,
 	dir string,
+	dataStore storage.Store,
 ) ([]sdk.Finding, error) {
 	var findings []sdk.Finding
 
-	evalCtx := &policyEvalContext{ctx: ctx, moduleData: moduleData, dir: dir}
+	evalCtx := &policyEvalContext{
+		ctx:        ctx,
+		moduleData: moduleData,
+		dir:        dir,
+		dataStore:  dataStore,
+	}
 
 	for _, policy := range policies {
 		// Prepare the policy once for both deny and warn queries
@@ -411,11 +469,19 @@ func (e *Engine) evaluatePolicyWithPrepare(evalCtx *policyEvalContext, policy st
 	}
 
 	for _, q := range queries {
-		r := rego.New(
+		// Build rego options
+		opts := []func(*rego.Rego){
 			rego.Query(q.query),
 			rego.Module("policy.rego", policy),
 			rego.Input(evalCtx.moduleData),
-		)
+		}
+
+		// Add data store if configured (external data files)
+		if evalCtx.dataStore != nil {
+			opts = append(opts, rego.Store(evalCtx.dataStore))
+		}
+
+		r := rego.New(opts...)
 
 		rs, err := r.Eval(evalCtx.ctx)
 		if err != nil {
@@ -556,11 +622,43 @@ deny contains msg if {
 
 import rego.v1
 
+# Helper: check if port 22 is within the ingress rule's port range
+allows_ssh(rule) if {
+    from_port := to_number(rule.from_port)
+    to_port := to_number(rule.to_port)
+    from_port <= 22
+    to_port >= 22
+}
+
+# Helper: check if ingress allows world access to SSH
+# Note: cidr_blocks is stored as raw HCL text like ["0.0.0.0/0"]
+# We check for the quoted value to avoid false positives (e.g., "10.0.0.0/0")
+public_ssh_ingress(ingress) if {
+    contains(ingress.cidr_blocks, "\"0.0.0.0/0\"")
+    allows_ssh(ingress)
+}
+
+# Single ingress block (parsed as object)
 deny contains msg if {
     some resource in input.resources
     resource.type == "aws_security_group"
-    contains(resource.ingress, "0.0.0.0/0")
-    contains(resource.ingress, "22")
+    is_object(resource.ingress)
+    public_ssh_ingress(resource.ingress)
+    msg := {
+        "msg": sprintf("Security group %s allows SSH from 0.0.0.0/0", [resource.name]),
+        "rule": "no-public-ssh",
+        "severity": "error",
+        "file": resource._file
+    }
+}
+
+# Multiple ingress blocks (parsed as array)
+deny contains msg if {
+    some resource in input.resources
+    resource.type == "aws_security_group"
+    is_array(resource.ingress)
+    some ingress in resource.ingress
+    public_ssh_ingress(ingress)
     msg := {
         "msg": sprintf("Security group %s allows SSH from 0.0.0.0/0", [resource.name]),
         "rule": "no-public-ssh",

@@ -151,9 +151,14 @@ dockers:
     build_flag_templates:
       - "--label=org.opencontainers.image.created={{.Date}}"
       - "--label=org.opencontainers.image.title={{.ProjectName}}"
+      - "--label=org.opencontainers.image.description=Single-binary Terraform/Terragrunt quality platform"
       - "--label=org.opencontainers.image.revision={{.FullCommit}}"
       - "--label=org.opencontainers.image.version={{.Version}}"
       - "--label=org.opencontainers.image.source=https://github.com/santosr2/TerraTidy"
+      - "--label=org.opencontainers.image.url=https://github.com/santosr2/TerraTidy"
+      - "--label=org.opencontainers.image.documentation=https://santosr2.github.io/TerraTidy/"
+      - "--label=org.opencontainers.image.licenses=MIT"
+      - "--label=org.opencontainers.image.vendor=santosr2"
 
   # Docker images for pre-releases (tag-specific only)
   # Note: :latest always points to the most recent stable release
@@ -165,6 +170,11 @@ dockers:
     build_flag_templates:
       - "--label=org.opencontainers.image.created={{.Date}}"
       - "--label=org.opencontainers.image.title={{.ProjectName}}"
+      - "--label=org.opencontainers.image.description=Single-binary Terraform/Terragrunt quality platform"
       - "--label=org.opencontainers.image.revision={{.FullCommit}}"
       - "--label=org.opencontainers.image.version={{.Version}}"
       - "--label=org.opencontainers.image.source=https://github.com/santosr2/TerraTidy"
+      - "--label=org.opencontainers.image.url=https://github.com/santosr2/TerraTidy"
+      - "--label=org.opencontainers.image.documentation=https://santosr2.github.io/TerraTidy/"
+      - "--label=org.opencontainers.image.licenses=MIT"
+      - "--label=org.opencontainers.image.vendor=santosr2"

@@ -120,6 +120,16 @@ fi
 
 # Output format
 FORMAT="${INPUT_FORMAT:-text}"
+
+# When fail-on-warning is enabled with non-JSON formats, we need to run twice:
+# once with JSON to get accurate warning counts, then with user's format for display.
+NEEDS_JSON_FOR_WARNINGS=false
+if [ "${INPUT_FAIL_ON_WARNING:-false}" = "true" ]; then
+  if [ "$FORMAT" != "json" ] && [ "$FORMAT" != "json-compact" ]; then
+    NEEDS_JSON_FOR_WARNINGS=true
+  fi
+fi
+
 CMD+=(--format "$FORMAT")
 
 # SARIF output file
@@ -135,6 +145,32 @@ fi
 # Run TerraTidy and capture output
 # Use array expansion instead of eval for safety
 _TMPDIR="${RUNNER_TEMP:-/tmp}"
+
+# Pre-run: If fail-on-warning is enabled with non-JSON format, run with JSON first
+# to get accurate warning/error counts for the fail decision.
+JSON_COUNTS_OUTPUT=""
+JSON_PRERUN_EXIT=0
+if [ "$NEEDS_JSON_FOR_WARNINGS" = "true" ]; then
+  # Build JSON command (same as CMD but with --format json)
+  JSON_CMD=("${CMD[@]}")
+  # Replace the format argument (--format must exist and have a value after it)
+  for i in "${!JSON_CMD[@]}"; do
+    if [ "${JSON_CMD[$i]}" = "--format" ]; then
+      JSON_CMD[i+1]="json"
+      break
+    fi
+  done
+  set +e
+  JSON_COUNTS_OUTPUT=$("${JSON_CMD[@]}" 2>"$_TMPDIR/terratidy-prerun-stderr.txt")
+  JSON_PRERUN_EXIT=$?
+  set -e
+  # Log pre-run errors as warning (pre-run failure degrades to exit-code fallback)
+  if [ -s "$_TMPDIR/terratidy-prerun-stderr.txt" ]; then
+    echo "::warning::TerraTidy pre-run for warning counts produced stderr:"
+    cat "$_TMPDIR/terratidy-prerun-stderr.txt"
+  fi
+fi
+
 set +e
 if [ "$FORMAT" = "sarif" ]; then
   "${CMD[@]}" > "$SARIF_FILE" 2>"$_TMPDIR/terratidy-stderr.txt"
@@ -155,15 +191,19 @@ set -e
 echo "$OUTPUT"
 
 # Parse findings counts from JSON output.
-# Accurate counts are only available for json/json-compact formats.
-# For other formats, findings-count reflects the exit code (0 = clean,
-# non-zero = issues found) and errors-count/warnings-count are estimates.
-# Note: For non-JSON formats, warnings-count is always 0. Use json or json-compact
-# format if you need accurate warning counts for fail-on-warning.
+# Accurate counts are only available for json/json-compact formats, or when
+# fail-on-warning is enabled (pre-run provides accurate counts for any format).
+# Otherwise, fall back to exit code based estimates.
 if [ "$FORMAT" = "json" ] || [ "$FORMAT" = "json-compact" ]; then
-  FINDINGS=$(echo "$OUTPUT" | jq -r '.summary.total // 0')
-  ERRORS=$(echo "$OUTPUT" | jq -r '.summary.errors // 0')
-  WARNINGS=$(echo "$OUTPUT" | jq -r '.summary.warnings // 0')
+  FINDINGS=$(echo "$OUTPUT" | jq -r '.summary.total // 0' 2>/dev/null || echo 0)
+  ERRORS=$(echo "$OUTPUT" | jq -r '.summary.errors // 0' 2>/dev/null || echo 0)
+  WARNINGS=$(echo "$OUTPUT" | jq -r '.summary.warnings // 0' 2>/dev/null || echo 0)
+elif [ -n "$JSON_COUNTS_OUTPUT" ] && [ "$JSON_PRERUN_EXIT" -le 1 ]; then
+  # Use counts from pre-run JSON output (fail-on-warning with non-JSON format)
+  # Trust exit 0 (clean) and 1 (findings exist); fall back to estimates on 2 (config) or 3 (internal)
+  FINDINGS=$(echo "$JSON_COUNTS_OUTPUT" | jq -r '.summary.total // 0' 2>/dev/null || echo 0)
+  ERRORS=$(echo "$JSON_COUNTS_OUTPUT" | jq -r '.summary.errors // 0' 2>/dev/null || echo 0)
+  WARNINGS=$(echo "$JSON_COUNTS_OUTPUT" | jq -r '.summary.warnings // 0' 2>/dev/null || echo 0)
 else
   FINDINGS=$EXIT_CODE
   ERRORS=0

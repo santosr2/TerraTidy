@@ -93,14 +93,15 @@ The LSP server automatically sends diagnostics when you open, edit, or save a fi
 - In the Problems panel (`Cmd+Shift+M` / `Ctrl+Shift+M`)
 - With detailed messages on hover
 
-The server runs style and lint engines. Rule overrides from `.terratidy.yaml` are respected:
+The server runs style and lint engines. Rule configuration from `.terratidy.yaml` is respected:
 
 ```yaml
-overrides:
-  rules:
-    style.resource-name-matches-type:
-      enabled: true
-      severity: warning
+engines:
+  style:
+    rules:
+      style.resource-name-matches-type:
+        enabled: true
+        severity: warning
 ```
 
 ### Formatting

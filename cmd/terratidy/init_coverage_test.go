@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -416,7 +417,12 @@ func TestRunInit_ForceOverwrite(t *testing.T) {
 }
 
 // TestRunInit_WriteFailure verifies that init returns ExitInternal on write failure.
+// Skipped on Windows because os.Chmod doesn't restrict write permissions the same way.
 func TestRunInit_WriteFailure(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping on Windows: os.Chmod doesn't restrict write permissions")
+	}
+
 	dir := t.TempDir()
 	oldWd, _ := os.Getwd()
 	require.NoError(t, os.Chdir(dir))

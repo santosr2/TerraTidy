@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -989,7 +990,13 @@ func TestEngine_LoadDataFiles_InvalidJSON(t *testing.T) {
 	assert.Contains(t, err.Error(), "parsing data file")
 }
 
+// TestEngine_LoadDataFiles_ReadError tests that read errors are properly reported.
+// Skipped on Windows because os.Chmod doesn't restrict read permissions the same way.
 func TestEngine_LoadDataFiles_ReadError(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping on Windows: os.Chmod doesn't restrict read permissions")
+	}
+
 	tmpDir := t.TempDir()
 	dataFile := filepath.Join(tmpDir, "unreadable.json")
 	require.NoError(t, os.WriteFile(dataFile, []byte(`{"key": "value"}`), 0o644))

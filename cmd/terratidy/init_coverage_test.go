@@ -362,3 +362,102 @@ func TestReadYesNo_Error(t *testing.T) {
 	require.Error(t, err)
 	assert.ErrorIs(t, err, io.EOF)
 }
+
+// TestRunInit_ConfigExists verifies that init returns ExitConfig when config exists without --force.
+func TestRunInit_ConfigExists(t *testing.T) {
+	dir := t.TempDir()
+	oldWd, _ := os.Getwd()
+	require.NoError(t, os.Chdir(dir))
+	defer func() { _ = os.Chdir(oldWd) }()
+
+	// Create existing config file
+	require.NoError(t, os.WriteFile(".terratidy.yaml", []byte("version: 1"), 0o600))
+
+	// Reset flags
+	initForce = false
+	initInteractive = false
+	initSplit = false
+	initMonorepo = false
+
+	err := runInit(nil, nil)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "already exists")
+
+	var exitErr *sdk.ExitError
+	require.True(t, errors.As(err, &exitErr), "should be ExitError")
+	assert.Equal(t, sdk.ExitConfig, exitErr.Code, "should return ExitConfig (code 2)")
+}
+
+// TestRunInit_ForceOverwrite verifies that init with --force overwrites existing config.
+func TestRunInit_ForceOverwrite(t *testing.T) {
+	dir := t.TempDir()
+	oldWd, _ := os.Getwd()
+	require.NoError(t, os.Chdir(dir))
+	defer func() { _ = os.Chdir(oldWd) }()
+
+	// Create existing config file
+	require.NoError(t, os.WriteFile(".terratidy.yaml", []byte("# old"), 0o600))
+
+	// Reset flags and set --force
+	initForce = true
+	initInteractive = false
+	initSplit = false
+	initMonorepo = false
+	defer func() { initForce = false }()
+
+	err := runInit(nil, nil)
+	require.NoError(t, err)
+
+	// Verify file was overwritten
+	content, err := os.ReadFile(".terratidy.yaml")
+	require.NoError(t, err)
+	assert.Contains(t, string(content), "version: 1")
+	assert.NotContains(t, string(content), "# old")
+}
+
+// TestRunInit_WriteFailure verifies that init returns ExitInternal on write failure.
+func TestRunInit_WriteFailure(t *testing.T) {
+	dir := t.TempDir()
+	oldWd, _ := os.Getwd()
+	require.NoError(t, os.Chdir(dir))
+	defer func() { _ = os.Chdir(oldWd) }()
+
+	// Make directory read-only to cause write failure
+	require.NoError(t, os.Chmod(dir, 0o500))
+	defer func() { _ = os.Chmod(dir, 0o700) }()
+
+	// Reset flags
+	initForce = false
+	initInteractive = false
+	initSplit = false
+	initMonorepo = false
+
+	err := runInit(nil, nil)
+	require.Error(t, err)
+
+	var exitErr *sdk.ExitError
+	require.True(t, errors.As(err, &exitErr), "should be ExitError")
+	assert.Equal(t, sdk.ExitInternal, exitErr.Code, "write failure should return ExitInternal (code 3)")
+}
+
+// TestRunInit_Monorepo verifies that init --monorepo generates monorepo config.
+func TestRunInit_Monorepo(t *testing.T) {
+	dir := t.TempDir()
+	oldWd, _ := os.Getwd()
+	require.NoError(t, os.Chdir(dir))
+	defer func() { _ = os.Chdir(oldWd) }()
+
+	// Reset flags and set --monorepo
+	initForce = false
+	initInteractive = false
+	initSplit = false
+	initMonorepo = true
+	defer func() { initMonorepo = false }()
+
+	err := runInit(nil, nil)
+	require.NoError(t, err)
+
+	content, err := os.ReadFile(".terratidy.yaml")
+	require.NoError(t, err)
+	assert.Contains(t, string(content), "version: 1")
+}

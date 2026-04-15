@@ -323,3 +323,97 @@ func TestBuildFmtConfig_BothFlagsOverride(t *testing.T) {
 	assert.False(t, result.Check, "CLI --check=false should override config check=true")
 	assert.False(t, result.Diff, "CLI --diff=false should override config diff=true")
 }
+
+// TestFmtCmd_ErrorPaths tests error handling in fmt command
+func TestFmtCmd_ErrorPaths(t *testing.T) {
+	t.Run("invalid config returns ExitConfig", func(t *testing.T) {
+		tmpDir := t.TempDir()
+
+		// Create invalid config
+		invalidConfig := "invalid: yaml: ["
+		require.NoError(t, os.WriteFile(filepath.Join(tmpDir, ".terratidy.yaml"), []byte(invalidConfig), 0o600))
+
+		oldWd, _ := os.Getwd()
+		require.NoError(t, os.Chdir(tmpDir))
+		defer func() { _ = os.Chdir(oldWd) }()
+
+		// Reset global flags
+		cfgFile = ""
+		changed = false
+		format = "text"
+		fmtCheck = false
+		fmtDiff = false
+		fmtAll = false
+
+		rootCmd.SetArgs([]string{"fmt", "."})
+		err := rootCmd.Execute()
+		require.Error(t, err)
+
+		var exitErr *sdk.ExitError
+		if errors.As(err, &exitErr) {
+			assert.Equal(t, sdk.ExitConfig, exitErr.Code, "invalid config should return ExitConfig")
+		}
+	})
+
+	t.Run("no files found", func(t *testing.T) {
+		emptyDir := t.TempDir()
+		changed = false
+		format = "text"
+		fmtCheck = false
+		fmtDiff = false
+		fmtAll = false
+
+		rootCmd.SetArgs([]string{"fmt", emptyDir})
+		err := rootCmd.Execute()
+		assert.NoError(t, err)
+	})
+
+	t.Run("fmt with --all flag", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		content := `resource "null_resource" "test" {
+  triggers = {
+    a = "b"
+  }
+}
+`
+		require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "main.tf"), []byte(content), 0o644))
+
+		// Reset flags
+		for _, name := range []string{"check", "diff", "all"} {
+			if f := fmtCmd.Flags().Lookup(name); f != nil {
+				f.Changed = false
+			}
+		}
+
+		changed = false
+		format = "text"
+		fmtCheck = false
+		fmtDiff = false
+		fmtAll = false
+
+		rootCmd.SetArgs([]string{"fmt", "--all", tmpDir})
+		err := rootCmd.Execute()
+		// May have findings but should not fail
+		_ = err
+	})
+
+	t.Run("fmt with changed flag", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		content := `resource "null_resource" "test" {}`
+		require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "main.tf"), []byte(content), 0o644))
+
+		// Reset flags
+		changed = true
+		format = "text"
+		fmtCheck = false
+		fmtDiff = false
+		fmtAll = false
+
+		rootCmd.SetArgs([]string{"fmt", "--changed", tmpDir})
+		err := rootCmd.Execute()
+		// Should handle gracefully even if not a git repo
+		_ = err
+
+		changed = false // Reset
+	})
+}

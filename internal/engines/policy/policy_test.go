@@ -989,6 +989,24 @@ func TestEngine_LoadDataFiles_InvalidJSON(t *testing.T) {
 	assert.Contains(t, err.Error(), "parsing data file")
 }
 
+func TestEngine_LoadDataFiles_ReadError(t *testing.T) {
+	tmpDir := t.TempDir()
+	dataFile := filepath.Join(tmpDir, "unreadable.json")
+	require.NoError(t, os.WriteFile(dataFile, []byte(`{"key": "value"}`), 0o644))
+
+	// Make file unreadable
+	require.NoError(t, os.Chmod(dataFile, 0o000))
+	defer func() { _ = os.Chmod(dataFile, 0o644) }()
+
+	engine := New(&Config{
+		DataFiles: []string{dataFile},
+	})
+
+	_, err := engine.loadDataFiles()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "reading data file")
+}
+
 func TestEngine_LoadDataFiles_ValidJSON(t *testing.T) {
 	tmpDir := t.TempDir()
 	dataFile := filepath.Join(tmpDir, "data.json")

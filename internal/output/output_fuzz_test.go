@@ -189,12 +189,12 @@ func FuzzOutputText(f *testing.F) {
 		var buf bytes.Buffer
 
 		// Test with color
-		formatter := &TextFormatter{Verbose: true, Color: true}
+		formatter := &TextFormatter{Color: true}
 		_ = formatter.Format(findings, &buf)
 
 		// Test without color
 		buf.Reset()
-		formatter = &TextFormatter{Verbose: false, Color: false}
+		formatter = &TextFormatter{Color: false}
 		_ = formatter.Format(findings, &buf)
 	})
 }

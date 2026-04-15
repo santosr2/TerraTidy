@@ -80,7 +80,7 @@ func BenchmarkJSONOutput(b *testing.B) {
 
 func BenchmarkTextOutput(b *testing.B) {
 	findings := generateFindings(1000)
-	formatter := &TextFormatter{Verbose: true}
+	formatter := &TextFormatter{}
 	var buf bytes.Buffer
 
 	b.ResetTimer()
@@ -156,7 +156,7 @@ func BenchmarkOutputManyFindings(b *testing.B) {
 		name      string
 		formatter Formatter
 	}{
-		{"Text", &TextFormatter{Verbose: true}},
+		{"Text", &TextFormatter{}},
 		{"JSON", &JSONFormatter{Pretty: true}},
 		{"SARIF", &SARIFFormatter{Version: "1.0.0"}},
 		{"JUnit", &JUnitFormatter{Version: "1.0.0"}},

@@ -46,14 +46,15 @@ resource "aws_instance" "db" {
 **Configuration Example:**
 
 ```yaml
-overrides:
-  rules:
-    style.blank-line-between-blocks:
-      enabled: true
-      config:
-        options:
-          min_lines: 1
-          max_lines: 2  # Allow up to 2 blank lines
+engines:
+  style:
+    rules:
+      style.blank-line-between-blocks:
+        enabled: true
+        config:
+          options:
+            min_lines: 1
+            max_lines: 2  # Allow up to 2 blank lines
 ```
 
 ### no-empty-blocks
@@ -148,13 +149,14 @@ variable "my_variable" { }
 **Configuration Example:**
 
 ```yaml
-overrides:
-  rules:
-    style.variable-naming:
-      enabled: true
-      config:
-        options:
-          case: camelCase  # Allow camelCase instead of snake_case
+engines:
+  style:
+    rules:
+      style.variable-naming:
+        enabled: true
+        config:
+          options:
+            case: camelCase  # Allow camelCase instead of snake_case
 ```
 
 ### output-naming
@@ -1094,7 +1096,7 @@ engines:
 
 1. Inline comments (`# terratidy:ignore:rule-name`)
 2. File-level comments (`# terratidy:ignore-file:rule-name`)
-3. Override rules in config (`overrides.rules`)
+3. Rule config (`engines.<engine>.rules`)
 4. Profile engine settings
 5. Base config engine settings
 

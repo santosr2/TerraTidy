@@ -116,15 +116,9 @@ Summary: 4 total issue(s)
 
   Errors:   1
   Warnings: 3
-
-Run individual commands for details:
-  terratidy fmt --check
-  terratidy style
-  terratidy lint
-  terratidy policy
 ```
 
-With `--parallel` (`-p`), the output is more compact:
+With `--parallel`, the output is more compact:
 
 ```text
 Checking 3 files...
@@ -143,12 +137,6 @@ Summary: 4 total issue(s)
 
   Errors:   1
   Warnings: 3
-
-Run individual commands for details:
-  terratidy fmt --check
-  terratidy style
-  terratidy lint
-  terratidy policy
 ```
 
 ### 3. Auto-fix Issues
@@ -200,7 +188,7 @@ These flags are specific to `terratidy check`:
 
 | Flag                 | Description                  |
 | -------------------- | ---------------------------- |
-| `--parallel` / `-p`  | Run engines in parallel      |
+| `--parallel`         | Run engines in parallel      |
 | `--skip-fmt`         | Skip formatting checks       |
 | `--skip-style`       | Skip style checks            |
 | `--skip-lint`        | Skip linting checks          |

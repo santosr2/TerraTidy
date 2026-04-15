@@ -227,6 +227,46 @@ For large projects:
 
 Run checks manually when needed.
 
+## Versioning
+
+The VS Code extension version is managed independently from the main TerraTidy
+version to comply with VS Code Marketplace requirements.
+
+### Version Scheme
+
+VS Code Marketplace only supports numeric versions (X.Y.Z) without semver
+pre-release suffixes like `-alpha.4`. The extension is published alongside
+each TerraTidy CLI release but uses a separate version number:
+
+| Component | Rule |
+|-----------|------|
+| major.minor | Matches TerraTidy CLI major.minor |
+| patch | Incremented manually via `mise run vscode:bump:patch` before each publish |
+| Pre-release | Indicated via `--pre-release` flag, not version string |
+
+### Version Mapping
+
+| TerraTidy CLI | VS Code Extension | Marketplace Status |
+|---------------|-------------------|-------------------|
+| 0.2.0-alpha.4 | 0.2.0 | Pre-release |
+| 0.2.0-alpha.5 | 0.2.1 | Pre-release |
+| 0.2.0 | 0.2.2 | Stable |
+| 0.3.0-alpha.1 | 0.3.0 | Pre-release |
+
+### Installing Pre-release Versions
+
+To install pre-release versions from the Marketplace:
+
+1. Open the TerraTidy extension page in VS Code
+2. Click the dropdown arrow next to "Install"
+3. Select "Install Pre-Release Version"
+
+Or via command line:
+
+```bash
+code --install-extension santosr2.vscode-terratidy --pre-release
+```
+
 ## Limitations
 
 ### Engine Selection for Diagnostics

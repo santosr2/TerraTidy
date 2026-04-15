@@ -187,10 +187,11 @@ variable "temp_var" { type = string } # terratidy:ignore:lint.terraform-typed-va
 Or disable globally in configuration:
 
 ```yaml
-overrides:
-  rules:
-    lint.terraform-unused-declarations:
-      enabled: false
+engines:
+  lint:
+    rules:
+      lint.terraform-unused-declarations:
+        enabled: false
 ```
 
 ## License Note

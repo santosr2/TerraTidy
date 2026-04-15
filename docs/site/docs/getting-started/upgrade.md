@@ -6,8 +6,8 @@ How to upgrade TerraTidy between versions.
 
 ```bash
 terratidy version
-terratidy version --short   # Just the version number
-terratidy version --json    # Machine-readable
+terratidy version --short        # Just the version number
+terratidy version --format json  # Machine-readable
 ```
 
 ## Upgrading
@@ -70,6 +70,74 @@ The policy engine uses OPA v1.15.0 with Rego v1 syntax. Policies must use
 `import rego.v1` and the `contains`/`if` keywords.
 
 ## Breaking Changes
+
+### v0.2.0-alpha.5: Distinct Exit Codes
+
+Exit codes now distinguish between different error types:
+
+| Code | Before | After |
+|------|--------|-------|
+| `0`  | Success | Success |
+| `1`  | All errors | Findings found only |
+| `2`  | N/A | Configuration errors |
+| `3`  | N/A | Internal errors |
+
+**Migration:** If your CI/CD scripts check for non-zero exit codes, update them to handle
+the new codes appropriately:
+
+```bash
+# Before: "if exit != 0 then fail"
+# After: distinguish error types
+terratidy check
+case $? in
+  0) echo "Pass" ;;
+  1) echo "Findings found - fail the build" ;;
+  2) echo "Config error - fail the build" ;;
+  3) echo "Internal error - fail the build" ;;
+esac
+```
+
+Most scripts that just check for non-zero will still work correctly.
+
+### v0.2.0-alpha.5: CLI Flag Shorthand Reassignments
+
+Short flags have been reassigned to more commonly used global flags:
+
+| Short | Before | After |
+|-------|--------|-------|
+| `-p`  | `check --parallel` | `--profile` (global) |
+| `-f`  | `init --force` | `--format` (global) |
+| `-c`  | N/A | `--config` (global) |
+
+**Migration:** Update any scripts using the old shorthands:
+
+```bash
+# Before
+terratidy check -p           # Meant --parallel
+terratidy init -f            # Meant --force
+
+# After
+terratidy check --parallel   # Use long form
+terratidy init --force       # Use long form
+```
+
+### v0.2.0-alpha.5: Version Command JSON Output
+
+The `version --json` flag has been replaced with `version --format json`:
+
+```bash
+# Before
+terratidy version --json
+
+# After
+terratidy version --format json
+```
+
+JSON field names changed to snake_case for consistency:
+
+| Before | After |
+|--------|-------|
+| `goVersion` | `go_version` |
 
 ### Pre-release to Stable
 

@@ -60,14 +60,13 @@ profiles:
         enabled: true
       style:
         enabled: true
+        rules:
+          style.block-label-case:
+            severity: error
       lint:
         enabled: true
       policy:
         enabled: true
-    overrides:
-      rules:
-        style.block-label-case:
-          severity: error
 ```
 
 ## Using Profiles
@@ -147,10 +146,10 @@ profiles:
     engines:
       policy:
         enabled: true
-    overrides:
-      rules:
-        style.block-label-case:
-          severity: error
+      style:
+        rules:
+          style.block-label-case:
+            severity: error
 ```
 
 Child profile settings take precedence over parent profile settings.
@@ -229,11 +228,10 @@ profiles:
         enabled: true
         policy_dirs:
           - ./policies/security
-    overrides:
-      rules:
-        security-group-unrestricted:
-          enabled: true
-          severity: error
+        rules:
+          policy.security-group-unrestricted:
+            enabled: true
+            severity: error
 ```
 
 ## Team Profiles

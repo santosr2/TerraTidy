@@ -1047,12 +1047,12 @@ resource "aws_instance" "web" {
 
 ## Multi-Pass Fixing
 
-When running with `--fix`, the style engine applies fixes in up to **3 passes**.
+When running with `--fix`, the style engine applies fixes in up to **10 passes**.
 Some rules interact with each other (e.g., reordering attributes may create new spacing issues),
 so the engine re-runs all rules after applying fixes to catch any new violations introduced by the first pass.
 
 ```bash
-# Fix mode applies up to 3 passes automatically
+# Fix mode applies up to 10 passes automatically
 terratidy style --fix
 
 # Show what would change without modifying files
@@ -1067,6 +1067,29 @@ Each pass:
 4. If any fixes were applied, continues to the next pass
 
 The engine stops early if no fixes are applied in a pass, so most files only need 1-2 passes.
+
+### Comment Preservation
+
+Attribute ordering rules (like `for-each-count-first`, `tags-at-end`, `depends-on-order`) preserve leading
+comments when reordering attributes. Comments that appear on lines immediately before an attribute stay
+attached to that attribute after fixing:
+
+```hcl
+# Before fix
+resource "aws_instance" "web" {
+  ami = "ami-12345"
+  # This comment describes the instance type
+  instance_type = "t3.micro"
+  for_each = var.instances
+}
+
+# After fix (comment stays with instance_type)
+resource "aws_instance" "web" {
+  for_each = var.instances
+  ami = "ami-12345"
+  # This comment describes the instance type
+  instance_type = "t3.micro"
+}
 
 ## Configuration
 

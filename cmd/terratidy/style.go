@@ -6,6 +6,7 @@ import (
 
 	"github.com/santosr2/TerraTidy/internal/config"
 	"github.com/santosr2/TerraTidy/internal/engines/style"
+	"github.com/santosr2/TerraTidy/internal/output"
 	"github.com/santosr2/TerraTidy/pkg/sdk"
 	"github.com/spf13/cobra"
 )
@@ -81,22 +82,51 @@ Use --fix to automatically fix fixable style issues.`,
 			return sdk.NewInternalError(fmt.Errorf("checking style: %w", err))
 		}
 
-		// Apply severity threshold filtering
-		threshold := getEffectiveSeverityThreshold(cfg)
-		findings = filterFindingsBySeverity(findings, threshold)
+		// Extract diff findings BEFORE severity filtering (they have SeverityInfo and
+		// would be filtered out by the default "warning" threshold)
+		var diffFindings []sdk.Finding
+		var regularFindings []sdk.Finding
+		for _, finding := range findings {
+			if finding.Rule == "style.diff" {
+				diffFindings = append(diffFindings, finding)
+			} else {
+				regularFindings = append(regularFindings, finding)
+			}
+		}
 
-		// Output results using formatter
-		return outputStyleResults(findings, styleCheck, cfg)
+		// Apply severity threshold filtering to regular findings only
+		threshold := getEffectiveSeverityThreshold(cfg)
+		regularFindings = filterFindingsBySeverity(regularFindings, threshold)
+
+		// For text format, print diff findings with colored output (matching fmt.go pattern)
+		if !useStructuredOutput {
+			for _, finding := range diffFindings {
+				// Print blank line before diff, then colored diff (same pattern as fmt.go)
+				fmt.Println()
+				fmt.Print(output.FormatDiff(finding.Message, color))
+			}
+		}
+
+		// For structured output, include diff findings in the formatter output
+		// (but NOT in the count used for check-mode exit code)
+		outputFindings := regularFindings
+		if useStructuredOutput {
+			outputFindings = append(outputFindings, diffFindings...)
+		}
+
+		// Output results using formatter (regularFindings count for check-mode, not diff findings)
+		return outputStyleResults(outputFindings, regularFindings, styleCheck, cfg)
 	},
 }
 
-func outputStyleResults(findings []sdk.Finding, checkMode bool, cfg *config.Config) error {
-	if err := outputResults(findings, "Style check summary", cfg); err != nil {
+func outputStyleResults(outputFindings, checkModeFindings []sdk.Finding, checkMode bool, cfg *config.Config) error {
+	if err := outputResults(outputFindings, "Style check summary", cfg); err != nil {
 		return err
 	}
 
-	// In check mode, return findings error if any issues found
-	if checkMode && len(findings) > 0 {
+	// In check mode, return findings error if any style issues found
+	// (excludes style.diff findings which are informational)
+	if checkMode && len(checkModeFindings) > 0 {
 		return sdk.NewFindingsError()
 	}
 

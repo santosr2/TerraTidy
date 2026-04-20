@@ -301,18 +301,25 @@ terratidy style [paths...] [flags]
 
 **Flags:**
 
-| Flag      | Description                                 |
-| --------- | ------------------------------------------- |
-| `--fix`   | Auto-fix style issues                       |
-| `--check` | Check only, exit with error if issues found |
-| `--diff`  | Show diff of style changes                  |
+| Flag      | Description                                               |
+| --------- | --------------------------------------------------------- |
+| `--fix`   | Auto-fix style issues                                     |
+| `--check` | Check only, exit with error if issues found               |
+| `--diff`  | Show diff of style changes (preview mode or with `--fix`) |
 
 **`--diff` behavior:**
 
-When `--diff` is combined with `--fix`, the engine captures the original file content before
-applying fixes, then generates a unified diff showing all changes made:
+The `--diff` flag works in two modes:
+
+- **Preview mode** (`--diff` alone): Shows what would change without modifying files. The engine
+  applies fixes in memory and generates a unified diff, then restores the original file.
+- **With `--fix`** (`--fix --diff`): Shows the diff and applies the changes.
 
 ```bash
+# Preview what would change (file not modified)
+terratidy style --diff
+
+# Apply fixes and show diff
 terratidy style --fix --diff
 ```
 
@@ -325,7 +332,10 @@ terratidy style
 # Fix style issues
 terratidy style --fix
 
-# Preview fixes as unified diff
+# Preview what would change (without modifying files)
+terratidy style --diff
+
+# Apply fixes and show diff
 terratidy style --fix --diff
 
 # Check only (exit with error if issues found)

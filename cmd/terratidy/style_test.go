@@ -73,3 +73,142 @@ func TestStyleCmdExecution(t *testing.T) {
 		assert.NoError(t, err, "style on valid tf file should not error")
 	})
 }
+
+// TestStyleDiffFlag tests that --diff flag shows diff content in output
+func TestStyleDiffFlag(t *testing.T) {
+	// Save and restore globals
+	oldStyleFix := styleFix
+	oldStyleCheck := styleCheck
+	oldStyleDiff := styleDiff
+	oldChanged := changed
+	oldColor := color
+	oldFormat := format
+
+	resetStyleFlags := func() {
+		for _, name := range []string{"fix", "check", "diff"} {
+			if f := styleCmd.Flags().Lookup(name); f != nil {
+				f.Changed = false
+			}
+		}
+	}
+	resetStyleFlags()
+
+	t.Cleanup(func() {
+		styleFix = oldStyleFix
+		styleCheck = oldStyleCheck
+		styleDiff = oldStyleDiff
+		changed = oldChanged
+		color = oldColor
+		format = oldFormat
+		rootCmd.SetArgs(nil)
+		resetStyleFlags()
+	})
+
+	t.Run("diff flag shows preview without modifying file", func(t *testing.T) {
+		tmpDir := t.TempDir()
+
+		// Create file with fixable style issue (extra blank lines)
+		// The blank-lines rule fixes multiple consecutive blank lines
+		contentWithIssue := `resource "aws_instance" "test" {
+  ami = "ami-123"
+}
+
+
+resource "null_resource" "test2" {
+  triggers = {}
+}
+`
+		filePath := filepath.Join(tmpDir, "main.tf")
+		require.NoError(t, os.WriteFile(filePath, []byte(contentWithIssue), 0o644))
+
+		// Get original content for comparison
+		originalContent, err := os.ReadFile(filePath)
+		require.NoError(t, err)
+
+		// Reset flags
+		styleFix = false
+		styleCheck = false
+		styleDiff = false
+		changed = false
+		color = false
+		format = "text"
+
+		rootCmd.SetArgs([]string{"style", "--diff", tmpDir})
+		_ = rootCmd.Execute()
+
+		// Verify file was NOT modified (preview mode)
+		afterContent, err := os.ReadFile(filePath)
+		require.NoError(t, err)
+		assert.Equal(t, string(originalContent), string(afterContent), "File should not be modified in preview mode")
+	})
+
+	t.Run("diff and fix flags show diff and apply changes", func(t *testing.T) {
+		resetStyleFlags()
+		tmpDir := t.TempDir()
+
+		// Create file with fixable style issue (two blank lines between blocks)
+		contentWithIssue := `resource "aws_instance" "test" {
+  ami = "ami-123"
+}
+
+
+resource "null_resource" "test2" {
+  triggers = {}
+}
+`
+		filePath := filepath.Join(tmpDir, "main.tf")
+		require.NoError(t, os.WriteFile(filePath, []byte(contentWithIssue), 0o644))
+
+		// Reset flags
+		styleFix = false
+		styleCheck = false
+		styleDiff = false
+		changed = false
+		color = false
+		format = "text"
+
+		rootCmd.SetArgs([]string{"style", "--fix", "--diff", tmpDir})
+		_ = rootCmd.Execute()
+
+		// Verify file WAS modified (fix mode should reduce double blank lines to single)
+		afterContent, err := os.ReadFile(filePath)
+		require.NoError(t, err)
+		assert.NotEqual(t, contentWithIssue, string(afterContent), "fix mode should modify the file")
+		assert.Contains(t, string(afterContent), "}\n\nresource", "should have single blank line between blocks")
+	})
+
+	t.Run("diff on clean file produces no error", func(t *testing.T) {
+		resetStyleFlags()
+		tmpDir := t.TempDir()
+
+		// Create a properly styled file (no issues to fix)
+		cleanContent := `resource "aws_instance" "test" {
+  ami = "ami-123"
+}
+
+resource "null_resource" "test2" {
+  triggers = {}
+}
+`
+		filePath := filepath.Join(tmpDir, "main.tf")
+		require.NoError(t, os.WriteFile(filePath, []byte(cleanContent), 0o644))
+
+		// Reset flags
+		styleFix = false
+		styleCheck = false
+		styleDiff = false
+		changed = false
+		color = false
+		format = "text"
+
+		// Run with --diff on a clean file
+		rootCmd.SetArgs([]string{"style", "--diff", tmpDir})
+		err := rootCmd.Execute()
+		// Clean file should not produce error and file should remain unchanged
+		assert.NoError(t, err, "diff on clean file should not error")
+
+		afterContent, err := os.ReadFile(filePath)
+		require.NoError(t, err)
+		assert.Equal(t, cleanContent, string(afterContent), "clean file should remain unchanged")
+	})
+}

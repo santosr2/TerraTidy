@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 
@@ -26,7 +27,7 @@ func TestOutputStyleResults_CheckMode(t *testing.T) {
 		{Rule: "style.blank-lines", Message: "test", Severity: sdk.SeverityWarning, File: "main.tf"},
 	}
 
-	err := outputStyleResults(findings, true, nil)
+	err := outputStyleResults(findings, findings, true, nil)
 	require.Error(t, err, "check mode with findings should return error")
 
 	// Should be an ExitError with findings code
@@ -44,7 +45,7 @@ func TestOutputStyleResults_NoCheckMode(t *testing.T) {
 		{Rule: "style.blank-lines", Message: "test", Severity: sdk.SeverityWarning, File: "main.tf"},
 	}
 
-	err := outputStyleResults(findings, false, nil)
+	err := outputStyleResults(findings, findings, false, nil)
 	assert.NoError(t, err, "non-check mode should not return error for warnings")
 }
 
@@ -53,7 +54,7 @@ func TestOutputStyleResults_NoFindings(t *testing.T) {
 	format = "text"
 	defer func() { format = old }()
 
-	err := outputStyleResults(nil, true, nil)
+	err := outputStyleResults(nil, nil, true, nil)
 	assert.NoError(t, err, "check mode with no findings should not error")
 }
 
@@ -433,4 +434,205 @@ func TestBuildLintConfig_WithEngineAndPluginRules(t *testing.T) {
 	require.Contains(t, lintCfg.Rules, "plugin-rule")
 	assert.Equal(t, "error", lintCfg.Rules["plugin-rule"].Severity)
 	assert.Equal(t, "val", lintCfg.Rules["plugin-rule"].Options["key"])
+}
+
+// TestChangedFlagConsistency verifies that --changed flag behaves consistently
+// across fmt, style, and lint commands: all three only process git-modified files.
+// NOTE: This test uses os.Chdir; do not call t.Parallel().
+func TestChangedFlagConsistency(t *testing.T) {
+	dir := t.TempDir()
+
+	runGit := func(args ...string) {
+		cmd := exec.Command("git", args...)
+		cmd.Dir = dir
+		cmd.Env = append(os.Environ(),
+			"GIT_AUTHOR_NAME=test",
+			"GIT_AUTHOR_EMAIL=test@test.com",
+			"GIT_COMMITTER_NAME=test",
+			"GIT_COMMITTER_EMAIL=test@test.com",
+		)
+		out, err := cmd.CombinedOutput()
+		require.NoError(t, err, "git %v failed: %s", args, out)
+	}
+
+	// Create directory structure with two files
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "modules"), 0o755))
+
+	// Initial committed content (properly formatted)
+	committedContent := `resource "aws_instance" "committed" {
+  ami           = "ami-123"
+  instance_type = "t2.micro"
+}
+`
+	// Changed content (properly formatted but different)
+	changedContent := `resource "aws_instance" "modified" {
+  ami           = "ami-456"
+  instance_type = "t2.small"
+}
+`
+
+	// Write initial files and commit them
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "unchanged.tf"), []byte(committedContent), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "changed.tf"), []byte(committedContent), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "modules", "nested.tf"), []byte(committedContent), 0o644))
+
+	runGit("init", "-b", "main")
+	runGit("config", "commit.gpgsign", "false")
+	runGit("config", "user.email", "test@test.com")
+	runGit("config", "user.name", "test")
+	runGit("add", ".")
+	runGit("commit", "-m", "initial")
+
+	// Modify one file to create uncommitted change
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "changed.tf"), []byte(changedContent), 0o644))
+
+	// Save and restore working directory
+	oldWd, err := os.Getwd()
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		_ = os.Chdir(oldWd)
+	})
+	require.NoError(t, os.Chdir(dir))
+
+	// Save and restore global state that affects getTargetFiles behavior
+	oldNoRecurse := noRecurse
+	oldExclude := excludePatterns
+	t.Cleanup(func() {
+		noRecurse = oldNoRecurse
+		excludePatterns = oldExclude
+	})
+	noRecurse = false
+	excludePatterns = nil
+
+	t.Run("getChangedFiles returns only modified file", func(t *testing.T) {
+		files, err := getChangedFiles([]string{"."}, true)
+		require.NoError(t, err)
+
+		require.Len(t, files, 1, "should only find the one changed file")
+		assert.Contains(t, files[0], "changed.tf", "should be the changed.tf file")
+	})
+
+	t.Run("getTargetFiles with changedOnly=true respects --changed", func(t *testing.T) {
+		files, err := getTargetFiles([]string{"."}, true)
+		require.NoError(t, err)
+
+		require.Len(t, files, 1, "changedOnly=true should return only changed files")
+		assert.Contains(t, files[0], "changed.tf")
+	})
+
+	t.Run("getTargetFiles with changedOnly=false returns all files", func(t *testing.T) {
+		files, err := getTargetFiles([]string{"."}, false)
+		require.NoError(t, err)
+
+		assert.GreaterOrEqual(t, len(files), 3, "changedOnly=false should return all .tf files")
+	})
+
+	t.Run("getTargetFilesWithExcludes respects changedOnly", func(t *testing.T) {
+		cfg := config.DefaultConfig()
+
+		filesWithChanged, err := getTargetFilesWithExcludes([]string{"."}, true, nil, cfg)
+		require.NoError(t, err)
+		require.Len(t, filesWithChanged, 1, "changedOnly=true should return only changed file")
+
+		filesWithoutChanged, err := getTargetFilesWithExcludes([]string{"."}, false, nil, cfg)
+		require.NoError(t, err)
+		assert.GreaterOrEqual(t, len(filesWithoutChanged), 3, "changedOnly=false should return all files")
+	})
+}
+
+// TestChangedFlagErrorsOutsideGitRepo verifies that --changed returns an error
+// when run outside a git repository for all commands using getTargetFiles.
+// NOTE: This test uses os.Chdir; do not call t.Parallel().
+func TestChangedFlagErrorsOutsideGitRepo(t *testing.T) {
+	nonGitDir := t.TempDir()
+
+	require.NoError(t, os.WriteFile(filepath.Join(nonGitDir, "main.tf"), []byte("# test"), 0o644))
+
+	oldWd, err := os.Getwd()
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		_ = os.Chdir(oldWd)
+	})
+	require.NoError(t, os.Chdir(nonGitDir))
+
+	_, err = getTargetFiles([]string{"."}, true)
+	require.Error(t, err, "changedOnly=true outside git repo should error")
+	assert.Contains(t, err.Error(), "not a git repository", "error should mention git repo requirement")
+}
+
+// TestChangedFlagWithNestedDirectories verifies --changed works with nested paths.
+// NOTE: This test uses os.Chdir; do not call t.Parallel().
+func TestChangedFlagWithNestedDirectories(t *testing.T) {
+	dir := t.TempDir()
+
+	runGit := func(args ...string) {
+		cmd := exec.Command("git", args...)
+		cmd.Dir = dir
+		cmd.Env = append(os.Environ(),
+			"GIT_AUTHOR_NAME=test",
+			"GIT_AUTHOR_EMAIL=test@test.com",
+			"GIT_COMMITTER_NAME=test",
+			"GIT_COMMITTER_EMAIL=test@test.com",
+		)
+		out, err := cmd.CombinedOutput()
+		require.NoError(t, err, "git %v failed: %s", args, out)
+	}
+
+	// Create nested directory structure
+	modulesDir := filepath.Join(dir, "modules")
+	envDir := filepath.Join(dir, "environments")
+	require.NoError(t, os.MkdirAll(modulesDir, 0o755))
+	require.NoError(t, os.MkdirAll(envDir, 0o755))
+
+	content := `resource "aws_instance" "test" {
+  ami           = "ami-123"
+  instance_type = "t2.micro"
+}
+`
+	modifiedContent := `resource "aws_instance" "modified" {
+  ami           = "ami-456"
+  instance_type = "t2.small"
+}
+`
+
+	// Create files in both directories
+	require.NoError(t, os.WriteFile(filepath.Join(modulesDir, "mod.tf"), []byte(content), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(envDir, "env.tf"), []byte(content), 0o644))
+
+	runGit("init", "-b", "main")
+	runGit("config", "commit.gpgsign", "false")
+	runGit("config", "user.email", "test@test.com")
+	runGit("config", "user.name", "test")
+	runGit("add", ".")
+	runGit("commit", "-m", "initial")
+
+	// Modify only the modules file
+	require.NoError(t, os.WriteFile(filepath.Join(modulesDir, "mod.tf"), []byte(modifiedContent), 0o644))
+
+	oldWd, err := os.Getwd()
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		_ = os.Chdir(oldWd)
+	})
+	require.NoError(t, os.Chdir(dir))
+
+	t.Run("changed flag from root finds nested changed file", func(t *testing.T) {
+		files, err := getChangedFiles([]string{"."}, true)
+		require.NoError(t, err)
+
+		require.Len(t, files, 1)
+		assert.Contains(t, files[0], "mod.tf")
+	})
+
+	t.Run("changed flag with specific path filters correctly", func(t *testing.T) {
+		// Ask for changes in modules - should find the changed file
+		filesInModules, err := getChangedFiles([]string{"modules"}, true)
+		require.NoError(t, err)
+		require.Len(t, filesInModules, 1, "modules dir has one changed file")
+
+		// Ask for changes in environments - should find nothing (no changes there)
+		filesInEnv, err := getChangedFiles([]string{"environments"}, true)
+		require.NoError(t, err)
+		assert.Empty(t, filesInEnv, "environments dir has no changes")
+	})
 }

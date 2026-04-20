@@ -139,7 +139,7 @@ func (f *JUnitFormatter) Format(findings []sdk.Finding, w io.Writer) error {
 func (f *JUnitFormatter) buildTestSuite(file string, findings []sdk.Finding, timestamp string) JUnitTestSuite {
 	var errors, failures int
 	var testCases []JUnitTestCase
-	displayFile := displayPath(file, f.AbsolutePaths)
+	displayFile := DisplayPath(file, f.AbsolutePaths)
 
 	for i := range findings {
 		testCase := JUnitTestCase{

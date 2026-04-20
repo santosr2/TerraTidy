@@ -364,3 +364,80 @@ resource "aws_instance" "y" {
 	}
 	assert.True(t, found, "diff finding expected after fixing a file with Diff+Fix mode enabled")
 }
+
+// TestDiffPreviewMode_GeneratesDiffWithoutModifyingFile verifies that Diff=true with Fix=false
+// (preview mode) generates a diff finding showing what would change, but does NOT modify the
+// original file. This exercises the capture-fix-restore logic in checkFile.
+func TestDiffPreviewMode_GeneratesDiffWithoutModifyingFile(t *testing.T) {
+	dir := t.TempDir()
+	// Missing blank line between blocks - will trigger a fixable finding
+	content := `resource "aws_instance" "test1" {
+  ami = "ami-123"
+}
+resource "aws_instance" "test2" {
+  ami = "ami-456"
+}
+`
+	tmpFile := filepath.Join(dir, "preview.tf")
+	require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0o644))
+
+	// Capture original content for comparison
+	originalContent, err := os.ReadFile(tmpFile)
+	require.NoError(t, err)
+
+	engine := New(&Config{
+		Fix:   false, // Preview mode - don't actually fix
+		Diff:  true,  // But show what would change
+		Rules: make(map[string]RuleConfig),
+	})
+
+	findings, err := engine.Run(context.Background(), []string{tmpFile})
+	require.NoError(t, err)
+
+	// Must produce a style.diff finding showing preview of changes
+	var diffFinding *sdk.Finding
+	for i := range findings {
+		if findings[i].Rule == "style.diff" {
+			diffFinding = &findings[i]
+			break
+		}
+	}
+	require.NotNil(t, diffFinding, "preview mode (Diff=true, Fix=false) must produce a style.diff finding")
+	assert.Contains(t, diffFinding.Message, "@@", "diff finding should contain unified diff markers")
+	assert.Equal(t, sdk.SeverityInfo, diffFinding.Severity)
+
+	// Verify file was NOT modified (original content restored)
+	afterContent, err := os.ReadFile(tmpFile)
+	require.NoError(t, err)
+	assert.Equal(t, originalContent, afterContent, "file must remain unchanged in preview mode")
+}
+
+// TestDiffPreviewMode_NoIssues_NoFinding verifies that Diff=true with Fix=false produces no
+// diff finding when there are no fixable issues.
+func TestDiffPreviewMode_NoIssues_NoFinding(t *testing.T) {
+	dir := t.TempDir()
+	// Already well-formed file - nothing to fix
+	content := `resource "aws_instance" "test1" {
+  ami = "ami-123"
+}
+
+resource "aws_instance" "test2" {
+  ami = "ami-456"
+}
+`
+	tmpFile := filepath.Join(dir, "already_good.tf")
+	require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0o644))
+
+	engine := New(&Config{
+		Fix:   false,
+		Diff:  true,
+		Rules: make(map[string]RuleConfig),
+	})
+
+	findings, err := engine.Run(context.Background(), []string{tmpFile})
+	require.NoError(t, err)
+
+	for _, f := range findings {
+		assert.NotEqual(t, "style.diff", f.Rule, "no diff finding expected when file has no issues")
+	}
+}

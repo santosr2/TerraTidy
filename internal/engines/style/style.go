@@ -128,8 +128,9 @@ func (e *Engine) checkFile(path string) ([]sdk.Finding, error) {
 	}
 
 	// Capture original content before any fixes for diff generation
+	// When Diff=true, we capture content regardless of Fix flag to support preview mode
 	var originalContent []byte
-	if e.config.Diff && e.config.Fix {
+	if e.config.Diff {
 		var err error
 		originalContent, err = os.ReadFile(path)
 		if err != nil {
@@ -210,8 +211,9 @@ func (e *Engine) checkFile(path string) ([]sdk.Finding, error) {
 			allFindings = annotations.FilterFindings(findings, suppressions)
 		}
 
-		// In fix mode, apply fixes and potentially loop for another pass
-		if e.config.Fix && len(findings) > 0 {
+		// In fix mode or diff preview mode, apply fixes and potentially loop for another pass
+		// When Diff=true with Fix=false, we still apply fixes to generate preview diff
+		if (e.config.Fix || e.config.Diff) && len(findings) > 0 {
 			fixedCount, err := e.applyFixes(ruleCtx, file, findings)
 			if err != nil {
 				return nil, fmt.Errorf("applying fixes: %w", err)
@@ -227,8 +229,17 @@ func (e *Engine) checkFile(path string) ([]sdk.Finding, error) {
 		break
 	}
 
-	// Generate diff if requested and fixes were applied
-	if e.config.Diff && e.config.Fix && originalContent != nil {
+	// Generate diff if requested (works in both fix mode and preview mode)
+	if e.config.Diff && originalContent != nil {
+		// In preview mode (Diff=true, Fix=false), always restore the original content
+		// even if diff generation fails - the preview contract guarantees no file changes
+		if !e.config.Fix {
+			defer func() {
+				// Restore is best-effort in defer; primary error takes precedence
+				_ = os.WriteFile(path, originalContent, 0o600)
+			}()
+		}
+
 		diffFinding, err := e.generateDiff(path, originalContent)
 		if err != nil {
 			return nil, err

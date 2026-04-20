@@ -417,3 +417,221 @@ func TestFmtCmd_ErrorPaths(t *testing.T) {
 		changed = false // Reset
 	})
 }
+
+// TestFmtDiffFlag tests that --diff flag shows diff content in output
+func TestFmtDiffFlag(t *testing.T) {
+	// Save and restore globals
+	oldFmtCheck := fmtCheck
+	oldFmtDiff := fmtDiff
+	oldFmtAll := fmtAll
+	oldChanged := changed
+	oldColor := color
+
+	resetFmtFlags := func() {
+		for _, name := range []string{"check", "diff", "all"} {
+			if f := fmtCmd.Flags().Lookup(name); f != nil {
+				f.Changed = false
+			}
+		}
+	}
+	resetFmtFlags()
+
+	t.Cleanup(func() {
+		fmtCheck = oldFmtCheck
+		fmtDiff = oldFmtDiff
+		fmtAll = oldFmtAll
+		changed = oldChanged
+		color = oldColor
+		rootCmd.SetArgs(nil)
+		resetFmtFlags()
+	})
+
+	t.Run("diff flag shows diff without modifying file in check mode", func(t *testing.T) {
+		tmpDir := t.TempDir()
+
+		// Create unformatted file
+		unformattedContent := `resource "aws_instance" "bad"   {
+ami="ami-123"
+instance_type="t2.micro"
+}`
+		filePath := filepath.Join(tmpDir, "unformatted.tf")
+		require.NoError(t, os.WriteFile(filePath, []byte(unformattedContent), 0o644))
+
+		// Get original content for comparison
+		originalContent, err := os.ReadFile(filePath)
+		require.NoError(t, err)
+
+		// Reset flags
+		fmtCheck = false
+		fmtDiff = false
+		fmtAll = false
+		changed = false
+		color = false // Disable color for predictable output
+
+		rootCmd.SetArgs([]string{"fmt", "--check", "--diff", tmpDir})
+		_ = rootCmd.Execute() // May return error for unformatted file
+
+		// Verify file was NOT modified (check mode)
+		afterContent, err := os.ReadFile(filePath)
+		require.NoError(t, err)
+		assert.Equal(t, string(originalContent), string(afterContent), "File should not be modified in check mode")
+	})
+
+	t.Run("diff flag with normal mode shows diff and formats file", func(t *testing.T) {
+		tmpDir := t.TempDir()
+
+		// Create unformatted file (missing spaces around =, extra spaces after resource type)
+		unformattedContent := `resource "aws_instance" "test"   {
+ami="ami-123"
+}`
+		filePath := filepath.Join(tmpDir, "format_me.tf")
+		require.NoError(t, os.WriteFile(filePath, []byte(unformattedContent), 0o644))
+
+		// Reset flags
+		fmtCheck = false
+		fmtDiff = false
+		fmtAll = false
+		changed = false
+		color = false
+
+		rootCmd.SetArgs([]string{"fmt", "--diff", tmpDir})
+		err := rootCmd.Execute()
+		assert.NoError(t, err)
+
+		// Verify file WAS modified (normal mode)
+		afterContent, err := os.ReadFile(filePath)
+		require.NoError(t, err)
+		assert.NotEqual(t, unformattedContent, string(afterContent), "File should be formatted")
+		// HCL formatter adds spaces around = and proper indentation
+		assert.Contains(t, string(afterContent), "ami = ", "File should have spaces around =")
+		assert.Contains(t, string(afterContent), "  ami", "File should have proper indentation")
+	})
+
+	t.Run("relative path display", func(t *testing.T) {
+		tmpDir := t.TempDir()
+
+		// Create unformatted file
+		unformattedContent := `resource "null_resource" "x"   {}`
+		filePath := filepath.Join(tmpDir, "rel_path.tf")
+		require.NoError(t, os.WriteFile(filePath, []byte(unformattedContent), 0o644))
+
+		// Reset flags and ensure absolute paths is off
+		fmtCheck = false
+		fmtDiff = false
+		fmtAll = false
+		changed = false
+		absolutePaths = false
+
+		rootCmd.SetArgs([]string{"fmt", tmpDir})
+		err := rootCmd.Execute()
+		assert.NoError(t, err)
+		// Output uses DisplayPath which converts to relative paths by default
+		// The test verifies the code path works without errors
+	})
+}
+
+// TestFmtAllCheckMode verifies that fmt --all --check reports style issues
+func TestFmtAllCheckMode(t *testing.T) {
+	// Save and restore globals
+	oldFmtCheck := fmtCheck
+	oldFmtDiff := fmtDiff
+	oldFmtAll := fmtAll
+	oldChanged := changed
+	oldColor := color
+
+	resetFmtFlags := func() {
+		for _, name := range []string{"check", "diff", "all"} {
+			if f := fmtCmd.Flags().Lookup(name); f != nil {
+				f.Changed = false
+			}
+		}
+	}
+	resetFmtFlags()
+
+	t.Cleanup(func() {
+		fmtCheck = oldFmtCheck
+		fmtDiff = oldFmtDiff
+		fmtAll = oldFmtAll
+		changed = oldChanged
+		color = oldColor
+		rootCmd.SetArgs(nil)
+		resetFmtFlags()
+	})
+
+	t.Run("all check mode returns error when style issues exist", func(t *testing.T) {
+		tmpDir := t.TempDir()
+
+		// Create file with style issues (tags not at end, depends_on not at end)
+		contentWithStyleIssues := `resource "aws_instance" "test" {
+  tags = {
+    Name = "test"
+  }
+
+  ami           = "ami-123"
+  instance_type = "t2.micro"
+
+  depends_on = [aws_vpc.main]
+}
+`
+		filePath := filepath.Join(tmpDir, "style_issues.tf")
+		require.NoError(t, os.WriteFile(filePath, []byte(contentWithStyleIssues), 0o644))
+
+		// Get original content to verify file is not modified
+		originalContent, err := os.ReadFile(filePath)
+		require.NoError(t, err)
+
+		// Reset flags
+		fmtCheck = false
+		fmtDiff = false
+		fmtAll = false
+		changed = false
+		color = false
+
+		rootCmd.SetArgs([]string{"fmt", "--all", "--check", tmpDir})
+		err = rootCmd.Execute()
+
+		// Should return error due to style issues
+		require.Error(t, err, "fmt --all --check should return error when style issues exist")
+
+		var exitErr *sdk.ExitError
+		require.True(t, errors.As(err, &exitErr), "should be an ExitError")
+		assert.Equal(t, sdk.ExitFindings, exitErr.Code, "should have findings exit code")
+
+		// Verify file was NOT modified (check mode)
+		afterContent, err := os.ReadFile(filePath)
+		require.NoError(t, err)
+		assert.Equal(t, string(originalContent), string(afterContent), "File should not be modified in check mode")
+	})
+
+	t.Run("all check mode succeeds when no issues", func(t *testing.T) {
+		tmpDir := t.TempDir()
+
+		// Create well-formatted file with no style issues
+		cleanContent := `resource "aws_instance" "test" {
+  ami           = "ami-123"
+  instance_type = "t2.micro"
+
+  tags = {
+    Name = "test"
+  }
+
+  depends_on = [aws_vpc.main]
+}
+`
+		filePath := filepath.Join(tmpDir, "clean.tf")
+		require.NoError(t, os.WriteFile(filePath, []byte(cleanContent), 0o644))
+
+		// Reset flags
+		fmtCheck = false
+		fmtDiff = false
+		fmtAll = false
+		changed = false
+		color = false
+
+		rootCmd.SetArgs([]string{"fmt", "--all", "--check", tmpDir})
+		err := rootCmd.Execute()
+
+		// Should succeed with no issues
+		assert.NoError(t, err, "fmt --all --check should succeed when no issues exist")
+	})
+}

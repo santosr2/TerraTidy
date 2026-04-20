@@ -21,8 +21,12 @@ var lintCmd = &cobra.Command{
 	Short: "Run linting checks",
 	Long: `Run linting checks to detect errors and best practice violations.
 
-Linting performs static analysis of Terraform code to find potential issues,
-security vulnerabilities, and violations of best practices.
+Linting is a read-only analysis that never modifies files. Unlike fmt and style,
+there is no --check or --diff flag because lint only reports issues without
+making changes. To fix lint issues, you must edit your Terraform code manually.
+
+Lint performs static analysis to find potential issues, security vulnerabilities,
+and violations of best practices.
 
 Use --changed to only lint files that have been modified in git.`,
 	Example: `  # Lint current directory

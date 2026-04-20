@@ -3,10 +3,12 @@ package main
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/santosr2/TerraTidy/internal/config"
 	fmtengine "github.com/santosr2/TerraTidy/internal/engines/format"
 	"github.com/santosr2/TerraTidy/internal/engines/style"
+	"github.com/santosr2/TerraTidy/internal/output"
 	"github.com/santosr2/TerraTidy/pkg/sdk"
 	"github.com/spf13/cobra"
 )
@@ -66,7 +68,9 @@ Use --all to also apply style fixes (equivalent to running fmt + style --fix).`,
 		if changed {
 			modeMsg = " (changed files only)"
 		}
-		if fmtAll {
+		if fmtAll && fmtCfg.Check {
+			fmt.Printf("Checking formatting and style on %s%s...\n\n", formatFileCount(len(files)), modeMsg)
+		} else if fmtAll {
 			fmt.Printf("Formatting and applying style fixes to %s%s...\n\n", formatFileCount(len(files)), modeMsg)
 		} else {
 			fmt.Printf("Formatting %s%s...\n\n", formatFileCount(len(files)), modeMsg)
@@ -78,21 +82,25 @@ Use --all to also apply style fixes (equivalent to running fmt + style --fix).`,
 			return sdk.NewInternalError(fmt.Errorf("formatting files: %w", err))
 		}
 
-		// Apply severity threshold filtering
-		threshold := getEffectiveSeverityThreshold(cfg)
-		findings = filterFindingsBySeverity(findings, threshold)
-
-		// Display formatting results
+		// Display formatting results BEFORE severity filtering
+		// (fmt.formatted has SeverityInfo which would be filtered out)
 		needsFormatting := 0
 		formatted := 0
+		useAbsolutePaths := getEffectiveAbsolutePaths(cfg)
 		for _, finding := range findings {
+			displayFile := output.DisplayPath(finding.File, useAbsolutePaths)
 			switch finding.Rule {
 			case "fmt.needs-formatting":
-				fmt.Printf("  [!] %s: needs formatting\n", finding.File)
+				fmt.Printf("  [!] %s: needs formatting\n", displayFile)
 				needsFormatting++
 			case "fmt.formatted":
-				fmt.Printf("  [+] %s: formatted\n", finding.File)
+				fmt.Printf("  [+] %s: formatted\n", displayFile)
 				formatted++
+			}
+			// Print diff if diff mode is enabled (via CLI or config) and message contains diff content
+			if fmtCfg.Diff && strings.HasPrefix(strings.TrimSpace(finding.Message), "---") {
+				fmt.Println()
+				fmt.Print(output.FormatDiff(finding.Message, color))
 			}
 		}
 
@@ -104,15 +112,17 @@ Use --all to also apply style fixes (equivalent to running fmt + style --fix).`,
 			fmt.Printf("Formatted %s\n", formatFileCount(formatted))
 		}
 
-		// In check mode, return findings error if any file needs formatting
-		if fmtCfg.Check && needsFormatting > 0 {
-			return sdk.NewFindingsError()
-		}
+		// Track total issues for check mode exit code
+		totalIssues := needsFormatting
 
-		// Run style fixes if --all flag is set
-		if fmtAll && !fmtCfg.Check {
+		// Run style engine if --all flag is set (in both check and fix modes)
+		if fmtAll {
 			fmt.Println()
-			fmt.Println("Applying style fixes...")
+			if fmtCfg.Check {
+				fmt.Println("Checking style...")
+			} else {
+				fmt.Println("Applying style fixes...")
+			}
 			fmt.Println()
 
 			// Load plugin rules if plugins are enabled
@@ -122,38 +132,71 @@ Use --all to also apply style fixes (equivalent to running fmt + style --fix).`,
 			}
 
 			// Use config-based style engine with plugin rules
-			styleEngine := style.New(buildStyleConfig(cfg, true), pluginRules...)
+			// In check mode: fix=false, diff=fmtCfg.Diff
+			// In fix mode: fix=true, diff=fmtCfg.Diff
+			styleEngine := style.New(buildStyleConfig(cfg, !fmtCfg.Check, fmtCfg.Diff), pluginRules...)
 
 			styleFindings, err := styleEngine.Run(context.Background(), files)
 			if err != nil {
 				return sdk.NewInternalError(fmt.Errorf("applying style fixes: %w", err))
 			}
 
+			// Count fixable style issues (issues with Fix != nil or fixable rules)
+			styleIssues := 0
 			styleFixed := 0
 			for _, finding := range styleFindings {
+				// Skip diff-only findings (style.diff rule)
+				if finding.Rule == "style.diff" {
+					// Print diff if present
+					if fmtCfg.Diff && strings.HasPrefix(strings.TrimSpace(finding.Message), "---") {
+						fmt.Println()
+						fmt.Print(output.FormatDiff(finding.Message, color))
+					}
+					continue
+				}
 				if finding.Fix != nil {
 					styleFixed++
 				}
-			}
-
-			if styleFixed > 0 {
-				fmt.Printf("Fixed %d style issue(s)\n", styleFixed)
-
-				// Re-run formatter after style fixes to restore proper HCL formatting
-				// (style fixes may disrupt equal sign alignment)
-				fmt.Println()
-				fmt.Println("Re-formatting files...")
-				rerunEngine := fmtengine.New(&fmtengine.Config{
-					Check: false,
-					Diff:  false,
-				})
-				if _, err := rerunEngine.Run(context.Background(), files); err != nil {
-					return sdk.NewInternalError(fmt.Errorf("re-formatting files: %w", err))
+				// In check mode, count all non-info findings as issues
+				if fmtCfg.Check && finding.Severity != sdk.SeverityInfo {
+					styleIssues++
 				}
-				fmt.Println("Done")
-			} else {
-				fmt.Println("No style issues to fix")
 			}
+
+			if fmtCfg.Check {
+				// Check mode: report issues found
+				if styleIssues > 0 {
+					fmt.Printf("Found %d style issue(s) that can be fixed with fmt --all\n", styleIssues)
+					totalIssues += styleIssues
+				} else {
+					fmt.Println("No style issues found")
+				}
+			} else {
+				// Fix mode: report fixes applied
+				if styleFixed > 0 {
+					fmt.Printf("Fixed %d style issue(s)\n", styleFixed)
+
+					// Re-run formatter after style fixes to restore proper HCL formatting
+					// (style fixes may disrupt equal sign alignment)
+					fmt.Println()
+					fmt.Println("Re-formatting files...")
+					rerunEngine := fmtengine.New(&fmtengine.Config{
+						Check: false,
+						Diff:  false,
+					})
+					if _, err := rerunEngine.Run(context.Background(), files); err != nil {
+						return sdk.NewInternalError(fmt.Errorf("re-formatting files: %w", err))
+					}
+					fmt.Println("Done")
+				} else {
+					fmt.Println("No style issues to fix")
+				}
+			}
+		}
+
+		// In check mode, return findings error if any issues found
+		if fmtCfg.Check && totalIssues > 0 {
+			return sdk.NewFindingsError()
 		}
 
 		return nil
@@ -163,7 +206,7 @@ Use --all to also apply style fixes (equivalent to running fmt + style --fix).`,
 func init() {
 	fmtCmd.Flags().BoolVar(&fmtCheck, "check", false, "check if files are formatted without modifying")
 	fmtCmd.Flags().BoolVar(&fmtDiff, "diff", false, "show diff of formatting changes")
-	fmtCmd.Flags().BoolVar(&fmtAll, "all", false, "also apply style fixes (equivalent to fmt + style --fix)")
+	fmtCmd.Flags().BoolVar(&fmtAll, "all", false, "also run style checks/fixes (combine with --check to verify only)")
 	rootCmd.AddCommand(fmtCmd)
 }
 

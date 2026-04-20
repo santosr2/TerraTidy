@@ -950,7 +950,7 @@ func TestTextFormatterPathBehavior(t *testing.T) {
 		var buf bytes.Buffer
 		err := formatter.Format([]sdk.Finding{finding}, &buf)
 		require.NoError(t, err)
-		// When AbsolutePaths is false and path is absolute, displayPath attempts
+		// When AbsolutePaths is false and path is absolute, DisplayPath attempts
 		// to make it relative. Since the path doesn't exist under cwd, it stays absolute.
 		// But the key is that AbsolutePaths=false is set.
 		assert.Contains(t, buf.String(), "test.tf")
@@ -967,7 +967,7 @@ func TestTextFormatterPathBehavior(t *testing.T) {
 }
 
 func TestDisplayPathRelativeConversion(t *testing.T) {
-	// Test that displayPath converts absolute paths under cwd to relative paths
+	// Test that DisplayPath converts absolute paths under cwd to relative paths
 	cwd, err := os.Getwd()
 	require.NoError(t, err)
 
@@ -1193,4 +1193,67 @@ func TestSARIFFormatterDeterministic(t *testing.T) {
 	assert.Equal(t, "a_rule", rules[0].ID, "Rules should be sorted alphabetically")
 	assert.Equal(t, "m_rule", rules[1].ID, "Rules should be sorted alphabetically")
 	assert.Equal(t, "z_rule", rules[2].ID, "Rules should be sorted alphabetically")
+}
+
+func TestDisplayPath(t *testing.T) {
+	cwd, err := os.Getwd()
+	require.NoError(t, err)
+
+	t.Run("absolute path under cwd becomes relative", func(t *testing.T) {
+		absPath := filepath.Join(cwd, "subdir", "test.tf")
+		result := DisplayPath(absPath, false)
+		assert.Equal(t, filepath.Join("subdir", "test.tf"), result)
+	})
+
+	t.Run("absolute path outside cwd becomes relative with dotdot", func(t *testing.T) {
+		absPath := "/some/other/path/test.tf"
+		result := DisplayPath(absPath, false)
+		assert.Contains(t, result, "..")
+		assert.Contains(t, result, "test.tf")
+	})
+
+	t.Run("relative path stays relative", func(t *testing.T) {
+		relPath := "subdir/test.tf"
+		result := DisplayPath(relPath, false)
+		assert.Equal(t, relPath, result)
+	})
+
+	t.Run("absolutePaths true preserves absolute", func(t *testing.T) {
+		absPath := filepath.Join(cwd, "subdir", "test.tf")
+		result := DisplayPath(absPath, true)
+		assert.Equal(t, absPath, result)
+	})
+}
+
+func TestFormatDiff(t *testing.T) {
+	t.Run("empty diff returns empty", func(t *testing.T) {
+		result := FormatDiff("", true)
+		assert.Equal(t, "", result)
+	})
+
+	t.Run("color false returns unchanged", func(t *testing.T) {
+		diff := "--- a/file.tf\n+++ b/file.tf\n@@ -1,3 +1,3 @@\n-old\n+new\n context"
+		result := FormatDiff(diff, false)
+		assert.Equal(t, diff, result)
+	})
+
+	t.Run("colorizes diff lines correctly", func(t *testing.T) {
+		diff := "--- a/file.tf\n+++ b/file.tf\n@@ -1,3 +1,3 @@\n-old line\n+new line\n context line"
+		result := FormatDiff(diff, true)
+
+		assert.Contains(t, result, "\033[36m--- a/file.tf\033[0m")
+		assert.Contains(t, result, "\033[36m+++ b/file.tf\033[0m")
+		assert.Contains(t, result, "\033[36m@@ -1,3 +1,3 @@\033[0m")
+		assert.Contains(t, result, "\033[31m-old line\033[0m")
+		assert.Contains(t, result, "\033[32m+new line\033[0m")
+		assert.Contains(t, result, "context line")
+		assert.NotContains(t, result, "\033[31mcontext")
+		assert.NotContains(t, result, "\033[32mcontext")
+	})
+
+	t.Run("non-diff text unchanged", func(t *testing.T) {
+		text := "just some text\nwith multiple lines"
+		result := FormatDiff(text, true)
+		assert.Equal(t, text, result)
+	})
 }

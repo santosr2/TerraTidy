@@ -106,9 +106,7 @@ func (e *Engine) Run(ctx context.Context, files []string) ([]sdk.Finding, error)
 		default:
 		}
 
-		// Create fresh parser per file to avoid cached state issues
-		parser := hclparse.NewParser()
-		findings, err := e.checkFile(parser, file)
+		findings, err := e.checkFile(file)
 		if err != nil {
 			return nil, fmt.Errorf("checking %s: %w", file, err)
 		}
@@ -120,7 +118,7 @@ func (e *Engine) Run(ctx context.Context, files []string) ([]sdk.Finding, error)
 }
 
 // checkFile checks a single file against all enabled rules
-func (e *Engine) checkFile(parser *hclparse.Parser, path string) ([]sdk.Finding, error) {
+func (e *Engine) checkFile(path string) ([]sdk.Finding, error) {
 	// Create context for rule execution
 	ruleCtx := &sdk.Context{
 		Context: context.Background(),
@@ -141,7 +139,7 @@ func (e *Engine) checkFile(parser *hclparse.Parser, path string) ([]sdk.Finding,
 
 	var allFindings []sdk.Finding
 	var suppressions []annotations.Suppression
-	maxPasses := 3 // Limit passes to prevent infinite loops
+	maxPasses := 10 // Limit passes to prevent infinite loops (enough for typical ordering + spacing fixes)
 
 	for pass := 0; pass < maxPasses; pass++ {
 		// Always read fresh content for each pass
@@ -155,7 +153,8 @@ func (e *Engine) checkFile(parser *hclparse.Parser, path string) ([]sdk.Finding,
 			suppressions = annotations.Parse(content)
 		}
 
-		// Parse HCL fresh for each pass
+		// Create fresh parser for each pass to avoid cached results
+		parser := hclparse.NewParser()
 		file, diags := parser.ParseHCL(content, path)
 		if diags.HasErrors() {
 			// Try as JSON for .tf.json files

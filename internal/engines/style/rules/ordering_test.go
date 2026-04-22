@@ -153,6 +153,50 @@ func TestForEachCountFirstRule(t *testing.T) {
 		amiIdx := indexOf(resultStr, "ami")
 		assert.Less(t, forEachIdx, amiIdx)
 	})
+
+	t.Run("Fix preserves leading comments on attributes", func(t *testing.T) {
+		content := `module "example" {
+  for_each = var.instances
+  depends_on = [module.other]
+  # This is an important comment about the instance
+  # It spans multiple lines
+  instance_type = "t3.micro"
+  source = "./module"
+  tags = { Name = "test" }
+}
+`
+		tmpDir := t.TempDir()
+		tmpFile := filepath.Join(tmpDir, "test.tf")
+		require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0o644))
+
+		file, diags := hclsyntax.ParseConfig([]byte(content), tmpFile, hcl.InitialPos)
+		require.False(t, diags.HasErrors())
+
+		hclFile := &hcl.File{Body: file.Body}
+		ctx := &sdk.Context{File: tmpFile}
+
+		result, err := rule.Fix(ctx, hclFile)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+
+		resultStr := string(result)
+		// Comments should be preserved
+		assert.Contains(t, resultStr, "# This is an important comment about the instance")
+		assert.Contains(t, resultStr, "# It spans multiple lines")
+		// Comment should appear before instance_type
+		commentIdx := indexOf(resultStr, "# This is an important comment")
+		instanceTypeIdx := indexOf(resultStr, "instance_type")
+		assert.Less(t, commentIdx, instanceTypeIdx, "comment should appear before instance_type")
+		// Ordering should be correct: for_each, source, instance_type, tags, depends_on
+		forEachIdx := indexOf(resultStr, "for_each")
+		sourceIdx := indexOf(resultStr, "source")
+		tagsIdx := indexOf(resultStr, "tags")
+		dependsOnIdx := indexOf(resultStr, "depends_on")
+		assert.Less(t, forEachIdx, sourceIdx, "for_each should be before source")
+		assert.Less(t, sourceIdx, instanceTypeIdx, "source should be before instance_type")
+		assert.Less(t, instanceTypeIdx, tagsIdx, "instance_type should be before tags")
+		assert.Less(t, tagsIdx, dependsOnIdx, "tags should be before depends_on")
+	})
 }
 
 func TestLifecycleAtEndRule(t *testing.T) {
@@ -405,6 +449,39 @@ func TestTagsAtEndRule(t *testing.T) {
 		amiIdx := indexOf(resultStr, "ami")
 		assert.Greater(t, tagsIdx, amiIdx, "tags should be after ami")
 	})
+
+	t.Run("Fix preserves leading comments on attributes", func(t *testing.T) {
+		content := `resource "aws_instance" "example" {
+  tags = { Name = "test" }
+  # This comment describes the AMI
+  ami = "ami-123"
+  # This comment describes the instance type
+  instance_type = "t3.micro"
+}
+`
+		tmpDir := t.TempDir()
+		tmpFile := filepath.Join(tmpDir, "test.tf")
+		require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0o644))
+
+		file, diags := hclsyntax.ParseConfig([]byte(content), tmpFile, hcl.InitialPos)
+		require.False(t, diags.HasErrors())
+
+		hclFile := &hcl.File{Body: file.Body}
+		ctx := &sdk.Context{File: tmpFile}
+
+		result, err := rule.Fix(ctx, hclFile)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+
+		resultStr := string(result)
+		// Comments should be preserved
+		assert.Contains(t, resultStr, "# This comment describes the AMI")
+		assert.Contains(t, resultStr, "# This comment describes the instance type")
+		// Tags should be at end, ami should be before tags
+		tagsIdx := indexOf(resultStr, "tags")
+		amiIdx := indexOf(resultStr, "ami")
+		assert.Less(t, amiIdx, tagsIdx, "ami should be before tags")
+	})
 }
 
 func TestDependsOnOrderRule(t *testing.T) {
@@ -490,6 +567,39 @@ func TestDependsOnOrderRule(t *testing.T) {
 
 		// Verify depends_on is now after ami
 		resultStr := string(result)
+		dependsOnIdx := indexOf(resultStr, "depends_on")
+		amiIdx := indexOf(resultStr, "ami")
+		assert.Greater(t, dependsOnIdx, amiIdx, "depends_on should be after ami")
+	})
+
+	t.Run("Fix preserves leading comments on attributes", func(t *testing.T) {
+		content := `resource "aws_instance" "example" {
+  depends_on = [aws_vpc.main]
+  # This is the AMI comment
+  ami = "ami-123"
+  # This describes the instance type
+  instance_type = "t3.micro"
+}
+`
+		tmpDir := t.TempDir()
+		tmpFile := filepath.Join(tmpDir, "test.tf")
+		require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0o644))
+
+		file, diags := hclsyntax.ParseConfig([]byte(content), tmpFile, hcl.InitialPos)
+		require.False(t, diags.HasErrors())
+
+		hclFile := &hcl.File{Body: file.Body}
+		ctx := &sdk.Context{File: tmpFile}
+
+		result, err := rule.Fix(ctx, hclFile)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+
+		resultStr := string(result)
+		// Comments should be preserved
+		assert.Contains(t, resultStr, "# This is the AMI comment")
+		assert.Contains(t, resultStr, "# This describes the instance type")
+		// depends_on should be at end
 		dependsOnIdx := indexOf(resultStr, "depends_on")
 		amiIdx := indexOf(resultStr, "ami")
 		assert.Greater(t, dependsOnIdx, amiIdx, "depends_on should be after ami")
@@ -597,6 +707,40 @@ func TestSourceVersionGroupedRule(t *testing.T) {
 		resultStr := string(result)
 		sourceIdx := indexOf(resultStr, "source")
 		nameIdx := indexOf(resultStr, "name")
+		assert.Less(t, sourceIdx, nameIdx, "source should be before name")
+	})
+
+	t.Run("Fix preserves leading comments on attributes", func(t *testing.T) {
+		content := `module "example" {
+  # Comment about module identifier
+  name = "test"
+  source = "./module"
+  version = "1.0.0"
+  # Comment about settings
+  config = {}
+}
+`
+		tmpDir := t.TempDir()
+		tmpFile := filepath.Join(tmpDir, "test.tf")
+		require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0o644))
+
+		file, diags := hclsyntax.ParseConfig([]byte(content), tmpFile, hcl.InitialPos)
+		require.False(t, diags.HasErrors())
+
+		hclFile := &hcl.File{Body: file.Body}
+		ctx := &sdk.Context{File: tmpFile}
+
+		result, err := rule.Fix(ctx, hclFile)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+
+		resultStr := string(result)
+		// Comments should be preserved
+		assert.Contains(t, resultStr, "# Comment about module identifier")
+		assert.Contains(t, resultStr, "# Comment about settings")
+		// source should be before name after fix
+		sourceIdx := indexOf(resultStr, "source")
+		nameIdx := indexOf(resultStr, "name =")
 		assert.Less(t, sourceIdx, nameIdx, "source should be before name")
 	})
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/hashicorp/hcl/v2"
@@ -1218,4 +1219,92 @@ resource "aws_instance" "MyServer" { }
 			}
 		})
 	}
+}
+
+func TestEngine_FixPreservesComments(t *testing.T) {
+	t.Run("single block with comments", func(t *testing.T) {
+		content := `module "example" {
+  source = "./module"
+  depends_on = [module.other]
+  # This is an important comment
+  # that spans multiple lines
+  instance_type = "t3.micro"
+  for_each = var.instances
+  tags = { Name = "test" }
+}
+`
+		tmpDir := t.TempDir()
+		tmpFile := filepath.Join(tmpDir, "test.tf")
+		require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0o644))
+
+		engine := New(&Config{Fix: true})
+		_, err := engine.Run(context.Background(), []string{tmpFile})
+		require.NoError(t, err)
+
+		result, err := os.ReadFile(tmpFile)
+		require.NoError(t, err)
+
+		resultStr := string(result)
+		// Comments must be preserved
+		assert.Contains(t, resultStr, "# This is an important comment")
+		assert.Contains(t, resultStr, "# that spans multiple lines")
+		// Order must be correct: for_each, source, regular attrs, tags, depends_on
+		forEachIdx := strings.Index(resultStr, "for_each")
+		sourceIdx := strings.Index(resultStr, "source")
+		instanceIdx := strings.Index(resultStr, "instance_type")
+		tagsIdx := strings.Index(resultStr, "tags")
+		dependsOnIdx := strings.Index(resultStr, "depends_on")
+		assert.Less(t, forEachIdx, sourceIdx, "for_each should be before source")
+		assert.Less(t, sourceIdx, instanceIdx, "source should be before instance_type")
+		assert.Less(t, instanceIdx, tagsIdx, "instance_type should be before tags")
+		assert.Less(t, tagsIdx, dependsOnIdx, "tags should be before depends_on")
+	})
+
+	t.Run("multiple blocks with comments in single pass", func(t *testing.T) {
+		content := `module "first" {
+  source = "./first"
+  depends_on = [module.zero]
+  # Comment on first module
+  attr1 = "value1"
+  for_each = var.first
+  tags = { Name = "first" }
+}
+
+module "second" {
+  source = "./second"
+  depends_on = [module.first]
+  # Comment on second module
+  attr2 = "value2"
+  for_each = var.second
+  tags = { Name = "second" }
+}
+`
+		tmpDir := t.TempDir()
+		tmpFile := filepath.Join(tmpDir, "test.tf")
+		require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0o644))
+
+		engine := New(&Config{Fix: true})
+		_, err := engine.Run(context.Background(), []string{tmpFile})
+		require.NoError(t, err)
+
+		result, err := os.ReadFile(tmpFile)
+		require.NoError(t, err)
+
+		resultStr := string(result)
+		// Both comments must be preserved
+		assert.Contains(t, resultStr, "# Comment on first module")
+		assert.Contains(t, resultStr, "# Comment on second module")
+		// Both blocks must be correctly ordered (check depends_on is last in each)
+		// Find the two depends_on occurrences
+		firstDepends := strings.Index(resultStr, "depends_on = [module.zero]")
+		secondDepends := strings.Index(resultStr, "depends_on = [module.first]")
+		assert.Greater(t, firstDepends, 0, "first depends_on should exist")
+		assert.Greater(t, secondDepends, firstDepends, "second depends_on should be after first")
+
+		// Verify no issues remain after fix
+		engine2 := New(&Config{Fix: false})
+		findings, err := engine2.Run(context.Background(), []string{tmpFile})
+		require.NoError(t, err)
+		assert.Empty(t, findings, "should have no issues after fix")
+	})
 }

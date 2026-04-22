@@ -1,6 +1,7 @@
 package rules
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/hashicorp/hcl/v2"
@@ -97,15 +98,44 @@ func TestReorderBlockAttrs(t *testing.T) {
 			require.False(t, diags.HasErrors())
 
 			syntaxBody := syntaxFile.Body.(*hclsyntax.Body)
-			if len(syntaxBody.Blocks) > 0 {
-				orderedNames := GetOrderedAttrNames(syntaxBody.Blocks[0].Body)
+			require.NotEmpty(t, syntaxBody.Blocks, "test content should have at least one block")
 
-				writeBlock := writeFile.Body().Blocks()[0]
-				ReorderBlockAttrs(writeBlock.Body(), orderedNames, tt.firstAttrs, tt.lastAttrs)
+			orderedNames := GetOrderedAttrNames(syntaxBody.Blocks[0].Body)
 
-				// Get the result
-				result := string(writeFile.Bytes())
-				assert.NotEmpty(t, result)
+			writeBlock := writeFile.Body().Blocks()[0]
+			ReorderBlockAttrs(writeBlock.Body(), orderedNames, tt.firstAttrs, tt.lastAttrs)
+
+			result := string(writeFile.Bytes())
+
+			// Verify checkFirst attribute appears before others
+			// Use "\n  " prefix to match line start (immune to hclwrite alignment padding)
+			if tt.checkFirst != "" {
+				firstIdx := strings.Index(result, "\n  "+tt.checkFirst)
+				require.NotEqual(t, -1, firstIdx, "%s should be in result", tt.checkFirst)
+
+				for _, name := range orderedNames {
+					if name != tt.checkFirst {
+						otherIdx := strings.Index(result, "\n  "+name)
+						require.NotEqual(t, -1, otherIdx, "%s should be in result", name)
+						assert.Less(t, firstIdx, otherIdx,
+							"%s should appear before %s", tt.checkFirst, name)
+					}
+				}
+			}
+
+			// Verify checkLast attribute appears after others
+			if tt.checkLast != "" {
+				lastIdx := strings.LastIndex(result, "\n  "+tt.checkLast)
+				require.NotEqual(t, -1, lastIdx, "%s should be in result", tt.checkLast)
+
+				for _, name := range orderedNames {
+					if name != tt.checkLast {
+						otherIdx := strings.LastIndex(result, "\n  "+name)
+						require.NotEqual(t, -1, otherIdx, "%s should be in result", name)
+						assert.Greater(t, lastIdx, otherIdx,
+							"%s should appear after %s", tt.checkLast, name)
+					}
+				}
 			}
 		})
 	}
@@ -899,4 +929,317 @@ func TestReorderBlockAttrsPreservesComments(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestExtractAttrRegions(t *testing.T) {
+	tests := []struct {
+		name            string
+		content         string
+		expectRegions   []string
+		expectComment   map[string]string // attr name -> expected comment content
+		expectLineCount map[string]int    // attr name -> exact number of lines expected
+	}{
+		{
+			name: "attributes with leading comments",
+			//nolint:dupword // HCL content intentionally contains repeated identifiers
+			content: `resource "test" "example" {
+  # This is a comment for ami
+  ami = "ami-123"
+
+  # Comment for name
+  name = "test"
+}`,
+			expectRegions: []string{"ami", "name"},
+			expectComment: map[string]string{
+				"ami":  "# This is a comment for ami",
+				"name": "# Comment for name",
+			},
+		},
+		{
+			name: "attribute without comment",
+			content: `resource "test" "example" {
+  ami = "ami-123"
+}`,
+			expectRegions: []string{"ami"},
+			expectComment: map[string]string{},
+		},
+		{
+			name: "multi-line attribute spans all lines",
+			content: `resource "test" "example" {
+  tags = {
+    Name = "test"
+    Env  = "prod"
+  }
+}`,
+			expectRegions:   []string{"tags"},
+			expectLineCount: map[string]int{"tags": 4},
+		},
+		{
+			name: "empty block returns no regions",
+			content: `resource "test" "example" {
+}`,
+			expectRegions: []string{},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			file, diags := hclsyntax.ParseConfig([]byte(tt.content), "test.tf", hcl.InitialPos)
+			require.False(t, diags.HasErrors())
+
+			body := file.Body.(*hclsyntax.Body)
+			require.NotEmpty(t, body.Blocks, "test content should have at least one block")
+
+			regions := ExtractAttrRegions([]byte(tt.content), body.Blocks[0].Body)
+
+			// Verify exact count of regions (catches spurious extra regions)
+			assert.Len(t, regions, len(tt.expectRegions),
+				"expected %d regions, got %d", len(tt.expectRegions), len(regions))
+
+			// Check expected regions exist
+			for _, name := range tt.expectRegions {
+				assert.Contains(t, regions, name, "region %s should exist", name)
+			}
+
+			// Check comments if specified
+			for name, expectedComment := range tt.expectComment {
+				region, ok := regions[name]
+				require.True(t, ok, "region %s should exist for comment check", name)
+				assert.Contains(t, region.LeadingComment, expectedComment,
+					"attribute %s should have comment containing: %s", name, expectedComment)
+			}
+
+			// Check multi-line attributes span exact expected lines
+			for name, expectedLines := range tt.expectLineCount {
+				region, ok := regions[name]
+				require.True(t, ok, "region %s should exist for line count check", name)
+				assert.Equal(t, expectedLines, len(region.Lines),
+					"attribute %s should span exactly %d lines, got %d", name, expectedLines, len(region.Lines))
+			}
+		})
+	}
+}
+
+func TestReorderBlockAttrsPreservingComments(t *testing.T) {
+	tests := []struct {
+		name         string
+		content      string
+		firstAttrs   []string
+		lastAttrs    []string
+		checkFirst   string // attribute that should appear first
+		checkLast    string // attribute that should appear last
+		expectInline []string
+	}{
+		{
+			name: "for_each moves to first with comment preserved",
+			//nolint:dupword // HCL content intentionally contains repeated identifiers
+			content: `resource "test" "example" {
+  # Comment for ami
+  ami = "ami-123"
+
+  # Comment for for_each
+  for_each = var.items
+
+  name = "test"
+}`,
+			firstAttrs:   []string{"for_each"},
+			lastAttrs:    nil,
+			checkFirst:   "for_each",
+			expectInline: []string{"# Comment for for_each", "# Comment for ami"},
+		},
+		{
+			name: "tags moves to end with comment preserved",
+			content: `resource "test" "example" {
+  # Tags comment
+  tags = { Name = "test" }
+  ami  = "ami-123"
+}`,
+			firstAttrs:   nil,
+			lastAttrs:    []string{"tags"},
+			checkLast:    "tags",
+			expectInline: []string{"# Tags comment"},
+		},
+		{
+			name: "firstAttrs targeting absent attribute leaves block unchanged",
+			content: `resource "test" "example" {
+  ami = "ami-123"
+}`,
+			firstAttrs:   []string{"for_each"},
+			lastAttrs:    nil,
+			expectInline: []string{`ami = "ami-123"`},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			file, diags := hclsyntax.ParseConfig([]byte(tt.content), "test.tf", hcl.InitialPos)
+			require.False(t, diags.HasErrors())
+
+			body := file.Body.(*hclsyntax.Body)
+			require.NotEmpty(t, body.Blocks, "test content should have at least one block")
+
+			block := body.Blocks[0]
+			orderedNames := GetOrderedAttrNames(block.Body)
+
+			result := ReorderBlockAttrsPreservingComments(
+				[]byte(tt.content),
+				block.Body,
+				block.Range().Start.Line,
+				block.Range().End.Line,
+				orderedNames,
+				tt.firstAttrs,
+				tt.lastAttrs,
+			)
+
+			resultStr := string(result)
+			assert.NotEmpty(t, resultStr)
+
+			// Verify positional ordering if checkFirst is specified
+			// Use "\n  " prefix to match line start (immune to alignment padding, avoids comment matches)
+			if tt.checkFirst != "" {
+				firstIdx := strings.Index(resultStr, "\n  "+tt.checkFirst)
+				require.NotEqual(t, -1, firstIdx, "%s should be in result", tt.checkFirst)
+
+				// Check it comes before other attributes
+				for _, name := range orderedNames {
+					if name != tt.checkFirst {
+						otherIdx := strings.Index(resultStr, "\n  "+name)
+						require.NotEqual(t, -1, otherIdx, "%s should be in result", name)
+						assert.Less(t, firstIdx, otherIdx,
+							"%s should appear before %s", tt.checkFirst, name)
+					}
+				}
+			}
+
+			// Verify positional ordering if checkLast is specified
+			if tt.checkLast != "" {
+				lastIdx := strings.LastIndex(resultStr, "\n  "+tt.checkLast)
+				require.NotEqual(t, -1, lastIdx, "%s should be in result", tt.checkLast)
+
+				// Check it comes after other attributes
+				for _, name := range orderedNames {
+					if name != tt.checkLast {
+						otherIdx := strings.LastIndex(resultStr, "\n  "+name)
+						require.NotEqual(t, -1, otherIdx, "%s should be in result", name)
+						assert.Greater(t, lastIdx, otherIdx,
+							"%s should appear after %s", tt.checkLast, name)
+					}
+				}
+			}
+
+			// Check expected content is preserved
+			for _, expected := range tt.expectInline {
+				assert.Contains(t, resultStr, expected, "should contain: %s", expected)
+			}
+		})
+	}
+}
+
+func TestReorderBlockAttrs_EdgeCases(t *testing.T) {
+	t.Run("empty orderedNames leaves block unchanged", func(t *testing.T) {
+		content := `resource "test" "example" {
+  ami = "ami-123"
+}`
+		writeFile, diags := hclwrite.ParseConfig([]byte(content), "test.tf", hcl.InitialPos)
+		require.False(t, diags.HasErrors())
+
+		block := writeFile.Body().Blocks()[0]
+		ReorderBlockAttrs(block.Body(), []string{}, []string{"for_each"}, nil)
+
+		// Should be structurally unchanged
+		result := string(writeFile.Bytes())
+		assert.Contains(t, result, `ami = "ami-123"`, "original attribute assignment should be preserved")
+	})
+
+	t.Run("nonexistent firstAttrs are skipped without panic", func(t *testing.T) {
+		content := `resource "test" "example" {
+  ami = "ami-123"
+}`
+		syntaxFile, diags := hclsyntax.ParseConfig([]byte(content), "test.tf", hcl.InitialPos)
+		require.False(t, diags.HasErrors())
+
+		writeFile, diags := hclwrite.ParseConfig([]byte(content), "test.tf", hcl.InitialPos)
+		require.False(t, diags.HasErrors())
+
+		syntaxBody := syntaxFile.Body.(*hclsyntax.Body)
+		orderedNames := GetOrderedAttrNames(syntaxBody.Blocks[0].Body)
+
+		// Add a name that doesn't exist in the body
+		orderedNames = append(orderedNames, "nonexistent_attr")
+
+		writeBlock := writeFile.Body().Blocks()[0]
+		ReorderBlockAttrs(writeBlock.Body(), orderedNames, []string{"nonexistent_attr"}, nil)
+
+		// Should not panic and original content preserved
+		result := string(writeFile.Bytes())
+		assert.Contains(t, result, `ami = "ami-123"`, "original attribute should be preserved")
+	})
+
+	t.Run("for_each moves first even when other attrs not in priority list", func(t *testing.T) {
+		content := `resource "test" "example" {
+  z_attr = "z"
+  a_attr = "a"
+  for_each = var.items
+}`
+		syntaxFile, diags := hclsyntax.ParseConfig([]byte(content), "test.tf", hcl.InitialPos)
+		require.False(t, diags.HasErrors())
+
+		writeFile, diags := hclwrite.ParseConfig([]byte(content), "test.tf", hcl.InitialPos)
+		require.False(t, diags.HasErrors())
+
+		syntaxBody := syntaxFile.Body.(*hclsyntax.Body)
+		orderedNames := GetOrderedAttrNames(syntaxBody.Blocks[0].Body)
+
+		writeBlock := writeFile.Body().Blocks()[0]
+		ReorderBlockAttrs(writeBlock.Body(), orderedNames, []string{"for_each"}, nil)
+
+		result := string(writeFile.Bytes())
+
+		// Verify for_each appears before other attributes
+		// Note: hclwrite adds alignment padding, so search for "\n  <attr>" to match line start
+		forEachIdx := strings.Index(result, "\n  for_each")
+		zAttrIdx := strings.Index(result, "\n  z_attr")
+		aAttrIdx := strings.Index(result, "\n  a_attr")
+
+		require.NotEqual(t, -1, forEachIdx, "for_each should be in result")
+		require.NotEqual(t, -1, zAttrIdx, "z_attr should be in result")
+		require.NotEqual(t, -1, aAttrIdx, "a_attr should be in result")
+
+		assert.Less(t, forEachIdx, zAttrIdx, "for_each should appear before z_attr")
+		assert.Less(t, forEachIdx, aAttrIdx, "for_each should appear before a_attr")
+	})
+
+	t.Run("lastAttrs moves attribute to end", func(t *testing.T) {
+		content := `resource "test" "example" {
+  tags = { Name = "test" }
+  ami  = "ami-123"
+  name = "example"
+}`
+		syntaxFile, diags := hclsyntax.ParseConfig([]byte(content), "test.tf", hcl.InitialPos)
+		require.False(t, diags.HasErrors())
+
+		writeFile, diags := hclwrite.ParseConfig([]byte(content), "test.tf", hcl.InitialPos)
+		require.False(t, diags.HasErrors())
+
+		syntaxBody := syntaxFile.Body.(*hclsyntax.Body)
+		orderedNames := GetOrderedAttrNames(syntaxBody.Blocks[0].Body)
+
+		writeBlock := writeFile.Body().Blocks()[0]
+		ReorderBlockAttrs(writeBlock.Body(), orderedNames, nil, []string{"tags"})
+
+		result := string(writeFile.Bytes())
+
+		// Verify tags appears after other attributes
+		// Note: hclwrite adds alignment padding, so search for "\n  <attr>" to match line start
+		tagsIdx := strings.LastIndex(result, "\n  tags")
+		amiIdx := strings.LastIndex(result, "\n  ami")
+		nameIdx := strings.LastIndex(result, "\n  name")
+
+		require.NotEqual(t, -1, tagsIdx, "tags should be in result")
+		require.NotEqual(t, -1, amiIdx, "ami should be in result")
+		require.NotEqual(t, -1, nameIdx, "name should be in result")
+
+		assert.Greater(t, tagsIdx, amiIdx, "tags should appear after ami")
+		assert.Greater(t, tagsIdx, nameIdx, "tags should appear after name")
+	})
 }

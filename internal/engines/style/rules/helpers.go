@@ -98,6 +98,89 @@ func getExprTokensWithTrailingComment(attr *hclwrite.Attribute) hclwrite.Tokens 
 	return exprTokens
 }
 
+// AttrRegion represents an attribute with its leading comments.
+type AttrRegion struct {
+	Name           string
+	LeadingComment string   // Comments on lines before the attribute
+	Lines          []string // The attribute line(s) including trailing comment
+	StartLine      int      // 1-indexed line number where region starts
+	EndLine        int      // 1-indexed line number where region ends
+}
+
+// ExtractAttrRegions extracts attribute regions (including leading comments) from content.
+// syntaxBody provides accurate line numbers for attributes.
+func ExtractAttrRegions(content []byte, syntaxBody *hclsyntax.Body) map[string]*AttrRegion {
+	lines := SplitLines(content)
+	regions := make(map[string]*AttrRegion)
+
+	// Get attributes sorted by line number
+	type attrPos struct {
+		name      string
+		startLine int
+		endLine   int
+	}
+	var attrs []attrPos
+	for name, attr := range syntaxBody.Attributes {
+		attrs = append(attrs, attrPos{
+			name:      name,
+			startLine: attr.Range().Start.Line,
+			endLine:   attr.Range().End.Line,
+		})
+	}
+	sort.Slice(attrs, func(i, j int) bool {
+		return attrs[i].startLine < attrs[j].startLine
+	})
+
+	for i, attr := range attrs {
+		region := &AttrRegion{
+			Name:      attr.name,
+			StartLine: attr.startLine,
+			EndLine:   attr.endLine,
+		}
+
+		// Find leading comments by scanning backwards from the attribute
+		// Stop at the previous attribute's end line or block start
+		searchStart := 1
+		if i > 0 {
+			searchStart = attrs[i-1].endLine + 1
+		}
+
+		// Collect leading comment lines
+		var leadingCommentLines []string
+		for lineNum := attr.startLine - 1; lineNum >= searchStart; lineNum-- {
+			if lineNum-1 >= len(lines) {
+				continue
+			}
+			line := lines[lineNum-1]
+			trimmed := strings.TrimSpace(line)
+			if trimmed == "" {
+				// Skip blank lines but stop collecting comments
+				continue
+			}
+			if strings.HasPrefix(trimmed, "#") || strings.HasPrefix(trimmed, "//") {
+				leadingCommentLines = append([]string{line}, leadingCommentLines...)
+			} else {
+				// Hit non-comment content, stop
+				break
+			}
+		}
+		if len(leadingCommentLines) > 0 {
+			region.LeadingComment = strings.Join(leadingCommentLines, "\n") + "\n"
+			// Adjust StartLine to include comments
+			region.StartLine = attr.startLine - len(leadingCommentLines)
+		}
+
+		// Collect attribute lines
+		for lineNum := attr.startLine; lineNum <= attr.endLine && lineNum-1 < len(lines); lineNum++ {
+			region.Lines = append(region.Lines, lines[lineNum-1])
+		}
+
+		regions[attr.name] = region
+	}
+
+	return regions
+}
+
 // ReorderBlockAttrs reorders attributes in a block according to the specified order.
 // firstAttrs are placed at the start, lastAttrs at the end, others maintain relative order.
 // orderedNames should be the original order of attributes (from hclsyntax parsing).
@@ -174,6 +257,115 @@ func ReorderBlockAttrs(body *hclwrite.Body, orderedNames, firstAttrs, lastAttrs 
 	for _, name := range last {
 		body.SetAttributeRaw(name, attrTokens[name])
 	}
+}
+
+// ReorderBlockAttrsPreservingComments reorders attributes while preserving leading comments.
+// This is a line-based approach that works with raw content.
+// Returns the modified content.
+func ReorderBlockAttrsPreservingComments(
+	content []byte,
+	syntaxBody *hclsyntax.Body,
+	blockStartLine, blockEndLine int,
+	orderedNames, firstAttrs, lastAttrs []string,
+) []byte {
+	if len(orderedNames) == 0 {
+		return content
+	}
+
+	// Extract attribute regions with leading comments
+	regions := ExtractAttrRegions(content, syntaxBody)
+
+	// Build sets for quick lookup
+	firstSet := make(map[string]bool)
+	for _, name := range firstAttrs {
+		firstSet[name] = true
+	}
+	lastSet := make(map[string]bool)
+	for _, name := range lastAttrs {
+		lastSet[name] = true
+	}
+
+	// Categorize attribute names
+	var first, middle, last []string
+	for _, name := range orderedNames {
+		if _, exists := regions[name]; !exists {
+			continue
+		}
+		if firstSet[name] {
+			first = append(first, name)
+		} else if lastSet[name] {
+			last = append(last, name)
+		} else {
+			middle = append(middle, name)
+		}
+	}
+
+	// Sort first and last attributes by priority order
+	sortByPriority := func(names []string, priority []string) {
+		prioMap := make(map[string]int)
+		for i, name := range priority {
+			prioMap[name] = i
+		}
+		sort.SliceStable(names, func(i, j int) bool {
+			pi, oki := prioMap[names[i]]
+			pj, okj := prioMap[names[j]]
+			if oki && okj {
+				return pi < pj
+			}
+			if oki {
+				return true
+			}
+			return !okj
+		})
+	}
+
+	sortByPriority(first, firstAttrs)
+	sortByPriority(last, lastAttrs)
+
+	// Build the new block content in order
+	lines := SplitLines(content)
+	var newBlockContent []string
+
+	// Get block opening line
+	if blockStartLine-1 < len(lines) {
+		newBlockContent = append(newBlockContent, lines[blockStartLine-1])
+	}
+
+	// Add attributes in new order
+	reorderedNames := append(append(first, middle...), last...)
+	for _, name := range reorderedNames {
+		region := regions[name]
+		if region == nil {
+			continue
+		}
+		// Add leading comment if present
+		if region.LeadingComment != "" {
+			commentLines := strings.Split(strings.TrimSuffix(region.LeadingComment, "\n"), "\n")
+			newBlockContent = append(newBlockContent, commentLines...)
+		}
+		// Add attribute lines
+		newBlockContent = append(newBlockContent, region.Lines...)
+	}
+
+	// Get block closing line
+	if blockEndLine-1 < len(lines) {
+		newBlockContent = append(newBlockContent, lines[blockEndLine-1])
+	}
+
+	// Rebuild full content
+	var result []string
+	// Lines before block
+	for i := 0; i < blockStartLine-1 && i < len(lines); i++ {
+		result = append(result, lines[i])
+	}
+	// New block content
+	result = append(result, newBlockContent...)
+	// Lines after block
+	for i := blockEndLine; i < len(lines); i++ {
+		result = append(result, lines[i])
+	}
+
+	return []byte(strings.Join(result, "\n") + "\n")
 }
 
 // FormatAndCleanBlankLines applies hclwrite.Format and removes leading/trailing blank lines inside blocks.

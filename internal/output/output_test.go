@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -1206,6 +1207,9 @@ func TestDisplayPath(t *testing.T) {
 	})
 
 	t.Run("absolute path outside cwd becomes relative with dotdot", func(t *testing.T) {
+		if runtime.GOOS == "windows" {
+			t.Skip("Unix-style absolute paths not applicable on Windows")
+		}
 		absPath := "/some/other/path/test.tf"
 		result := DisplayPath(absPath, false)
 		assert.Contains(t, result, "..")

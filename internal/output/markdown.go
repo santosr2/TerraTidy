@@ -87,7 +87,7 @@ func (f *MarkdownFormatter) writeSummary(w io.Writer, total, errors, warnings, i
 }
 
 func (f *MarkdownFormatter) writeFileFindingsAsTable(w io.Writer, file string, findings []sdk.Finding) {
-	displayFile := displayPath(file, f.AbsolutePaths)
+	displayFile := DisplayPath(file, f.AbsolutePaths)
 	_, _ = fmt.Fprintf(w, "### `%s`\n\n", displayFile)
 	_, _ = fmt.Fprint(w, "| Severity | Line | Rule | Message |\n")
 	_, _ = fmt.Fprint(w, "|----------|------|------|---------|")

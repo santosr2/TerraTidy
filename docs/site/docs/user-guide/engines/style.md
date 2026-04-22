@@ -13,8 +13,17 @@ to maintain a uniform codebase.
 # Run style checks
 terratidy style
 
+# Exit with code 1 if issues found (useful for CI)
+terratidy style --check
+
 # Fix style issues
 terratidy style --fix
+
+# Preview what would change (without modifying files)
+terratidy style --diff
+
+# Fix and show diff of changes
+terratidy style --fix --diff
 
 # Check specific directory
 terratidy style ./modules/
@@ -52,7 +61,7 @@ engines:
 |--------|------|---------|-------------|
 | `enabled` | bool | `true` | Enable/disable the style engine |
 | `fix` | bool | `false` | Auto-fix mode - apply fixes automatically |
-| `diff` | bool | `false` | Show unified diff when fixes are applied |
+| `diff` | bool | `false` | Show colored unified diff (works standalone for preview, or with `fix` to show applied changes) |
 | `rules` | map | `{}` | Rule configuration (enabled, severity, options) |
 
 ## Rules

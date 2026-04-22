@@ -168,7 +168,7 @@ func (f *SARIFFormatter) buildSARIFResults(findings []sdk.Finding) []SARIFResult
 }
 
 func (f *SARIFFormatter) buildSARIFResult(finding sdk.Finding) SARIFResult {
-	filePath := displayPath(finding.File, f.AbsolutePaths)
+	filePath := DisplayPath(finding.File, f.AbsolutePaths)
 	result := SARIFResult{
 		RuleID: finding.Rule,
 		Level:  sarifLevel(finding.Severity),
@@ -210,7 +210,7 @@ func buildSARIFRegion(startLine, startCol, endLine, endCol int) SARIFRegion {
 }
 
 func (f *SARIFFormatter) buildSARIFFixes(finding sdk.Finding) []SARIFFix {
-	filePath := displayPath(finding.File, f.AbsolutePaths)
+	filePath := DisplayPath(finding.File, f.AbsolutePaths)
 	return []SARIFFix{
 		{
 			Description: SARIFMessage{

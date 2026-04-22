@@ -15,9 +15,9 @@ import (
 	"github.com/santosr2/TerraTidy/pkg/sdk"
 )
 
-// displayPath returns the path for display, converting to relative unless absolutePaths is true.
+// DisplayPath returns the path for display, converting to relative unless absolutePaths is true.
 // Relative paths are the default for better readability in CI/editor output.
-func displayPath(path string, absolutePaths bool) string {
+func DisplayPath(path string, absolutePaths bool) string {
 	if absolutePaths {
 		return path
 	}
@@ -32,10 +32,40 @@ func displayPath(path string, absolutePaths bool) string {
 	return path
 }
 
+// FormatDiff colorizes unified diff output for terminal display.
+// Headers (--- and +++), hunk markers (@@), removed lines (-), and added lines (+) get colored.
+// If color is false, returns the input unchanged.
+func FormatDiff(diff string, color bool) string {
+	if !color || diff == "" {
+		return diff
+	}
+	var result strings.Builder
+	lines := strings.Split(diff, "\n")
+	for i, line := range lines {
+		if i > 0 {
+			result.WriteString("\n")
+		}
+		switch {
+		case strings.HasPrefix(line, "---") || strings.HasPrefix(line, "+++"):
+			result.WriteString(colorCyan + line + colorReset)
+		case strings.HasPrefix(line, "@@"):
+			result.WriteString(colorCyan + line + colorReset)
+		case strings.HasPrefix(line, "-"):
+			result.WriteString(colorRed + line + colorReset)
+		case strings.HasPrefix(line, "+"):
+			result.WriteString(colorGreen + line + colorReset)
+		default:
+			result.WriteString(line)
+		}
+	}
+	return result.String()
+}
+
 // ANSI color codes
 const (
 	colorReset  = "\033[0m"
 	colorRed    = "\033[31m"
+	colorGreen  = "\033[32m"
 	colorYellow = "\033[33m"
 	colorCyan   = "\033[36m"
 	colorGray   = "\033[90m"
@@ -79,7 +109,7 @@ func (f *TextFormatter) Format(findings []sdk.Finding, w io.Writer) error {
 			iconColor = colorCyan
 		}
 
-		displayFile := displayPath(finding.File, f.AbsolutePaths)
+		displayFile := DisplayPath(finding.File, f.AbsolutePaths)
 
 		// Include line:col when available (StartLine > 0), matching compiler/linter conventions.
 		// Omit for file-level findings without position to avoid confusing `:0:0` output.
@@ -181,7 +211,7 @@ func (f *JSONFormatter) Format(findings []sdk.Finding, w io.Writer) error {
 		output.Findings = append(output.Findings, JSONFinding{
 			Rule:    finding.Rule,
 			Message: finding.Message,
-			File:    displayPath(finding.File, f.AbsolutePaths),
+			File:    DisplayPath(finding.File, f.AbsolutePaths),
 			Location: JSONLocation{
 				Start: JSONPosition{
 					Line:   finding.Location.StartLine,
@@ -327,8 +357,8 @@ func (f *TableFormatter) printFinding(w io.Writer, finding sdk.Finding) {
 		severity = "INFO"
 	}
 
-	// Format location - use displayPath for consistent path handling
-	filename := displayPath(finding.File, f.AbsolutePaths)
+	// Format location - use DisplayPath for consistent path handling
+	filename := DisplayPath(finding.File, f.AbsolutePaths)
 	location := filename
 	if finding.Location.StartLine > 0 {
 		location = fmt.Sprintf("%s:%d:%d", filename, finding.Location.StartLine, finding.Location.StartColumn)
@@ -367,7 +397,7 @@ type GitHubActionsFormatter struct {
 func (f *GitHubActionsFormatter) Format(findings []sdk.Finding, w io.Writer) error {
 	for _, finding := range findings {
 		command := f.severityToCommand(finding.Severity)
-		file := displayPath(finding.File, f.AbsolutePaths)
+		file := DisplayPath(finding.File, f.AbsolutePaths)
 		line := finding.Location.StartLine
 		col := finding.Location.StartColumn
 		endLine := finding.Location.EndLine
@@ -654,7 +684,7 @@ func (f *HTMLFormatter) generateFileSection(file string, findings []sdk.Finding)
 		findingsHTML += f.generateFindingHTML(finding)
 	}
 
-	displayFile := displayPath(file, f.AbsolutePaths)
+	displayFile := DisplayPath(file, f.AbsolutePaths)
 	return fmt.Sprintf(`
         <div class="file-section">
             <div class="file-header">%s</div>

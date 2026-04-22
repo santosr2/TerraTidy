@@ -108,33 +108,32 @@ func TestReorderBlockAttrs(t *testing.T) {
 			result := string(writeFile.Bytes())
 
 			// Verify checkFirst attribute appears before others
+			// Use "\n  " prefix to match line start (immune to hclwrite alignment padding)
 			if tt.checkFirst != "" {
-				firstIdx := strings.Index(result, tt.checkFirst+" =")
+				firstIdx := strings.Index(result, "\n  "+tt.checkFirst)
 				require.NotEqual(t, -1, firstIdx, "%s should be in result", tt.checkFirst)
 
 				for _, name := range orderedNames {
 					if name != tt.checkFirst {
-						otherIdx := strings.Index(result, name+" =")
-						if otherIdx != -1 {
-							assert.Less(t, firstIdx, otherIdx,
-								"%s should appear before %s", tt.checkFirst, name)
-						}
+						otherIdx := strings.Index(result, "\n  "+name)
+						require.NotEqual(t, -1, otherIdx, "%s should be in result", name)
+						assert.Less(t, firstIdx, otherIdx,
+							"%s should appear before %s", tt.checkFirst, name)
 					}
 				}
 			}
 
 			// Verify checkLast attribute appears after others
 			if tt.checkLast != "" {
-				lastIdx := strings.LastIndex(result, tt.checkLast+" =")
+				lastIdx := strings.LastIndex(result, "\n  "+tt.checkLast)
 				require.NotEqual(t, -1, lastIdx, "%s should be in result", tt.checkLast)
 
 				for _, name := range orderedNames {
 					if name != tt.checkLast {
-						otherIdx := strings.LastIndex(result, name+" =")
-						if otherIdx != -1 {
-							assert.Greater(t, lastIdx, otherIdx,
-								"%s should appear after %s", tt.checkLast, name)
-						}
+						otherIdx := strings.LastIndex(result, "\n  "+name)
+						require.NotEqual(t, -1, otherIdx, "%s should be in result", name)
+						assert.Greater(t, lastIdx, otherIdx,
+							"%s should appear after %s", tt.checkLast, name)
 					}
 				}
 			}
@@ -1096,35 +1095,34 @@ func TestReorderBlockAttrsPreservingComments(t *testing.T) {
 			assert.NotEmpty(t, resultStr)
 
 			// Verify positional ordering if checkFirst is specified
+			// Use "\n  " prefix to match line start (immune to alignment padding, avoids comment matches)
 			if tt.checkFirst != "" {
-				firstIdx := strings.Index(resultStr, tt.checkFirst+" =")
-				require.NotEqual(t, -1, firstIdx, "%s assignment should be in result", tt.checkFirst)
+				firstIdx := strings.Index(resultStr, "\n  "+tt.checkFirst)
+				require.NotEqual(t, -1, firstIdx, "%s should be in result", tt.checkFirst)
 
 				// Check it comes before other attributes
 				for _, name := range orderedNames {
 					if name != tt.checkFirst {
-						otherIdx := strings.Index(resultStr, name+" =")
-						if otherIdx != -1 {
-							assert.Less(t, firstIdx, otherIdx,
-								"%s should appear before %s", tt.checkFirst, name)
-						}
+						otherIdx := strings.Index(resultStr, "\n  "+name)
+						require.NotEqual(t, -1, otherIdx, "%s should be in result", name)
+						assert.Less(t, firstIdx, otherIdx,
+							"%s should appear before %s", tt.checkFirst, name)
 					}
 				}
 			}
 
 			// Verify positional ordering if checkLast is specified
 			if tt.checkLast != "" {
-				lastIdx := strings.LastIndex(resultStr, tt.checkLast+" =")
-				require.NotEqual(t, -1, lastIdx, "%s assignment should be in result", tt.checkLast)
+				lastIdx := strings.LastIndex(resultStr, "\n  "+tt.checkLast)
+				require.NotEqual(t, -1, lastIdx, "%s should be in result", tt.checkLast)
 
 				// Check it comes after other attributes
 				for _, name := range orderedNames {
 					if name != tt.checkLast {
-						otherIdx := strings.LastIndex(resultStr, name+" =")
-						if otherIdx != -1 {
-							assert.Greater(t, lastIdx, otherIdx,
-								"%s should appear after %s", tt.checkLast, name)
-						}
+						otherIdx := strings.LastIndex(resultStr, "\n  "+name)
+						require.NotEqual(t, -1, otherIdx, "%s should be in result", name)
+						assert.Greater(t, lastIdx, otherIdx,
+							"%s should appear after %s", tt.checkLast, name)
 					}
 				}
 			}

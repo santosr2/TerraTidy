@@ -98,15 +98,45 @@ func TestReorderBlockAttrs(t *testing.T) {
 			require.False(t, diags.HasErrors())
 
 			syntaxBody := syntaxFile.Body.(*hclsyntax.Body)
-			if len(syntaxBody.Blocks) > 0 {
-				orderedNames := GetOrderedAttrNames(syntaxBody.Blocks[0].Body)
+			require.NotEmpty(t, syntaxBody.Blocks, "test content should have at least one block")
 
-				writeBlock := writeFile.Body().Blocks()[0]
-				ReorderBlockAttrs(writeBlock.Body(), orderedNames, tt.firstAttrs, tt.lastAttrs)
+			orderedNames := GetOrderedAttrNames(syntaxBody.Blocks[0].Body)
 
-				// Get the result
-				result := string(writeFile.Bytes())
-				assert.NotEmpty(t, result)
+			writeBlock := writeFile.Body().Blocks()[0]
+			ReorderBlockAttrs(writeBlock.Body(), orderedNames, tt.firstAttrs, tt.lastAttrs)
+
+			result := string(writeFile.Bytes())
+
+			// Verify checkFirst attribute appears before others
+			if tt.checkFirst != "" {
+				firstIdx := strings.Index(result, tt.checkFirst+" =")
+				require.NotEqual(t, -1, firstIdx, "%s should be in result", tt.checkFirst)
+
+				for _, name := range orderedNames {
+					if name != tt.checkFirst {
+						otherIdx := strings.Index(result, name+" =")
+						if otherIdx != -1 {
+							assert.Less(t, firstIdx, otherIdx,
+								"%s should appear before %s", tt.checkFirst, name)
+						}
+					}
+				}
+			}
+
+			// Verify checkLast attribute appears after others
+			if tt.checkLast != "" {
+				lastIdx := strings.LastIndex(result, tt.checkLast+" =")
+				require.NotEqual(t, -1, lastIdx, "%s should be in result", tt.checkLast)
+
+				for _, name := range orderedNames {
+					if name != tt.checkLast {
+						otherIdx := strings.LastIndex(result, name+" =")
+						if otherIdx != -1 {
+							assert.Greater(t, lastIdx, otherIdx,
+								"%s should appear after %s", tt.checkLast, name)
+						}
+					}
+				}
 			}
 		})
 	}
@@ -904,11 +934,11 @@ func TestReorderBlockAttrsPreservesComments(t *testing.T) {
 
 func TestExtractAttrRegions(t *testing.T) {
 	tests := []struct {
-		name           string
-		content        string
-		expectRegions  []string
-		expectComment  map[string]string // attr name -> expected comment content
-		expectMinLines map[string]int    // attr name -> minimum number of lines
+		name            string
+		content         string
+		expectRegions   []string
+		expectComment   map[string]string // attr name -> expected comment content
+		expectLineCount map[string]int    // attr name -> exact number of lines expected
 	}{
 		{
 			name: "attributes with leading comments",
@@ -942,8 +972,8 @@ func TestExtractAttrRegions(t *testing.T) {
     Env  = "prod"
   }
 }`,
-			expectRegions:  []string{"tags"},
-			expectMinLines: map[string]int{"tags": 4},
+			expectRegions:   []string{"tags"},
+			expectLineCount: map[string]int{"tags": 4},
 		},
 		{
 			name: "empty block returns no regions",
@@ -980,12 +1010,12 @@ func TestExtractAttrRegions(t *testing.T) {
 					"attribute %s should have comment containing: %s", name, expectedComment)
 			}
 
-			// Check multi-line attributes span expected lines
-			for name, minLines := range tt.expectMinLines {
+			// Check multi-line attributes span exact expected lines
+			for name, expectedLines := range tt.expectLineCount {
 				region, ok := regions[name]
 				require.True(t, ok, "region %s should exist for line count check", name)
-				assert.GreaterOrEqual(t, len(region.Lines), minLines,
-					"attribute %s should span at least %d lines, got %d", name, minLines, len(region.Lines))
+				assert.Equal(t, expectedLines, len(region.Lines),
+					"attribute %s should span exactly %d lines, got %d", name, expectedLines, len(region.Lines))
 			}
 		})
 	}
@@ -1067,8 +1097,8 @@ func TestReorderBlockAttrsPreservingComments(t *testing.T) {
 
 			// Verify positional ordering if checkFirst is specified
 			if tt.checkFirst != "" {
-				firstIdx := strings.Index(resultStr, tt.checkFirst)
-				require.NotEqual(t, -1, firstIdx, "%s should be in result", tt.checkFirst)
+				firstIdx := strings.Index(resultStr, tt.checkFirst+" =")
+				require.NotEqual(t, -1, firstIdx, "%s assignment should be in result", tt.checkFirst)
 
 				// Check it comes before other attributes
 				for _, name := range orderedNames {
@@ -1084,13 +1114,13 @@ func TestReorderBlockAttrsPreservingComments(t *testing.T) {
 
 			// Verify positional ordering if checkLast is specified
 			if tt.checkLast != "" {
-				lastIdx := strings.Index(resultStr, tt.checkLast)
-				require.NotEqual(t, -1, lastIdx, "%s should be in result", tt.checkLast)
+				lastIdx := strings.LastIndex(resultStr, tt.checkLast+" =")
+				require.NotEqual(t, -1, lastIdx, "%s assignment should be in result", tt.checkLast)
 
 				// Check it comes after other attributes
 				for _, name := range orderedNames {
 					if name != tt.checkLast {
-						otherIdx := strings.Index(resultStr, name+" =")
+						otherIdx := strings.LastIndex(resultStr, name+" =")
 						if otherIdx != -1 {
 							assert.Greater(t, lastIdx, otherIdx,
 								"%s should appear after %s", tt.checkLast, name)
@@ -1168,9 +1198,10 @@ func TestReorderBlockAttrs_EdgeCases(t *testing.T) {
 		result := string(writeFile.Bytes())
 
 		// Verify for_each appears before other attributes
-		forEachIdx := strings.Index(result, "for_each")
-		zAttrIdx := strings.Index(result, "z_attr")
-		aAttrIdx := strings.Index(result, "a_attr")
+		// Note: hclwrite adds alignment padding, so search for "\n  <attr>" to match line start
+		forEachIdx := strings.Index(result, "\n  for_each")
+		zAttrIdx := strings.Index(result, "\n  z_attr")
+		aAttrIdx := strings.Index(result, "\n  a_attr")
 
 		require.NotEqual(t, -1, forEachIdx, "for_each should be in result")
 		require.NotEqual(t, -1, zAttrIdx, "z_attr should be in result")
@@ -1201,9 +1232,10 @@ func TestReorderBlockAttrs_EdgeCases(t *testing.T) {
 		result := string(writeFile.Bytes())
 
 		// Verify tags appears after other attributes
-		tagsIdx := strings.Index(result, "tags")
-		amiIdx := strings.Index(result, "ami")
-		nameIdx := strings.Index(result, "name")
+		// Note: hclwrite adds alignment padding, so search for "\n  <attr>" to match line start
+		tagsIdx := strings.LastIndex(result, "\n  tags")
+		amiIdx := strings.LastIndex(result, "\n  ami")
+		nameIdx := strings.LastIndex(result, "\n  name")
 
 		require.NotEqual(t, -1, tagsIdx, "tags should be in result")
 		require.NotEqual(t, -1, amiIdx, "ami should be in result")

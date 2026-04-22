@@ -211,4 +211,42 @@ resource "null_resource" "test2" {
 		require.NoError(t, err)
 		assert.Equal(t, cleanContent, string(afterContent), "clean file should remain unchanged")
 	})
+
+	t.Run("diff with structured output includes diff findings", func(t *testing.T) {
+		resetStyleFlags()
+		tmpDir := t.TempDir()
+
+		// Create file with fixable style issue (extra blank lines)
+		contentWithIssue := `resource "aws_instance" "test" {
+  ami = "ami-123"
+}
+
+
+resource "null_resource" "test2" {
+  triggers = {}
+}
+`
+		filePath := filepath.Join(tmpDir, "main.tf")
+		require.NoError(t, os.WriteFile(filePath, []byte(contentWithIssue), 0o644))
+
+		originalContent, err := os.ReadFile(filePath)
+		require.NoError(t, err)
+
+		// Reset flags
+		styleFix = false
+		styleCheck = false
+		styleDiff = false
+		changed = false
+		color = false
+		format = "json"
+
+		rootCmd.SetArgs([]string{"style", "--diff", tmpDir})
+		err = rootCmd.Execute()
+		assert.NoError(t, err)
+
+		// File should NOT be modified (preview mode)
+		afterContent, err := os.ReadFile(filePath)
+		require.NoError(t, err)
+		assert.Equal(t, string(originalContent), string(afterContent), "File should not be modified in preview mode")
+	})
 }

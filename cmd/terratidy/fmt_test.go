@@ -528,6 +528,41 @@ ami="ami-123"
 		// Output uses DisplayPath which converts to relative paths by default
 		// The test verifies the code path works without errors
 	})
+
+	t.Run("all and diff flags together show style diffs without modifying file in check mode", func(t *testing.T) {
+		tmpDir := t.TempDir()
+
+		// Create file with style issue (extra blank lines between blocks)
+		contentWithStyleIssue := `resource "aws_instance" "test" {
+  ami = "ami-123"
+}
+
+
+resource "null_resource" "test2" {
+  triggers = {}
+}
+`
+		filePath := filepath.Join(tmpDir, "main.tf")
+		require.NoError(t, os.WriteFile(filePath, []byte(contentWithStyleIssue), 0o644))
+
+		originalContent, err := os.ReadFile(filePath)
+		require.NoError(t, err)
+
+		// Reset flags
+		fmtCheck = false
+		fmtDiff = false
+		fmtAll = false
+		changed = false
+		color = false
+
+		rootCmd.SetArgs([]string{"fmt", "--all", "--diff", "--check", tmpDir})
+		_ = rootCmd.Execute() // May return ExitFindings due to style issues
+
+		// File should NOT be modified (check mode)
+		afterContent, err := os.ReadFile(filePath)
+		require.NoError(t, err)
+		assert.Equal(t, string(originalContent), string(afterContent), "File should not be modified in check mode")
+	})
 }
 
 // TestFmtAllCheckMode verifies that fmt --all --check reports style issues

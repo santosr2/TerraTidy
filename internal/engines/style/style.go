@@ -4,6 +4,7 @@ package style
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"os"
 
@@ -140,14 +141,43 @@ func (e *Engine) checkFile(path string) ([]sdk.Finding, error) {
 
 	var allFindings []sdk.Finding
 	var suppressions []annotations.Suppression
-	maxPasses := 10 // Limit passes to prevent infinite loops (enough for typical ordering + spacing fixes)
+	// Hash-based fixed-point detection. The set of pre-fix file states we have
+	// seen during this checkFile invocation. If a later pass reads content whose
+	// hash is already in this set, we have cycled back to a state we have been
+	// in before — typically a rule whose Fix() re-triggers its own finding, or
+	// two rules ping-ponging the same content. Aborting on the cycle is the
+	// right behavior: we emit a style.fix-loop error finding instead of either
+	// silently truncating (the old 10-pass cap) or looping forever.
+	seenHashes := make(map[[sha256.Size]byte]struct{})
+	var lastAppliedRule string
 
-	for pass := 0; pass < maxPasses; pass++ {
+	for pass := 0; ; pass++ {
 		// Always read fresh content for each pass
 		content, err := os.ReadFile(path)
 		if err != nil {
 			return nil, fmt.Errorf("reading file: %w", err)
 		}
+
+		contentHash := sha256.Sum256(content)
+		if _, seen := seenHashes[contentHash]; seen {
+			// The hash check runs before applying a fix this pass, so a repeat
+			// implies that at least one prior pass applied a fix — therefore
+			// lastAppliedRule is always populated when this branch fires.
+			allFindings = append(allFindings, sdk.Finding{
+				Rule: "style.fix-loop",
+				Message: fmt.Sprintf(
+					"fix loop detected: applying %q reproduced a previously-seen file state. "+
+						"This is the last rule applied before the cycle was detected; another "+
+						"rule may also be involved in a ping-pong cycle. Aborting to avoid an "+
+						"infinite fix loop.",
+					lastAppliedRule,
+				),
+				File:     path,
+				Severity: sdk.SeverityError,
+			})
+			break
+		}
+		seenHashes[contentHash] = struct{}{}
 
 		// Parse suppression annotations on first pass
 		if pass == 0 {
@@ -180,37 +210,9 @@ func (e *Engine) checkFile(path string) ([]sdk.Finding, error) {
 			}}, nil
 		}
 
-		// Run all enabled rules
-		var findings []sdk.Finding
-		for _, rule := range e.rules {
-			ruleConfig := e.getRuleConfig(rule.Name())
-			if !ruleConfig.IsEnabled(true) { // Default enabled if not explicitly set
-				continue
-			}
-
-			ruleCtx.Options = ruleConfig.Options
-
-			ruleFindings, err := rule.Check(ruleCtx, file)
-			if err != nil {
-				return nil, fmt.Errorf("rule %s: %w", rule.Name(), err)
-			}
-
-			// Apply severity override from config if specified
-			if ruleConfig.Severity != "" {
-				for i := range ruleFindings {
-					ruleFindings[i].Severity = sdk.ParseSeverity(ruleConfig.Severity, ruleFindings[i].Severity)
-				}
-			}
-
-			// Stamp Fixable: engine owns the signal, not the rule. Set true for Fixer
-			// rules (engine dispatches to Fixer.Fix(ctx, file) lazily in applyFixes);
-			// false otherwise, regardless of what the rule may have set.
-			_, isFixer := rule.(sdk.Fixer)
-			for i := range ruleFindings {
-				ruleFindings[i].Fixable = isFixer
-			}
-
-			findings = append(findings, ruleFindings...)
+		findings, err := e.runEnabledRules(ruleCtx, file)
+		if err != nil {
+			return nil, err
 		}
 
 		// On first pass, collect all findings for reporting
@@ -222,13 +224,14 @@ func (e *Engine) checkFile(path string) ([]sdk.Finding, error) {
 		// In fix mode or diff preview mode, apply fixes and potentially loop for another pass
 		// When Diff=true with Fix=false, we still apply fixes to generate preview diff
 		if (e.config.Fix || e.config.Diff) && len(findings) > 0 {
-			fixedCount, err := e.applyFixes(ruleCtx, file, findings)
+			appliedRule, err := e.applyFixes(ruleCtx, file, findings)
 			if err != nil {
 				return nil, fmt.Errorf("applying fixes: %w", err)
 			}
 
-			// If we applied fixes, continue to next pass to catch any new issues
-			if fixedCount > 0 {
+			// If we applied a fix, loop again to catch any new issues
+			if appliedRule != "" {
+				lastAppliedRule = appliedRule
 				continue
 			}
 		}
@@ -258,6 +261,43 @@ func (e *Engine) checkFile(path string) ([]sdk.Finding, error) {
 	}
 
 	return allFindings, nil
+}
+
+// runEnabledRules invokes Check() on every enabled rule against the parsed file
+// and returns the aggregated findings. It applies the per-rule severity override
+// from config and stamps Fixable based on whether the rule implements sdk.Fixer.
+func (e *Engine) runEnabledRules(ruleCtx *sdk.Context, file *hcl.File) ([]sdk.Finding, error) {
+	var findings []sdk.Finding
+	for _, rule := range e.rules {
+		ruleConfig := e.getRuleConfig(rule.Name())
+		if !ruleConfig.IsEnabled(true) { // Default enabled if not explicitly set
+			continue
+		}
+
+		ruleCtx.Options = ruleConfig.Options
+
+		ruleFindings, err := rule.Check(ruleCtx, file)
+		if err != nil {
+			return nil, fmt.Errorf("rule %s: %w", rule.Name(), err)
+		}
+
+		if ruleConfig.Severity != "" {
+			for i := range ruleFindings {
+				ruleFindings[i].Severity = sdk.ParseSeverity(ruleConfig.Severity, ruleFindings[i].Severity)
+			}
+		}
+
+		// Stamp Fixable: engine owns the signal, not the rule. Set true for Fixer
+		// rules (engine dispatches to Fixer.Fix(ctx, file) lazily in applyFixes);
+		// false otherwise, regardless of what the rule may have set.
+		_, isFixer := rule.(sdk.Fixer)
+		for i := range ruleFindings {
+			ruleFindings[i].Fixable = isFixer
+		}
+
+		findings = append(findings, ruleFindings...)
+	}
+	return findings, nil
 }
 
 // generateDiff creates a diff finding comparing original content with the current file.
@@ -295,17 +335,19 @@ func (e *Engine) generateDiff(path string, originalContent []byte) (*sdk.Finding
 }
 
 // applyFixes applies ONE auto-fix to the file per pass.
-// Returns the number of fixes applied (0 or 1).
+// Returns the name of the rule whose fix was applied, or "" if no fix ran.
 //
 // Dispatch: for each finding marked Fixable, look up the originating rule by name
 // and invoke its Fixer.Fix(ctx, file) method. The first non-nil byte content
-// returned wins; it is written to disk and the loop returns 1. The multi-pass
-// loop in Run will re-read the file and re-run rules after each fix, ensuring
-// subsequent fixes are computed against the updated content.
+// returned wins; it is written to disk and the rule name is returned. The
+// multi-pass loop in checkFile re-reads the file and re-runs rules after each
+// fix, so subsequent fixes are computed against the updated content.
 //
-// Note: rules' Fix() methods are responsible for idempotence — if Fix(Fix(x)) != Fix(x),
-// the multi-pass loop will keep applying fixes until the loop guard fires.
-func (e *Engine) applyFixes(ctx *sdk.Context, file *hcl.File, findings []sdk.Finding) (int, error) {
+// Note: each rule's Fix() must converge — repeated applications must eventually
+// reach a fixed point. If the file returns to a previously-seen state, the
+// multi-pass loop's hash-based cycle detector fires and emits a style.fix-loop
+// error finding instead of looping forever.
+func (e *Engine) applyFixes(ctx *sdk.Context, file *hcl.File, findings []sdk.Finding) (string, error) {
 	for i := range findings {
 		if !findings[i].Fixable {
 			continue
@@ -318,19 +360,19 @@ func (e *Engine) applyFixes(ctx *sdk.Context, file *hcl.File, findings []sdk.Fin
 
 		content, err := fixer.Fix(ctx, file)
 		if err != nil {
-			return 0, fmt.Errorf("computing fix for %s: %w", findings[i].Rule, err)
+			return "", fmt.Errorf("computing fix for %s: %w", findings[i].Rule, err)
 		}
 		if content == nil {
 			continue
 		}
 
 		if err := os.WriteFile(ctx.File, content, 0o600); err != nil {
-			return 0, fmt.Errorf("writing fix for %s: %w", findings[i].Rule, err)
+			return "", fmt.Errorf("writing fix for %s: %w", findings[i].Rule, err)
 		}
-		return 1, nil
+		return findings[i].Rule, nil
 	}
 
-	return 0, nil
+	return "", nil
 }
 
 // findFixerByRuleName returns the rule registered under the given name as an

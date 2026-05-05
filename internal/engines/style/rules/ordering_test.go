@@ -103,30 +103,6 @@ func TestForEachCountFirstRule(t *testing.T) {
 		})
 	}
 
-	t.Run("Check populates Fix field for fixable findings", func(t *testing.T) {
-		content := `resource "aws_instance" "example" {
-  ami      = "ami-123"
-  for_each = var.instances
-  name     = "test"
-}
-`
-		tmpDir := t.TempDir()
-		tmpFile := filepath.Join(tmpDir, "test.tf")
-		require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0o644))
-
-		file, diags := hclsyntax.ParseConfig([]byte(content), tmpFile, hcl.InitialPos)
-		require.False(t, diags.HasErrors())
-
-		hclFile := &hcl.File{Body: file.Body}
-		ctx := &sdk.Context{File: tmpFile}
-
-		findings, err := rule.Check(ctx, hclFile)
-		require.NoError(t, err)
-		require.Len(t, findings, 1)
-		require.NotNil(t, findings[0].Fix, "Fix should be populated for fixable finding")
-		require.NotEmpty(t, findings[0].Fix.Content, "Fix.Content should contain fixed bytes")
-	})
-
 	t.Run("Fix reorders for_each to first", func(t *testing.T) {
 		content := `resource "aws_instance" "example" {
   ami      = "ami-123"
@@ -258,31 +234,6 @@ func TestLifecycleAtEndRule(t *testing.T) {
 		})
 	}
 
-	t.Run("Check populates Fix field for fixable findings", func(t *testing.T) {
-		content := `resource "aws_instance" "example" {
-  lifecycle {
-    prevent_destroy = true
-  }
-  ami = "ami-123"
-}
-`
-		tmpDir := t.TempDir()
-		tmpFile := filepath.Join(tmpDir, "test.tf")
-		require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0o644))
-
-		file, diags := hclsyntax.ParseConfig([]byte(content), tmpFile, hcl.InitialPos)
-		require.False(t, diags.HasErrors())
-
-		hclFile := &hcl.File{Body: file.Body}
-		ctx := &sdk.Context{File: tmpFile}
-
-		findings, err := rule.Check(ctx, hclFile)
-		require.NoError(t, err)
-		require.Len(t, findings, 1)
-		require.NotNil(t, findings[0].Fix, "Fix should be populated for fixable finding")
-		require.NotEmpty(t, findings[0].Fix.Content, "Fix.Content should contain fixed bytes")
-	})
-
 	t.Run("Fix returns nil for nil inputs", func(t *testing.T) {
 		result, err := rule.Fix(nil, nil)
 		assert.NoError(t, err)
@@ -396,32 +347,6 @@ func TestTagsAtEndRule(t *testing.T) {
 			assert.Len(t, findings, tt.wantFindings)
 		})
 	}
-
-	t.Run("Check populates Fix field for fixable findings", func(t *testing.T) {
-		content := `resource "aws_instance" "example" {
-  ami = "ami-123"
-  lifecycle {
-    prevent_destroy = true
-  }
-  tags = { Name = "test" }
-}
-`
-		tmpDir := t.TempDir()
-		tmpFile := filepath.Join(tmpDir, "test.tf")
-		require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0o644))
-
-		file, diags := hclsyntax.ParseConfig([]byte(content), tmpFile, hcl.InitialPos)
-		require.False(t, diags.HasErrors())
-
-		hclFile := &hcl.File{Body: file.Body}
-		ctx := &sdk.Context{File: tmpFile}
-
-		findings, err := rule.Check(ctx, hclFile)
-		require.NoError(t, err)
-		require.Len(t, findings, 1)
-		require.NotNil(t, findings[0].Fix, "Fix should be populated for fixable finding")
-		require.NotEmpty(t, findings[0].Fix.Content, "Fix.Content should contain fixed bytes")
-	})
 
 	t.Run("Fix reorders tags to end of attributes", func(t *testing.T) {
 		content := `resource "aws_instance" "example" {

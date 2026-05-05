@@ -33,10 +33,6 @@ func (r *CommentSyntaxRule) Check(ctx *sdk.Context, _ *hcl.File) ([]sdk.Finding,
 
 	lines := SplitLines(content)
 
-	// Pre-compute fix once for all findings in this file
-	fixedContent := r.fixContent(content)
-	fixResult := &sdk.FixResult{Content: fixedContent}
-
 	for i, line := range lines {
 		lineNum := i + 1
 		trimmed := strings.TrimSpace(line)
@@ -55,7 +51,6 @@ func (r *CommentSyntaxRule) Check(ctx *sdk.Context, _ *hcl.File) ([]sdk.Finding,
 					EndColumn:   len(trimmed),
 				},
 				Severity: sdk.SeverityInfo,
-				Fix:      fixResult,
 			})
 		}
 	}
@@ -176,10 +171,6 @@ func (r *NoTrailingWhitespaceRule) Check(ctx *sdk.Context, _ *hcl.File) ([]sdk.F
 
 	lines := SplitLines(content)
 
-	// Pre-compute fix once for all findings in this file
-	fixedContent := r.fixContent(content)
-	fixResult := &sdk.FixResult{Content: fixedContent}
-
 	for i, line := range lines {
 		lineNum := i + 1
 
@@ -196,7 +187,6 @@ func (r *NoTrailingWhitespaceRule) Check(ctx *sdk.Context, _ *hcl.File) ([]sdk.F
 					EndColumn:   len(line),
 				},
 				Severity: sdk.SeverityInfo,
-				Fix:      fixResult,
 			})
 		}
 	}
@@ -337,10 +327,6 @@ func (r *NoConsecutiveBlankLinesRule) Check(ctx *sdk.Context, _ *hcl.File) ([]sd
 
 	lines := SplitLines(content)
 
-	// Pre-compute fix once for all findings in this file
-	fixedContent := r.fixContent(content)
-	fixResult := &sdk.FixResult{Content: fixedContent}
-
 	consecutiveBlank := 0
 
 	for i, line := range lines {
@@ -362,7 +348,6 @@ func (r *NoConsecutiveBlankLinesRule) Check(ctx *sdk.Context, _ *hcl.File) ([]sd
 						EndColumn:   1,
 					},
 					Severity: sdk.SeverityInfo,
-					Fix:      fixResult,
 				})
 			}
 		} else {

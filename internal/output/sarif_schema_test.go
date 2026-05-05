@@ -133,7 +133,7 @@ func TestSARIF_ValidatesAgainstSchema(t *testing.T) {
 					File:     "test.tf",
 					Severity: sdk.SeverityWarning,
 					Location: sdk.Location{StartLine: 1, StartColumn: 1, EndLine: 1, EndColumn: 10},
-					Fix:      &sdk.FixResult{Content: []byte("fixed content")},
+					Fixable:  true,
 				},
 			},
 		},

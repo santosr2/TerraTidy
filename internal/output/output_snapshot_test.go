@@ -38,7 +38,7 @@ func snapshotFindings() []sdk.Finding {
 				EndLine:     25,
 				EndColumn:   1,
 			},
-			Fix: &sdk.FixResult{Content: []byte("\n")},
+			Fixable: true,
 		},
 		{
 			Rule:     "lint.deprecated-attribute",
@@ -75,10 +75,7 @@ func snapshotFindings() []sdk.Finding {
 				EndLine:     7,
 				EndColumn:   2,
 			},
-			Fix: &sdk.FixResult{Content: []byte(`variable "name" {
-  description = "TODO: add description"
-  type        = string
-}`)},
+			Fixable: true,
 		},
 	}
 }

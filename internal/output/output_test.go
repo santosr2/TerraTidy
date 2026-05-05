@@ -116,7 +116,7 @@ func TestJSONFormatter(t *testing.T) {
 					Message:  "Test message",
 					File:     "test.tf",
 					Severity: sdk.SeverityError,
-					Fix:      &sdk.FixResult{Content: []byte("fixed")},
+					Fixable:  true,
 					Location: sdk.Location{
 						StartLine:   1,
 						StartColumn: 1,
@@ -147,7 +147,7 @@ func TestJSONFormatter(t *testing.T) {
 					Message:  "Warning",
 					File:     "test.tf",
 					Severity: sdk.SeverityWarning,
-					Fix:      &sdk.FixResult{Content: []byte("fixed")},
+					Fixable:  true,
 					Location: sdk.Location{
 						StartLine:   2,
 						StartColumn: 1,
@@ -299,7 +299,7 @@ func TestSARIFFormatter(t *testing.T) {
 					Message:  "Test message",
 					File:     "test.tf",
 					Severity: sdk.SeverityError,
-					Fix:      &sdk.FixResult{Content: []byte("fixed")},
+					Fixable:  true,
 					Location: sdk.Location{
 						StartLine:   1,
 						StartColumn: 1,
@@ -330,7 +330,7 @@ func TestSARIFFormatter(t *testing.T) {
 					Message:  "Warning",
 					File:     "test.tf",
 					Severity: sdk.SeverityWarning,
-					Fix:      &sdk.FixResult{Content: []byte("fixed")},
+					Fixable:  true,
 					Location: sdk.Location{
 						StartLine:   2,
 						StartColumn: 1,
@@ -393,7 +393,7 @@ func TestHTMLFormatter(t *testing.T) {
 					Message:  "Test message",
 					File:     "test.tf",
 					Severity: sdk.SeverityError,
-					Fix:      &sdk.FixResult{Content: []byte("fixed")},
+					Fixable:  true,
 					Location: sdk.Location{
 						StartLine:   1,
 						StartColumn: 1,
@@ -424,7 +424,7 @@ func TestHTMLFormatter(t *testing.T) {
 					Message:  "Warning finding",
 					File:     "main.tf",
 					Severity: sdk.SeverityWarning,
-					Fix:      &sdk.FixResult{Content: []byte("fixed")},
+					Fixable:  true,
 					Location: sdk.Location{
 						StartLine:   5,
 						StartColumn: 1,
@@ -509,7 +509,7 @@ func TestHTMLFormatter(t *testing.T) {
 			// Verify fixable badge appears for fixable findings
 			hasFixable := false
 			for _, f := range tt.findings {
-				if f.Fix != nil {
+				if f.Fixable {
 					hasFixable = true
 					break
 				}

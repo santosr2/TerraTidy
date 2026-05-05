@@ -97,12 +97,6 @@ func TestBlockLabelCaseRule(t *testing.T) {
 			assert.Len(t, findings, tt.wantFindings)
 		})
 	}
-
-	t.Run("Fix returns nil", func(t *testing.T) {
-		result, err := rule.Fix(nil, nil)
-		assert.NoError(t, err)
-		assert.Nil(t, result)
-	})
 }
 
 func TestVariableNamingRule(t *testing.T) {
@@ -164,12 +158,6 @@ func TestVariableNamingRule(t *testing.T) {
 			assert.Len(t, findings, tt.wantFindings)
 		})
 	}
-
-	t.Run("Fix returns nil", func(t *testing.T) {
-		result, err := rule.Fix(nil, nil)
-		assert.NoError(t, err)
-		assert.Nil(t, result)
-	})
 }
 
 func TestOutputNamingRule(t *testing.T) {
@@ -231,12 +219,6 @@ func TestOutputNamingRule(t *testing.T) {
 			assert.Len(t, findings, tt.wantFindings)
 		})
 	}
-
-	t.Run("Fix returns nil", func(t *testing.T) {
-		result, err := rule.Fix(nil, nil)
-		assert.NoError(t, err)
-		assert.Nil(t, result)
-	})
 }
 
 func TestLocalNamingRule(t *testing.T) {
@@ -300,12 +282,6 @@ func TestLocalNamingRule(t *testing.T) {
 			assert.Len(t, findings, tt.wantFindings)
 		})
 	}
-
-	t.Run("Fix returns nil", func(t *testing.T) {
-		result, err := rule.Fix(nil, nil)
-		assert.NoError(t, err)
-		assert.Nil(t, result)
-	})
 }
 
 // TestNamingRulesWithConfig tests naming rules with different naming conventions from config.

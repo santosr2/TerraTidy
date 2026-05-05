@@ -442,8 +442,3 @@ func (r *NoEmptyBlocksRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Findi
 
 	return findings, nil
 }
-
-// Fix is a no-op for this rule as empty blocks require manual review.
-func (r *NoEmptyBlocksRule) Fix(_ *sdk.Context, _ *hcl.File) ([]byte, error) {
-	return nil, nil
-}

@@ -73,11 +73,6 @@ func (r *BlockLabelCaseRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Find
 	return findings, nil
 }
 
-// Fix is a no-op for this rule as block label renaming requires manual review.
-func (r *BlockLabelCaseRule) Fix(_ *sdk.Context, _ *hcl.File) ([]byte, error) {
-	return nil, nil
-}
-
 // VariableNamingRule ensures variable names follow naming conventions.
 type VariableNamingRule struct{}
 
@@ -126,11 +121,6 @@ func (r *VariableNamingRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Find
 	}
 
 	return findings, nil
-}
-
-// Fix is a no-op for this rule as renaming requires manual review.
-func (r *VariableNamingRule) Fix(_ *sdk.Context, _ *hcl.File) ([]byte, error) {
-	return nil, nil
 }
 
 // OutputNamingRule ensures output names follow naming conventions.
@@ -183,11 +173,6 @@ func (r *OutputNamingRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Findin
 	return findings, nil
 }
 
-// Fix is a no-op for this rule as renaming requires manual review.
-func (r *OutputNamingRule) Fix(_ *sdk.Context, _ *hcl.File) ([]byte, error) {
-	return nil, nil
-}
-
 // LocalNamingRule ensures local value names follow naming conventions.
 type LocalNamingRule struct{}
 
@@ -234,9 +219,4 @@ func (r *LocalNamingRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Finding
 	}
 
 	return findings, nil
-}
-
-// Fix is a no-op for this rule as renaming requires manual review.
-func (r *LocalNamingRule) Fix(_ *sdk.Context, _ *hcl.File) ([]byte, error) {
-	return nil, nil
 }

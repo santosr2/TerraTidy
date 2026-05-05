@@ -298,11 +298,6 @@ func (r *ConsistentQuotesRule) hasSingleQuotedValue(line string) bool {
 	return false
 }
 
-// Fix is a no-op for this rule as quote style fixing is complex.
-func (r *ConsistentQuotesRule) Fix(_ *sdk.Context, _ *hcl.File) ([]byte, error) {
-	return nil, nil
-}
-
 // NoConsecutiveBlankLinesRule ensures no more than one consecutive blank line.
 type NoConsecutiveBlankLinesRule struct{}
 

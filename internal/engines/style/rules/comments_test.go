@@ -272,12 +272,6 @@ resource "aws_instance" "web" {
 			assert.Len(t, findings, tt.wantFindings)
 		})
 	}
-
-	t.Run("Fix returns nil", func(t *testing.T) {
-		result, err := rule.Fix(nil, nil)
-		assert.NoError(t, err)
-		assert.Nil(t, result)
-	})
 }
 
 func TestNoConsecutiveBlankLinesRule(t *testing.T) {

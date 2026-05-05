@@ -152,12 +152,6 @@ resource "aws_vpc" "main" {
 			assert.Len(t, findings, tt.wantFindings)
 		})
 	}
-
-	t.Run("Fix returns nil", func(t *testing.T) {
-		result, err := rule.Fix(nil, nil)
-		assert.NoError(t, err)
-		assert.Nil(t, result)
-	})
 }
 
 func TestScopedFileOrganizationRule_GetFileScope(t *testing.T) {
@@ -411,12 +405,6 @@ func TestTerraformFilesStructureRule(t *testing.T) {
 			assert.Len(t, findings, tt.wantFindings)
 		})
 	}
-
-	t.Run("Fix returns nil", func(t *testing.T) {
-		result, err := rule.Fix(nil, nil)
-		assert.NoError(t, err)
-		assert.Nil(t, result)
-	})
 }
 
 func TestTerraformFilesStructureRule_FileExists(t *testing.T) {

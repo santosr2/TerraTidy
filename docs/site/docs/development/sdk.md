@@ -96,6 +96,12 @@ type Finding struct {
     // Fixable is true when the rule that produced this finding implements Fixer.
     // The engine sets this; rules must not set it directly.
     Fixable bool `json:"fixable,omitempty"`
+
+    // IsDiff is true when Message holds a unified diff rather than a
+    // human-readable description. Consumers (CLI, LSP, formatters) route
+    // diff-message findings through a diff renderer instead of plain text.
+    // Set by the fmt and style engines in diff mode; rules must not set it.
+    IsDiff bool `json:"is_diff,omitempty"`
 }
 ```
 
@@ -103,6 +109,10 @@ A finding is auto-fixable when `Fixable` is `true`. The engine sets this field b
 type-asserting the rule against `sdk.Fixer` and stamping it on every finding the
 rule produces. To compute the actual fix bytes, the engine calls
 `Fixer.Fix(ctx, file)` lazily — only in fix or diff mode.
+
+A finding with `IsDiff` set to `true` carries a unified diff in `Message` instead
+of a description. The CLI gates diff rendering on this field; the JSON output
+format exposes it as `"is_diff": true`.
 
 ## Location
 

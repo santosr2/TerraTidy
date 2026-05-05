@@ -331,6 +331,7 @@ func (e *Engine) generateDiff(path string, originalContent []byte) (*sdk.Finding
 		Message:  diffText,
 		File:     path,
 		Severity: sdk.SeverityInfo,
+		IsDiff:   true,
 	}, nil
 }
 

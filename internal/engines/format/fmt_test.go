@@ -223,3 +223,70 @@ func TestConfigFromEngine(t *testing.T) {
 		assert.True(t, cfg.Diff)
 	})
 }
+
+// TestEngine_IsDiff verifies that the IsDiff signal on findings tracks the diff
+// content carried in Message: true only when Diff mode is enabled AND the file
+// actually needs formatting (so a diff was generated). Covers all four
+// combinations of {check,fix} x {diff,no-diff}.
+func TestEngine_IsDiff(t *testing.T) {
+	unformatted := `resource "aws_instance" "example"   {
+ami="ami-12345678"
+}
+`
+
+	tests := []struct {
+		name       string
+		check      bool
+		diff       bool
+		wantRule   string
+		wantIsDiff bool
+	}{
+		{"check mode without diff", true, false, "fmt.needs-formatting", false},
+		{"check mode with diff", true, true, "fmt.needs-formatting", true},
+		{"fix mode without diff", false, false, "fmt.formatted", false},
+		{"fix mode with diff", false, true, "fmt.formatted", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tmpDir := t.TempDir()
+			tmpFile := filepath.Join(tmpDir, "test.tf")
+			require.NoError(t, os.WriteFile(tmpFile, []byte(unformatted), 0o644))
+
+			engine := New(&Config{Check: tt.check, Diff: tt.diff})
+			findings, err := engine.Run(context.Background(), []string{tmpFile})
+			require.NoError(t, err)
+			require.Len(t, findings, 1, "unformatted file should produce one finding")
+
+			f := findings[0]
+			assert.Equal(t, tt.wantRule, f.Rule)
+			assert.Equal(t, tt.wantIsDiff, f.IsDiff,
+				"IsDiff must match whether Message carries a unified diff")
+			if tt.wantIsDiff {
+				assert.Contains(t, f.Message, "@@",
+					"diff message must contain unified diff hunk markers")
+			} else {
+				assert.NotContains(t, f.Message, "@@",
+					"non-diff message must not contain unified diff hunk markers")
+			}
+		})
+	}
+}
+
+// TestEngine_IsDiff_NoFinding_AlreadyFormatted verifies that an already-formatted
+// file produces no finding at all (so IsDiff doesn't even apply). Guards against
+// a regression where the engine might emit a stub finding with IsDiff=false.
+func TestEngine_IsDiff_NoFinding_AlreadyFormatted(t *testing.T) {
+	formatted := `resource "aws_instance" "example" {
+  ami = "ami-12345678"
+}
+`
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "test.tf")
+	require.NoError(t, os.WriteFile(tmpFile, []byte(formatted), 0o644))
+
+	engine := New(&Config{Check: true, Diff: true})
+	findings, err := engine.Run(context.Background(), []string{tmpFile})
+	require.NoError(t, err)
+	assert.Empty(t, findings, "already-formatted file must produce no finding even in diff mode")
+}

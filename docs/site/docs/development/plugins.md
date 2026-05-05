@@ -82,6 +82,7 @@ type Finding struct {
     Location Location `json:"location"`
     Severity Severity `json:"severity"`
     Fixable  bool     `json:"fixable,omitempty"`
+    IsDiff   bool     `json:"is_diff,omitempty"`
 }
 ```
 

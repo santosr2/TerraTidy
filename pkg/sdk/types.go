@@ -101,6 +101,11 @@ type Finding struct {
 	// Fixable is true when the rule that produced this finding implements Fixer.
 	// The engine sets this; rules must not set it directly.
 	Fixable bool `json:"fixable,omitempty"`
+	// IsDiff is true when Message holds a unified diff (rather than a human-readable
+	// description). Engines that emit diff-as-message findings (fmt --diff,
+	// style.diff) set this so consumers can route diff content through a diff
+	// renderer instead of plain text.
+	IsDiff bool `json:"is_diff,omitempty"`
 }
 
 // Context provides runtime information to rules during execution. Each rule

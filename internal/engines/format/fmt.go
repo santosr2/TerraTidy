@@ -131,6 +131,7 @@ func (e *Engine) formatFile(path string) (*sdk.Finding, error) {
 			File:     path,
 			Severity: sdk.SeverityError,
 			Fixable:  true,
+			IsDiff:   diffText != "",
 		}, nil
 	}
 
@@ -148,6 +149,7 @@ func (e *Engine) formatFile(path string) (*sdk.Finding, error) {
 		Message:  message,
 		File:     path,
 		Severity: sdk.SeverityInfo,
+		IsDiff:   diffText != "",
 	}, nil
 }
 

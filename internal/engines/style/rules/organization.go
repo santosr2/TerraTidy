@@ -56,11 +56,6 @@ func (r *VariablesInFileRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Fin
 	return findings, nil
 }
 
-// Fix is a no-op for this rule as moving blocks requires manual review.
-func (r *VariablesInFileRule) Fix(_ *sdk.Context, _ *hcl.File) ([]byte, error) {
-	return nil, nil
-}
-
 // OutputsInFileRule ensures outputs are defined in outputs.tf.
 type OutputsInFileRule struct{}
 
@@ -109,11 +104,6 @@ func (r *OutputsInFileRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Findi
 	return findings, nil
 }
 
-// Fix is a no-op for this rule as moving blocks requires manual review.
-func (r *OutputsInFileRule) Fix(_ *sdk.Context, _ *hcl.File) ([]byte, error) {
-	return nil, nil
-}
-
 // ProvidersInFileRule ensures providers are defined in providers.tf or versions.tf.
 type ProvidersInFileRule struct{}
 
@@ -160,9 +150,4 @@ func (r *ProvidersInFileRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Fin
 	}
 
 	return findings, nil
-}
-
-// Fix is a no-op for this rule as moving blocks requires manual review.
-func (r *ProvidersInFileRule) Fix(_ *sdk.Context, _ *hcl.File) ([]byte, error) {
-	return nil, nil
 }

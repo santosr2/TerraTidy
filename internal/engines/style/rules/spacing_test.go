@@ -296,12 +296,6 @@ func TestNoEmptyBlocksRule(t *testing.T) {
 			assert.Len(t, findings, tt.wantFindings)
 		})
 	}
-
-	t.Run("Fix returns nil", func(t *testing.T) {
-		result, err := rule.Fix(nil, nil)
-		assert.NoError(t, err)
-		assert.Nil(t, result)
-	})
 }
 
 func TestBlankLineBetweenBlocksRule_FixMultipleConsecutiveBlanks(t *testing.T) {

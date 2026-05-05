@@ -163,11 +163,6 @@ func (r *ResourceNameMatchesTypeRule) nameJustRepeatsType(name string, typeWords
 	return allFromType && len(nameParts) > 0
 }
 
-// Fix is a no-op for this rule as renaming resources requires manual review.
-func (r *ResourceNameMatchesTypeRule) Fix(_ *sdk.Context, _ *hcl.File) ([]byte, error) {
-	return nil, nil
-}
-
 // OutputPrefixRule ensures outputs follow a naming pattern.
 type OutputPrefixRule struct{}
 
@@ -250,11 +245,6 @@ func (r *OutputPrefixRule) getPatternConfig(config map[string]any) (prefix, suff
 	return prefix, suffix
 }
 
-// Fix is a no-op for this rule as renaming outputs requires manual review.
-func (r *OutputPrefixRule) Fix(_ *sdk.Context, _ *hcl.File) ([]byte, error) {
-	return nil, nil
-}
-
 // ModuleNameConventionRule ensures module names follow conventions.
 type ModuleNameConventionRule struct{}
 
@@ -316,9 +306,4 @@ func (r *ModuleNameConventionRule) Check(ctx *sdk.Context, file *hcl.File) ([]sd
 	}
 
 	return findings, nil
-}
-
-// Fix is a no-op for this rule as renaming modules requires manual review.
-func (r *ModuleNameConventionRule) Fix(_ *sdk.Context, _ *hcl.File) ([]byte, error) {
-	return nil, nil
 }

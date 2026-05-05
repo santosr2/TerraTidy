@@ -142,11 +142,6 @@ func (r *ScopedFileOrganizationRule) getResourceScope(resourceType string) strin
 	return ""
 }
 
-// Fix is a no-op for this rule as moving resources between files requires manual review.
-func (r *ScopedFileOrganizationRule) Fix(_ *sdk.Context, _ *hcl.File) ([]byte, error) {
-	return nil, nil
-}
-
 // TerraformFilesStructureRule ensures standard file structure is followed.
 // Standard files: variables.tf, outputs.tf, providers.tf, versions.tf, main.tf, locals.tf
 type TerraformFilesStructureRule struct{}
@@ -228,9 +223,4 @@ func (r *TerraformFilesStructureRule) shouldSuggestStandardFile(blockType string
 		"provider": true,
 	}
 	return commonTypes[blockType]
-}
-
-// Fix is a no-op for this rule as moving blocks between files requires manual review.
-func (r *TerraformFilesStructureRule) Fix(_ *sdk.Context, _ *hcl.File) ([]byte, error) {
-	return nil, nil
 }

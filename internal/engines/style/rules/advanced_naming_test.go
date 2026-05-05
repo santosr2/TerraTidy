@@ -118,12 +118,6 @@ func TestResourceNameMatchesTypeRule(t *testing.T) {
 			assert.Len(t, findings, tt.wantFindings)
 		})
 	}
-
-	t.Run("Fix returns nil", func(t *testing.T) {
-		result, err := rule.Fix(nil, nil)
-		assert.NoError(t, err)
-		assert.Nil(t, result)
-	})
 }
 
 func TestResourceNameMatchesTypeRule_ExtractTypeWords(t *testing.T) {
@@ -301,12 +295,6 @@ func TestOutputPrefixRule(t *testing.T) {
 			assert.Len(t, findings, tt.wantFindings)
 		})
 	}
-
-	t.Run("Fix returns nil", func(t *testing.T) {
-		result, err := rule.Fix(nil, nil)
-		assert.NoError(t, err)
-		assert.Nil(t, result)
-	})
 }
 
 func TestModuleNameConventionRule(t *testing.T) {
@@ -404,10 +392,4 @@ func TestModuleNameConventionRule(t *testing.T) {
 			assert.Len(t, findings, tt.wantFindings)
 		})
 	}
-
-	t.Run("Fix returns nil", func(t *testing.T) {
-		result, err := rule.Fix(nil, nil)
-		assert.NoError(t, err)
-		assert.Nil(t, result)
-	})
 }

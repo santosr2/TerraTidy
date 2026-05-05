@@ -400,11 +400,6 @@ func (r *NestedBlockOrderRule) checkNestedBlocks(ctx *sdk.Context, block *hclsyn
 	return findings
 }
 
-// Fix is a no-op for this rule as reordering nested blocks is complex.
-func (r *NestedBlockOrderRule) Fix(_ *sdk.Context, _ *hcl.File) ([]byte, error) {
-	return nil, nil
-}
-
 // OneLineAttributeSpacingRule ensures one-line attributes are grouped together.
 // This is a variant of attribute-group-spacing specifically for one-line vs block attributes.
 type OneLineAttributeSpacingRule struct{}
@@ -514,9 +509,4 @@ func (r *OneLineAttributeSpacingRule) checkBlock(ctx *sdk.Context, block *hclsyn
 	}
 
 	return findings
-}
-
-// Fix is a no-op for this rule as it provides informational suggestions.
-func (r *OneLineAttributeSpacingRule) Fix(_ *sdk.Context, _ *hcl.File) ([]byte, error) {
-	return nil, nil
 }

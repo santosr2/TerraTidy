@@ -2,8 +2,10 @@ package style
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/hashicorp/hcl/v2"
@@ -522,4 +524,243 @@ resource "aws_instance" "test2" {
 	for _, f := range findings {
 		assert.NotEqual(t, "style.diff", f.Rule, "no diff finding expected when file has no issues")
 	}
+}
+
+// stubMarkerRemoverRule reports one finding per "# REMOVE_ME" comment in the file
+// and removes a single marker on each Fix() call. Used to verify that the
+// multi-pass loop converges past the old 10-pass cap.
+type stubMarkerRemoverRule struct{}
+
+func (r *stubMarkerRemoverRule) Name() string { return "test.stub-marker-remover" }
+func (r *stubMarkerRemoverRule) Description() string {
+	return "Removes one REMOVE_ME comment per Fix call"
+}
+
+func (r *stubMarkerRemoverRule) Check(ctx *sdk.Context, _ *hcl.File) ([]sdk.Finding, error) {
+	content, err := os.ReadFile(ctx.File)
+	if err != nil {
+		return nil, err
+	}
+	var findings []sdk.Finding
+	for i, line := range strings.Split(string(content), "\n") {
+		if strings.HasPrefix(strings.TrimSpace(line), "# REMOVE_ME") {
+			findings = append(findings, sdk.Finding{
+				Rule:     r.Name(),
+				Message:  fmt.Sprintf("REMOVE_ME marker on line %d", i+1),
+				File:     ctx.File,
+				Location: sdk.Location{StartLine: i + 1, EndLine: i + 1},
+				Severity: sdk.SeverityWarning,
+			})
+		}
+	}
+	return findings, nil
+}
+
+func (r *stubMarkerRemoverRule) Fix(ctx *sdk.Context, _ *hcl.File) ([]byte, error) {
+	content, err := os.ReadFile(ctx.File)
+	if err != nil {
+		return nil, err
+	}
+	lines := strings.Split(string(content), "\n")
+	for i, line := range lines {
+		if strings.HasPrefix(strings.TrimSpace(line), "# REMOVE_ME") {
+			out := append([]string{}, lines[:i]...)
+			out = append(out, lines[i+1:]...)
+			return []byte(strings.Join(out, "\n")), nil
+		}
+	}
+	return nil, nil
+}
+
+// TestCheckFile_ConvergesBeyond10Passes verifies that the multi-pass fix loop no
+// longer truncates at 10 passes. We seed a file with 12 markers and let the stub
+// rule remove one per pass; convergence proves the old `maxPasses := 10` cap is
+// gone and replaced by hash-based fixed-point detection.
+func TestCheckFile_ConvergesBeyond10Passes(t *testing.T) {
+	dir := t.TempDir()
+	const markerCount = 12
+	var b strings.Builder
+	for i := 1; i <= markerCount; i++ {
+		fmt.Fprintf(&b, "# REMOVE_ME %d\n", i)
+	}
+	b.WriteString("resource \"aws_instance\" \"test\" {\n  ami = \"ami-x\"\n}\n")
+	tmpFile := filepath.Join(dir, "many_passes.tf")
+	require.NoError(t, os.WriteFile(tmpFile, []byte(b.String()), 0o644))
+
+	engine := New(&Config{
+		Fix:   true,
+		Rules: make(map[string]RuleConfig),
+	}, &stubMarkerRemoverRule{})
+
+	_, err := engine.Run(context.Background(), []string{tmpFile})
+	require.NoError(t, err)
+
+	// All 12 markers must be gone — proves the loop ran more than 10 passes.
+	final, err := os.ReadFile(tmpFile)
+	require.NoError(t, err)
+	assert.NotContains(t, string(final), "REMOVE_ME",
+		"all markers should be removed, proving the multi-pass loop ran past the old 10-pass cap")
+}
+
+// stubSelfTriggeringFixerRule always reports a finding and its Fix() returns the
+// file content unchanged. The hash-based fix-loop guard must detect this self-loop.
+type stubSelfTriggeringFixerRule struct{}
+
+func (r *stubSelfTriggeringFixerRule) Name() string        { return "test.stub-self-trigger" }
+func (r *stubSelfTriggeringFixerRule) Description() string { return "Always reports, Fix is a no-op" }
+
+func (r *stubSelfTriggeringFixerRule) Check(ctx *sdk.Context, _ *hcl.File) ([]sdk.Finding, error) {
+	return []sdk.Finding{{
+		Rule:     r.Name(),
+		Message:  "always reports",
+		File:     ctx.File,
+		Severity: sdk.SeverityWarning,
+	}}, nil
+}
+
+func (r *stubSelfTriggeringFixerRule) Fix(ctx *sdk.Context, _ *hcl.File) ([]byte, error) {
+	// Return content unchanged: the rule's Check() will keep reporting the same
+	// finding on the next pass, which is exactly the self-loop pattern the
+	// hash-based guard exists to catch.
+	return os.ReadFile(ctx.File)
+}
+
+// TestCheckFile_FixLoopGuard_DetectsSelfLoop verifies that a rule whose Fix()
+// re-triggers its own finding (here, by returning unchanged content) causes the
+// engine to emit a single style.fix-loop error finding naming the offending rule
+// and abort the multi-pass loop instead of looping forever.
+func TestCheckFile_FixLoopGuard_DetectsSelfLoop(t *testing.T) {
+	dir := t.TempDir()
+	// Plain file with no built-in rule fixes available — the stub is the only
+	// fixer the engine will dispatch to.
+	content := `resource "aws_instance" "test" {
+  ami = "ami-x"
+}
+`
+	tmpFile := filepath.Join(dir, "self_loop.tf")
+	require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0o644))
+
+	engine := New(&Config{
+		Fix:   true,
+		Rules: make(map[string]RuleConfig),
+	}, &stubSelfTriggeringFixerRule{})
+
+	findings, err := engine.Run(context.Background(), []string{tmpFile})
+	require.NoError(t, err, "self-loop must terminate cleanly, not error or hang")
+
+	var loopFinding *sdk.Finding
+	for i := range findings {
+		if findings[i].Rule == "style.fix-loop" {
+			loopFinding = &findings[i]
+			break
+		}
+	}
+	require.NotNil(t, loopFinding, "engine must emit a style.fix-loop finding when a fix cycles")
+	assert.Equal(t, sdk.SeverityError, loopFinding.Severity,
+		"fix-loop finding must be an error, not a warning")
+	assert.Contains(t, loopFinding.Message, "test.stub-self-trigger",
+		"fix-loop message must name the rule that caused the loop")
+}
+
+// stubSwapRuleAToB rewrites PING_A → PING_B. Paired with stubSwapRuleBToA, the
+// two rules form a deterministic ping-pong cycle: one rule fires per pass, each
+// undoing the other.
+type stubSwapRuleAToB struct{}
+
+func (r *stubSwapRuleAToB) Name() string        { return "test.stub-swap-a-to-b" }
+func (r *stubSwapRuleAToB) Description() string { return "Rewrites PING_A to PING_B" }
+
+func (r *stubSwapRuleAToB) Check(ctx *sdk.Context, _ *hcl.File) ([]sdk.Finding, error) {
+	content, err := os.ReadFile(ctx.File)
+	if err != nil {
+		return nil, err
+	}
+	if !strings.Contains(string(content), "PING_A") {
+		return nil, nil
+	}
+	return []sdk.Finding{{
+		Rule:     r.Name(),
+		Message:  "PING_A present",
+		File:     ctx.File,
+		Severity: sdk.SeverityWarning,
+	}}, nil
+}
+
+func (r *stubSwapRuleAToB) Fix(ctx *sdk.Context, _ *hcl.File) ([]byte, error) {
+	content, err := os.ReadFile(ctx.File)
+	if err != nil {
+		return nil, err
+	}
+	return []byte(strings.Replace(string(content), "PING_A", "PING_B", 1)), nil
+}
+
+// stubSwapRuleBToA mirrors stubSwapRuleAToB in the opposite direction.
+type stubSwapRuleBToA struct{}
+
+func (r *stubSwapRuleBToA) Name() string        { return "test.stub-swap-b-to-a" }
+func (r *stubSwapRuleBToA) Description() string { return "Rewrites PING_B to PING_A" }
+
+func (r *stubSwapRuleBToA) Check(ctx *sdk.Context, _ *hcl.File) ([]sdk.Finding, error) {
+	content, err := os.ReadFile(ctx.File)
+	if err != nil {
+		return nil, err
+	}
+	if !strings.Contains(string(content), "PING_B") {
+		return nil, nil
+	}
+	return []sdk.Finding{{
+		Rule:     r.Name(),
+		Message:  "PING_B present",
+		File:     ctx.File,
+		Severity: sdk.SeverityWarning,
+	}}, nil
+}
+
+func (r *stubSwapRuleBToA) Fix(ctx *sdk.Context, _ *hcl.File) ([]byte, error) {
+	content, err := os.ReadFile(ctx.File)
+	if err != nil {
+		return nil, err
+	}
+	return []byte(strings.Replace(string(content), "PING_B", "PING_A", 1)), nil
+}
+
+// TestCheckFile_FixLoopGuard_DetectsPingPong verifies that the hash-based guard
+// fires on a two-rule ping-pong cycle (rule A undoes rule B and vice versa) the
+// same way it fires on a single-rule self-loop. The fix-loop finding's message
+// must name one of the cycling rules — specifically the last rule that applied
+// a fix before the cycle was detected.
+func TestCheckFile_FixLoopGuard_DetectsPingPong(t *testing.T) {
+	dir := t.TempDir()
+	content := `# PING_A
+resource "aws_instance" "test" {
+  ami = "ami-x"
+}
+`
+	tmpFile := filepath.Join(dir, "ping_pong.tf")
+	require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0o644))
+
+	engine := New(&Config{
+		Fix:   true,
+		Rules: make(map[string]RuleConfig),
+	}, &stubSwapRuleAToB{}, &stubSwapRuleBToA{})
+
+	findings, err := engine.Run(context.Background(), []string{tmpFile})
+	require.NoError(t, err, "ping-pong cycle must terminate cleanly")
+
+	var loopFinding *sdk.Finding
+	for i := range findings {
+		if findings[i].Rule == "style.fix-loop" {
+			loopFinding = &findings[i]
+			break
+		}
+	}
+	require.NotNil(t, loopFinding, "ping-pong cycle must produce a style.fix-loop finding")
+	assert.Equal(t, sdk.SeverityError, loopFinding.Severity)
+	// lastAppliedRule names whichever rule fired most recently before the
+	// cycle was detected. Either is acceptable; the test asserts only that
+	// the message names one of the two cycling rules.
+	matches := strings.Contains(loopFinding.Message, "test.stub-swap-a-to-b") ||
+		strings.Contains(loopFinding.Message, "test.stub-swap-b-to-a")
+	assert.True(t, matches, "fix-loop message must name one of the cycling rules; got: %s",
+		loopFinding.Message)
 }

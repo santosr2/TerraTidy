@@ -82,12 +82,17 @@ type Finding struct {
     Location Location `json:"location"`
     Severity Severity `json:"severity"`
     Fixable  bool     `json:"fixable,omitempty"`
+    IsDiff   bool     `json:"is_diff,omitempty"`
 }
 ```
 
 `Fixable` is set by the engine based on whether the rule implements `sdk.Fixer`.
 The engine calls `Fixer.Fix(ctx, file)` lazily — only when applying fixes —
 instead of asking rules to precompute fix bytes during `Check()`.
+
+`IsDiff` is set by the fmt and style engines when `Message` contains a unified
+diff; the CLI uses it to route diff content through a renderer instead of
+printing it as plain text.
 
 ### Runner
 

@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/santosr2/TerraTidy/internal/config"
 	fmtengine "github.com/santosr2/TerraTidy/internal/engines/format"
@@ -97,8 +96,8 @@ Use --all to also apply style fixes (equivalent to running fmt + style --fix).`,
 				fmt.Printf("  [+] %s: formatted\n", displayFile)
 				formatted++
 			}
-			// Print diff if diff mode is enabled (via CLI or config) and message contains diff content
-			if fmtCfg.Diff && strings.HasPrefix(strings.TrimSpace(finding.Message), "---") {
+			// Print diff if diff mode is enabled (via CLI or config) and the finding carries one
+			if fmtCfg.Diff && finding.IsDiff {
 				fmt.Println()
 				fmt.Print(output.FormatDiff(finding.Message, color))
 			}
@@ -148,7 +147,7 @@ Use --all to also apply style fixes (equivalent to running fmt + style --fix).`,
 				// Skip diff-only findings (style.diff rule)
 				if finding.Rule == "style.diff" {
 					// Print diff if present
-					if fmtCfg.Diff && strings.HasPrefix(strings.TrimSpace(finding.Message), "---") {
+					if fmtCfg.Diff && finding.IsDiff {
 						fmt.Println()
 						fmt.Print(output.FormatDiff(finding.Message, color))
 					}

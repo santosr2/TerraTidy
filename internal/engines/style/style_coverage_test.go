@@ -342,6 +342,7 @@ resource "aws_instance" "test2" {
 	require.NotNil(t, diffFinding, "Fix+Diff mode must produce a style.diff finding when the file changes")
 	assert.Contains(t, diffFinding.Message, "@@", "diff finding should contain unified diff markers")
 	assert.Equal(t, sdk.SeverityInfo, diffFinding.Severity)
+	assert.True(t, diffFinding.IsDiff, "style.diff finding must set IsDiff=true so consumers can route to a diff renderer")
 }
 
 // TestFixWithDiff_NoChangeNoFinding verifies that Fix+Diff mode does NOT emit a style.diff finding
@@ -489,6 +490,7 @@ resource "aws_instance" "test2" {
 	require.NotNil(t, diffFinding, "preview mode (Diff=true, Fix=false) must produce a style.diff finding")
 	assert.Contains(t, diffFinding.Message, "@@", "diff finding should contain unified diff markers")
 	assert.Equal(t, sdk.SeverityInfo, diffFinding.Severity)
+	assert.True(t, diffFinding.IsDiff, "style.diff finding must set IsDiff=true in preview mode")
 
 	// Verify file was NOT modified (original content restored)
 	afterContent, err := os.ReadFile(tmpFile)

@@ -77,13 +77,6 @@ func (r *MetaArgumentsOrderRule) checkBlock(ctx *sdk.Context, block *hclsyntax.B
 		return findings
 	}
 
-	// Pre-compute fix once for this block (shared by all findings)
-	var fixResult *sdk.FixResult
-	fixedContent, err := r.fixBlock(ctx.File, block.Type, block.Labels)
-	if err == nil && fixedContent != nil {
-		fixResult = &sdk.FixResult{Content: fixedContent}
-	}
-
 	// Check ordering
 	for i := 0; i < len(metaArgs)-1; i++ {
 		for j := i + 1; j < len(metaArgs); j++ {
@@ -96,7 +89,6 @@ func (r *MetaArgumentsOrderRule) checkBlock(ctx *sdk.Context, block *hclsyntax.B
 					File:     ctx.File,
 					Location: sdk.LocationFromRange(block.Range()),
 					Severity: sdk.SeverityInfo,
-					Fix:      fixResult,
 				})
 			}
 			// If b appears before a in file but should come after
@@ -107,48 +99,12 @@ func (r *MetaArgumentsOrderRule) checkBlock(ctx *sdk.Context, block *hclsyntax.B
 					File:     ctx.File,
 					Location: sdk.LocationFromRange(block.Range()),
 					Severity: sdk.SeverityInfo,
-					Fix:      fixResult,
 				})
 			}
 		}
 	}
 
 	return findings
-}
-
-func (r *MetaArgumentsOrderRule) fixBlock(filePath, blockType string, blockLabels []string) ([]byte, error) {
-	content, err := os.ReadFile(filePath)
-	if err != nil {
-		return nil, err
-	}
-
-	syntaxBody, writeFile, err := ParseBothFormats(content, filePath)
-	if err != nil {
-		return nil, err
-	}
-	if syntaxBody == nil {
-		return content, nil
-	}
-
-	// Find syntax body for this block
-	targetSyntaxBody := FindSyntaxBody(syntaxBody, blockType, blockLabels)
-	if targetSyntaxBody == nil {
-		return content, nil
-	}
-
-	// Find the matching block in hclwrite
-	targetBlock := FindWriteBlock(writeFile, blockType, blockLabels)
-	if targetBlock == nil {
-		return content, nil
-	}
-
-	orderedNames := GetOrderedAttrNames(targetSyntaxBody)
-	// Meta-args should be first, depends_on should be near end (before tags)
-	firstAttrs := []string{"for_each", "count", "provider"}
-	lastAttrs := []string{"depends_on"}
-	ReorderBlockAttrs(targetBlock.Body(), orderedNames, firstAttrs, lastAttrs)
-
-	return FormatAndCleanBlankLines(writeFile.Bytes()), nil
 }
 
 // Fix reorders meta-arguments in all blocks.
@@ -238,7 +194,7 @@ func (r *LifecycleAttributeOrderRule) Check(ctx *sdk.Context, file *hcl.File) ([
 				continue
 			}
 
-			blockFindings := r.checkLifecycleBlock(ctx, block, nested)
+			blockFindings := r.checkLifecycleBlock(ctx, nested)
 			findings = append(findings, blockFindings...)
 		}
 	}
@@ -246,7 +202,7 @@ func (r *LifecycleAttributeOrderRule) Check(ctx *sdk.Context, file *hcl.File) ([
 	return findings, nil
 }
 
-func (r *LifecycleAttributeOrderRule) checkLifecycleBlock(ctx *sdk.Context, parentBlock, lifecycleBlock *hclsyntax.Block) []sdk.Finding {
+func (r *LifecycleAttributeOrderRule) checkLifecycleBlock(ctx *sdk.Context, lifecycleBlock *hclsyntax.Block) []sdk.Finding {
 	var findings []sdk.Finding
 
 	// Collect lifecycle attributes with their positions
@@ -271,13 +227,6 @@ func (r *LifecycleAttributeOrderRule) checkLifecycleBlock(ctx *sdk.Context, pare
 		return findings
 	}
 
-	// Pre-compute fix once for this block
-	var fixResult *sdk.FixResult
-	fixedContent, err := r.fixLifecycleBlock(ctx.File, parentBlock.Labels)
-	if err == nil && fixedContent != nil {
-		fixResult = &sdk.FixResult{Content: fixedContent}
-	}
-
 	// Check ordering
 	for i := 0; i < len(attrs)-1; i++ {
 		for j := i + 1; j < len(attrs); j++ {
@@ -289,7 +238,6 @@ func (r *LifecycleAttributeOrderRule) checkLifecycleBlock(ctx *sdk.Context, pare
 					File:     ctx.File,
 					Location: sdk.LocationFromRange(lifecycleBlock.Range()),
 					Severity: sdk.SeverityInfo,
-					Fix:      fixResult,
 				})
 			}
 			if b.line < a.line && b.order > a.order {
@@ -299,84 +247,12 @@ func (r *LifecycleAttributeOrderRule) checkLifecycleBlock(ctx *sdk.Context, pare
 					File:     ctx.File,
 					Location: sdk.LocationFromRange(lifecycleBlock.Range()),
 					Severity: sdk.SeverityInfo,
-					Fix:      fixResult,
 				})
 			}
 		}
 	}
 
 	return findings
-}
-
-func (r *LifecycleAttributeOrderRule) fixLifecycleBlock(filePath string, parentLabels []string) ([]byte, error) {
-	content, err := os.ReadFile(filePath)
-	if err != nil {
-		return nil, err
-	}
-
-	writeFile, diags := hclwrite.ParseConfig(content, filePath, hcl.InitialPos)
-	if diags.HasErrors() {
-		return nil, diags
-	}
-
-	// Find the resource block
-	var targetBlock *hclwrite.Block
-	for _, block := range writeFile.Body().Blocks() {
-		if block.Type() != "resource" {
-			continue
-		}
-		if MatchBlockLabels(block.Labels(), parentLabels) {
-			targetBlock = block
-			break
-		}
-	}
-
-	if targetBlock == nil {
-		return content, nil
-	}
-
-	// Find lifecycle block
-	for _, nested := range targetBlock.Body().Blocks() {
-		if nested.Type() != "lifecycle" {
-			continue
-		}
-
-		// Reorder lifecycle attributes
-		attrOrder := []string{"create_before_destroy", "prevent_destroy", "ignore_changes", "replace_triggered_by"}
-
-		attrExprs := make(map[string]hclwrite.Tokens)
-		for name, attr := range nested.Body().Attributes() {
-			attrExprs[name] = getExprTokensWithTrailingComment(attr)
-		}
-
-		for _, name := range attrOrder {
-			nested.Body().RemoveAttribute(name)
-		}
-
-		for _, name := range attrOrder {
-			if tokens, ok := attrExprs[name]; ok {
-				nested.Body().SetAttributeRaw(name, tokens)
-			}
-		}
-
-		// Add back any other attributes not in the order list
-		for name, tokens := range attrExprs {
-			found := false
-			for _, orderedName := range attrOrder {
-				if name == orderedName {
-					found = true
-					break
-				}
-			}
-			if !found {
-				nested.Body().SetAttributeRaw(name, tokens)
-			}
-		}
-
-		break
-	}
-
-	return FormatAndCleanBlankLines(writeFile.Bytes()), nil
 }
 
 // Fix reorders lifecycle attributes in all blocks.

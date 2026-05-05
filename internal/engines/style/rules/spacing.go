@@ -38,20 +38,16 @@ func (r *NoLeadingTrailingBlankLinesRule) Check(ctx *sdk.Context, file *hcl.File
 	}
 	lines := SplitLines(content)
 
-	// Pre-compute fix once for all findings in this file
-	fixedContent := FormatAndCleanBlankLines(content)
-	fixResult := &sdk.FixResult{Content: fixedContent}
-
 	// Check each block for leading/trailing blank lines
 	for _, block := range hclFile.Blocks {
-		blockFindings := r.checkBlock(ctx, block, lines, fixResult)
+		blockFindings := r.checkBlock(ctx, block, lines)
 		findings = append(findings, blockFindings...)
 	}
 
 	return findings, nil
 }
 
-func (r *NoLeadingTrailingBlankLinesRule) checkBlock(ctx *sdk.Context, block *hclsyntax.Block, lines []string, fixResult *sdk.FixResult) []sdk.Finding {
+func (r *NoLeadingTrailingBlankLinesRule) checkBlock(ctx *sdk.Context, block *hclsyntax.Block, lines []string) []sdk.Finding {
 	var findings []sdk.Finding
 
 	startLine := block.Range().Start.Line
@@ -83,7 +79,6 @@ func (r *NoLeadingTrailingBlankLinesRule) checkBlock(ctx *sdk.Context, block *hc
 					EndColumn:   1,
 				},
 				Severity: sdk.SeverityInfo,
-				Fix:      fixResult,
 			})
 		} else {
 			break // Stop at first non-blank line
@@ -111,7 +106,6 @@ func (r *NoLeadingTrailingBlankLinesRule) checkBlock(ctx *sdk.Context, block *hc
 					EndColumn:   1,
 				},
 				Severity: sdk.SeverityInfo,
-				Fix:      fixResult,
 			})
 		} else {
 			break // Stop at first non-blank line
@@ -120,7 +114,7 @@ func (r *NoLeadingTrailingBlankLinesRule) checkBlock(ctx *sdk.Context, block *hc
 
 	// Also check nested blocks recursively
 	for _, nested := range block.Body.Blocks {
-		nestedFindings := r.checkBlock(ctx, nested, lines, fixResult)
+		nestedFindings := r.checkBlock(ctx, nested, lines)
 		findings = append(findings, nestedFindings...)
 	}
 
@@ -207,13 +201,6 @@ func (r *BlankLineBetweenBlocksRule) Check(ctx *sdk.Context, file *hcl.File) ([]
 	}
 	lines := SplitLines(content)
 
-	// Pre-compute fix once for all findings in this file
-	fixedContent, _ := r.fixContent(content, ctx.File)
-	var fixResult *sdk.FixResult
-	if fixedContent != nil {
-		fixResult = &sdk.FixResult{Content: fixedContent}
-	}
-
 	blocks := hclFile.Blocks
 	for i := 0; i < len(blocks)-1; i++ {
 		currentBlock := blocks[i]
@@ -241,7 +228,6 @@ func (r *BlankLineBetweenBlocksRule) Check(ctx *sdk.Context, file *hcl.File) ([]
 				File:     ctx.File,
 				Location: sdk.LocationFromRange(nextBlock.Range()),
 				Severity: sdk.SeverityWarning,
-				Fix:      fixResult,
 			})
 		} else if blankLines > effectiveMax {
 			findings = append(findings, sdk.Finding{
@@ -250,7 +236,6 @@ func (r *BlankLineBetweenBlocksRule) Check(ctx *sdk.Context, file *hcl.File) ([]
 				File:     ctx.File,
 				Location: sdk.LocationFromRange(nextBlock.Range()),
 				Severity: sdk.SeverityWarning,
-				Fix:      fixResult,
 			})
 		}
 	}

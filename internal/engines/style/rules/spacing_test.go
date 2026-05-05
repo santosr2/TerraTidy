@@ -90,11 +90,6 @@ func TestNoLeadingTrailingBlankLinesRule(t *testing.T) {
 			findings, err := rule.Check(ctx, hclFile)
 			require.NoError(t, err)
 			assert.Len(t, findings, tt.wantFindings)
-
-			// Verify findings are fixable
-			for _, f := range findings {
-				assert.NotNil(t, f.Fix)
-			}
 		})
 	}
 

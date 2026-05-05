@@ -76,18 +76,18 @@ Findings represent issues detected by engines:
 
 ```go
 type Finding struct {
-    Rule     string      `json:"rule"`
-    Message  string      `json:"message"`
-    File     string      `json:"file"`
-    Location Location    `json:"location"`
-    Severity Severity    `json:"severity"`
-    Fix      *FixResult  `json:"fix,omitempty"`
-}
-
-type FixResult struct {
-    Content []byte
+    Rule     string   `json:"rule"`
+    Message  string   `json:"message"`
+    File     string   `json:"file"`
+    Location Location `json:"location"`
+    Severity Severity `json:"severity"`
+    Fixable  bool     `json:"fixable,omitempty"`
 }
 ```
+
+`Fixable` is set by the engine based on whether the rule implements `sdk.Fixer`.
+The engine calls `Fixer.Fix(ctx, file)` lazily — only when applying fixes —
+instead of asking rules to precompute fix bytes during `Check()`.
 
 ### Runner
 
@@ -124,7 +124,7 @@ func (e *FmtEngine) Run(ctx context.Context, files []string) ([]Finding, error) 
                 Rule:    "fmt",
                 Message: "File is not formatted",
                 File:    file,
-                Fix:     &FixResult{Content: formatted},
+                Fixable: true,
             })
         }
     }

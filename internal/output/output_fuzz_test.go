@@ -92,9 +92,9 @@ func generateFuzzFindings(data []byte) []sdk.Finding {
 			offset += 4
 		}
 
-		// Fix (1 byte determines if fixable)
+		// Fixable (1 byte determines fixability)
 		if offset < len(data) && data[offset]%2 == 0 {
-			f.Fix = &sdk.FixResult{Content: []byte("fixed content")}
+			f.Fixable = true
 		}
 		if offset < len(data) {
 			offset++

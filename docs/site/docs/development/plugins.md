@@ -76,26 +76,18 @@ type Context struct {
 
 ```go
 type Finding struct {
-    Rule     string      `json:"rule"`
-    Message  string      `json:"message"`
-    File     string      `json:"file"`
-    Location Location    `json:"location"`
-    Severity Severity    `json:"severity"`
-    Fix      *FixResult  `json:"fix,omitempty"`
+    Rule     string   `json:"rule"`
+    Message  string   `json:"message"`
+    File     string   `json:"file"`
+    Location Location `json:"location"`
+    Severity Severity `json:"severity"`
+    Fixable  bool     `json:"fixable,omitempty"`
 }
 ```
 
-### FixResult
-
-Holds the result of an auto-fix operation:
-
-```go
-type FixResult struct {
-    Content []byte
-}
-```
-
-A finding is auto-fixable when `Fix != nil`.
+A finding is auto-fixable when `Fixable` is `true`. The engine sets this based on
+whether the rule implements `Fixer`; rules must not set it directly. Fix bytes
+are computed lazily by calling `Fixer.Fix(ctx, file)` only when needed.
 
 ### Severity
 

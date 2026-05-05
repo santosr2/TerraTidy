@@ -93,21 +93,16 @@ type Finding struct {
     // Severity indicates the importance: error, warning, or info.
     Severity Severity `json:"severity"`
 
-    // Fix holds the pre-computed fix result. If non-nil, the finding is auto-fixable.
-    Fix *FixResult `json:"fix,omitempty"`
+    // Fixable is true when the rule that produced this finding implements Fixer.
+    // The engine sets this; rules must not set it directly.
+    Fixable bool `json:"fixable,omitempty"`
 }
 ```
 
-## FixResult
-
-Holds the result of an auto-fix operation:
-
-```go
-type FixResult struct {
-    // Content is the corrected file content after applying the fix.
-    Content []byte
-}
-```
+A finding is auto-fixable when `Fixable` is `true`. The engine sets this field by
+type-asserting the rule against `sdk.Fixer` and stamping it on every finding the
+rule produces. To compute the actual fix bytes, the engine calls
+`Fixer.Fix(ctx, file)` lazily — only in fix or diff mode.
 
 ## Location
 

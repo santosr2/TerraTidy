@@ -193,7 +193,7 @@ func (f *SARIFFormatter) buildSARIFResult(finding sdk.Finding) SARIFResult {
 		},
 	}
 
-	if finding.Fix != nil {
+	if finding.Fixable {
 		result.Fixes = f.buildSARIFFixes(finding)
 	}
 	return result

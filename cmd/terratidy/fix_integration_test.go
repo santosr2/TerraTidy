@@ -168,7 +168,7 @@ resource "aws_instance" "test2" {
 func TestPrintFixSummary(t *testing.T) {
 	// Should not panic with various inputs
 	printFixSummary(nil, 0)
-	printFixSummary([]sdk.Finding{{Fix: nil}}, 1)
+	printFixSummary([]sdk.Finding{{Fixable: false}}, 1)
 	printFixSummary(nil, 5)
 }
 

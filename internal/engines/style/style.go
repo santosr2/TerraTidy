@@ -202,17 +202,12 @@ func (e *Engine) checkFile(path string) ([]sdk.Finding, error) {
 				}
 			}
 
-			// Stamp Fix sentinel: engine owns the Fixable signal, not the rule.
-			// For Fixer rules, set Fix to an empty FixResult (Content stays nil; the engine
-			// dispatches to Fixer.Fix(ctx, file) lazily in applyFixes). For non-Fixer rules,
-			// force Fix to nil regardless of what the rule may have set.
+			// Stamp Fixable: engine owns the signal, not the rule. Set true for Fixer
+			// rules (engine dispatches to Fixer.Fix(ctx, file) lazily in applyFixes);
+			// false otherwise, regardless of what the rule may have set.
 			_, isFixer := rule.(sdk.Fixer)
 			for i := range ruleFindings {
-				if isFixer {
-					ruleFindings[i].Fix = &sdk.FixResult{}
-				} else {
-					ruleFindings[i].Fix = nil
-				}
+				ruleFindings[i].Fixable = isFixer
 			}
 
 			findings = append(findings, ruleFindings...)
@@ -302,9 +297,9 @@ func (e *Engine) generateDiff(path string, originalContent []byte) (*sdk.Finding
 // applyFixes applies ONE auto-fix to the file per pass.
 // Returns the number of fixes applied (0 or 1).
 //
-// Dispatch: for each finding marked fixable (Fix != nil), look up the originating
-// rule by name and invoke its Fixer.Fix(ctx, file) method. The first non-nil byte
-// content returned wins; it is written to disk and the loop returns 1. The multi-pass
+// Dispatch: for each finding marked Fixable, look up the originating rule by name
+// and invoke its Fixer.Fix(ctx, file) method. The first non-nil byte content
+// returned wins; it is written to disk and the loop returns 1. The multi-pass
 // loop in Run will re-read the file and re-run rules after each fix, ensuring
 // subsequent fixes are computed against the updated content.
 //
@@ -312,7 +307,7 @@ func (e *Engine) generateDiff(path string, originalContent []byte) (*sdk.Finding
 // the multi-pass loop will keep applying fixes until the loop guard fires.
 func (e *Engine) applyFixes(ctx *sdk.Context, file *hcl.File, findings []sdk.Finding) (int, error) {
 	for i := range findings {
-		if findings[i].Fix == nil {
+		if !findings[i].Fixable {
 			continue
 		}
 

@@ -57,17 +57,6 @@ func (r *ForEachCountFirstRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.F
 			}
 		}
 
-		// Pre-compute fix once for this block (shared by findings)
-		var fixResult *sdk.FixResult
-		needsFix := (forEachAttr != nil && firstAttr != nil && forEachAttr != firstAttr) ||
-			(countAttr != nil && firstAttr != nil && countAttr != firstAttr && forEachAttr == nil)
-		if needsFix {
-			fixedContent, err := r.fixBlock(ctx.File, block.Type, block.Labels, "")
-			if err == nil && fixedContent != nil {
-				fixResult = &sdk.FixResult{Content: fixedContent}
-			}
-		}
-
 		// Check if for_each/count exists but is not first
 		if forEachAttr != nil && firstAttr != nil && forEachAttr != firstAttr {
 			findings = append(findings, sdk.Finding{
@@ -76,7 +65,6 @@ func (r *ForEachCountFirstRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.F
 				File:     ctx.File,
 				Location: sdk.LocationFromRange(forEachAttr.Range()),
 				Severity: sdk.SeverityWarning,
-				Fix:      fixResult,
 			})
 		}
 
@@ -87,70 +75,11 @@ func (r *ForEachCountFirstRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.F
 				File:     ctx.File,
 				Location: sdk.LocationFromRange(countAttr.Range()),
 				Severity: sdk.SeverityWarning,
-				Fix:      fixResult,
 			})
 		}
 	}
 
 	return findings, nil
-}
-
-// fixBlock moves for_each or count to be the first attribute in the block.
-func (r *ForEachCountFirstRule) fixBlock(
-	filePath, blockType string,
-	blockLabels []string,
-	_ string, // attrName - unused, we handle both for_each and count
-) ([]byte, error) {
-	content, err := os.ReadFile(filePath)
-	if err != nil {
-		return nil, err
-	}
-
-	// Parse with hclsyntax to get accurate positions
-	syntaxFile, diags := hclsyntax.ParseConfig(content, filePath, hcl.InitialPos)
-	if diags.HasErrors() {
-		return nil, diags
-	}
-	syntaxBody, ok := syntaxFile.Body.(*hclsyntax.Body)
-	if !ok {
-		return content, nil
-	}
-
-	// Find the target block
-	var targetBlock *hclsyntax.Block
-	for _, block := range syntaxBody.Blocks {
-		if block.Type != blockType {
-			continue
-		}
-		if MatchBlockLabels(block.Labels, blockLabels) {
-			targetBlock = block
-			break
-		}
-	}
-	if targetBlock == nil {
-		return content, nil
-	}
-
-	orderedNames := GetOrderedAttrNames(targetBlock.Body)
-	// For modules, also position source/version after for_each/count
-	firstAttrs := []string{"for_each", "count"}
-	if blockType == "module" {
-		firstAttrs = []string{"for_each", "count", "source", "version"}
-	}
-	lastAttrs := []string{"tags", "labels", "tags_all", "depends_on"}
-
-	// Use line-based reordering to preserve leading comments
-	result := ReorderBlockAttrsPreservingComments(
-		content,
-		targetBlock.Body,
-		targetBlock.Range().Start.Line,
-		targetBlock.Range().End.Line,
-		orderedNames,
-		firstAttrs,
-		lastAttrs,
-	)
-
-	return FormatAndCleanBlankLines(result), nil
 }
 
 // Fix moves for_each/count to be first attribute in each block.
@@ -251,33 +180,17 @@ func (r *LifecycleAtEndRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Find
 
 		// If lifecycle exists and is not at the end
 		if lifecycleBlock != nil && lifecycleBlock.Range().End.Line < lastLine {
-			var fixResult *sdk.FixResult
-			fixedContent, err := r.fixLifecyclePosition(ctx.File, block.Labels)
-			if err == nil && fixedContent != nil {
-				fixResult = &sdk.FixResult{Content: fixedContent}
-			}
 			findings = append(findings, sdk.Finding{
 				Rule:     r.Name(),
 				Message:  "lifecycle block should be at the end of the resource block",
 				File:     ctx.File,
 				Location: sdk.LocationFromRange(lifecycleBlock.Range()),
 				Severity: sdk.SeverityWarning,
-				Fix:      fixResult,
 			})
 		}
 	}
 
 	return findings, nil
-}
-
-// fixLifecyclePosition moves lifecycle block to the end of the resource.
-// Used by Check to pre-compute fix content (reads from file).
-func (r *LifecycleAtEndRule) fixLifecyclePosition(filePath string, blockLabels []string) ([]byte, error) {
-	content, err := os.ReadFile(filePath)
-	if err != nil {
-		return nil, err
-	}
-	return r.fixLifecyclePositionContent(content, filePath, blockLabels)
 }
 
 // fixLifecyclePositionContent moves lifecycle block to the end of the resource.
@@ -427,13 +340,6 @@ func (r *TagsAtEndRule) checkTagsBlock(ctx *sdk.Context, block *hclsyntax.Block)
 		return findings
 	}
 
-	// Pre-compute fix once for this block
-	var fixResult *sdk.FixResult
-	fixedContent, err := r.fixTagsBlock(ctx.File, block.Type, block.Labels)
-	if err == nil && fixedContent != nil {
-		fixResult = &sdk.FixResult{Content: fixedContent}
-	}
-
 	lifecycleBlock := FindNestedBlock(body.Blocks, "lifecycle")
 	tagsLine := tagsAttr.Range().Start.Line
 
@@ -444,7 +350,6 @@ func (r *TagsAtEndRule) checkTagsBlock(ctx *sdk.Context, block *hclsyntax.Block)
 			File:     ctx.File,
 			Location: sdk.LocationFromRange(tagsAttr.Range()),
 			Severity: sdk.SeverityWarning,
-			Fix:      fixResult,
 		})
 	}
 
@@ -455,46 +360,10 @@ func (r *TagsAtEndRule) checkTagsBlock(ctx *sdk.Context, block *hclsyntax.Block)
 			File:     ctx.File,
 			Location: sdk.LocationFromRange(tagsAttr.Range()),
 			Severity: sdk.SeverityInfo,
-			Fix:      fixResult,
 		})
 	}
 
 	return findings
-}
-
-// fixTagsBlock reorders a specific block's tags attribute to be at the end.
-func (r *TagsAtEndRule) fixTagsBlock(filePath, blockType string, blockLabels []string) ([]byte, error) {
-	content, err := os.ReadFile(filePath)
-	if err != nil {
-		return nil, err
-	}
-
-	syntaxBody, writeFile, err := ParseBothFormats(content, filePath)
-	if err != nil {
-		return nil, err
-	}
-	if syntaxBody == nil {
-		return content, nil
-	}
-
-	// Find syntax body for this block
-	targetSyntaxBody := FindSyntaxBody(syntaxBody, blockType, blockLabels)
-	if targetSyntaxBody == nil {
-		return content, nil
-	}
-
-	// Find the matching block in hclwrite
-	targetBlock := FindWriteBlock(writeFile, blockType, blockLabels)
-	if targetBlock == nil {
-		return content, nil
-	}
-
-	orderedNames := GetOrderedAttrNames(targetSyntaxBody)
-	// tags/labels should be at the end
-	lastAttrs := []string{"tags", "labels", "tags_all", "depends_on"}
-	ReorderBlockAttrs(targetBlock.Body(), orderedNames, nil, lastAttrs)
-
-	return FormatAndCleanBlankLines(writeFile.Bytes()), nil
 }
 
 func findTagsAttribute(attrs hclsyntax.Attributes) *hclsyntax.Attribute {
@@ -609,13 +478,6 @@ func (r *DependsOnOrderRule) checkDependsOnBlock(ctx *sdk.Context, block *hclsyn
 		return findings
 	}
 
-	// Pre-compute fix once for this block
-	var fixResult *sdk.FixResult
-	fixedContent, err := r.fixDependsOnOrder(ctx.File, block.Type, block.Labels)
-	if err == nil && fixedContent != nil {
-		fixResult = &sdk.FixResult{Content: fixedContent}
-	}
-
 	lifecycleBlock := FindNestedBlock(body.Blocks, "lifecycle")
 	dependsOnLine := dependsOnAttr.Range().Start.Line
 
@@ -626,7 +488,6 @@ func (r *DependsOnOrderRule) checkDependsOnBlock(ctx *sdk.Context, block *hclsyn
 			File:     ctx.File,
 			Location: sdk.LocationFromRange(dependsOnAttr.Range()),
 			Severity: sdk.SeverityWarning,
-			Fix:      fixResult,
 		})
 	}
 
@@ -637,7 +498,6 @@ func (r *DependsOnOrderRule) checkDependsOnBlock(ctx *sdk.Context, block *hclsyn
 			File:     ctx.File,
 			Location: sdk.LocationFromRange(dependsOnAttr.Range()),
 			Severity: sdk.SeverityInfo,
-			Fix:      fixResult,
 		})
 	}
 
@@ -652,41 +512,6 @@ func (r *DependsOnOrderRule) hasAttributesAfterDependsOn(attrs hclsyntax.Attribu
 		}
 	}
 	return false
-}
-
-// fixDependsOnOrder moves depends_on to be near the end (before tags/lifecycle).
-func (r *DependsOnOrderRule) fixDependsOnOrder(filePath, blockType string, blockLabels []string) ([]byte, error) {
-	content, err := os.ReadFile(filePath)
-	if err != nil {
-		return nil, err
-	}
-
-	syntaxBody, writeFile, err := ParseBothFormats(content, filePath)
-	if err != nil {
-		return nil, err
-	}
-	if syntaxBody == nil {
-		return content, nil
-	}
-
-	// Find syntax body for this block
-	targetSyntaxBody := FindSyntaxBody(syntaxBody, blockType, blockLabels)
-	if targetSyntaxBody == nil {
-		return content, nil
-	}
-
-	// Find the matching block in hclwrite
-	targetBlock := FindWriteBlock(writeFile, blockType, blockLabels)
-	if targetBlock == nil {
-		return content, nil
-	}
-
-	orderedNames := GetOrderedAttrNames(targetSyntaxBody)
-	// depends_on should be near the end (before tags)
-	lastAttrs := []string{"tags", "labels", "tags_all", "depends_on"}
-	ReorderBlockAttrs(targetBlock.Body(), orderedNames, nil, lastAttrs)
-
-	return FormatAndCleanBlankLines(writeFile.Bytes()), nil
 }
 
 // Fix moves depends_on to be near the end of blocks.
@@ -776,21 +601,14 @@ func (r *SourceVersionGroupedRule) checkModuleBlock(ctx *sdk.Context, block *hcl
 	sourceAttr := FindAttribute(body.Attributes, "source")
 	versionAttr := FindAttribute(body.Attributes, "version")
 
-	// Pre-compute fix once for this block
-	var fixResult *sdk.FixResult
-	fixedContent, err := r.fixModuleBlock(ctx.File, block.Labels)
-	if err == nil && fixedContent != nil {
-		fixResult = &sdk.FixResult{Content: fixedContent}
-	}
-
 	if sourceAttr != nil {
-		if finding := r.checkSourcePosition(ctx, body.Attributes, sourceAttr, fixResult); finding != nil {
+		if finding := r.checkSourcePosition(ctx, body.Attributes, sourceAttr); finding != nil {
 			findings = append(findings, *finding)
 		}
 	}
 
 	if sourceAttr != nil && versionAttr != nil {
-		if finding := r.checkVersionFollowsSource(ctx, body.Attributes, sourceAttr, versionAttr, fixResult); finding != nil {
+		if finding := r.checkVersionFollowsSource(ctx, body.Attributes, sourceAttr, versionAttr); finding != nil {
 			findings = append(findings, *finding)
 		}
 	}
@@ -798,60 +616,8 @@ func (r *SourceVersionGroupedRule) checkModuleBlock(ctx *sdk.Context, block *hcl
 	return findings
 }
 
-// fixModuleBlock reorders a specific module block's attributes.
-func (r *SourceVersionGroupedRule) fixModuleBlock(filePath string, blockLabels []string) ([]byte, error) {
-	content, err := os.ReadFile(filePath)
-	if err != nil {
-		return nil, err
-	}
-
-	// Parse with hclsyntax to get accurate positions
-	syntaxFile, diags := hclsyntax.ParseConfig(content, filePath, hcl.InitialPos)
-	if diags.HasErrors() {
-		return nil, diags
-	}
-	syntaxBody, ok := syntaxFile.Body.(*hclsyntax.Body)
-	if !ok {
-		return content, nil
-	}
-
-	// Find the target block
-	var targetBlock *hclsyntax.Block
-	for _, block := range syntaxBody.Blocks {
-		if block.Type != "module" {
-			continue
-		}
-		if MatchBlockLabels(block.Labels, blockLabels) {
-			targetBlock = block
-			break
-		}
-	}
-	if targetBlock == nil {
-		return content, nil
-	}
-
-	orderedNames := GetOrderedAttrNames(targetBlock.Body)
-	// source and version should come after for_each/count but before everything else
-	firstAttrs := []string{"for_each", "count", "source", "version"}
-	lastAttrs := []string{"tags", "labels", "tags_all", "depends_on"}
-
-	// Use line-based reordering to preserve leading comments
-	result := ReorderBlockAttrsPreservingComments(
-		content,
-		targetBlock.Body,
-		targetBlock.Range().Start.Line,
-		targetBlock.Range().End.Line,
-		orderedNames,
-		firstAttrs,
-		lastAttrs,
-	)
-
-	return FormatAndCleanBlankLines(result), nil
-}
-
 func (r *SourceVersionGroupedRule) checkSourcePosition(
 	ctx *sdk.Context, attrs hclsyntax.Attributes, sourceAttr *hclsyntax.Attribute,
-	fixResult *sdk.FixResult,
 ) *sdk.Finding {
 	sourceLine := sourceAttr.Range().Start.Line
 	allowedBefore := map[string]bool{"source": true, "for_each": true, "count": true}
@@ -864,7 +630,6 @@ func (r *SourceVersionGroupedRule) checkSourcePosition(
 				File:     ctx.File,
 				Location: sdk.LocationFromRange(sourceAttr.Range()),
 				Severity: sdk.SeverityWarning,
-				Fix:      fixResult,
 			}
 		}
 	}
@@ -874,7 +639,6 @@ func (r *SourceVersionGroupedRule) checkSourcePosition(
 func (r *SourceVersionGroupedRule) checkVersionFollowsSource(
 	ctx *sdk.Context, attrs hclsyntax.Attributes,
 	sourceAttr, versionAttr *hclsyntax.Attribute,
-	fixResult *sdk.FixResult,
 ) *sdk.Finding {
 	sourceLine := sourceAttr.Range().End.Line
 	versionLine := versionAttr.Range().Start.Line
@@ -889,7 +653,6 @@ func (r *SourceVersionGroupedRule) checkVersionFollowsSource(
 				File:     ctx.File,
 				Location: sdk.LocationFromRange(versionAttr.Range()),
 				Severity: sdk.SeverityWarning,
-				Fix:      fixResult,
 			}
 		}
 	}
@@ -994,15 +757,7 @@ func (r *VariableOrderRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Findi
 
 func (r *VariableOrderRule) checkVariableBlock(ctx *sdk.Context, block *hclsyntax.Block, attrOrder map[string]int) []sdk.Finding {
 	attrs := r.collectVariableAttrs(block.Body, attrOrder)
-
-	// Pre-compute fix once for this block
-	var fixResult *sdk.FixResult
-	fixedContent, err := r.Fix(&sdk.Context{File: ctx.File}, nil)
-	if err == nil && fixedContent != nil {
-		fixResult = &sdk.FixResult{Content: fixedContent}
-	}
-
-	return r.findOrderViolations(ctx, block, attrs, fixResult)
+	return r.findOrderViolations(ctx, block, attrs)
 }
 
 func (r *VariableOrderRule) collectVariableAttrs(body *hclsyntax.Body, attrOrder map[string]int) []varAttrPos {
@@ -1038,7 +793,7 @@ func (r *VariableOrderRule) collectVariableAttrs(body *hclsyntax.Body, attrOrder
 }
 
 func (r *VariableOrderRule) findOrderViolations(
-	ctx *sdk.Context, block *hclsyntax.Block, attrs []varAttrPos, fixResult *sdk.FixResult,
+	ctx *sdk.Context, block *hclsyntax.Block, attrs []varAttrPos,
 ) []sdk.Finding {
 	var findings []sdk.Finding
 	if len(attrs) < 2 {
@@ -1047,7 +802,7 @@ func (r *VariableOrderRule) findOrderViolations(
 
 	for i := 0; i < len(attrs)-1; i++ {
 		for j := i + 1; j < len(attrs); j++ {
-			if finding := r.checkAttrPair(ctx, block, attrs[i], attrs[j], fixResult); finding != nil {
+			if finding := r.checkAttrPair(ctx, block, attrs[i], attrs[j]); finding != nil {
 				findings = append(findings, *finding)
 			}
 		}
@@ -1055,7 +810,7 @@ func (r *VariableOrderRule) findOrderViolations(
 	return findings
 }
 
-func (r *VariableOrderRule) checkAttrPair(ctx *sdk.Context, block *hclsyntax.Block, a, b varAttrPos, fixResult *sdk.FixResult) *sdk.Finding {
+func (r *VariableOrderRule) checkAttrPair(ctx *sdk.Context, block *hclsyntax.Block, a, b varAttrPos) *sdk.Finding {
 	if b.line < a.line && b.order > a.order {
 		return &sdk.Finding{
 			Rule:     r.Name(),
@@ -1063,7 +818,6 @@ func (r *VariableOrderRule) checkAttrPair(ctx *sdk.Context, block *hclsyntax.Blo
 			File:     ctx.File,
 			Location: sdk.LocationFromRange(block.Range()),
 			Severity: sdk.SeverityInfo,
-			Fix:      fixResult,
 		}
 	}
 
@@ -1074,7 +828,6 @@ func (r *VariableOrderRule) checkAttrPair(ctx *sdk.Context, block *hclsyntax.Blo
 			File:     ctx.File,
 			Location: sdk.LocationFromRange(block.Range()),
 			Severity: sdk.SeverityInfo,
-			Fix:      fixResult,
 		}
 	}
 
@@ -1173,15 +926,7 @@ func (r *OutputOrderRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Finding
 
 func (r *OutputOrderRule) checkOutputBlock(ctx *sdk.Context, block *hclsyntax.Block, attrOrder map[string]int) []sdk.Finding {
 	attrs := r.collectOutputAttrs(block.Body, attrOrder)
-
-	// Pre-compute fix once for this block
-	var fixResult *sdk.FixResult
-	fixedContent, err := r.Fix(&sdk.Context{File: ctx.File}, nil)
-	if err == nil && fixedContent != nil {
-		fixResult = &sdk.FixResult{Content: fixedContent}
-	}
-
-	return r.findOutputOrderViolations(ctx, block, attrs, fixResult)
+	return r.findOutputOrderViolations(ctx, block, attrs)
 }
 
 func (r *OutputOrderRule) collectOutputAttrs(body *hclsyntax.Body, attrOrder map[string]int) []varAttrPos {
@@ -1201,7 +946,7 @@ func (r *OutputOrderRule) collectOutputAttrs(body *hclsyntax.Body, attrOrder map
 }
 
 func (r *OutputOrderRule) findOutputOrderViolations(
-	ctx *sdk.Context, block *hclsyntax.Block, attrs []varAttrPos, fixResult *sdk.FixResult,
+	ctx *sdk.Context, block *hclsyntax.Block, attrs []varAttrPos,
 ) []sdk.Finding {
 	var findings []sdk.Finding
 	if len(attrs) < 2 {
@@ -1210,7 +955,7 @@ func (r *OutputOrderRule) findOutputOrderViolations(
 
 	for i := 0; i < len(attrs)-1; i++ {
 		for j := i + 1; j < len(attrs); j++ {
-			if finding := r.checkOutputAttrPair(ctx, block, attrs[i], attrs[j], fixResult); finding != nil {
+			if finding := r.checkOutputAttrPair(ctx, block, attrs[i], attrs[j]); finding != nil {
 				findings = append(findings, *finding)
 			}
 		}
@@ -1218,7 +963,7 @@ func (r *OutputOrderRule) findOutputOrderViolations(
 	return findings
 }
 
-func (r *OutputOrderRule) checkOutputAttrPair(ctx *sdk.Context, block *hclsyntax.Block, a, b varAttrPos, fixResult *sdk.FixResult) *sdk.Finding {
+func (r *OutputOrderRule) checkOutputAttrPair(ctx *sdk.Context, block *hclsyntax.Block, a, b varAttrPos) *sdk.Finding {
 	if b.line < a.line && b.order > a.order {
 		return &sdk.Finding{
 			Rule:     r.Name(),
@@ -1226,7 +971,6 @@ func (r *OutputOrderRule) checkOutputAttrPair(ctx *sdk.Context, block *hclsyntax
 			File:     ctx.File,
 			Location: sdk.LocationFromRange(block.Range()),
 			Severity: sdk.SeverityInfo,
-			Fix:      fixResult,
 		}
 	}
 
@@ -1237,7 +981,6 @@ func (r *OutputOrderRule) checkOutputAttrPair(ctx *sdk.Context, block *hclsyntax
 			File:     ctx.File,
 			Location: sdk.LocationFromRange(block.Range()),
 			Severity: sdk.SeverityInfo,
-			Fix:      fixResult,
 		}
 	}
 
@@ -1327,18 +1070,12 @@ func (r *TerraformBlockFirstRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk
 	}
 
 	if terraformBlock != nil && terraformBlock != firstBlock {
-		var fixResult *sdk.FixResult
-		fixedContent, err := r.fixFile(ctx.File)
-		if err == nil && fixedContent != nil {
-			fixResult = &sdk.FixResult{Content: fixedContent}
-		}
 		findings = append(findings, sdk.Finding{
 			Rule:     r.Name(),
 			Message:  "terraform block should be the first block in the file",
 			File:     ctx.File,
 			Location: sdk.LocationFromRange(terraformBlock.Range()),
 			Severity: sdk.SeverityWarning,
-			Fix:      fixResult,
 		})
 	}
 
@@ -1404,13 +1141,6 @@ func (r *ProviderBlockOrderRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.
 		}
 	}
 
-	// Pre-compute fix once
-	var fixResult *sdk.FixResult
-	fixedContent, err := r.fixFile(ctx.File)
-	if err == nil && fixedContent != nil {
-		fixResult = &sdk.FixResult{Content: fixedContent}
-	}
-
 	for _, block := range hclFile.Blocks {
 		if block.Type == "provider" {
 			providerLine := block.Range().Start.Line
@@ -1423,7 +1153,6 @@ func (r *ProviderBlockOrderRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.
 					File:     ctx.File,
 					Location: sdk.LocationFromRange(block.Range()),
 					Severity: sdk.SeverityWarning,
-					Fix:      fixResult,
 				})
 			}
 
@@ -1435,7 +1164,6 @@ func (r *ProviderBlockOrderRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.
 					File:     ctx.File,
 					Location: sdk.LocationFromRange(block.Range()),
 					Severity: sdk.SeverityWarning,
-					Fix:      fixResult,
 				})
 			}
 		}
@@ -1604,13 +1332,6 @@ func (r *AttributeGroupSpacingRule) checkBlock(ctx *sdk.Context, block *hclsynta
 		}
 	}
 
-	// Pre-compute fix once for this file
-	var fixResult *sdk.FixResult
-	fixedContent, err := r.fixAllBlocks(ctx.File)
-	if err == nil && fixedContent != nil {
-		fixResult = &sdk.FixResult{Content: fixedContent}
-	}
-
 	// Check for missing blank lines between groups
 	for i := 0; i < len(attrs)-1; i++ {
 		curr := attrs[i]
@@ -1657,7 +1378,6 @@ func (r *AttributeGroupSpacingRule) checkBlock(ctx *sdk.Context, block *hclsynta
 					EndColumn:   1,
 				},
 				Severity: sdk.SeverityInfo,
-				Fix:      fixResult,
 			})
 		}
 	}
@@ -1776,51 +1496,6 @@ func (r *AttributeGroupSpacingRule) fixBlockContent(content []byte, filePath, bl
 	}
 
 	return []byte(strings.Join(result, "\n") + "\n"), nil
-}
-
-// fixAllBlocks fixes attribute group spacing in all blocks in the file.
-// Works entirely in memory - does NOT write to disk.
-func (r *AttributeGroupSpacingRule) fixAllBlocks(filePath string) ([]byte, error) {
-	content, err := os.ReadFile(filePath)
-	if err != nil {
-		return nil, err
-	}
-
-	// Parse to find all blocks
-	syntaxFile, diags := hclsyntax.ParseConfig(content, filePath, hcl.InitialPos)
-	if diags.HasErrors() {
-		return content, nil
-	}
-
-	syntaxBody, ok := syntaxFile.Body.(*hclsyntax.Body)
-	if !ok {
-		return content, nil
-	}
-
-	// Collect block info before modifying content (line numbers will change)
-	type blockInfo struct {
-		blockType string
-		labels    []string
-	}
-	var blocks []blockInfo
-	for _, block := range syntaxBody.Blocks {
-		if block.Type != "resource" && block.Type != "module" && block.Type != "data" &&
-			block.Type != "variable" && block.Type != "output" {
-			continue
-		}
-		blocks = append(blocks, blockInfo{blockType: block.Type, labels: block.Labels})
-	}
-
-	// Process each block that needs spacing (re-parse after each modification)
-	for _, bi := range blocks {
-		content, err = r.fixBlockContent(content, filePath, bi.blockType, bi.labels)
-		if err != nil {
-			return nil, err
-		}
-		// Do NOT write to disk - work entirely in memory
-	}
-
-	return content, nil
 }
 
 // Fix adds blank lines between attribute groups.

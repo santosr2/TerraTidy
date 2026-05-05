@@ -141,7 +141,7 @@ Use --all to also apply style fixes (equivalent to running fmt + style --fix).`,
 				return sdk.NewInternalError(fmt.Errorf("applying style fixes: %w", err))
 			}
 
-			// Count fixable style issues (issues with Fix != nil or fixable rules)
+			// Count fixable style issues (Fixable=true is set by the engine for Fixer rules)
 			styleIssues := 0
 			styleFixed := 0
 			for _, finding := range styleFindings {
@@ -154,7 +154,7 @@ Use --all to also apply style fixes (equivalent to running fmt + style --fix).`,
 					}
 					continue
 				}
-				if finding.Fix != nil {
+				if finding.Fixable {
 					styleFixed++
 				}
 				// In check mode, count all non-info findings as issues

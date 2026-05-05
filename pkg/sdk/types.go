@@ -83,18 +83,10 @@ func LocationFromRange(r hcl.Range) Location {
 	}
 }
 
-// FixResult holds the result of an auto-fix operation. Instead of a closure
-// that performs disk I/O, the fixed content is stored directly in memory.
-// This enables deferred writes, better deduplication, and simpler testing.
-type FixResult struct {
-	// Content is the corrected file content after applying the fix.
-	Content []byte
-}
-
 // Finding represents a single issue detected by a rule. Findings are collected
 // by engines and formatted for output. Each finding identifies the rule that
-// produced it, the file and location where the issue was found, and optionally
-// a function to auto-fix the issue.
+// produced it, the file and location where the issue was found, and an indicator
+// of whether the issue can be auto-fixed.
 type Finding struct {
 	// Rule is the identifier of the rule that produced this finding (e.g., "style.block-label-case").
 	Rule string `json:"rule"`
@@ -106,9 +98,9 @@ type Finding struct {
 	Location Location `json:"location"`
 	// Severity indicates the importance of this finding.
 	Severity Severity `json:"severity"`
-	// Fix holds the pre-computed fix result. If non-nil, the finding is auto-fixable.
-	// The Content field contains the corrected file content.
-	Fix *FixResult `json:"fix,omitempty"`
+	// Fixable is true when the rule that produced this finding implements Fixer.
+	// The engine sets this; rules must not set it directly.
+	Fixable bool `json:"fixable,omitempty"`
 }
 
 // Context provides runtime information to rules during execution. Each rule

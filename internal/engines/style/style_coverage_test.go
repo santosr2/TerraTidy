@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/hashicorp/hcl/v2"
 	"github.com/santosr2/TerraTidy/internal/config"
 	"github.com/santosr2/TerraTidy/pkg/sdk"
 	"github.com/stretchr/testify/assert"
@@ -169,12 +170,14 @@ resource "aws_instance" "test2" {
 	findings, err := checkEngine.Run(context.Background(), []string{tmpFile})
 	require.NoError(t, err)
 
-	// Verify we have at least one finding with Fix populated
+	// Verify we have at least one finding with Fix populated (sentinel set by engine).
+	// Fix.Content must NOT be set: the engine dispatches to Fixer.Fix(ctx, file) lazily
+	// in applyFixes — Check() never carries fix bytes through Fix.Content.
 	hasFixableFinding := false
 	for _, f := range findings {
 		if f.Fix != nil {
 			hasFixableFinding = true
-			assert.NotNil(t, f.Fix.Content, "Fix.Content should be set")
+			assert.Nil(t, f.Fix.Content, "Fix.Content must NOT be set; engine dispatches to Fix() lazily")
 			break
 		}
 	}
@@ -193,6 +196,86 @@ resource "aws_instance" "test2" {
 	require.NoError(t, err)
 	assert.NotEqual(t, content, string(modified), "fix should modify the file")
 	assert.Contains(t, string(modified), "\n\nresource", "should have blank line between blocks")
+}
+
+// stubNonFixerRule is a rule that does not implement sdk.Fixer; used to verify
+// that the engine forces Fix to nil on findings from non-Fixer rules.
+type stubNonFixerRule struct{}
+
+func (r *stubNonFixerRule) Name() string        { return "test.stub-non-fixer" }
+func (r *stubNonFixerRule) Description() string { return "Test rule that is not a Fixer" }
+
+func (r *stubNonFixerRule) Check(ctx *sdk.Context, _ *hcl.File) ([]sdk.Finding, error) {
+	return []sdk.Finding{{
+		Rule:     r.Name(),
+		Message:  "stub finding from non-fixer",
+		File:     ctx.File,
+		Severity: sdk.SeverityWarning,
+		// Intentionally set Fix to a non-nil value here; the engine must overwrite
+		// it with nil because this rule does not implement Fixer.
+		Fix: &sdk.FixResult{Content: []byte("garbage")},
+	}}, nil
+}
+
+// stubErroringFixerRule is a Fixer rule whose Fix() always returns an error;
+// used to verify that applyFixes wraps and propagates Fix() errors.
+type stubErroringFixerRule struct{}
+
+func (r *stubErroringFixerRule) Name() string        { return "test.stub-erroring-fixer" }
+func (r *stubErroringFixerRule) Description() string { return "Test rule that errors in Fix()" }
+
+func (r *stubErroringFixerRule) Check(ctx *sdk.Context, _ *hcl.File) ([]sdk.Finding, error) {
+	return []sdk.Finding{{
+		Rule:     r.Name(),
+		Message:  "stub finding",
+		File:     ctx.File,
+		Severity: sdk.SeverityWarning,
+	}}, nil
+}
+
+func (r *stubErroringFixerRule) Fix(_ *sdk.Context, _ *hcl.File) ([]byte, error) {
+	return nil, assert.AnError
+}
+
+func TestEngineDispatch_PropagatesFixerError(t *testing.T) {
+	dir := t.TempDir()
+	tmpFile := filepath.Join(dir, "test.tf")
+	// Empty file produces no findings from any built-in rule, so the stub is the
+	// only finding-generator the engine sees. This keeps the test from depending
+	// on the rule registration order or the set of enabled-by-default rules.
+	require.NoError(t, os.WriteFile(tmpFile, []byte("\n"), 0o644))
+
+	engine := New(&Config{
+		Fix:   true,
+		Rules: make(map[string]RuleConfig),
+	}, &stubErroringFixerRule{})
+
+	_, err := engine.Run(context.Background(), []string{tmpFile})
+	require.Error(t, err, "applyFixes must propagate errors from Fixer.Fix()")
+	assert.Contains(t, err.Error(), "test.stub-erroring-fixer",
+		"propagated error should name the failing rule")
+}
+
+func TestEngineDispatch_NonFixerFindingsHaveNilFix(t *testing.T) {
+	dir := t.TempDir()
+	tmpFile := filepath.Join(dir, "test.tf")
+	require.NoError(t, os.WriteFile(tmpFile, []byte("resource \"aws_instance\" \"x\" {}\n"), 0o644))
+
+	// Inject the stub via the plugin slot so it runs through the regular Check path.
+	engine := New(&Config{Rules: make(map[string]RuleConfig)}, &stubNonFixerRule{})
+	findings, err := engine.Run(context.Background(), []string{tmpFile})
+	require.NoError(t, err)
+
+	var stubFinding *sdk.Finding
+	for i := range findings {
+		if findings[i].Rule == "test.stub-non-fixer" {
+			stubFinding = &findings[i]
+			break
+		}
+	}
+	require.NotNil(t, stubFinding, "stub rule should produce a finding")
+	assert.Nil(t, stubFinding.Fix,
+		"engine must force Fix to nil for findings from non-Fixer rules, even if the rule sets it")
 }
 
 func TestRun_RuleDisabling(t *testing.T) {

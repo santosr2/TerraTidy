@@ -202,6 +202,19 @@ func (e *Engine) checkFile(path string) ([]sdk.Finding, error) {
 				}
 			}
 
+			// Stamp Fix sentinel: engine owns the Fixable signal, not the rule.
+			// For Fixer rules, set Fix to an empty FixResult (Content stays nil; the engine
+			// dispatches to Fixer.Fix(ctx, file) lazily in applyFixes). For non-Fixer rules,
+			// force Fix to nil regardless of what the rule may have set.
+			_, isFixer := rule.(sdk.Fixer)
+			for i := range ruleFindings {
+				if isFixer {
+					ruleFindings[i].Fix = &sdk.FixResult{}
+				} else {
+					ruleFindings[i].Fix = nil
+				}
+			}
+
 			findings = append(findings, ruleFindings...)
 		}
 
@@ -288,20 +301,57 @@ func (e *Engine) generateDiff(path string, originalContent []byte) (*sdk.Finding
 
 // applyFixes applies ONE auto-fix to the file per pass.
 // Returns the number of fixes applied (0 or 1).
-// The multi-pass loop in Run will re-read the file and re-run rules after each fix,
-// ensuring subsequent fixes are computed against the updated content.
-func (e *Engine) applyFixes(ctx *sdk.Context, _ *hcl.File, findings []sdk.Finding) (int, error) {
-	// Find the first fixable finding
+//
+// Dispatch: for each finding marked fixable (Fix != nil), look up the originating
+// rule by name and invoke its Fixer.Fix(ctx, file) method. The first non-nil byte
+// content returned wins; it is written to disk and the loop returns 1. The multi-pass
+// loop in Run will re-read the file and re-run rules after each fix, ensuring
+// subsequent fixes are computed against the updated content.
+//
+// Note: rules' Fix() methods are responsible for idempotence — if Fix(Fix(x)) != Fix(x),
+// the multi-pass loop will keep applying fixes until the loop guard fires.
+func (e *Engine) applyFixes(ctx *sdk.Context, file *hcl.File, findings []sdk.Finding) (int, error) {
 	for i := range findings {
-		if findings[i].Fix != nil && findings[i].Fix.Content != nil {
-			if err := os.WriteFile(ctx.File, findings[i].Fix.Content, 0o600); err != nil {
-				return 0, fmt.Errorf("writing fix for %s: %w", findings[i].Rule, err)
-			}
-			return 1, nil
+		if findings[i].Fix == nil {
+			continue
 		}
+
+		fixer := e.findFixerByRuleName(findings[i].Rule)
+		if fixer == nil {
+			continue
+		}
+
+		content, err := fixer.Fix(ctx, file)
+		if err != nil {
+			return 0, fmt.Errorf("computing fix for %s: %w", findings[i].Rule, err)
+		}
+		if content == nil {
+			continue
+		}
+
+		if err := os.WriteFile(ctx.File, content, 0o600); err != nil {
+			return 0, fmt.Errorf("writing fix for %s: %w", findings[i].Rule, err)
+		}
+		return 1, nil
 	}
 
 	return 0, nil
+}
+
+// findFixerByRuleName returns the rule registered under the given name as an
+// sdk.Fixer, or nil if no rule with that name is registered or it does not
+// implement Fixer.
+func (e *Engine) findFixerByRuleName(name string) sdk.Fixer {
+	for _, r := range e.rules {
+		if r.Name() != name {
+			continue
+		}
+		if f, ok := r.(sdk.Fixer); ok {
+			return f
+		}
+		return nil
+	}
+	return nil
 }
 
 // getRuleConfig returns the configuration for a rule

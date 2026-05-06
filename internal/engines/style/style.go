@@ -128,6 +128,14 @@ func (e *Engine) checkFile(path string) ([]sdk.Finding, error) {
 		File:    path,
 	}
 
+	// Capture the original file mode once. All write paths below (preview
+	// restore and per-pass fix apply) honor it. Falls back to 0o600 if Stat
+	// fails so we still produce a sensibly-permissioned file.
+	mode := os.FileMode(0o600)
+	if info, err := os.Stat(path); err == nil {
+		mode = info.Mode().Perm()
+	}
+
 	// Capture original content before any fixes for diff generation
 	// When Diff=true, we capture content regardless of Fix flag to support preview mode
 	var originalContent []byte
@@ -224,7 +232,7 @@ func (e *Engine) checkFile(path string) ([]sdk.Finding, error) {
 		// In fix mode or diff preview mode, apply fixes and potentially loop for another pass
 		// When Diff=true with Fix=false, we still apply fixes to generate preview diff
 		if (e.config.Fix || e.config.Diff) && len(findings) > 0 {
-			appliedRule, err := e.applyFixes(ruleCtx, file, findings)
+			appliedRule, err := e.applyFixes(ruleCtx, file, findings, mode)
 			if err != nil {
 				return nil, fmt.Errorf("applying fixes: %w", err)
 			}
@@ -246,8 +254,11 @@ func (e *Engine) checkFile(path string) ([]sdk.Finding, error) {
 		// even if diff generation fails - the preview contract guarantees no file changes
 		if !e.config.Fix {
 			defer func() {
-				// Restore is best-effort in defer; primary error takes precedence
-				_ = os.WriteFile(path, originalContent, 0o600)
+				// Errors are silent by design: the preview contract prefers
+				// returning the diff finding over surfacing restore failures.
+				// Both calls preserve the captured original mode.
+				_ = os.WriteFile(path, originalContent, mode)
+				_ = os.Chmod(path, mode)
 			}()
 		}
 
@@ -348,7 +359,7 @@ func (e *Engine) generateDiff(path string, originalContent []byte) (*sdk.Finding
 // reach a fixed point. If the file returns to a previously-seen state, the
 // multi-pass loop's hash-based cycle detector fires and emits a style.fix-loop
 // error finding instead of looping forever.
-func (e *Engine) applyFixes(ctx *sdk.Context, file *hcl.File, findings []sdk.Finding) (string, error) {
+func (e *Engine) applyFixes(ctx *sdk.Context, file *hcl.File, findings []sdk.Finding, mode os.FileMode) (string, error) {
 	for i := range findings {
 		if !findings[i].Fixable {
 			continue
@@ -367,8 +378,13 @@ func (e *Engine) applyFixes(ctx *sdk.Context, file *hcl.File, findings []sdk.Fin
 			continue
 		}
 
-		if err := os.WriteFile(ctx.File, content, 0o600); err != nil {
+		if err := os.WriteFile(ctx.File, content, mode); err != nil {
 			return "", fmt.Errorf("writing fix for %s: %w", findings[i].Rule, err)
+		}
+		// Defensive Chmod: WriteFile preserves mode on truncation, but if the
+		// file was recreated for any reason, ensure original mode wins over umask.
+		if err := os.Chmod(ctx.File, mode); err != nil {
+			return "", fmt.Errorf("restoring mode after fix for %s: %w", findings[i].Rule, err)
 		}
 		return findings[i].Rule, nil
 	}

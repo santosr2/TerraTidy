@@ -135,8 +135,9 @@ func (e *Engine) formatFile(path string) (*sdk.Finding, error) {
 		}, nil
 	}
 
-	// In normal mode, write the formatted content
-	if err := os.WriteFile(path, formatted, 0o600); err != nil {
+	// In normal mode, write the formatted content while preserving the file's
+	// existing permission bits. Fall back to 0o600 if Stat fails.
+	if err := writeFilePreservingMode(path, formatted); err != nil {
 		return nil, fmt.Errorf("writing formatted file: %w", err)
 	}
 
@@ -161,4 +162,20 @@ func isHCLFile(path string) bool {
 // Format formats the given content and returns the formatted result
 func Format(content []byte) []byte {
 	return hclwrite.Format(content)
+}
+
+// writeFilePreservingMode writes content to path, preserving the file's
+// existing permission bits. If Stat fails (e.g., a concurrent modification or
+// permissions issue), it falls back to mode 0o600. A trailing Chmod ensures
+// the captured mode wins even on the rare path where WriteFile recreates the
+// file (and any umask would otherwise apply).
+func writeFilePreservingMode(path string, content []byte) error {
+	mode := os.FileMode(0o600)
+	if info, err := os.Stat(path); err == nil {
+		mode = info.Mode().Perm()
+	}
+	if err := os.WriteFile(path, content, mode); err != nil {
+		return err
+	}
+	return os.Chmod(path, mode)
 }

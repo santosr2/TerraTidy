@@ -304,6 +304,37 @@ ami="ami-12345678"
 		"fmt must preserve original file mode after writing formatted content")
 }
 
+// TestEngine_WriteFileError verifies that a write failure during formatting
+// surfaces as an error from Engine.Run. Setup: a read-only fixture (0o400) lets
+// ReadFile succeed (owner has read) but causes os.WriteFile to fail with
+// EACCES, exercising the error branches in writeFilePreservingMode and the
+// outer formatFile wrapper. Skipped on Windows and when running as root, where
+// mode-based access control does not apply.
+func TestEngine_WriteFileError(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Unix-style file permissions don't apply on Windows")
+	}
+	if os.Geteuid() == 0 {
+		t.Skip("running as root bypasses mode-based access control")
+	}
+
+	unformatted := `resource "aws_instance" "example" {
+ami="ami-12345678"
+}
+`
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "test.tf")
+	require.NoError(t, os.WriteFile(tmpFile, []byte(unformatted), 0o644))
+	require.NoError(t, os.Chmod(tmpFile, 0o400), "make file read-only so WriteFile fails")
+
+	engine := New(&Config{})
+	findings, err := engine.Run(context.Background(), []string{tmpFile})
+	require.Error(t, err, "expected error from read-only file write")
+	assert.Contains(t, err.Error(), "writing formatted file",
+		"error should be wrapped with the write context")
+	assert.Empty(t, findings, "no findings should be returned on write failure")
+}
+
 // TestEngine_IsDiff_NoFinding_AlreadyFormatted verifies that an already-formatted
 // file produces no finding at all (so IsDiff doesn't even apply). Guards against
 // a regression where the engine might emit a stub finding with IsDiff=false.

@@ -10,21 +10,25 @@ import (
 
 func TestGetEffectiveParallel(t *testing.T) {
 	tests := []struct {
-		name        string
-		cfg         *config.Config
-		cliParallel bool
-		want        bool
+		name          string
+		cfg           *config.Config
+		cliParallel   bool
+		cliNoParallel bool
+		want          bool
 	}{
-		{"cli flag true overrides config", &config.Config{Parallel: config.BoolPtr(false)}, true, true},
-		{"cli flag false uses config true", &config.Config{Parallel: config.BoolPtr(true)}, false, true},
-		{"both false", &config.Config{Parallel: config.BoolPtr(false)}, false, false},
-		{"nil config cli false", nil, false, false},
-		{"nil config cli true", nil, true, true},
+		{"cli flag true overrides config", &config.Config{Parallel: config.BoolPtr(false)}, true, false, true},
+		{"cli flag false uses config true", &config.Config{Parallel: config.BoolPtr(true)}, false, false, true},
+		{"both false", &config.Config{Parallel: config.BoolPtr(false)}, false, false, false},
+		{"nil config cli false", nil, false, false, false},
+		{"nil config cli true", nil, true, false, true},
+		{"no-parallel overrides config true", &config.Config{Parallel: config.BoolPtr(true)}, false, true, false},
+		{"no-parallel overrides --parallel", &config.Config{Parallel: config.BoolPtr(false)}, true, true, false},
+		{"no-parallel with nil config", nil, false, true, false},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.want, getEffectiveParallel(tt.cfg, tt.cliParallel))
+			assert.Equal(t, tt.want, getEffectiveParallel(tt.cfg, tt.cliParallel, tt.cliNoParallel))
 		})
 	}
 }

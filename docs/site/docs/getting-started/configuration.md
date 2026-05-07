@@ -346,7 +346,8 @@ parallel: false  # Run engines sequentially (fmt -> style -> lint -> policy)
 Parallel mode is faster but output order is non-deterministic. Sequential mode is useful
 for debugging or when `fail_fast` is enabled (fail_fast only works in sequential mode).
 
-Can be overridden with `--parallel` CLI flag.
+Can be overridden with `--parallel` (force on) or `--no-parallel` (force off) CLI flags.
+`--no-parallel` takes precedence over both `--parallel` and the config setting.
 
 ### fail_fast
 

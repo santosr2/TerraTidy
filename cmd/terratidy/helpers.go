@@ -566,8 +566,11 @@ func getEffectiveSeverityThreshold(cfg *config.Config) string {
 }
 
 // getEffectiveParallel returns whether parallel execution should be used.
-// CLI flag takes precedence over config file setting.
-func getEffectiveParallel(cfg *config.Config, cliParallel bool) bool {
+// Precedence: --no-parallel > --parallel > config > default (false).
+func getEffectiveParallel(cfg *config.Config, cliParallel, cliNoParallel bool) bool {
+	if cliNoParallel {
+		return false
+	}
 	if cliParallel {
 		return true
 	}

@@ -44,6 +44,12 @@ func TestCheckCmd(t *testing.T) {
 		assert.NotNil(t, flag)
 		assert.Equal(t, "false", flag.DefValue)
 	})
+
+	t.Run("has no-parallel flag", func(t *testing.T) {
+		flag := checkCmd.Flags().Lookup("no-parallel")
+		assert.NotNil(t, flag)
+		assert.Equal(t, "false", flag.DefValue)
+	})
 }
 
 func TestCountBySeverity(t *testing.T) {

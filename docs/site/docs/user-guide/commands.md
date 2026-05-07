@@ -212,15 +212,18 @@ terratidy check [paths...] [flags]
 
 **Flags:**
 
-| Flag            | Description                     |
-| --------------- | ------------------------------- |
-| `--parallel`    | Run engines in parallel         |
-| `--skip-fmt`    | Skip formatting checks          |
-| `--skip-style`  | Skip style checks               |
-| `--skip-lint`   | Skip linting checks             |
-| `--skip-policy` | Skip policy checks              |
+| Flag            | Description                                                 |
+| --------------- | ----------------------------------------------------------- |
+| `--parallel`    | Run engines in parallel                                     |
+| `--no-parallel` | Force sequential execution (overrides `--parallel` and config) |
+| `--skip-fmt`    | Skip formatting checks                                      |
+| `--skip-style`  | Skip style checks                                           |
+| `--skip-lint`   | Skip linting checks                                         |
+| `--skip-policy` | Skip policy checks                                          |
 
 When `fail_fast` is enabled in config, the check stops after the first engine that reports errors.
+`fail_fast` only takes effect in sequential mode; combine it with `--no-parallel` (or
+`parallel: false` in config) to make it active.
 
 **Examples:**
 
@@ -237,8 +240,11 @@ terratidy check --profile ci
 # Output as JSON
 terratidy check --format json
 
-# Run in parallel for faster execution
+# Run in parallel for faster execution (default)
 terratidy check --parallel
+
+# Force sequential execution (e.g. to combine with fail_fast: true)
+terratidy check --no-parallel
 
 # Skip policy checks
 terratidy check --skip-policy

@@ -24,6 +24,7 @@ var (
 	checkSkipLint   bool
 	checkSkipPolicy bool
 	checkParallel   bool
+	checkNoParallel bool
 )
 
 var checkCmd = &cobra.Command{
@@ -45,8 +46,11 @@ Use --skip-* flags to skip specific engines.`,
   # Skip policy checks
   terratidy check --skip-policy
 
-  # Run engines in parallel for faster execution
-  terratidy check --parallel`,
+  # Force parallel execution (engines already run in parallel by default)
+  terratidy check --parallel
+
+  # Force sequential execution (useful with fail_fast: true)
+  terratidy check --no-parallel`,
 	RunE: runCheck,
 }
 
@@ -55,7 +59,8 @@ func init() {
 	checkCmd.Flags().BoolVar(&checkSkipStyle, "skip-style", false, "skip style checks")
 	checkCmd.Flags().BoolVar(&checkSkipLint, "skip-lint", false, "skip linting")
 	checkCmd.Flags().BoolVar(&checkSkipPolicy, "skip-policy", false, "skip policy checks")
-	checkCmd.Flags().BoolVar(&checkParallel, "parallel", false, "run engines in parallel")
+	checkCmd.Flags().BoolVar(&checkParallel, "parallel", false, "force parallel engine execution (already enabled by default config)")
+	checkCmd.Flags().BoolVar(&checkNoParallel, "no-parallel", false, "force sequential engine execution (overrides --parallel and config)")
 	rootCmd.AddCommand(checkCmd)
 }
 
@@ -176,7 +181,7 @@ func runAllChecksWithConfig(cfg *config.Config, files []string, quiet bool, plug
 	ctx := context.Background()
 
 	// Determine if parallel execution should be used
-	useParallel := getEffectiveParallel(cfg, checkParallel)
+	useParallel := getEffectiveParallel(cfg, checkParallel, checkNoParallel)
 
 	if useParallel {
 		return runAllChecksParallelWithConfig(ctx, cfg, files, quiet, pluginRules)

@@ -161,6 +161,24 @@ func TestRunAllChecksWithConfig(t *testing.T) {
 		require.NoError(t, err)
 		_ = findings
 	})
+
+	t.Run("no-parallel forces sequential despite config parallel: true", func(t *testing.T) {
+		oldParallel := checkParallel
+		oldNoParallel := checkNoParallel
+		checkParallel = true
+		checkNoParallel = true
+		defer func() {
+			checkParallel = oldParallel
+			checkNoParallel = oldNoParallel
+		}()
+
+		parallelCfg := config.DefaultConfig()
+		parallelCfg.Parallel = config.BoolPtr(true)
+
+		findings, err := runAllChecksWithConfig(parallelCfg, []string{tmpFile}, true, nil)
+		require.NoError(t, err)
+		_ = findings
+	})
 }
 
 func TestPrintCheckHeader(t *testing.T) {

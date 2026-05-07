@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/santosr2/TerraTidy/internal/config"
@@ -271,6 +272,67 @@ ami="ami-12345678"
 			}
 		})
 	}
+}
+
+// TestEngine_PreservesFileMode verifies that running fmt on a file with a
+// non-default permission mode (0o755) does not change the mode after the
+// formatted bytes are written back. Skipped on Windows where Unix-style
+// permission bits don't apply.
+func TestEngine_PreservesFileMode(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Unix-style file permissions don't apply on Windows")
+	}
+
+	unformatted := `resource "aws_instance" "example" {
+ami="ami-12345678"
+}
+`
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "test.tf")
+	require.NoError(t, os.WriteFile(tmpFile, []byte(unformatted), 0o755))
+	require.NoError(t, os.Chmod(tmpFile, 0o755), "ensure mode is set even if umask altered WriteFile's perm")
+
+	engine := New(&Config{})
+	findings, err := engine.Run(context.Background(), []string{tmpFile})
+	require.NoError(t, err)
+	require.Len(t, findings, 1, "unformatted file should produce a finding")
+	assert.Equal(t, "fmt.formatted", findings[0].Rule)
+
+	info, err := os.Stat(tmpFile)
+	require.NoError(t, err)
+	assert.Equal(t, os.FileMode(0o755), info.Mode().Perm(),
+		"fmt must preserve original file mode after writing formatted content")
+}
+
+// TestEngine_WriteFileError verifies that a write failure during formatting
+// surfaces as an error from Engine.Run. Setup: a read-only fixture (0o400) lets
+// ReadFile succeed (owner has read) but causes os.WriteFile to fail with
+// EACCES, exercising the error branches in writeFilePreservingMode and the
+// outer formatFile wrapper. Skipped on Windows and when running as root, where
+// mode-based access control does not apply.
+func TestEngine_WriteFileError(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Unix-style file permissions don't apply on Windows")
+	}
+	if os.Geteuid() == 0 {
+		t.Skip("running as root bypasses mode-based access control")
+	}
+
+	unformatted := `resource "aws_instance" "example" {
+ami="ami-12345678"
+}
+`
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "test.tf")
+	require.NoError(t, os.WriteFile(tmpFile, []byte(unformatted), 0o644))
+	require.NoError(t, os.Chmod(tmpFile, 0o400), "make file read-only so WriteFile fails")
+
+	engine := New(&Config{})
+	findings, err := engine.Run(context.Background(), []string{tmpFile})
+	require.Error(t, err, "expected error from read-only file write")
+	assert.Contains(t, err.Error(), "writing formatted file",
+		"error should be wrapped with the write context")
+	assert.Empty(t, findings, "no findings should be returned on write failure")
 }
 
 // TestEngine_IsDiff_NoFinding_AlreadyFormatted verifies that an already-formatted

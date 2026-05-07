@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -1307,4 +1308,111 @@ module "second" {
 		require.NoError(t, err)
 		assert.Empty(t, findings, "should have no issues after fix")
 	})
+}
+
+// TestEngine_PreservesFileMode_OnFix verifies that the per-pass fix-apply path
+// preserves the file's original permission mode after writing fixed content.
+// Skipped on Windows where Unix-style permission bits don't apply.
+func TestEngine_PreservesFileMode_OnFix(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Unix-style file permissions don't apply on Windows")
+	}
+
+	// Two adjacent blocks lacking a blank-line separator triggers a fixable
+	// style finding. We need a fix to actually run so the WriteFile path is
+	// exercised.
+	content := `resource "aws_instance" "test1" {
+  ami = "ami-123"
+}
+resource "aws_instance" "test2" {
+  ami = "ami-456"
+}
+`
+	dir := t.TempDir()
+	tmpFile := filepath.Join(dir, "test.tf")
+	require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0o755))
+	require.NoError(t, os.Chmod(tmpFile, 0o755), "ensure mode is set even if umask altered WriteFile's perm")
+
+	engine := New(&Config{Fix: true, Rules: make(map[string]RuleConfig)})
+	_, err := engine.Run(context.Background(), []string{tmpFile})
+	require.NoError(t, err)
+
+	modified, err := os.ReadFile(tmpFile)
+	require.NoError(t, err)
+	require.NotEqual(t, content, string(modified), "test precondition: fix must have actually modified the file")
+
+	info, err := os.Stat(tmpFile)
+	require.NoError(t, err)
+	assert.Equal(t, os.FileMode(0o755), info.Mode().Perm(),
+		"style fix must preserve original file mode after writing fixed content")
+}
+
+// TestEngine_PreservesFileMode_OnDiffPreviewRestore verifies that diff preview
+// mode (Diff=true, Fix=false) restores the file to its original content AND
+// preserves the original permission mode after applying-then-restoring.
+// Skipped on Windows.
+func TestEngine_PreservesFileMode_OnDiffPreviewRestore(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Unix-style file permissions don't apply on Windows")
+	}
+
+	content := `resource "aws_instance" "test1" {
+  ami = "ami-123"
+}
+resource "aws_instance" "test2" {
+  ami = "ami-456"
+}
+`
+	dir := t.TempDir()
+	tmpFile := filepath.Join(dir, "test.tf")
+	require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0o755))
+	require.NoError(t, os.Chmod(tmpFile, 0o755), "ensure mode is set even if umask altered WriteFile's perm")
+
+	engine := New(&Config{Fix: false, Diff: true, Rules: make(map[string]RuleConfig)})
+	_, err := engine.Run(context.Background(), []string{tmpFile})
+	require.NoError(t, err)
+
+	// Preview contract: file content unchanged after run.
+	restored, err := os.ReadFile(tmpFile)
+	require.NoError(t, err)
+	assert.Equal(t, content, string(restored), "diff preview must leave file content unchanged")
+
+	info, err := os.Stat(tmpFile)
+	require.NoError(t, err)
+	assert.Equal(t, os.FileMode(0o755), info.Mode().Perm(),
+		"diff preview restore must preserve original file mode")
+}
+
+// TestEngine_WriteFileError verifies that a write failure during fix-apply
+// surfaces as an error from Engine.Run. Setup: a read-only fixture (0o400)
+// lets ReadFile succeed (owner has read) and the rules detect a fixable
+// finding, but os.WriteFile in applyFixes fails with EACCES, exercising the
+// "writing fix" error branch. Skipped on Windows and when running as root,
+// where mode-based access control does not apply.
+func TestEngine_WriteFileError(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Unix-style file permissions don't apply on Windows")
+	}
+	if os.Geteuid() == 0 {
+		t.Skip("running as root bypasses mode-based access control")
+	}
+
+	// Two adjacent blocks → fixable style finding → applyFixes runs.
+	content := `resource "aws_instance" "test1" {
+  ami = "ami-123"
+}
+resource "aws_instance" "test2" {
+  ami = "ami-456"
+}
+`
+	dir := t.TempDir()
+	tmpFile := filepath.Join(dir, "test.tf")
+	require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0o644))
+	require.NoError(t, os.Chmod(tmpFile, 0o400), "make file read-only so WriteFile fails")
+
+	engine := New(&Config{Fix: true, Rules: make(map[string]RuleConfig)})
+	_, err := engine.Run(context.Background(), []string{tmpFile})
+	require.Error(t, err, "expected error from read-only file write")
+	assert.Contains(t, err.Error(), "writing fix for",
+		"error should be wrapped with the rule context from applyFixes")
 }

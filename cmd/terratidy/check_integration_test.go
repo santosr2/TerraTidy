@@ -1073,14 +1073,22 @@ func TestRootConfigFieldsAffectRuntime(t *testing.T) {
 
 		// Config parallel=true, CLI parallel=false -> use config (true)
 		cfg.Parallel = config.BoolPtr(true)
-		assert.True(t, getEffectiveParallel(cfg, false), "should use config when CLI flag false")
+		assert.True(t, getEffectiveParallel(cfg, false, false), "should use config when CLI flag false")
 
 		// Config parallel=false, CLI parallel=true -> CLI wins
 		cfg.Parallel = config.BoolPtr(false)
-		assert.True(t, getEffectiveParallel(cfg, true), "CLI flag should override config")
+		assert.True(t, getEffectiveParallel(cfg, true, false), "CLI flag should override config")
 
 		// Both false
-		assert.False(t, getEffectiveParallel(cfg, false), "both false should return false")
+		assert.False(t, getEffectiveParallel(cfg, false, false), "both false should return false")
+
+		// --no-parallel beats config parallel: true
+		cfg.Parallel = config.BoolPtr(true)
+		assert.False(t, getEffectiveParallel(cfg, false, true), "--no-parallel should override config parallel: true")
+
+		// --no-parallel beats --parallel
+		cfg.Parallel = config.BoolPtr(false)
+		assert.False(t, getEffectiveParallel(cfg, true, true), "--no-parallel should override --parallel")
 	})
 
 	t.Run("imports merge config correctly", func(t *testing.T) {

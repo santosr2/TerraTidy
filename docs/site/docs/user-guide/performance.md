@@ -19,12 +19,14 @@ parallel: true
 Parallel mode runs all enabled engines (fmt, style, lint, policy) simultaneously using
 goroutines. This is most effective when multiple engines are enabled.
 
-**Default behavior:** The config default is `parallel: true`, but the `--parallel` CLI flag
-is additive (it enables parallel when your config has it disabled). If you haven't changed
-the default config, engines already run in parallel.
+**Default behavior:** Parallel execution is on by default. When no config file is present,
+or when `parallel` is omitted from config, TerraTidy runs engines in parallel. Use `--parallel`
+to force parallel when config has explicitly disabled it, and `--no-parallel` to force
+sequential execution regardless of config.
 
-**Note:** `fail_fast` only works in sequential mode. When using `--parallel`, all engines
-run to completion regardless of errors.
+**Note:** `fail_fast` only works in sequential mode. When running in parallel, all engines
+run to completion regardless of errors. Pair `--no-parallel` with `fail_fast: true` to stop
+on the first engine that reports errors.
 
 ## Engine Selection
 

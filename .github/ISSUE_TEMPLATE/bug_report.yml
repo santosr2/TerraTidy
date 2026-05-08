@@ -72,7 +72,7 @@ body:
     attributes:
       label: Go Version
       description: Output of `go version` (if installed from source or using go install)
-      placeholder: "go1.26.1 darwin/arm64"
+      placeholder: "go1.26.3 darwin/arm64"
 
   - type: textarea
     id: debug-output

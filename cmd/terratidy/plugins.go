@@ -219,7 +219,7 @@ func (r *ExampleRule) Fix(ctx *sdk.Context, file *hcl.File) ([]byte, error) {
 		// Create go.mod
 		goModContent := fmt.Sprintf(`module %s
 
-go 1.26.1
+go 1.26.3
 
 require github.com/santosr2/TerraTidy v%s
 `, pluginName, buildinfo.Version)

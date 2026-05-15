@@ -45,11 +45,13 @@ resource "aws_instance" "web" {
 			wantFindings: 1,
 		},
 		{
-			name: "inline // comment",
+			// Inline trailing `// comment` is no longer flagged: the rule's scope is full-line
+			// `//` comments only (per fmt-style-polish Phase 4 scope narrowing).
+			name: "trailing // comment is not flagged",
 			content: `resource "aws_instance" "web" {
   ami = "ami-123" // inline comment
 }`,
-			wantFindings: 1,
+			wantFindings: 0,
 		},
 		{
 			name: "// inside string is ignored",
@@ -74,6 +76,51 @@ resource "aws_instance" "web" {
 			content: `# Valid comment
 // Invalid comment
 resource "aws_instance" "web" {
+  ami = "ami-123"
+}`,
+			wantFindings: 1,
+		},
+		{
+			// Regression: # comment containing a URL with `//` must not be flagged.
+			name: "hash comment containing URL is not flagged",
+			content: `# https://github.com/hashicorp/terraform
+resource "aws_instance" "web" {
+  ami = "ami-123"
+}`,
+			wantFindings: 0,
+		},
+		{
+			// Regression: # comment with arbitrary `//` content is not flagged.
+			name: "hash comment containing double-slash is not flagged",
+			content: `# you can use // to do X
+resource "aws_instance" "web" {
+  ami = "ami-123"
+}`,
+			wantFindings: 0,
+		},
+		{
+			// Regression: line with `//` after a value (inside a string-position context)
+			// is treated as not-a-full-line comment.
+			name: "url inside string with // is not flagged",
+			content: `output "u" { value = "url://example.com" }
+`,
+			wantFindings: 0,
+		},
+		{
+			// Indented `//` at line start is still flagged.
+			name: "indented // comment is flagged",
+			content: `resource "x" "y" {
+  // indented full-line comment
+  ami = "ami-123"
+}`,
+			wantFindings: 1,
+		},
+		{
+			// `// foo // bar`: first `//` is the comment delimiter; second is body content.
+			// Only the line itself is flagged once; on Fix, only the FIRST `//` is rewritten.
+			name: "multiple // on same comment line is flagged once",
+			content: `// foo // bar
+resource "x" "y" {
   ami = "ami-123"
 }`,
 			wantFindings: 1,
@@ -120,6 +167,83 @@ resource "aws_instance" "web" {
 		require.NoError(t, err)
 		assert.Contains(t, string(result), "# This should be fixed")
 		assert.NotContains(t, string(result), "// This should be fixed")
+	})
+
+	t.Run("Fix preserves hash comments containing URLs verbatim", func(t *testing.T) {
+		// Regression lock: the buggy old scanner would convert the `//` inside the URL.
+		// Use the exact hashicorp URL form called out in the plan.
+		tmpDir := t.TempDir()
+		tmpFile := filepath.Join(tmpDir, "test.tf")
+		content := `# https://github.com/hashicorp/terraform
+# also fine: // does not break me
+resource "aws_instance" "web" {
+  ami = "ami-123" // trailing remains as // because the rule is full-line only
+}
+`
+		require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0o644))
+
+		ctx := &sdk.Context{File: tmpFile}
+		result, err := rule.Fix(ctx, nil)
+		require.NoError(t, err)
+		out := string(result)
+
+		// Hash comments untouched.
+		assert.Contains(t, out, "# https://github.com/hashicorp/terraform")
+		assert.Contains(t, out, "# also fine: // does not break me")
+		// Trailing `//` after a value is intentionally NOT rewritten (scope: full-line only).
+		assert.Contains(t, out, `ami = "ami-123" // trailing remains as //`)
+	})
+
+	t.Run("Fix preserves leading whitespace when converting // to #", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		tmpFile := filepath.Join(tmpDir, "test.tf")
+		content := `resource "x" "y" {
+  // indented comment
+  ami = "ami-123"
+}
+`
+		require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0o644))
+
+		ctx := &sdk.Context{File: tmpFile}
+		result, err := rule.Fix(ctx, nil)
+		require.NoError(t, err)
+		assert.Contains(t, string(result), "  # indented comment")
+		assert.NotContains(t, string(result), "  // indented comment")
+	})
+
+	t.Run("Fix rewrites only the first // on a multi-slash comment line", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		tmpFile := filepath.Join(tmpDir, "test.tf")
+		content := "// foo // bar\n"
+		require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0o644))
+
+		ctx := &sdk.Context{File: tmpFile}
+		result, err := rule.Fix(ctx, nil)
+		require.NoError(t, err)
+		// First `//` becomes `#`; the second `//` (inside the comment body) is preserved.
+		assert.Contains(t, string(result), "# foo // bar")
+	})
+
+	t.Run("Fix is idempotent", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		tmpFile := filepath.Join(tmpDir, "test.tf")
+		content := `// to convert
+# https://example.com/url-stays
+# normal hash
+resource "x" "y" {
+  ami = "ami-123" // trailing left alone
+}
+`
+		require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0o644))
+		ctx := &sdk.Context{File: tmpFile}
+
+		first, err := rule.Fix(ctx, nil)
+		require.NoError(t, err)
+		require.NoError(t, os.WriteFile(tmpFile, first, 0o644))
+
+		second, err := rule.Fix(ctx, nil)
+		require.NoError(t, err)
+		assert.Equal(t, string(first), string(second), "Fix(Fix(x)) must equal Fix(x)")
 	})
 }
 

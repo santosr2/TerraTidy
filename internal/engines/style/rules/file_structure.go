@@ -156,7 +156,7 @@ func (r *TerraformFilesStructureRule) Description() string {
 	return "Ensures standard Terraform file structure (variables.tf, outputs.tf, providers.tf, etc.)"
 }
 
-// standardFileBlocks maps standard file names to expected block types
+// standardFileBlocks maps canonical standard file names to expected block types.
 var standardFileBlocks = map[string][]string{
 	"variables.tf": {"variable"},
 	"outputs.tf":   {"output"},
@@ -164,6 +164,30 @@ var standardFileBlocks = map[string][]string{
 	"versions.tf":  {"terraform"},
 	"locals.tf":    {"locals"},
 	"data.tf":      {"data"},
+}
+
+// standardFileAliases maps canonical standard file names to acceptable alternate basenames.
+// Both forms are recognized as valid containers; suggestions always use the canonical key.
+var standardFileAliases = map[string][]string{
+	"variables.tf": {"variable.tf"},
+	"outputs.tf":   {"output.tf"},
+	"providers.tf": {"provider.tf"},
+}
+
+// isStandardFileOrAlias reports whether basename is a recognized standard file
+// or one of its accepted alternate basenames.
+func isStandardFileOrAlias(basename string) bool {
+	if _, ok := standardFileBlocks[basename]; ok {
+		return true
+	}
+	for _, aliases := range standardFileAliases {
+		for _, alias := range aliases {
+			if basename == alias {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // Check examines files for blocks that should be in standard files.
@@ -177,22 +201,18 @@ func (r *TerraformFilesStructureRule) Check(ctx *sdk.Context, file *hcl.File) ([
 
 	fileName := filepath.Base(ctx.File)
 
-	// Get list of expected block types for this file
-	expectedTypes := standardFileBlocks[fileName]
-
-	// Skip if this is a standard file
-	if len(expectedTypes) > 0 {
+	// Skip if this is a standard file or one of its accepted aliases
+	if isStandardFileOrAlias(fileName) {
 		return findings, nil
 	}
 
 	// Check if blocks in this file should be in a standard file
+	dir := filepath.Dir(ctx.File)
 	for _, block := range hclFile.Blocks {
 		for standardFile, types := range standardFileBlocks {
 			for _, blockType := range types {
 				if block.Type == blockType {
-					// Check if the standard file exists
-					standardPath := filepath.Join(filepath.Dir(ctx.File), standardFile)
-					if r.fileExists(standardPath) || r.shouldSuggestStandardFile(block.Type) {
+					if r.standardFileOrAliasExists(dir, standardFile) || r.shouldSuggestStandardFile(block.Type) {
 						findings = append(findings, sdk.Finding{
 							Rule:     r.Name(),
 							Message:  block.Type + " block should be in " + standardFile,
@@ -212,6 +232,20 @@ func (r *TerraformFilesStructureRule) Check(ctx *sdk.Context, file *hcl.File) ([
 func (r *TerraformFilesStructureRule) fileExists(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil
+}
+
+// standardFileOrAliasExists reports whether the canonical standardFile or any
+// of its accepted aliases exists in dir.
+func (r *TerraformFilesStructureRule) standardFileOrAliasExists(dir, standardFile string) bool {
+	if r.fileExists(filepath.Join(dir, standardFile)) {
+		return true
+	}
+	for _, alias := range standardFileAliases[standardFile] {
+		if r.fileExists(filepath.Join(dir, alias)) {
+			return true
+		}
+	}
+	return false
 }
 
 // shouldSuggestStandardFile returns true if this block type is commonly placed in standard files

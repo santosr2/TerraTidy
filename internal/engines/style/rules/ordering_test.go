@@ -3,6 +3,7 @@ package rules
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/hashicorp/hcl/v2"
@@ -190,6 +191,7 @@ func TestLifecycleAtEndRule(t *testing.T) {
 		name         string
 		content      string
 		wantFindings int
+		wantMessage  string
 	}{
 		{
 			name: "lifecycle at end",
@@ -210,11 +212,78 @@ func TestLifecycleAtEndRule(t *testing.T) {
   ami = "ami-123"
 }`,
 			wantFindings: 1,
+			wantMessage:  "end of the resource block",
 		},
 		{
 			name: "no lifecycle",
 			content: `resource "aws_instance" "example" {
   ami = "ami-123"
+}`,
+			wantFindings: 0,
+		},
+		{
+			name: "data block lifecycle not at end",
+			content: `data "aws_ami" "example" {
+  lifecycle {
+    postcondition {
+      condition     = self.id != ""
+      error_message = "AMI not found"
+    }
+  }
+  most_recent = true
+  owners      = ["amazon"]
+}`,
+			wantFindings: 1,
+			wantMessage:  "end of the data block",
+		},
+		{
+			name: "data block lifecycle at end",
+			content: `data "aws_ami" "example" {
+  most_recent = true
+  owners      = ["amazon"]
+  lifecycle {
+    postcondition {
+      condition     = self.id != ""
+      error_message = "AMI not found"
+    }
+  }
+}`,
+			wantFindings: 0,
+		},
+		{
+			name: "module block lifecycle not at end",
+			content: `module "vpc" {
+  source = "./vpc"
+  lifecycle {
+    precondition {
+      condition     = var.region != ""
+      error_message = "region required"
+    }
+  }
+  cidr_block = "10.0.0.0/16"
+}`,
+			wantFindings: 1,
+			wantMessage:  "end of the module block",
+		},
+		{
+			name: "module block lifecycle at end",
+			content: `module "vpc" {
+  source     = "./vpc"
+  cidr_block = "10.0.0.0/16"
+  lifecycle {
+    precondition {
+      condition     = var.region != ""
+      error_message = "region required"
+    }
+  }
+}`,
+			wantFindings: 0,
+		},
+		{
+			name: "non-host block (variable) is ignored",
+			content: `variable "example" {
+  type    = string
+  default = "x"
 }`,
 			wantFindings: 0,
 		},
@@ -231,6 +300,9 @@ func TestLifecycleAtEndRule(t *testing.T) {
 			findings, err := rule.Check(ctx, hclFile)
 			require.NoError(t, err)
 			assert.Len(t, findings, tt.wantFindings)
+			if tt.wantMessage != "" && len(findings) > 0 {
+				assert.Contains(t, findings[0].Message, tt.wantMessage)
+			}
 		})
 	}
 
@@ -268,6 +340,117 @@ func TestLifecycleAtEndRule(t *testing.T) {
 		lifecycleIdx := indexOf(resultStr, "lifecycle")
 		amiIdx := indexOf(resultStr, "ami")
 		assert.Greater(t, lifecycleIdx, amiIdx, "lifecycle should be after ami")
+	})
+
+	t.Run("Fix moves lifecycle to end in data block", func(t *testing.T) {
+		content := `data "aws_ami" "example" {
+  lifecycle {
+    postcondition {
+      condition     = self.id != ""
+      error_message = "AMI not found"
+    }
+  }
+  most_recent = true
+  owners      = ["amazon"]
+}
+`
+		tmpDir := t.TempDir()
+		tmpFile := filepath.Join(tmpDir, "test.tf")
+		require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0o644))
+
+		file, diags := hclsyntax.ParseConfig([]byte(content), tmpFile, hcl.InitialPos)
+		require.False(t, diags.HasErrors())
+
+		hclFile := &hcl.File{Body: file.Body}
+		ctx := &sdk.Context{File: tmpFile}
+
+		result, err := rule.Fix(ctx, hclFile)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+
+		resultStr := string(result)
+		lifecycleIdx := indexOf(resultStr, "lifecycle")
+		ownersIdx := indexOf(resultStr, "owners")
+		assert.Greater(t, lifecycleIdx, ownersIdx, "lifecycle should be after owners in data block")
+	})
+
+	t.Run("Fix moves lifecycle to end in module block", func(t *testing.T) {
+		content := `module "vpc" {
+  source = "./vpc"
+  lifecycle {
+    precondition {
+      condition     = var.region != ""
+      error_message = "region required"
+    }
+  }
+  cidr_block = "10.0.0.0/16"
+}
+`
+		tmpDir := t.TempDir()
+		tmpFile := filepath.Join(tmpDir, "test.tf")
+		require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0o644))
+
+		file, diags := hclsyntax.ParseConfig([]byte(content), tmpFile, hcl.InitialPos)
+		require.False(t, diags.HasErrors())
+
+		hclFile := &hcl.File{Body: file.Body}
+		ctx := &sdk.Context{File: tmpFile}
+
+		result, err := rule.Fix(ctx, hclFile)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+
+		resultStr := string(result)
+		lifecycleIdx := indexOf(resultStr, "lifecycle")
+		cidrIdx := indexOf(resultStr, "cidr_block")
+		assert.Greater(t, lifecycleIdx, cidrIdx, "lifecycle should be after cidr_block in module block")
+	})
+
+	t.Run("Fix handles same labels across different block types", func(t *testing.T) {
+		// Regression: resource and data both labeled "example". Both have a
+		// lifecycle that needs moving. The fix must move both independently,
+		// matching by (block type, labels), not labels alone.
+		content := `resource "aws_instance" "example" {
+  lifecycle {
+    prevent_destroy = true
+  }
+  ami = "ami-123"
+}
+
+data "aws_ami" "example" {
+  lifecycle {
+    postcondition {
+      condition     = self.id != ""
+      error_message = "AMI not found"
+    }
+  }
+  most_recent = true
+}
+`
+		tmpDir := t.TempDir()
+		tmpFile := filepath.Join(tmpDir, "test.tf")
+		require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0o644))
+
+		file, diags := hclsyntax.ParseConfig([]byte(content), tmpFile, hcl.InitialPos)
+		require.False(t, diags.HasErrors())
+
+		hclFile := &hcl.File{Body: file.Body}
+		ctx := &sdk.Context{File: tmpFile}
+
+		result, err := rule.Fix(ctx, hclFile)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+
+		resultStr := string(result)
+		// Resource block: lifecycle should come after ami.
+		amiIdx := indexOf(resultStr, "ami =")
+		// First lifecycle occurrence is in the resource block.
+		firstLifecycleIdx := indexOf(resultStr, "lifecycle")
+		assert.Greater(t, firstLifecycleIdx, amiIdx, "resource lifecycle should be after ami")
+		// Data block: lifecycle should come after most_recent.
+		mostRecentIdx := indexOf(resultStr, "most_recent")
+		secondLifecycleIdx := strings.Index(resultStr[firstLifecycleIdx+len("lifecycle"):], "lifecycle") + firstLifecycleIdx + len("lifecycle")
+		assert.Greater(t, secondLifecycleIdx, mostRecentIdx, "data lifecycle should be after most_recent")
 	})
 }
 
@@ -407,6 +590,251 @@ func TestTagsAtEndRule(t *testing.T) {
 		amiIdx := indexOf(resultStr, "ami")
 		assert.Less(t, amiIdx, tagsIdx, "ami should be before tags")
 	})
+
+	t.Run("Check flags single attr after tags (new threshold > 0)", func(t *testing.T) {
+		// The team-tools fixture: only one attribute follows tags. With the old `> 2`
+		// threshold this slipped through; with `> 0` the Check fires.
+		content := `module "team-tools" {
+  source = "./team-tools"
+  tags   = { team = "platform" }
+  count  = 1
+}`
+		file, diags := hclsyntax.ParseConfig([]byte(content), "test.tf", hcl.InitialPos)
+		require.False(t, diags.HasErrors())
+		hclFile := &hcl.File{Body: file.Body}
+		ctx := &sdk.Context{File: "test.tf"}
+
+		findings, err := rule.Check(ctx, hclFile)
+		require.NoError(t, err)
+		// Expect the "near the end" finding; lifecycle is absent so no second finding.
+		assert.Len(t, findings, 1)
+		assert.Contains(t, findings[0].Message, "near the end")
+	})
+
+	t.Run("Check flags trailing nested blocks after tags", func(t *testing.T) {
+		// aws_security_group with tags in the middle, ingress/egress AFTER tags but BEFORE lifecycle.
+		// Previously countAttrsAfterTags returned 0 (no attrs trailing); now we count blocks too.
+		content := `resource "aws_security_group" "vpce" {
+  vpc_id      = "vpc-1"
+  name        = "x"
+  description = "y"
+  tags        = { Name = "test" }
+  ingress {
+    from_port = 80
+  }
+  egress {
+    to_port = 443
+  }
+  lifecycle {
+    prevent_destroy = true
+  }
+}`
+		file, diags := hclsyntax.ParseConfig([]byte(content), "test.tf", hcl.InitialPos)
+		require.False(t, diags.HasErrors())
+		hclFile := &hcl.File{Body: file.Body}
+		ctx := &sdk.Context{File: "test.tf"}
+
+		findings, err := rule.Check(ctx, hclFile)
+		require.NoError(t, err)
+		require.Len(t, findings, 1, "trailing non-lifecycle blocks should flag the rule")
+		assert.Contains(t, findings[0].Message, "near the end")
+	})
+
+	t.Run("Fix moves tags to just before lifecycle, other items stay put", func(t *testing.T) {
+		// Mirrors aws_security_group.vpce. Tags moves from position 4 to position 6
+		// (between egress and lifecycle). vpc_id, name, description, ingress, egress
+		// keep their source positions. Use alignment-agnostic anchors because hclwrite
+		// re-aligns `=` columns after the move.
+		content := `resource "aws_security_group" "vpce" {
+  vpc_id      = "vpc-1"
+  name        = "x"
+  description = "y"
+  tags        = { Name = "test" }
+  ingress {
+    from_port = 80
+  }
+  egress {
+    to_port = 443
+  }
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+`
+		out := runRuleFix(t, rule, content)
+		assertOrderedSubstrings(t, out, []string{
+			"\n  vpc_id",
+			"\n  name",
+			"\n  description",
+			"\n  ingress {",
+			"from_port = 80",
+			"\n  egress {",
+			"to_port = 443",
+			"\n  tags",
+			`Name = "test"`,
+			"\n  lifecycle {",
+			"prevent_destroy = true",
+		})
+	})
+
+	t.Run("Fix preserves leading comment on tags when moving", func(t *testing.T) {
+		// Mirrors a real ACM module fixture where tags carries a hint comment.
+		content := `resource "aws_acm_certificate" "x" {
+  domain_name       = "example.com"
+  # remove * from the beginning before importing into Vanta
+  tags              = { Name = "cert" }
+  validation_method = "DNS"
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+`
+		out := runRuleFix(t, rule, content)
+		assert.Contains(t, out, "# remove * from the beginning before importing into Vanta")
+		assertOrderedSubstrings(t, out, []string{
+			"\n  domain_name",
+			"\n  validation_method",
+			"\n  # remove * from the beginning before importing into Vanta",
+			"\n  tags",
+			"\n  lifecycle {",
+		})
+	})
+
+	t.Run("Fix moves tags to end when no lifecycle present", func(t *testing.T) {
+		content := `resource "aws_instance" "x" {
+  ami           = "ami-123"
+  tags          = { Name = "test" }
+  instance_type = "t3.medium"
+}
+`
+		out := runRuleFix(t, rule, content)
+		assertOrderedSubstrings(t, out, []string{
+			"\n  ami",
+			"\n  instance_type",
+			"\n  tags",
+		})
+	})
+
+	t.Run("Fix is idempotent", func(t *testing.T) {
+		content := `resource "aws_security_group" "x" {
+  vpc_id      = "vpc-1"
+  name        = "x"
+  description = "y"
+  tags        = { Name = "test" }
+  ingress {
+    from_port = 80
+  }
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+`
+		tmpDir := t.TempDir()
+		tmpFile := filepath.Join(tmpDir, "test.tf")
+		require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0o644))
+
+		ctx := &sdk.Context{File: tmpFile}
+		first, err := rule.Fix(ctx, &hcl.File{Body: mustParseBody(t, content)})
+		require.NoError(t, err)
+		require.NoError(t, os.WriteFile(tmpFile, first, 0o644))
+
+		second, err := rule.Fix(ctx, &hcl.File{Body: mustParseBody(t, string(first))})
+		require.NoError(t, err)
+		assert.Equal(t, string(first), string(second), "Fix(Fix(x)) must equal Fix(x)")
+	})
+
+	t.Run("Fix is idempotent after first-pass move with leading comment", func(t *testing.T) {
+		// Starts from a violating state (tags+comment in the middle) so the first Fix
+		// performs a real move. The second Fix must produce identical output.
+		content := `resource "aws_security_group" "x" {
+  vpc_id      = "vpc-1"
+  name        = "x"
+  # important: tag this carefully
+  tags        = { Name = "test" }
+  description = "y"
+  ingress {
+    from_port = 80
+  }
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+`
+		tmpDir := t.TempDir()
+		tmpFile := filepath.Join(tmpDir, "test.tf")
+		require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0o644))
+
+		ctx := &sdk.Context{File: tmpFile}
+		first, err := rule.Fix(ctx, nil)
+		require.NoError(t, err)
+		require.NoError(t, os.WriteFile(tmpFile, first, 0o644))
+
+		second, err := rule.Fix(ctx, nil)
+		require.NoError(t, err)
+		assert.Equal(t, string(first), string(second), "Fix(Fix(x)) must equal Fix(x) after a real move")
+		// Comment must still be present after both passes.
+		assert.Contains(t, string(second), "# important: tag this carefully")
+	})
+
+	t.Run("findTagsAttribute prefers tags over tags_all", func(t *testing.T) {
+		// A resource where both tags and tags_all are present should have Fix() operate
+		// on `tags`, not `tags_all` (which is provider-managed). The reviewer flagged a
+		// non-deterministic map-iteration bug here; this test locks the priority order.
+		content := `resource "aws_instance" "x" {
+  ami            = "ami-123"
+  tags           = { Name = "user-tag" }
+  instance_type  = "t3.medium"
+  tags_all       = { Name = "user-tag", Inherited = "x" }
+}
+`
+		tmpDir := t.TempDir()
+		tmpFile := filepath.Join(tmpDir, "test.tf")
+		require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0o644))
+
+		ctx := &sdk.Context{File: tmpFile}
+		result, err := rule.Fix(ctx, nil)
+		require.NoError(t, err)
+		out := string(result)
+
+		// `tags` moves to the end; `tags_all` stays in its original (after-`instance_type`)
+		// position since findTagsAttribute targets `tags` first.
+		assertOrderedSubstrings(t, out, []string{
+			"\n  ami",
+			"\n  instance_type",
+			"\n  tags_all",
+			"\n  tags ",
+		})
+	})
+
+	t.Run("Check emits a single finding when tags is after lifecycle (no double-fire)", func(t *testing.T) {
+		// Previously this case produced two findings on the same line ("before lifecycle"
+		// + "near the end"). The Check now picks the more specific message and skips the
+		// general one.
+		content := `resource "aws_instance" "x" {
+  ami = "ami-123"
+  lifecycle {
+    prevent_destroy = true
+  }
+  tags = { Name = "test" }
+}`
+		file, diags := hclsyntax.ParseConfig([]byte(content), "test.tf", hcl.InitialPos)
+		require.False(t, diags.HasErrors())
+		hclFile := &hcl.File{Body: file.Body}
+		ctx := &sdk.Context{File: "test.tf"}
+
+		findings, err := rule.Check(ctx, hclFile)
+		require.NoError(t, err)
+		require.Len(t, findings, 1, "should produce exactly one finding, not two, for a single misplacement")
+		assert.Contains(t, findings[0].Message, "before lifecycle")
+	})
+}
+
+// mustParseBody parses HCL content and returns its body, failing the test on error.
+func mustParseBody(t *testing.T, content string) hcl.Body {
+	t.Helper()
+	file, diags := hclsyntax.ParseConfig([]byte(content), "test.tf", hcl.InitialPos)
+	require.False(t, diags.HasErrors())
+	return file.Body
 }
 
 func TestDependsOnOrderRule(t *testing.T) {
@@ -528,6 +956,352 @@ func TestDependsOnOrderRule(t *testing.T) {
 		dependsOnIdx := indexOf(resultStr, "depends_on")
 		amiIdx := indexOf(resultStr, "ami")
 		assert.Greater(t, dependsOnIdx, amiIdx, "depends_on should be after ami")
+	})
+
+	t.Run("Check emits a single finding when depends_on is after lifecycle", func(t *testing.T) {
+		// Previously this case produced two findings; the single-finding policy now picks
+		// the more specific "before lifecycle" message and skips the general one.
+		content := `resource "aws_instance" "x" {
+  ami = "ami-123"
+  lifecycle {
+    prevent_destroy = true
+  }
+  depends_on = [aws_vpc.main]
+}`
+		file, diags := hclsyntax.ParseConfig([]byte(content), "test.tf", hcl.InitialPos)
+		require.False(t, diags.HasErrors())
+		hclFile := &hcl.File{Body: file.Body}
+		ctx := &sdk.Context{File: "test.tf"}
+
+		findings, err := rule.Check(ctx, hclFile)
+		require.NoError(t, err)
+		require.Len(t, findings, 1, "should produce exactly one finding, not two, for a single misplacement")
+		assert.Contains(t, findings[0].Message, "before lifecycle")
+	})
+
+	t.Run("Check flags trailing nested blocks after depends_on", func(t *testing.T) {
+		// New behavior: non-lifecycle nested blocks after depends_on count as "items
+		// after depends_on", so the rule flags them even though no attrs trail.
+		content := `resource "aws_ecs_service" "elixir" {
+  name        = "elixir"
+  cluster     = "main"
+  depends_on  = [aws_lb_listener.elixir]
+  ordered_placement_strategy {
+    type = "spread"
+  }
+  lifecycle {
+    create_before_destroy = true
+  }
+}`
+		file, diags := hclsyntax.ParseConfig([]byte(content), "test.tf", hcl.InitialPos)
+		require.False(t, diags.HasErrors())
+		hclFile := &hcl.File{Body: file.Body}
+		ctx := &sdk.Context{File: "test.tf"}
+
+		findings, err := rule.Check(ctx, hclFile)
+		require.NoError(t, err)
+		require.Len(t, findings, 1)
+		assert.Contains(t, findings[0].Message, "after non-lifecycle nested blocks")
+		assert.Equal(t, sdk.SeverityWarning, findings[0].Severity, "trailing-blocks finding should be Warning (Fix will rewrite the file)")
+	})
+
+	t.Run("Fix moves depends_on to before lifecycle, sub-blocks stay put", func(t *testing.T) {
+		// Mirrors aws_ecs_service.elixir. depends_on moves from position 3 to just
+		// before lifecycle. ordered_placement_strategy stays in its source position.
+		content := `resource "aws_ecs_service" "elixir" {
+  name       = "elixir"
+  cluster    = "main"
+  depends_on = [aws_lb_listener.elixir]
+  ordered_placement_strategy {
+    type  = "spread"
+    field = "instanceId"
+  }
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+`
+		out := runRuleFix(t, rule, content)
+		assertOrderedSubstrings(t, out, []string{
+			"\n  name",
+			"\n  cluster",
+			"\n  ordered_placement_strategy {",
+			`type  = "spread"`,
+			`field = "instanceId"`,
+			"\n  depends_on",
+			"\n  lifecycle {",
+		})
+	})
+
+	t.Run("Fix preserves leading comment on depends_on when moving", func(t *testing.T) {
+		content := `resource "aws_ecs_service" "x" {
+  name       = "x"
+  cluster    = "main"
+  # waits for the listener to be ready first
+  depends_on = [aws_lb_listener.x]
+  ordered_placement_strategy {
+    type = "spread"
+  }
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+`
+		out := runRuleFix(t, rule, content)
+		assert.Contains(t, out, "# waits for the listener to be ready first")
+		assertOrderedSubstrings(t, out, []string{
+			"\n  name",
+			"\n  cluster",
+			"\n  ordered_placement_strategy {",
+			"\n  # waits for the listener to be ready first",
+			"\n  depends_on",
+			"\n  lifecycle {",
+		})
+	})
+
+	t.Run("Fix moves depends_on to end when no lifecycle present", func(t *testing.T) {
+		content := `resource "aws_instance" "x" {
+  ami           = "ami-123"
+  depends_on    = [aws_vpc.main]
+  instance_type = "t3.medium"
+}
+`
+		out := runRuleFix(t, rule, content)
+		assertOrderedSubstrings(t, out, []string{
+			"\n  ami",
+			"\n  instance_type",
+			"\n  depends_on",
+		})
+	})
+
+	t.Run("Fix is idempotent after first-pass move with leading comment", func(t *testing.T) {
+		content := `resource "aws_instance" "x" {
+  ami = "ami-123"
+  # waits for vpc
+  depends_on = [aws_vpc.main]
+  instance_type = "t3.medium"
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+`
+		tmpDir := t.TempDir()
+		tmpFile := filepath.Join(tmpDir, "test.tf")
+		require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0o644))
+
+		ctx := &sdk.Context{File: tmpFile}
+		first, err := rule.Fix(ctx, nil)
+		require.NoError(t, err)
+		require.NoError(t, os.WriteFile(tmpFile, first, 0o644))
+
+		second, err := rule.Fix(ctx, nil)
+		require.NoError(t, err)
+		assert.Equal(t, string(first), string(second), "Fix(Fix(x)) must equal Fix(x) after a real move")
+		assert.Contains(t, string(second), "# waits for vpc")
+	})
+
+	t.Run("Check accepts canonical depends_on then tags then lifecycle layout", func(t *testing.T) {
+		// Regression lock: countItemsAfterDependsOn must exclude the tags family because
+		// the canonical layout places tags between depends_on and lifecycle. Without this
+		// exclusion the rule would flag every well-formed resource that also has tags.
+		content := `resource "aws_instance" "x" {
+  ami        = "ami-123"
+  depends_on = [aws_vpc.main]
+  tags       = { Name = "x" }
+  lifecycle {
+    prevent_destroy = true
+  }
+}`
+		file, diags := hclsyntax.ParseConfig([]byte(content), "test.tf", hcl.InitialPos)
+		require.False(t, diags.HasErrors())
+		hclFile := &hcl.File{Body: file.Body}
+		ctx := &sdk.Context{File: "test.tf"}
+
+		findings, err := rule.Check(ctx, hclFile)
+		require.NoError(t, err)
+		assert.Empty(t, findings, "depends_on → tags → lifecycle is canonical and must not be flagged")
+	})
+
+	t.Run("Fix handles no-lifecycle resource with trailing nested blocks", func(t *testing.T) {
+		// depends_on followed by a nested block, no lifecycle present. The fix should
+		// move depends_on to right before the closing brace.
+		content := `resource "aws_ecs_service" "x" {
+  name       = "x"
+  cluster    = "main"
+  depends_on = [aws_lb_listener.x]
+  ordered_placement_strategy {
+    type = "spread"
+  }
+}
+`
+		out := runRuleFix(t, rule, content)
+		assertOrderedSubstrings(t, out, []string{
+			"\n  name",
+			"\n  cluster",
+			"\n  ordered_placement_strategy {",
+			"\n  depends_on",
+			"\n}",
+		})
+	})
+
+	t.Run("Fix handles two resources in one file, both needing the move", func(t *testing.T) {
+		// Validates the bottom-up sort: rewriting block N must not invalidate the
+		// line ranges of blocks above it. Without bottom-up, the second block's
+		// recorded range would be stale after the first rewrite.
+		content := `resource "aws_instance" "first" {
+  ami        = "ami-1"
+  depends_on = [aws_vpc.main]
+  instance_type = "t3.medium"
+}
+
+resource "aws_instance" "second" {
+  ami        = "ami-2"
+  depends_on = [aws_vpc.main]
+  instance_type = "t3.large"
+}
+`
+		out := runRuleFix(t, rule, content)
+		assertOrderedSubstrings(t, out, []string{
+			`"first"`,
+			"\n  ami",
+			"\n  instance_type",
+			"\n  depends_on",
+			`"second"`,
+			"\n  ami",
+			"\n  instance_type",
+			"\n  depends_on",
+		})
+	})
+
+	t.Run("Fix handles multi-line depends_on list intact", func(t *testing.T) {
+		// depends_on value spans multiple lines; the entire range must move together.
+		content := `resource "aws_instance" "x" {
+  ami = "ami-123"
+  depends_on = [
+    aws_vpc.main,
+    aws_subnet.public,
+    aws_security_group.app,
+  ]
+  instance_type = "t3.medium"
+}
+`
+		out := runRuleFix(t, rule, content)
+		// All three dependency lines must be present and contiguous after the move.
+		assert.Contains(t, out, "aws_vpc.main,")
+		assert.Contains(t, out, "aws_subnet.public,")
+		assert.Contains(t, out, "aws_security_group.app,")
+		assertOrderedSubstrings(t, out, []string{
+			"\n  ami",
+			"\n  instance_type",
+			"\n  depends_on = [",
+			"aws_vpc.main,",
+			"aws_subnet.public,",
+			"aws_security_group.app,",
+			"]",
+		})
+	})
+
+	t.Run("Check and Fix work on module blocks", func(t *testing.T) {
+		content := `module "team-tools" {
+  source     = "./team-tools"
+  depends_on = [aws_iam_role.team]
+  count      = 1
+}`
+		file, diags := hclsyntax.ParseConfig([]byte(content), "test.tf", hcl.InitialPos)
+		require.False(t, diags.HasErrors())
+		hclFile := &hcl.File{Body: file.Body}
+		ctx := &sdk.Context{File: "test.tf"}
+
+		findings, err := rule.Check(ctx, hclFile)
+		require.NoError(t, err)
+		assert.Len(t, findings, 1, "module with depends_on then count should flag")
+
+		out := runRuleFix(t, rule, content)
+		assertOrderedSubstrings(t, out, []string{
+			"\n  source",
+			"\n  count",
+			"\n  depends_on",
+		})
+	})
+
+	t.Run("Check and Fix work on data blocks", func(t *testing.T) {
+		content := `data "aws_ami" "x" {
+  most_recent = true
+  depends_on  = [aws_iam_role.x]
+  owners      = ["amazon"]
+}`
+		file, diags := hclsyntax.ParseConfig([]byte(content), "test.tf", hcl.InitialPos)
+		require.False(t, diags.HasErrors())
+		hclFile := &hcl.File{Body: file.Body}
+		ctx := &sdk.Context{File: "test.tf"}
+
+		findings, err := rule.Check(ctx, hclFile)
+		require.NoError(t, err)
+		assert.Len(t, findings, 1, "data with depends_on then owners should flag")
+
+		out := runRuleFix(t, rule, content)
+		assertOrderedSubstrings(t, out, []string{
+			"\n  most_recent",
+			"\n  owners",
+			"\n  depends_on",
+		})
+	})
+
+	t.Run("Fix is a no-op (no diff) when depends_on is already adjacent to lifecycle with a blank gap", func(t *testing.T) {
+		// Closes the Fix/Check semantic gap the reviewer flagged: previously Fix would
+		// run the splice on this layout (because attrEnd+1 != insertBefore), produce a
+		// visually-equivalent output, then FormatAndCleanBlankLines would collapse the
+		// blank — so the first pass produced a non-trivial diff. The tightened no-op
+		// guard now correctly recognizes this as already-canonical.
+		content := `resource "aws_instance" "x" {
+  ami        = "ami-123"
+  depends_on = [aws_vpc.main]
+
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+`
+		tmpDir := t.TempDir()
+		tmpFile := filepath.Join(tmpDir, "test.tf")
+		require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0o644))
+
+		ctx := &sdk.Context{File: tmpFile}
+		result, err := rule.Fix(ctx, nil)
+		require.NoError(t, err)
+		assert.Equal(t, content, string(result), "Fix should be a no-op when depends_on is already correctly placed (even with blank-line gap)")
+	})
+
+	t.Run("Fix is idempotent when depends_on is already adjacent to lifecycle with a blank line gap", func(t *testing.T) {
+		// Edge case the prior reviewer flagged: when there is a blank line between
+		// depends_on and lifecycle, the splice still runs but should produce visually
+		// identical output. Verifies that the no-op guard plus FormatAndCleanBlankLines
+		// converge after one pass.
+		content := `resource "aws_instance" "x" {
+  ami        = "ami-123"
+  depends_on = [aws_vpc.main]
+
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+`
+		tmpDir := t.TempDir()
+		tmpFile := filepath.Join(tmpDir, "test.tf")
+		require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0o644))
+
+		ctx := &sdk.Context{File: tmpFile}
+		first, err := rule.Fix(ctx, nil)
+		require.NoError(t, err)
+		require.NoError(t, os.WriteFile(tmpFile, first, 0o644))
+
+		second, err := rule.Fix(ctx, nil)
+		require.NoError(t, err)
+		assert.Equal(t, string(first), string(second), "blank line between depends_on and lifecycle must not break idempotence")
+		// depends_on still appears before lifecycle.
+		dependsIdx := strings.Index(string(second), "depends_on")
+		lifecycleIdx := strings.Index(string(second), "lifecycle {")
+		assert.Less(t, dependsIdx, lifecycleIdx)
 	})
 }
 
@@ -727,22 +1501,364 @@ func TestVariableOrderRule(t *testing.T) {
 		})
 	}
 
-	t.Run("Fix reorders attributes", func(t *testing.T) {
-		content := `variable "example" {
+	fixTests := []struct {
+		name      string
+		input     string
+		wantOrder []string // substrings that must appear in this top-down order in the output
+		wantKeep  []string // substrings that must remain present anywhere
+	}{
+		{
+			name: "type before description gets reordered",
+			input: `variable "example" {
   type        = string
   description = "Example variable"
   default     = "value"
 }
+`,
+			wantOrder: []string{`description = "Example variable"`, `type        = string`, `default     = "value"`},
+		},
+		{
+			name: "heredoc description survives reorder",
+			input: `variable "example" {
+  type        = string
+  description = <<-EOT
+    A multi-line
+    description with # hashes and // slashes
+  EOT
+  default     = "value"
+}
+`,
+			wantOrder: []string{
+				`description = <<-EOT`,
+				`A multi-line`,
+				`description with # hashes and // slashes`,
+				`EOT`,
+				`type        = string`,
+				`default     = "value"`,
+			},
+			wantKeep: []string{`# hashes and // slashes`},
+		},
+		{
+			name: "multi-line validation block keeps body and moves after attrs",
+			input: `variable "name" {
+  validation {
+    condition     = length(var.name) > 0
+    error_message = "must not be empty"
+  }
+  type        = string
+  description = "Name of the thing"
+}
+`,
+			wantOrder: []string{
+				`description = "Name of the thing"`,
+				`type        = string`,
+				`validation {`,
+				`condition     = length(var.name) > 0`,
+				`error_message = "must not be empty"`,
+			},
+		},
+		{
+			name: "validation-only variable preserves block",
+			input: `variable "name" {
+  type = string
+  validation {
+    condition     = length(var.name) > 0
+    error_message = "must not be empty"
+  }
+}
+`,
+			wantOrder: []string{`type = string`, `validation {`, `condition     = length(var.name) > 0`},
+		},
+		{
+			name: "description-only variable left unchanged",
+			input: `variable "name" {
+  description = "Name of the thing"
+}
+`,
+			wantOrder: []string{`description = "Name of the thing"`},
+		},
+		{
+			name:  "empty variable body left unchanged",
+			input: "variable \"name\" {}\n",
+			wantOrder: []string{
+				`variable "name" {`,
+			},
+		},
+		{
+			name: "interleaved validation moves to end after all known attrs",
+			input: `variable "name" {
+  description = "Name"
+  validation {
+    condition     = length(var.name) > 0
+    error_message = "must not be empty"
+  }
+  type    = string
+  default = "x"
+}
+`,
+			wantOrder: []string{
+				`description = "Name"`,
+				"\n  type",
+				"\n  default",
+				`validation {`,
+			},
+		},
+		{
+			name: "multiple validation blocks keep relative order",
+			input: `variable "name" {
+  validation {
+    condition     = length(var.name) > 0
+    error_message = "first"
+  }
+  type = string
+  validation {
+    condition     = length(var.name) < 64
+    error_message = "second"
+  }
+  description = "Name"
+}
+`,
+			wantOrder: []string{
+				`description = "Name"`,
+				"\n  type",
+				`error_message = "first"`,
+				`error_message = "second"`,
+			},
+		},
+		{
+			name: "all five known attributes reorder to canonical sequence",
+			input: `variable "name" {
+  nullable    = false
+  sensitive   = true
+  default     = "x"
+  type        = string
+  description = "Name"
+}
+`,
+			wantOrder: []string{
+				`description = "Name"`,
+				"\n  type",
+				"\n  default",
+				"\n  sensitive",
+				"\n  nullable",
+			},
+		},
+		{
+			name: "heredoc inside validation condition is preserved",
+			input: `variable "name" {
+  validation {
+    condition = (
+      length(var.name) > 0 &&
+      length(var.name) < 64
+    )
+    error_message = <<-EOT
+      name must be 1-63 characters.
+      See policy doc for # rationale.
+    EOT
+  }
+  type        = string
+  description = "Name"
+}
+`,
+			wantOrder: []string{
+				`description = "Name"`,
+				"\n  type",
+				`validation {`,
+				`length(var.name) > 0 &&`,
+				`length(var.name) < 64`,
+				`name must be 1-63 characters.`,
+				`See policy doc for # rationale.`,
+			},
+			wantKeep: []string{`See policy doc for # rationale.`},
+		},
+		{
+			name: "comment inside validation body survives reorder",
+			input: `variable "name" {
+  validation {
+    # check non-empty
+    condition     = length(var.name) > 0
+    error_message = "must not be empty"
+  }
+  type        = string
+  description = "Name"
+}
+`,
+			wantOrder: []string{
+				`description = "Name"`,
+				"\n  type",
+				`validation {`,
+				`# check non-empty`,
+				`condition     = length(var.name) > 0`,
+			},
+		},
+		{
+			name: "trailing comment on closing brace is preserved",
+			input: `variable "name" {
+  type        = string
+  description = "Name"
+} # end of name
+`,
+			wantOrder: []string{
+				`description = "Name"`,
+				"\n  type",
+				`} # end of name`,
+			},
+			wantKeep: []string{`# end of name`},
+		},
+		{
+			name: "orphan comment after last attr is preserved (no following region)",
+			input: `variable "name" {
+  type        = string
+  description = "Name"
+
+  # forgotten note pinned to the bottom
+}
+`,
+			wantOrder: []string{
+				`description = "Name"`,
+				"\n  type",
+				`# forgotten note pinned to the bottom`,
+			},
+			wantKeep: []string{`# forgotten note pinned to the bottom`},
+		},
+		{
+			name: "orphan comment between regions follows reordered next region",
+			input: `variable "name" {
+  type        = string
+
+  # comment naturally attached to default below
+  default     = "x"
+  description = "Name"
+}
+`,
+			wantOrder: []string{
+				`description = "Name"`,
+				"\n  type",
+				`# comment naturally attached to default below`,
+				"\n  default",
+			},
+		},
+		{
+			name: "leading comments on attrs and validation block are preserved",
+			input: `variable "name" {
+  # validation comment
+  validation {
+    condition     = length(var.name) > 0
+    error_message = "must not be empty"
+  }
+  # type comment
+  type = string
+  # description comment
+  description = "Name"
+}
+`,
+			wantOrder: []string{
+				`# description comment`,
+				`description = "Name"`,
+				`# type comment`,
+				`type = string`,
+				`# validation comment`,
+				`validation {`,
+			},
+			wantKeep: []string{
+				`# validation comment`,
+				`# type comment`,
+				`# description comment`,
+			},
+		},
+	}
+
+	for _, tt := range fixTests {
+		t.Run("Fix/"+tt.name, func(t *testing.T) {
+			tmpDir := t.TempDir()
+			tmpFile := filepath.Join(tmpDir, "test.tf")
+			require.NoError(t, os.WriteFile(tmpFile, []byte(tt.input), 0o644))
+
+			ctx := &sdk.Context{File: tmpFile}
+			result, err := rule.Fix(ctx, nil)
+			require.NoError(t, err)
+			require.NotNil(t, result)
+
+			output := string(result)
+			assertOrderedSubstrings(t, output, tt.wantOrder)
+			for _, want := range tt.wantKeep {
+				assert.Contains(t, output, want, "should retain: %s", want)
+			}
+		})
+	}
+
+	t.Run("Fix is idempotent", func(t *testing.T) {
+		input := `variable "name" {
+  validation {
+    condition     = length(var.name) > 0
+    error_message = "must not be empty"
+  }
+  type        = string
+  description = <<-EOT
+    Multi-line
+    with # marker
+  EOT
+  default     = "x"
+}
 `
 		tmpDir := t.TempDir()
 		tmpFile := filepath.Join(tmpDir, "test.tf")
-		require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0o644))
+		require.NoError(t, os.WriteFile(tmpFile, []byte(input), 0o644))
+
+		ctx := &sdk.Context{File: tmpFile}
+		first, err := rule.Fix(ctx, nil)
+		require.NoError(t, err)
+		require.NoError(t, os.WriteFile(tmpFile, first, 0o644))
+
+		second, err := rule.Fix(ctx, nil)
+		require.NoError(t, err)
+		assert.Equal(t, string(first), string(second), "Fix(Fix(content)) must equal Fix(content)")
+	})
+
+	t.Run("Fix handles multiple variables in one file", func(t *testing.T) {
+		input := `variable "first" {
+  type        = string
+  description = "First var"
+}
+
+variable "second" {
+  default     = "x"
+  type        = string
+  description = "Second var"
+}
+`
+		tmpDir := t.TempDir()
+		tmpFile := filepath.Join(tmpDir, "test.tf")
+		require.NoError(t, os.WriteFile(tmpFile, []byte(input), 0o644))
 
 		ctx := &sdk.Context{File: tmpFile}
 		result, err := rule.Fix(ctx, nil)
 		require.NoError(t, err)
-		assert.NotNil(t, result)
+		output := string(result)
+		assertOrderedSubstrings(t, output, []string{
+			`description = "First var"`,
+			`type        = string`,
+			`description = "Second var"`,
+			`type        = string`,
+			`default     = "x"`,
+		})
 	})
+}
+
+// assertOrderedSubstrings asserts that each substring appears in the given top-down order.
+func assertOrderedSubstrings(t *testing.T, haystack string, needles []string) {
+	t.Helper()
+	prev := 0
+	prevNeedle := ""
+	for _, needle := range needles {
+		if prev > len(haystack) {
+			t.Fatalf("expected %q to appear after %q but reached end of input:\n%s", needle, prevNeedle, haystack)
+		}
+		idx := strings.Index(haystack[prev:], needle)
+		require.NotEqual(t, -1, idx, "expected %q to appear after %q in:\n%s", needle, prevNeedle, haystack)
+		prev += idx + len(needle)
+		prevNeedle = needle
+	}
 }
 
 func TestOutputOrderRule(t *testing.T) {
@@ -793,20 +1909,181 @@ func TestOutputOrderRule(t *testing.T) {
 		})
 	}
 
-	t.Run("Fix reorders attributes", func(t *testing.T) {
-		content := `output "example" {
+	outputFixTests := []struct {
+		name      string
+		input     string
+		wantOrder []string
+		wantKeep  []string
+	}{
+		{
+			name: "value before description gets reordered",
+			input: `output "example" {
+  value       = "test"
+  description = "Example output"
+}
+`,
+			wantOrder: []string{`description = "Example output"`, `value       = "test"`},
+		},
+		{
+			name: "all four known attrs reorder to canonical sequence",
+			input: `output "example" {
+  depends_on  = [aws_s3_bucket.x]
+  sensitive   = true
+  value       = "test"
+  description = "Example output"
+}
+`,
+			wantOrder: []string{
+				`description = "Example output"`,
+				"\n  value",
+				"\n  sensitive",
+				"\n  depends_on",
+			},
+		},
+		{
+			name: "precondition block moves after attrs",
+			input: `output "example" {
+  precondition {
+    condition     = var.x != ""
+    error_message = "x must be set"
+  }
+  value       = "test"
+  description = "Example output"
+}
+`,
+			wantOrder: []string{
+				`description = "Example output"`,
+				"\n  value",
+				`precondition {`,
+				`condition     = var.x != ""`,
+			},
+		},
+		{
+			name: "heredoc inside value attribute is preserved",
+			input: `output "example" {
+  value       = <<-EOT
+    A multi-line value
+    with # markers
+  EOT
+  description = "Example output"
+}
+`,
+			wantOrder: []string{
+				`description = "Example output"`,
+				`value       = <<-EOT`,
+				`A multi-line value`,
+				`with # markers`,
+				`EOT`,
+			},
+			wantKeep: []string{`with # markers`},
+		},
+		{
+			name: "leading comments on attrs and precondition are preserved",
+			input: `output "example" {
+  # precondition comment
+  precondition {
+    condition     = var.x != ""
+    error_message = "x must be set"
+  }
+  # value comment
+  value = "test"
+  # description comment
+  description = "Example output"
+}
+`,
+			wantOrder: []string{
+				`# description comment`,
+				`description = "Example output"`,
+				`# value comment`,
+				`value = "test"`,
+				`# precondition comment`,
+				`precondition {`,
+			},
+		},
+		{
+			name: "orphan trailing comment is preserved",
+			input: `output "example" {
+  value       = "test"
+  description = "Example output"
+
+  # forgotten trailing note
+}
+`,
+			wantKeep: []string{`# forgotten trailing note`},
+		},
+	}
+
+	for _, tt := range outputFixTests {
+		t.Run("Fix/"+tt.name, func(t *testing.T) {
+			tmpDir := t.TempDir()
+			tmpFile := filepath.Join(tmpDir, "test.tf")
+			require.NoError(t, os.WriteFile(tmpFile, []byte(tt.input), 0o644))
+
+			ctx := &sdk.Context{File: tmpFile}
+			result, err := rule.Fix(ctx, nil)
+			require.NoError(t, err)
+			require.NotNil(t, result)
+
+			output := string(result)
+			assertOrderedSubstrings(t, output, tt.wantOrder)
+			for _, want := range tt.wantKeep {
+				assert.Contains(t, output, want, "should retain: %s", want)
+			}
+		})
+	}
+
+	t.Run("Fix is idempotent", func(t *testing.T) {
+		input := `output "example" {
+  precondition {
+    condition     = var.x != ""
+    error_message = "x must be set"
+  }
+  depends_on  = [aws_s3_bucket.x]
+  sensitive   = true
   value       = "test"
   description = "Example output"
 }
 `
 		tmpDir := t.TempDir()
 		tmpFile := filepath.Join(tmpDir, "test.tf")
-		require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0o644))
+		require.NoError(t, os.WriteFile(tmpFile, []byte(input), 0o644))
+
+		ctx := &sdk.Context{File: tmpFile}
+		first, err := rule.Fix(ctx, nil)
+		require.NoError(t, err)
+		require.NoError(t, os.WriteFile(tmpFile, first, 0o644))
+
+		second, err := rule.Fix(ctx, nil)
+		require.NoError(t, err)
+		assert.Equal(t, string(first), string(second), "Fix(Fix(content)) must equal Fix(content)")
+	})
+
+	t.Run("Fix handles multiple outputs in one file", func(t *testing.T) {
+		input := `output "first" {
+  value       = "1"
+  description = "First"
+}
+
+output "second" {
+  sensitive   = true
+  value       = "2"
+  description = "Second"
+}
+`
+		tmpDir := t.TempDir()
+		tmpFile := filepath.Join(tmpDir, "test.tf")
+		require.NoError(t, os.WriteFile(tmpFile, []byte(input), 0o644))
 
 		ctx := &sdk.Context{File: tmpFile}
 		result, err := rule.Fix(ctx, nil)
 		require.NoError(t, err)
-		assert.NotNil(t, result)
+		assertOrderedSubstrings(t, string(result), []string{
+			`description = "First"`,
+			`value       = "1"`,
+			`description = "Second"`,
+			`value       = "2"`,
+			`sensitive   = true`,
+		})
 	})
 }
 
@@ -871,10 +2148,110 @@ terraform {
 		})
 	}
 
-	t.Run("Fix returns nil", func(t *testing.T) {
+	t.Run("Fix returns nil when ctx is nil", func(t *testing.T) {
 		result, err := rule.Fix(nil, nil)
 		assert.NoError(t, err)
 		assert.Nil(t, result)
+	})
+
+	t.Run("Fix moves terraform block to first position", func(t *testing.T) {
+		input := `resource "aws_instance" "x" {
+  ami = "ami-123"
+}
+
+terraform {
+  required_version = ">= 1.0"
+}
+`
+		out := runRuleFix(t, rule, input)
+		tfIdx := strings.Index(out, "terraform {")
+		rIdx := strings.Index(out, "resource ")
+		require.NotEqual(t, -1, tfIdx)
+		require.NotEqual(t, -1, rIdx)
+		assert.Less(t, tfIdx, rIdx, "terraform must precede resource after fix")
+	})
+
+	t.Run("Fix preserves comments inside resource bodies", func(t *testing.T) {
+		input := `resource "aws_instance" "x" {
+  # important: choose AMI carefully
+  ami           = "ami-123"
+  instance_type = "t3.medium" # production size
+}
+
+terraform {
+  required_version = ">= 1.0"
+}
+`
+		out := runRuleFix(t, rule, input)
+		assert.Contains(t, out, "# important: choose AMI carefully")
+		assert.Contains(t, out, "# production size")
+		// The buggy old helper would reshuffle attrs via map iteration; line-range never touches block bodies.
+		amiIdx := strings.Index(out, "ami           = ")
+		instIdx := strings.Index(out, "instance_type = ")
+		require.NotEqual(t, -1, amiIdx)
+		require.NotEqual(t, -1, instIdx)
+		assert.Less(t, amiIdx, instIdx, "resource body attribute order must be untouched")
+	})
+
+	t.Run("Fix preserves standalone comments above blocks", func(t *testing.T) {
+		// Mirrors a real-world backup-style file: standalone section header comments
+		// and an external link comment must remain anchored to their blocks after reorder.
+		//nolint:dupword // HCL content intentionally contains repeated identifiers
+		input := `# https://docs.example.com/backup-policy
+
+# Section: SNS Notifications
+resource "aws_sns_topic" "backup" {
+  name = "backup"
+}
+
+# A note about the module
+module "backup_vault" {
+  source = "./vault"
+  name   = "default"
+}
+
+terraform {
+  required_version = ">= 1.0"
+}
+`
+		out := runRuleFix(t, rule, input)
+		// The Slab-style URL comment lives in the file header.
+		assert.Contains(t, out, "# https://docs.example.com/backup-policy")
+		// Section header travels with its sns_topic resource.
+		assert.Contains(t, out, "# Section: SNS Notifications")
+		// Module-attached comment stays with the module.
+		assert.Contains(t, out, "# A note about the module")
+		// Resulting order: terraform, resource, module
+		assertOrderedSubstrings(t, out, []string{
+			"terraform {",
+			"# Section: SNS Notifications",
+			`resource "aws_sns_topic"`,
+			"# A note about the module",
+			`module "backup_vault"`,
+		})
+	})
+
+	t.Run("Fix is idempotent", func(t *testing.T) {
+		input := `resource "aws_instance" "x" {
+  ami = "ami-123"
+}
+
+terraform {
+  required_version = ">= 1.0"
+}
+`
+		tmpDir := t.TempDir()
+		tmpFile := filepath.Join(tmpDir, "test.tf")
+		require.NoError(t, os.WriteFile(tmpFile, []byte(input), 0o644))
+
+		ctx := &sdk.Context{File: tmpFile}
+		first, err := rule.Fix(ctx, nil)
+		require.NoError(t, err)
+		require.NoError(t, os.WriteFile(tmpFile, first, 0o644))
+
+		second, err := rule.Fix(ctx, nil)
+		require.NoError(t, err)
+		assert.Equal(t, string(first), string(second), "Fix(Fix(content)) must equal Fix(content)")
 	})
 }
 
@@ -947,11 +2324,141 @@ provider "aws" {
 		})
 	}
 
-	t.Run("Fix returns nil", func(t *testing.T) {
+	t.Run("Fix returns nil when ctx is nil", func(t *testing.T) {
 		result, err := rule.Fix(nil, nil)
 		assert.NoError(t, err)
 		assert.Nil(t, result)
 	})
+
+	t.Run("Fix reorders terraform, resource, provider to terraform, provider, resource", func(t *testing.T) {
+		input := `terraform {
+  required_version = ">= 1.0"
+}
+
+resource "aws_instance" "x" {
+  ami = "ami-123"
+}
+
+provider "aws" {
+  region = "us-east-1"
+}
+`
+		out := runRuleFix(t, rule, input)
+		assertOrderedSubstrings(t, out, []string{
+			"terraform {",
+			`provider "aws"`,
+			`resource "aws_instance"`,
+		})
+	})
+
+	t.Run("Fix preserves all comments through reorder", func(t *testing.T) {
+		//nolint:dupword // HCL content intentionally contains repeated block-type identifiers
+		input := `# File-level note at top.
+
+# About the resource
+resource "aws_instance" "x" {
+  ami = "ami-123"
+}
+
+# About the provider
+provider "aws" {
+  region = "us-east-1"
+}
+
+# About terraform
+terraform {
+  required_version = ">= 1.0"
+}
+`
+		out := runRuleFix(t, rule, input)
+		assert.Contains(t, out, "# File-level note at top.")
+		assert.Contains(t, out, "# About the resource")
+		assert.Contains(t, out, "# About the provider")
+		assert.Contains(t, out, "# About terraform")
+		assertOrderedSubstrings(t, out, []string{
+			"# File-level note at top.",
+			"# About terraform",
+			"terraform {",
+			"# About the provider",
+			`provider "aws"`,
+			"# About the resource",
+			`resource "aws_instance"`,
+		})
+	})
+
+	t.Run("Fix does not touch attributes inside untouched blocks", func(t *testing.T) {
+		input := `resource "aws_instance" "x" {
+  ami           = "ami-123"
+  instance_type = "t3.medium"
+  tags = {
+    Name = "test"
+    Env  = "prod"
+  }
+}
+
+terraform {
+  required_version = ">= 1.0"
+}
+`
+		out := runRuleFix(t, rule, input)
+		// Resource body order untouched.
+		amiIdx := strings.Index(out, "ami           = ")
+		instIdx := strings.Index(out, "instance_type = ")
+		tagsIdx := strings.Index(out, "tags = {")
+		require.NotEqual(t, -1, amiIdx)
+		require.NotEqual(t, -1, instIdx)
+		require.NotEqual(t, -1, tagsIdx)
+		assert.Less(t, amiIdx, instIdx)
+		assert.Less(t, instIdx, tagsIdx)
+		// Nested map order preserved
+		nameIdx := strings.Index(out, `Name = "test"`)
+		envIdx := strings.Index(out, `Env  = "prod"`)
+		assert.Less(t, nameIdx, envIdx)
+	})
+
+	t.Run("Fix is idempotent", func(t *testing.T) {
+		input := `provider "aws" {
+  region = "us-east-1"
+}
+
+terraform {
+  required_version = ">= 1.0"
+}
+
+resource "aws_instance" "x" {
+  ami = "ami-123"
+}
+`
+		tmpDir := t.TempDir()
+		tmpFile := filepath.Join(tmpDir, "test.tf")
+		require.NoError(t, os.WriteFile(tmpFile, []byte(input), 0o644))
+
+		ctx := &sdk.Context{File: tmpFile}
+		first, err := rule.Fix(ctx, nil)
+		require.NoError(t, err)
+		require.NoError(t, os.WriteFile(tmpFile, first, 0o644))
+
+		second, err := rule.Fix(ctx, nil)
+		require.NoError(t, err)
+		assert.Equal(t, string(first), string(second), "Fix(Fix(content)) must equal Fix(content)")
+	})
+}
+
+// runRuleFix writes content to a tmp file, runs rule.Fix, and returns the output as a string.
+func runRuleFix(t *testing.T, rule sdk.Rule, content string) string {
+	t.Helper()
+	fixer, ok := rule.(sdk.Fixer)
+	require.True(t, ok, "rule must implement sdk.Fixer")
+
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "test.tf")
+	require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0o644))
+
+	ctx := &sdk.Context{File: tmpFile}
+	result, err := fixer.Fix(ctx, nil)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	return string(result)
 }
 
 func TestIsDependsOnRelevantBlock(t *testing.T) {

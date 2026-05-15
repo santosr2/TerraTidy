@@ -282,7 +282,8 @@ func (e *Engine) getRuleConfig(ruleName string) RuleConfig {
 
 // registerRules registers all built-in lint rules
 func (e *Engine) registerRules() {
-	e.rules = append(e.rules,
+	e.rules = append(
+		e.rules,
 		&TerraformRequiredVersionRule{},
 		&TerraformRequiredProvidersRule{},
 		&TerraformDeprecatedSyntaxRule{},

@@ -107,13 +107,45 @@ type AttrRegion struct {
 	EndLine        int      // 1-indexed line number where region ends
 }
 
+// collectLeadingComments walks backwards from startLine-1 (exclusive) down to searchStart
+// (inclusive), collecting consecutive `#` and `//` comment lines. Blank lines are passed
+// through without being collected and without terminating the scan, matching long-standing
+// behavior across other style rules. Non-comment content terminates the scan.
+// Returns comment lines in source order (top-down).
+//
+// Note on blank-line passthrough: a comment separated from the next region by one or more
+// blank lines is still claimed as that region's leading comment. The motivating reason is
+// damage control: the reassembly path emits only content attached to a region or captured
+// by collectOrphanLines, so a stricter "stop on blank" rule would silently drop comments
+// the author placed visually above a target region. Section-header comments above blank
+// lines therefore travel with the following region; users who want them stationary should
+// place them outside the block or attach them inline.
+func collectLeadingComments(lines []string, startLine, searchStart int) []string {
+	var leading []string
+	for lineNum := startLine - 1; lineNum >= searchStart; lineNum-- {
+		if lineNum-1 >= len(lines) || lineNum-1 < 0 {
+			continue
+		}
+		line := lines[lineNum-1]
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" {
+			continue
+		}
+		if strings.HasPrefix(trimmed, "#") || strings.HasPrefix(trimmed, "//") {
+			leading = append([]string{line}, leading...)
+			continue
+		}
+		break
+	}
+	return leading
+}
+
 // ExtractAttrRegions extracts attribute regions (including leading comments) from content.
 // syntaxBody provides accurate line numbers for attributes.
 func ExtractAttrRegions(content []byte, syntaxBody *hclsyntax.Body) map[string]*AttrRegion {
 	lines := SplitLines(content)
 	regions := make(map[string]*AttrRegion)
 
-	// Get attributes sorted by line number
 	type attrPos struct {
 		name      string
 		startLine int
@@ -138,39 +170,18 @@ func ExtractAttrRegions(content []byte, syntaxBody *hclsyntax.Body) map[string]*
 			EndLine:   attr.endLine,
 		}
 
-		// Find leading comments by scanning backwards from the attribute
-		// Stop at the previous attribute's end line or block start
+		// Stop the comment scan at the previous attribute's end line (or block start).
 		searchStart := 1
 		if i > 0 {
 			searchStart = attrs[i-1].endLine + 1
 		}
 
-		// Collect leading comment lines
-		var leadingCommentLines []string
-		for lineNum := attr.startLine - 1; lineNum >= searchStart; lineNum-- {
-			if lineNum-1 >= len(lines) {
-				continue
-			}
-			line := lines[lineNum-1]
-			trimmed := strings.TrimSpace(line)
-			if trimmed == "" {
-				// Skip blank lines but stop collecting comments
-				continue
-			}
-			if strings.HasPrefix(trimmed, "#") || strings.HasPrefix(trimmed, "//") {
-				leadingCommentLines = append([]string{line}, leadingCommentLines...)
-			} else {
-				// Hit non-comment content, stop
-				break
-			}
-		}
+		leadingCommentLines := collectLeadingComments(lines, attr.startLine, searchStart)
 		if len(leadingCommentLines) > 0 {
 			region.LeadingComment = strings.Join(leadingCommentLines, "\n") + "\n"
-			// Adjust StartLine to include comments
 			region.StartLine = attr.startLine - len(leadingCommentLines)
 		}
 
-		// Collect attribute lines
 		for lineNum := attr.startLine; lineNum <= attr.endLine && lineNum-1 < len(lines); lineNum++ {
 			region.Lines = append(region.Lines, lines[lineNum-1])
 		}
@@ -259,9 +270,63 @@ func ReorderBlockAttrs(body *hclwrite.Body, orderedNames, firstAttrs, lastAttrs 
 	}
 }
 
+// markConsumedAttrLines marks the source lines covered by the given attribute regions
+// (including their captured leading comments) so the caller can later identify content
+// that belongs to no region. Safe to call alongside markConsumedBlockLines on the same
+// map: well-formed HCL guarantees attr and block ranges do not overlap, but writing the
+// same true value twice for a line is idempotent regardless.
+func markConsumedAttrLines(regions map[string]*AttrRegion, consumed map[int]bool) {
+	for _, region := range regions {
+		if region == nil {
+			continue
+		}
+		for line := region.StartLine; line <= region.EndLine; line++ {
+			consumed[line] = true
+		}
+	}
+}
+
+// markConsumedBlockLines marks the source lines covered by the given block regions.
+func markConsumedBlockLines(regions []*BlockRegion, consumed map[int]bool) {
+	for _, region := range regions {
+		if region == nil {
+			continue
+		}
+		for line := region.StartLine; line <= region.EndLine; line++ {
+			consumed[line] = true
+		}
+	}
+}
+
+// collectOrphanLines returns non-blank lines in the (blockStart, blockEnd) interior whose
+// source line number is not in `consumed`. These are comments or other content that no
+// region claimed as part of its leading-comment block. Preserving them protects against
+// silent data loss when reassembling a reordered body.
+//
+// Position semantics (trailing-orphan): callers emit these lines after all regions and
+// before the closing brace. In real pipelines orphans only arise when a comment appears
+// after the last region with no following sibling — comments interleaved between regions
+// are claimed as leading-comments of the region that follows them by collectLeadingComments.
+func collectOrphanLines(lines []string, blockStartLine, blockEndLine int, consumed map[int]bool) []string {
+	var orphans []string
+	for line := blockStartLine + 1; line < blockEndLine; line++ {
+		if consumed[line] {
+			continue
+		}
+		if line-1 < 0 || line-1 >= len(lines) {
+			continue
+		}
+		if strings.TrimSpace(lines[line-1]) == "" {
+			continue
+		}
+		orphans = append(orphans, lines[line-1])
+	}
+	return orphans
+}
+
 // ReorderBlockAttrsPreservingComments reorders attributes while preserving leading comments.
-// This is a line-based approach that works with raw content.
-// Returns the modified content.
+// Non-blank lines inside the block that no region claimed (orphan comments after the last
+// attribute, for example) are emitted before the closing brace so they are never silently lost.
 func ReorderBlockAttrsPreservingComments(
 	content []byte,
 	syntaxBody *hclsyntax.Body,
@@ -272,10 +337,8 @@ func ReorderBlockAttrsPreservingComments(
 		return content
 	}
 
-	// Extract attribute regions with leading comments
 	regions := ExtractAttrRegions(content, syntaxBody)
 
-	// Build sets for quick lookup
 	firstSet := make(map[string]bool)
 	for _, name := range firstAttrs {
 		firstSet[name] = true
@@ -285,7 +348,6 @@ func ReorderBlockAttrsPreservingComments(
 		lastSet[name] = true
 	}
 
-	// Categorize attribute names
 	var first, middle, last []string
 	for _, name := range orderedNames {
 		if _, exists := regions[name]; !exists {
@@ -300,7 +362,6 @@ func ReorderBlockAttrsPreservingComments(
 		}
 	}
 
-	// Sort first and last attributes by priority order
 	sortByPriority := func(names []string, priority []string) {
 		prioMap := make(map[string]int)
 		for i, name := range priority {
@@ -322,45 +383,232 @@ func ReorderBlockAttrsPreservingComments(
 	sortByPriority(first, firstAttrs)
 	sortByPriority(last, lastAttrs)
 
-	// Build the new block content in order
 	lines := SplitLines(content)
+	consumed := make(map[int]bool)
+	markConsumedAttrLines(regions, consumed)
+	orphans := collectOrphanLines(lines, blockStartLine, blockEndLine, consumed)
+
 	var newBlockContent []string
 
-	// Get block opening line
 	if blockStartLine-1 < len(lines) {
 		newBlockContent = append(newBlockContent, lines[blockStartLine-1])
 	}
 
-	// Add attributes in new order
 	reorderedNames := append(append(first, middle...), last...)
 	for _, name := range reorderedNames {
 		region := regions[name]
 		if region == nil {
 			continue
 		}
-		// Add leading comment if present
 		if region.LeadingComment != "" {
 			commentLines := strings.Split(strings.TrimSuffix(region.LeadingComment, "\n"), "\n")
 			newBlockContent = append(newBlockContent, commentLines...)
 		}
-		// Add attribute lines
 		newBlockContent = append(newBlockContent, region.Lines...)
 	}
 
-	// Get block closing line
+	newBlockContent = append(newBlockContent, orphans...)
+
 	if blockEndLine-1 < len(lines) {
 		newBlockContent = append(newBlockContent, lines[blockEndLine-1])
 	}
 
-	// Rebuild full content
 	var result []string
-	// Lines before block
 	for i := 0; i < blockStartLine-1 && i < len(lines); i++ {
 		result = append(result, lines[i])
 	}
-	// New block content
 	result = append(result, newBlockContent...)
-	// Lines after block
+	for i := blockEndLine; i < len(lines); i++ {
+		result = append(result, lines[i])
+	}
+
+	return []byte(strings.Join(result, "\n") + "\n")
+}
+
+// BlockRegion represents a nested block with its leading comments.
+type BlockRegion struct {
+	Type           string
+	Labels         []string
+	LeadingComment string   // Comments on lines before the block (may be empty)
+	Lines          []string // The block's source lines (opening header through closing brace)
+	StartLine      int      // 1-indexed line number where region starts (includes leading comments)
+	EndLine        int      // 1-indexed line number where region ends
+}
+
+// ExtractBlockRegions extracts nested block regions (including leading comments) from content.
+// syntaxBody provides accurate line numbers for blocks. Regions are returned in source order.
+//
+// Leading-comment scan stops at the closest prior body item (attribute or block), so blocks
+// sandwiched between attributes pick up only comments that belong to them.
+func ExtractBlockRegions(content []byte, syntaxBody *hclsyntax.Body) []*BlockRegion {
+	if len(syntaxBody.Blocks) == 0 {
+		return nil
+	}
+	lines := SplitLines(content)
+
+	// Collect all body item end lines so each block can find its immediate prior boundary
+	// regardless of body element kind.
+	endLines := make([]int, 0, len(syntaxBody.Attributes)+len(syntaxBody.Blocks))
+	for _, attr := range syntaxBody.Attributes {
+		endLines = append(endLines, attr.Range().End.Line)
+	}
+	for _, b := range syntaxBody.Blocks {
+		endLines = append(endLines, b.Range().End.Line)
+	}
+	sort.Ints(endLines)
+
+	blocks := make([]*hclsyntax.Block, len(syntaxBody.Blocks))
+	copy(blocks, syntaxBody.Blocks)
+	sort.Slice(blocks, func(i, j int) bool {
+		return blocks[i].Range().Start.Line < blocks[j].Range().Start.Line
+	})
+
+	regions := make([]*BlockRegion, 0, len(blocks))
+	for _, blk := range blocks {
+		startLine := blk.Range().Start.Line
+		endLine := blk.Range().End.Line
+
+		searchStart := priorBoundary(endLines, startLine)
+
+		leadingCommentLines := collectLeadingComments(lines, startLine, searchStart)
+
+		region := &BlockRegion{
+			Type:      blk.Type,
+			Labels:    append([]string(nil), blk.Labels...),
+			StartLine: startLine,
+			EndLine:   endLine,
+		}
+		if len(leadingCommentLines) > 0 {
+			region.LeadingComment = strings.Join(leadingCommentLines, "\n") + "\n"
+			region.StartLine = startLine - len(leadingCommentLines)
+		}
+		for lineNum := startLine; lineNum <= endLine && lineNum-1 < len(lines); lineNum++ {
+			region.Lines = append(region.Lines, lines[lineNum-1])
+		}
+		regions = append(regions, region)
+	}
+
+	return regions
+}
+
+// priorBoundary returns the line immediately after the largest end-line in sortedEndLines
+// that is strictly less than startLine. Returns 1 if no such end-line exists.
+func priorBoundary(sortedEndLines []int, startLine int) int {
+	boundary := 1
+	for _, end := range sortedEndLines {
+		if end >= startLine {
+			break
+		}
+		if end+1 > boundary {
+			boundary = end + 1
+		}
+	}
+	return boundary
+}
+
+// ReorderBlockBodyPreservingAll reorders attributes AND nested blocks in a block body,
+// preserving leading comments on each. The desired output structure is:
+//
+//  1. Attributes named in attrOrder (in that order).
+//  2. Nested blocks whose type is in nestedBlockOrder (in that order; multiple blocks of the
+//     same type keep their original relative order).
+//  3. Remaining attributes (in their original source order).
+//  4. Remaining nested blocks (in their original source order).
+//
+// Items not present in the body are silently skipped.
+func ReorderBlockBodyPreservingAll(
+	content []byte,
+	syntaxBody *hclsyntax.Body,
+	blockStartLine, blockEndLine int,
+	attrOrder, nestedBlockOrder []string,
+) []byte {
+	attrRegions := ExtractAttrRegions(content, syntaxBody)
+	blockRegions := ExtractBlockRegions(content, syntaxBody)
+
+	if len(attrRegions) == 0 && len(blockRegions) == 0 {
+		return content
+	}
+
+	attrPrio := make(map[string]int, len(attrOrder))
+	for i, name := range attrOrder {
+		attrPrio[name] = i
+	}
+	blockPrio := make(map[string]int, len(nestedBlockOrder))
+	for i, t := range nestedBlockOrder {
+		blockPrio[t] = i
+	}
+
+	var orderedAttrs, leftoverAttrs []*AttrRegion
+	for _, name := range GetOrderedAttrNames(syntaxBody) {
+		region, ok := attrRegions[name]
+		if !ok || region == nil {
+			continue
+		}
+		if _, prioritized := attrPrio[name]; prioritized {
+			orderedAttrs = append(orderedAttrs, region)
+		} else {
+			leftoverAttrs = append(leftoverAttrs, region)
+		}
+	}
+	sort.SliceStable(orderedAttrs, func(i, j int) bool {
+		return attrPrio[orderedAttrs[i].Name] < attrPrio[orderedAttrs[j].Name]
+	})
+
+	var orderedBlocks, leftoverBlocks []*BlockRegion
+	for _, region := range blockRegions {
+		if _, prioritized := blockPrio[region.Type]; prioritized {
+			orderedBlocks = append(orderedBlocks, region)
+		} else {
+			leftoverBlocks = append(leftoverBlocks, region)
+		}
+	}
+	sort.SliceStable(orderedBlocks, func(i, j int) bool {
+		return blockPrio[orderedBlocks[i].Type] < blockPrio[orderedBlocks[j].Type]
+	})
+
+	lines := SplitLines(content)
+
+	consumed := make(map[int]bool)
+	markConsumedAttrLines(attrRegions, consumed)
+	markConsumedBlockLines(blockRegions, consumed)
+	orphans := collectOrphanLines(lines, blockStartLine, blockEndLine, consumed)
+
+	var newBlockContent []string
+	if blockStartLine-1 < len(lines) {
+		newBlockContent = append(newBlockContent, lines[blockStartLine-1])
+	}
+
+	appendRegion := func(comment string, regionLines []string) {
+		if comment != "" {
+			commentLines := strings.Split(strings.TrimSuffix(comment, "\n"), "\n")
+			newBlockContent = append(newBlockContent, commentLines...)
+		}
+		newBlockContent = append(newBlockContent, regionLines...)
+	}
+	for _, r := range orderedAttrs {
+		appendRegion(r.LeadingComment, r.Lines)
+	}
+	for _, r := range orderedBlocks {
+		appendRegion(r.LeadingComment, r.Lines)
+	}
+	for _, r := range leftoverAttrs {
+		appendRegion(r.LeadingComment, r.Lines)
+	}
+	for _, r := range leftoverBlocks {
+		appendRegion(r.LeadingComment, r.Lines)
+	}
+
+	newBlockContent = append(newBlockContent, orphans...)
+
+	if blockEndLine-1 < len(lines) {
+		newBlockContent = append(newBlockContent, lines[blockEndLine-1])
+	}
+
+	var result []string
+	for i := 0; i < blockStartLine-1 && i < len(lines); i++ {
+		result = append(result, lines[i])
+	}
+	result = append(result, newBlockContent...)
 	for i := blockEndLine; i < len(lines); i++ {
 		result = append(result, lines[i])
 	}
@@ -712,97 +960,159 @@ func ParseBothFormats(content []byte, filePath string) (*hclsyntax.Body, *hclwri
 	return syntaxBody, writeFile, nil
 }
 
-// ReorderTopLevelBlocks reorders top-level blocks in a file according to best practices:
-// 1. terraform blocks first
-// 2. provider blocks second
-// 3. variable blocks
-// 4. locals blocks
-// 5. data blocks
-// 6. resource blocks
-// 7. module blocks
-// 8. output blocks
-func ReorderTopLevelBlocks(writeFile *hclwrite.File) []byte {
-	blocks := writeFile.Body().Blocks()
-	if len(blocks) == 0 {
-		return writeFile.Bytes()
-	}
-
-	// Categorize blocks by type
-	var terraformBlocks []*hclwrite.Block
-	var providerBlocks []*hclwrite.Block
-	var variableBlocks []*hclwrite.Block
-	var localsBlocks []*hclwrite.Block
-	var dataBlocks []*hclwrite.Block
-	var resourceBlocks []*hclwrite.Block
-	var moduleBlocks []*hclwrite.Block
-	var outputBlocks []*hclwrite.Block
-	var otherBlocks []*hclwrite.Block
-
-	for _, block := range blocks {
-		switch block.Type() {
-		case "terraform":
-			terraformBlocks = append(terraformBlocks, block)
-		case "provider":
-			providerBlocks = append(providerBlocks, block)
-		case "variable":
-			variableBlocks = append(variableBlocks, block)
-		case "locals":
-			localsBlocks = append(localsBlocks, block)
-		case "data":
-			dataBlocks = append(dataBlocks, block)
-		case "resource":
-			resourceBlocks = append(resourceBlocks, block)
-		case "module":
-			moduleBlocks = append(moduleBlocks, block)
-		case "output":
-			outputBlocks = append(outputBlocks, block)
-		default:
-			otherBlocks = append(otherBlocks, block)
-		}
-	}
-
-	// Clear all blocks from the body
-	for _, block := range blocks {
-		writeFile.Body().RemoveBlock(block)
-	}
-
-	// Re-add blocks in the desired order
-	addBlocksWithSpacing(writeFile.Body(), terraformBlocks)
-	addBlocksWithSpacing(writeFile.Body(), providerBlocks)
-	addBlocksWithSpacing(writeFile.Body(), variableBlocks)
-	addBlocksWithSpacing(writeFile.Body(), localsBlocks)
-	addBlocksWithSpacing(writeFile.Body(), dataBlocks)
-	addBlocksWithSpacing(writeFile.Body(), resourceBlocks)
-	addBlocksWithSpacing(writeFile.Body(), moduleBlocks)
-	addBlocksWithSpacing(writeFile.Body(), outputBlocks)
-	addBlocksWithSpacing(writeFile.Body(), otherBlocks)
-
-	return FormatAndCleanBlankLines(writeFile.Bytes())
+// topLevelBlockPriority defines the canonical source order for top-level blocks.
+// Blocks of unknown type (e.g., user-defined extensions) sort to the bottom in source order.
+var topLevelBlockPriority = map[string]int{
+	"terraform": 1,
+	"provider":  2,
+	"variable":  3,
+	"locals":    4,
+	"data":      5,
+	"resource":  6,
+	"module":    7,
+	"output":    8,
 }
 
-// addBlocksWithSpacing adds blocks to a body, preserving their content including inline comments.
-func addBlocksWithSpacing(body *hclwrite.Body, blocks []*hclwrite.Block) {
-	for _, block := range blocks {
-		newBlock := body.AppendNewBlock(block.Type(), block.Labels())
-		// Copy attributes with inline comments preserved
-		for name, attr := range block.Body().Attributes() {
-			newBlock.Body().SetAttributeRaw(name, getExprTokensWithTrailingComment(attr))
+// topLevelOtherPriority is the sort key for top-level blocks of unknown type. The wide gap
+// from the highest known priority (8) leaves room to add new canonical types without
+// disturbing the relative ordering of pre-existing unknown blocks.
+const topLevelOtherPriority = 99
+
+// collectAdjacentLeadingComments walks backwards from startLine-1 (exclusive) down to
+// searchStart (inclusive), collecting `#` and `//` comment lines that are DIRECTLY
+// adjacent (no blank-line gap). Unlike collectLeadingComments, a blank line terminates
+// the scan. This stricter semantics matches the conventional reading at the top level:
+// file-header comments are separated from the first block by a blank line and should
+// stay with the file, not travel with the block.
+//
+// Returns the captured comment lines in source order. regionStart is the 1-indexed line
+// number of the first captured comment (or equal to startLine if no comments were captured).
+func collectAdjacentLeadingComments(lines []string, startLine, searchStart int) (comments []string, regionStart int) {
+	regionStart = startLine
+	for lineNum := startLine - 1; lineNum >= searchStart; lineNum-- {
+		if lineNum-1 < 0 || lineNum-1 >= len(lines) {
+			break
 		}
-		// Copy nested blocks
-		for _, nested := range block.Body().Blocks() {
-			copyNestedBlock(newBlock.Body(), nested)
+		line := lines[lineNum-1]
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" {
+			break
 		}
-		body.AppendNewline()
+		if !strings.HasPrefix(trimmed, "#") && !strings.HasPrefix(trimmed, "//") {
+			break
+		}
+		comments = append([]string{line}, comments...)
+		regionStart = lineNum
 	}
+	return comments, regionStart
 }
 
-// copyNestedBlock recursively copies a nested block to a new body, preserving inline comments.
-func copyNestedBlock(body *hclwrite.Body, block *hclwrite.Block) {
-	newBlock := body.AppendNewBlock(block.Type(), block.Labels())
-	for name, attr := range block.Body().Attributes() {
-		newBlock.Body().SetAttributeRaw(name, getExprTokensWithTrailingComment(attr))
+// ReorderTopLevelBlocksByLineRange reorders top-level blocks in a HCL file according to the
+// canonical priority defined by topLevelBlockPriority (terraform, provider, variable, locals,
+// data, resource, module, output, then anything else in source order).
+//
+// This is a line-based reorder: each block is emitted as its original source line range
+// plus any captured leading comments, so attribute order, inline comments, nested-block
+// layout, and heredoc bodies inside each block are byte-for-byte preserved.
+//
+// Stable within priority: blocks of the same type retain their original relative order.
+// File-header content (anything before the first block's adjacent leading comments) and
+// file-footer content (anything after the last block in source) is preserved verbatim.
+// Reordered blocks are joined with exactly one blank line between them.
+//
+// Top-level leading-comment capture is strict (collectAdjacentLeadingComments): only comments
+// directly above a block with no blank-line gap travel with it. This matches the convention
+// that file-level headers (copyright, license) are visually separated from the first block
+// by a blank line and should remain anchored to the file.
+func ReorderTopLevelBlocksByLineRange(content []byte) ([]byte, error) {
+	syntaxFile, diags := hclsyntax.ParseConfig(content, "", hcl.InitialPos)
+	if diags.HasErrors() {
+		return nil, diags
 	}
-	for _, nested := range block.Body().Blocks() {
-		copyNestedBlock(newBlock.Body(), nested)
+	body, ok := syntaxFile.Body.(*hclsyntax.Body)
+	if !ok || len(body.Blocks) == 0 {
+		return content, nil
 	}
+
+	lines := SplitLines(content)
+
+	sourceBlocks := make([]*hclsyntax.Block, len(body.Blocks))
+	copy(sourceBlocks, body.Blocks)
+	sort.Slice(sourceBlocks, func(i, j int) bool {
+		return sourceBlocks[i].Range().Start.Line < sourceBlocks[j].Range().Start.Line
+	})
+
+	type topRegion struct {
+		priority     int
+		sourceIdx    int
+		commentLines []string
+		regionStart  int // 1-indexed line where the comment+body region begins
+		bodyStart    int
+		bodyEnd      int
+	}
+
+	regions := make([]topRegion, 0, len(sourceBlocks))
+	for i, blk := range sourceBlocks {
+		searchStart := 1
+		if i > 0 {
+			searchStart = sourceBlocks[i-1].Range().End.Line + 1
+		}
+		commentLines, regionStart := collectAdjacentLeadingComments(lines, blk.Range().Start.Line, searchStart)
+
+		prio, known := topLevelBlockPriority[blk.Type]
+		if !known {
+			prio = topLevelOtherPriority
+		}
+		regions = append(regions, topRegion{
+			priority:     prio,
+			sourceIdx:    i,
+			commentLines: commentLines,
+			regionStart:  regionStart,
+			bodyStart:    blk.Range().Start.Line,
+			bodyEnd:      blk.Range().End.Line,
+		})
+	}
+
+	headerEnd := regions[0].regionStart
+	footerStart := sourceBlocks[len(sourceBlocks)-1].Range().End.Line
+
+	sort.SliceStable(regions, func(i, j int) bool {
+		if regions[i].priority != regions[j].priority {
+			return regions[i].priority < regions[j].priority
+		}
+		return regions[i].sourceIdx < regions[j].sourceIdx
+	})
+
+	var result []string
+
+	// File header: everything before the first source block's adjacent-comment region.
+	for i := 0; i < headerEnd-1 && i < len(lines); i++ {
+		result = append(result, lines[i])
+	}
+
+	for i, r := range regions {
+		if i > 0 {
+			result = append(result, "")
+		}
+		result = append(result, r.commentLines...)
+		for line := r.bodyStart; line <= r.bodyEnd && line-1 < len(lines); line++ {
+			result = append(result, lines[line-1])
+		}
+	}
+
+	// File footer: everything after the last source block, dropping a leading blank
+	// so the separator we emit before the footer isn't doubled.
+	var footer []string
+	for i := footerStart; i < len(lines); i++ {
+		footer = append(footer, lines[i])
+	}
+	for len(footer) > 0 && strings.TrimSpace(footer[0]) == "" {
+		footer = footer[1:]
+	}
+	if len(footer) > 0 {
+		result = append(result, "")
+		result = append(result, footer...)
+	}
+
+	return []byte(strings.Join(result, "\n") + "\n"), nil
 }

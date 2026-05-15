@@ -94,7 +94,8 @@ func (f *MarkdownFormatter) writeFileFindingsAsTable(w io.Writer, file string, f
 
 	for _, finding := range findings {
 		icon := f.severityIcon(finding.Severity)
-		_, _ = fmt.Fprintf(w, "\n| %s %s | %d | `%s` | %s |",
+		_, _ = fmt.Fprintf(
+			w, "\n| %s %s | %d | `%s` | %s |",
 			icon,
 			finding.Severity,
 			finding.Location.StartLine,

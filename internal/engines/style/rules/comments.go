@@ -19,7 +19,7 @@ func (r *CommentSyntaxRule) Name() string {
 
 // Description returns a human-readable description of the rule.
 func (r *CommentSyntaxRule) Description() string {
-	return "Ensures comments use # syntax instead of //"
+	return "Ensures full-line comments use # syntax instead of // (trailing // after a value is not flagged)"
 }
 
 // Check examines the file for // style comments.
@@ -58,33 +58,13 @@ func (r *CommentSyntaxRule) Check(ctx *sdk.Context, _ *hcl.File) ([]sdk.Finding,
 	return findings, nil
 }
 
-// hasDoubleSlashComment checks if a line has a // comment outside of strings
+// hasDoubleSlashComment reports whether a line is a full-line `//` comment (after
+// trimming leading whitespace). Lines starting with `#` are never flagged, even if
+// their body contains `//` (e.g. URLs like `# https://example.com/path`). Trailing
+// `//` after a value (e.g. `key = "x" // note`) is not flagged either; the rule's
+// scope is full-line comments only.
 func (r *CommentSyntaxRule) hasDoubleSlashComment(line string) bool {
-	inString := false
-	stringChar := rune(0)
-
-	for i := 0; i < len(line)-1; i++ {
-		c := rune(line[i])
-		next := rune(line[i+1])
-
-		// Handle string boundaries
-		if (c == '"' || c == '\'') && (i == 0 || line[i-1] != '\\') {
-			if !inString {
-				inString = true
-				stringChar = c
-			} else if c == stringChar {
-				inString = false
-			}
-			continue
-		}
-
-		// Check for // outside strings
-		if !inString && c == '/' && next == '/' {
-			return true
-		}
-	}
-
-	return false
+	return strings.HasPrefix(strings.TrimSpace(line), "//")
 }
 
 func (r *CommentSyntaxRule) fixFile(filePath string) ([]byte, error) {
@@ -107,36 +87,19 @@ func (r *CommentSyntaxRule) fixContent(content []byte) []byte {
 	return []byte(strings.Join(result, "\n") + "\n")
 }
 
+// fixLine converts a full-line `//` comment to `#` (preserving leading whitespace).
+// Lines that are not full-line `//` comments are returned unchanged — `#` comments
+// containing `//` (e.g. URLs) and inline `//` after a value both pass through.
+//
+// hasDoubleSlashComment guarantees the first `//` in the raw line is the comment
+// delimiter (the trimmed line starts with `//`, so leading whitespace is the only
+// thing that can precede it), so strings.Index is safe to use here without a guard.
 func (r *CommentSyntaxRule) fixLine(line string) string {
-	// Only replace // with # when it's at the start of a comment (not inside strings)
-	inString := false
-	stringChar := rune(0)
-	result := []byte(line)
-
-	for i := 0; i < len(line)-1; i++ {
-		c := rune(line[i])
-		next := rune(line[i+1])
-
-		if (c == '"' || c == '\'') && (i == 0 || line[i-1] != '\\') {
-			if !inString {
-				inString = true
-				stringChar = c
-			} else if c == stringChar {
-				inString = false
-			}
-			continue
-		}
-
-		if !inString && c == '/' && next == '/' {
-			// Replace // with #
-			result[i] = '#'
-			// Remove the second /
-			result = append(result[:i+1], result[i+2:]...)
-			break
-		}
+	if !r.hasDoubleSlashComment(line) {
+		return line
 	}
-
-	return string(result)
+	idx := strings.Index(line, "//")
+	return line[:idx] + "#" + line[idx+2:]
 }
 
 // Fix replaces // comments with # comments.

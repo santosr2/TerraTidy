@@ -1243,3 +1243,499 @@ func TestReorderBlockAttrs_EdgeCases(t *testing.T) {
 		assert.Greater(t, tagsIdx, nameIdx, "tags should appear after name")
 	})
 }
+
+func TestExtractBlockRegions(t *testing.T) {
+	tests := []struct {
+		name              string
+		content           string
+		expectTypes       []string
+		expectComments    map[int]string // block index -> expected comment substring
+		expectLineCounts  map[int]int    // block index -> expected number of lines
+		expectFirstLineAt map[int]int    // block index -> expected first line of region (1-indexed, comments-included)
+	}{
+		{
+			name: "single nested block without comment",
+			content: `variable "x" {
+  type = string
+  validation {
+    condition     = length(var.x) > 0
+    error_message = "required"
+  }
+}`,
+			expectTypes:      []string{"validation"},
+			expectLineCounts: map[int]int{0: 4},
+		},
+		{
+			name: "block with leading comment",
+			content: `variable "x" {
+  type = string
+  # validation comment
+  validation {
+    condition     = length(var.x) > 0
+    error_message = "required"
+  }
+}`,
+			expectTypes:    []string{"validation"},
+			expectComments: map[int]string{0: "# validation comment"},
+		},
+		{
+			name: "block sandwiched between attributes captures only its own comment",
+			//nolint:dupword // HCL content intentionally contains repeated identifiers
+			content: `variable "x" {
+  description = "x"
+  # only this comment belongs to validation
+  validation {
+    condition     = length(var.x) > 0
+    error_message = "required"
+  }
+  type = string
+}`,
+			expectTypes: []string{"validation"},
+			expectComments: map[int]string{
+				0: "# only this comment belongs to validation",
+			},
+		},
+		{
+			name: "multiple validation blocks preserved in source order",
+			content: `variable "x" {
+  type = string
+  validation {
+    condition     = length(var.x) > 0
+    error_message = "first"
+  }
+  validation {
+    condition     = length(var.x) < 64
+    error_message = "second"
+  }
+}`,
+			expectTypes: []string{"validation", "validation"},
+		},
+		{
+			name: "body with no nested blocks returns nil",
+			content: `variable "x" {
+  type = string
+}`,
+			expectTypes: []string{},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			file, diags := hclsyntax.ParseConfig([]byte(tt.content), "test.tf", hcl.InitialPos)
+			require.False(t, diags.HasErrors())
+
+			body := file.Body.(*hclsyntax.Body)
+			require.NotEmpty(t, body.Blocks, "test content should have at least one block")
+
+			regions := ExtractBlockRegions([]byte(tt.content), body.Blocks[0].Body)
+			require.Equal(t, len(tt.expectTypes), len(regions),
+				"expected %d regions, got %d", len(tt.expectTypes), len(regions))
+
+			for i, want := range tt.expectTypes {
+				assert.Equal(t, want, regions[i].Type, "region %d type", i)
+			}
+			for idx, want := range tt.expectComments {
+				assert.Contains(t, regions[idx].LeadingComment, want,
+					"region %d should have comment %q", idx, want)
+			}
+			for idx, want := range tt.expectLineCounts {
+				assert.Equal(t, want, len(regions[idx].Lines),
+					"region %d should span %d lines, got %d", idx, want, len(regions[idx].Lines))
+			}
+			for idx, want := range tt.expectFirstLineAt {
+				assert.Equal(t, want, regions[idx].StartLine, "region %d StartLine", idx)
+			}
+		})
+	}
+}
+
+func TestReorderBlockBodyPreservingAll(t *testing.T) {
+	t.Run("attrs and nested blocks reorder to canonical layout", func(t *testing.T) {
+		content := `variable "x" {
+  validation {
+    condition     = length(var.x) > 0
+    error_message = "required"
+  }
+  type        = string
+  description = "x"
+}
+`
+		file, diags := hclsyntax.ParseConfig([]byte(content), "test.tf", hcl.InitialPos)
+		require.False(t, diags.HasErrors())
+		body := file.Body.(*hclsyntax.Body)
+		require.NotEmpty(t, body.Blocks)
+		block := body.Blocks[0]
+
+		result := ReorderBlockBodyPreservingAll(
+			[]byte(content),
+			block.Body,
+			block.Range().Start.Line,
+			block.Range().End.Line,
+			[]string{"description", "type"},
+			[]string{"validation"},
+		)
+		out := string(result)
+
+		descIdx := strings.Index(out, `description = "x"`)
+		typeIdx := strings.Index(out, `type        = string`)
+		valIdx := strings.Index(out, `validation {`)
+		require.NotEqual(t, -1, descIdx)
+		require.NotEqual(t, -1, typeIdx)
+		require.NotEqual(t, -1, valIdx)
+		assert.Less(t, descIdx, typeIdx, "description before type")
+		assert.Less(t, typeIdx, valIdx, "type before validation")
+	})
+
+	t.Run("unknown attrs and blocks land after prioritized ones in source order", func(t *testing.T) {
+		content := `variable "x" {
+  custom_block {
+    field = 1
+  }
+  unknown_attr = "u"
+  validation {
+    condition     = length(var.x) > 0
+    error_message = "required"
+  }
+  type        = string
+  description = "x"
+}
+`
+		file, diags := hclsyntax.ParseConfig([]byte(content), "test.tf", hcl.InitialPos)
+		require.False(t, diags.HasErrors())
+		body := file.Body.(*hclsyntax.Body)
+		block := body.Blocks[0]
+
+		result := ReorderBlockBodyPreservingAll(
+			[]byte(content),
+			block.Body,
+			block.Range().Start.Line,
+			block.Range().End.Line,
+			[]string{"description", "type"},
+			[]string{"validation"},
+		)
+		out := string(result)
+
+		descIdx := strings.Index(out, `description = "x"`)
+		typeIdx := strings.Index(out, `type        = string`)
+		valIdx := strings.Index(out, `validation {`)
+		unknownIdx := strings.Index(out, `unknown_attr = "u"`)
+		customIdx := strings.Index(out, `custom_block {`)
+
+		assert.Less(t, descIdx, typeIdx, "description before type")
+		assert.Less(t, typeIdx, valIdx, "type before validation")
+		assert.Less(t, valIdx, unknownIdx, "validation before unknown_attr")
+		assert.Less(t, unknownIdx, customIdx, "unknown_attr before custom_block")
+	})
+
+	t.Run("empty body is left unchanged", func(t *testing.T) {
+		content := "variable \"x\" {}\n"
+		file, diags := hclsyntax.ParseConfig([]byte(content), "test.tf", hcl.InitialPos)
+		require.False(t, diags.HasErrors())
+		body := file.Body.(*hclsyntax.Body)
+		block := body.Blocks[0]
+
+		result := ReorderBlockBodyPreservingAll(
+			[]byte(content),
+			block.Body,
+			block.Range().Start.Line,
+			block.Range().End.Line,
+			[]string{"description"},
+			[]string{"validation"},
+		)
+		assert.Equal(t, content, string(result))
+	})
+
+	t.Run("trailing orphan comment is preserved before closing brace", func(t *testing.T) {
+		content := `variable "x" {
+  type        = string
+  description = "x"
+
+  # forgotten note pinned to the bottom
+}
+`
+		file, diags := hclsyntax.ParseConfig([]byte(content), "test.tf", hcl.InitialPos)
+		require.False(t, diags.HasErrors())
+		body := file.Body.(*hclsyntax.Body)
+		block := body.Blocks[0]
+
+		result := ReorderBlockBodyPreservingAll(
+			[]byte(content),
+			block.Body,
+			block.Range().Start.Line,
+			block.Range().End.Line,
+			[]string{"description", "type"},
+			nil,
+		)
+		out := string(result)
+
+		assert.Contains(t, out, `# forgotten note pinned to the bottom`,
+			"orphan comment with no following region must not be dropped")
+
+		// Orphan should appear after the last region and before the closing brace.
+		descIdx := strings.Index(out, `description = "x"`)
+		orphanIdx := strings.Index(out, `# forgotten note pinned to the bottom`)
+		closeIdx := strings.LastIndex(out, "}")
+		assert.Greater(t, orphanIdx, descIdx, "orphan should appear after all regions")
+		assert.Less(t, orphanIdx, closeIdx, "orphan should appear before closing brace")
+	})
+}
+
+func TestCollectOrphanLines(t *testing.T) {
+	tests := []struct {
+		name           string
+		content        string
+		blockStart     int
+		blockEnd       int
+		consumed       map[int]bool
+		expectedOrphan []string
+	}{
+		{
+			name: "trailing comment with no following region",
+			content: `block {
+  attr = "x"
+
+  # orphan
+}`,
+			blockStart:     1,
+			blockEnd:       5,
+			consumed:       map[int]bool{2: true},
+			expectedOrphan: []string{"  # orphan"},
+		},
+		{
+			name: "no orphans when everything is consumed",
+			content: `block {
+  a = 1
+  b = 2
+}`,
+			blockStart:     1,
+			blockEnd:       4,
+			consumed:       map[int]bool{2: true, 3: true},
+			expectedOrphan: nil,
+		},
+		{
+			name: "blank lines are dropped, not treated as orphans",
+			content: `block {
+  a = 1
+
+
+}`,
+			blockStart:     1,
+			blockEnd:       5,
+			consumed:       map[int]bool{2: true},
+			expectedOrphan: nil,
+		},
+		{
+			// Helper-level contract test. In real pipelines mid-block orphans do not
+			// arise because collectLeadingComments would claim line 3 as line 4's leading
+			// comment and the caller would mark line 3 consumed. We construct a `consumed`
+			// map that omits line 3 to verify the helper's contract: any non-consumed,
+			// non-blank line is returned regardless of position.
+			name: "non-consumed interior line is returned (helper contract)",
+			content: `block {
+  a = 1
+  # interior line
+  b = 2
+}`,
+			blockStart:     1,
+			blockEnd:       5,
+			consumed:       map[int]bool{2: true, 4: true},
+			expectedOrphan: []string{"  # interior line"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			lines := SplitLines([]byte(tt.content))
+			got := collectOrphanLines(lines, tt.blockStart, tt.blockEnd, tt.consumed)
+			assert.Equal(t, tt.expectedOrphan, got)
+		})
+	}
+}
+
+func TestReorderTopLevelBlocksByLineRange(t *testing.T) {
+	t.Run("canonical priority order", func(t *testing.T) {
+		input := `output "x" { value = "x" }
+module "m" { source = "./m" }
+resource "r" "x" { x = 1 }
+data "d" "x" { x = 1 }
+locals { x = 1 }
+variable "v" { default = "x" }
+provider "p" { region = "x" }
+terraform { required_version = ">= 1.0" }
+`
+		out, err := ReorderTopLevelBlocksByLineRange([]byte(input))
+		require.NoError(t, err)
+
+		assertOrderedSubstrings(t, string(out), []string{
+			"terraform {",
+			"provider ",
+			"variable ",
+			"locals {",
+			"data ",
+			"resource ",
+			"module ",
+			"output ",
+		})
+	})
+
+	t.Run("preserves block-internal content byte-for-byte", func(t *testing.T) {
+		input := `resource "aws_instance" "x" {
+  # important comment
+  ami           = "ami-123"
+  instance_type = "t3.medium" # trailing
+  tags = {
+    Name = "test"
+  }
+}
+
+terraform {
+  required_version = ">= 1.0"
+}
+`
+		out, err := ReorderTopLevelBlocksByLineRange([]byte(input))
+		require.NoError(t, err)
+		outStr := string(out)
+
+		// Resource body must be byte-for-byte preserved; the buggy old helper would
+		// reshuffle attrs via map iteration.
+		expectedResourceBody := `resource "aws_instance" "x" {
+  # important comment
+  ami           = "ami-123"
+  instance_type = "t3.medium" # trailing
+  tags = {
+    Name = "test"
+  }
+}`
+		assert.Contains(t, outStr, expectedResourceBody)
+	})
+
+	t.Run("file header preserved before reordered blocks", func(t *testing.T) {
+		input := `# Copyright notice
+# License terms
+
+resource "x" "x" { x = 1 }
+
+terraform { required_version = ">= 1.0" }
+`
+		out, err := ReorderTopLevelBlocksByLineRange([]byte(input))
+		require.NoError(t, err)
+		outStr := string(out)
+
+		assertOrderedSubstrings(t, outStr, []string{
+			"# Copyright notice",
+			"# License terms",
+			"terraform {",
+			"resource ",
+		})
+	})
+
+	t.Run("file footer preserved after reordered blocks", func(t *testing.T) {
+		input := `resource "x" "x" { x = 1 }
+
+terraform { required_version = ">= 1.0" }
+
+# trailing footer note
+`
+		out, err := ReorderTopLevelBlocksByLineRange([]byte(input))
+		require.NoError(t, err)
+		outStr := string(out)
+
+		// Footer must appear after the last reordered block.
+		footerIdx := strings.Index(outStr, "# trailing footer note")
+		resourceIdx := strings.Index(outStr, "resource ")
+		require.NotEqual(t, -1, footerIdx, "footer comment must survive")
+		require.NotEqual(t, -1, resourceIdx)
+		assert.Greater(t, footerIdx, resourceIdx, "footer must appear after last block")
+	})
+
+	t.Run("unknown block types sort to bottom in source order", func(t *testing.T) {
+		input := `custom_block "x" { x = 1 }
+terraform { required_version = ">= 1.0" }
+another_custom "y" { y = 2 }
+resource "r" "x" { x = 1 }
+`
+		out, err := ReorderTopLevelBlocksByLineRange([]byte(input))
+		require.NoError(t, err)
+		assertOrderedSubstrings(t, string(out), []string{
+			"terraform {",
+			`resource `,
+			`custom_block `,
+			`another_custom `,
+		})
+	})
+
+	t.Run("empty file is returned unchanged", func(t *testing.T) {
+		input := []byte("")
+		out, err := ReorderTopLevelBlocksByLineRange(input)
+		require.NoError(t, err)
+		assert.Equal(t, input, out)
+	})
+
+	t.Run("comment directly above first block travels with that block", func(t *testing.T) {
+		// No blank line between the comment and the resource means the comment is the
+		// resource's adjacent leading comment, not file-level header content. After
+		// reorder, the comment must move with the resource.
+		input := `# directly attached comment
+resource "x" "x" { x = 1 }
+
+terraform { required_version = ">= 1.0" }
+`
+		out, err := ReorderTopLevelBlocksByLineRange([]byte(input))
+		require.NoError(t, err)
+		outStr := string(out)
+
+		// terraform is now first; the directly attached comment must precede resource
+		// (not appear at the top of the file as if it were a file header).
+		assertOrderedSubstrings(t, outStr, []string{
+			"terraform {",
+			"# directly attached comment",
+			"resource ",
+		})
+		// The directly attached comment must not appear before terraform.
+		tfIdx := strings.Index(outStr, "terraform {")
+		commentIdx := strings.Index(outStr, "# directly attached comment")
+		assert.Greater(t, commentIdx, tfIdx, "adjacent comment must travel with its block, not stay at file top")
+	})
+
+	t.Run("multi-blank-line gaps between blocks are normalised to single blank", func(t *testing.T) {
+		// Documents (does not enforce as new) behavior: the reorder emits exactly one
+		// blank line between reordered blocks. The old hclwrite-based reorder did the
+		// same through FormatAndCleanBlankLines. Extra blank lines between source blocks
+		// are collapsed; this is an intentional formatting normalization.
+		input := "terraform { required_version = \">= 1.0\" }\n\n\n\nresource \"x\" \"x\" { x = 1 }\n"
+		out, err := ReorderTopLevelBlocksByLineRange([]byte(input))
+		require.NoError(t, err)
+		outStr := string(out)
+
+		// Count blank-line runs between terraform and resource — there must be exactly one.
+		tfEnd := strings.Index(outStr, "}\n")
+		require.NotEqual(t, -1, tfEnd)
+		between := outStr[tfEnd+2:]
+		resIdx := strings.Index(between, "resource ")
+		require.NotEqual(t, -1, resIdx)
+		gap := between[:resIdx]
+		assert.Equal(t, "\n", gap, "expected exactly one blank line between blocks, got %q", gap)
+	})
+
+	t.Run("invalid HCL returns an error", func(t *testing.T) {
+		input := []byte("this is not valid hcl {{{\n")
+		_, err := ReorderTopLevelBlocksByLineRange(input)
+		assert.Error(t, err)
+	})
+
+	t.Run("stable order within same block type", func(t *testing.T) {
+		input := `variable "b" { default = "b" }
+variable "a" { default = "a" }
+terraform { required_version = ">= 1.0" }
+`
+		out, err := ReorderTopLevelBlocksByLineRange([]byte(input))
+		require.NoError(t, err)
+
+		// terraform must come first; variables preserve their source order (b then a).
+		assertOrderedSubstrings(t, string(out), []string{
+			"terraform {",
+			`variable "b"`,
+			`variable "a"`,
+		})
+	})
+}

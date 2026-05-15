@@ -2,6 +2,7 @@ package rules
 
 import (
 	"os"
+	"sort"
 	"strings"
 
 	"github.com/hashicorp/hcl/v2"
@@ -130,8 +131,25 @@ func (r *ForEachCountFirstRule) Fix(ctx *sdk.Context, file *hcl.File) ([]byte, e
 	return FormatAndCleanBlankLines(content), nil
 }
 
-// LifecycleAtEndRule ensures lifecycle block is at the end of resource blocks.
+// LifecycleAtEndRule ensures lifecycle block is at the end of resource, data,
+// module, and check blocks.
 type LifecycleAtEndRule struct{}
+
+// lifecycleHostBlockTypes lists the block types that may contain a `lifecycle`
+// nested block and that this rule polices. `check` is included for TF 1.5+
+// assertion blocks; while they rarely embed a lifecycle today, including the
+// type keeps the rule consistent and future-proof.
+var lifecycleHostBlockTypes = map[string]struct{}{
+	"resource": {},
+	"data":     {},
+	"module":   {},
+	"check":    {},
+}
+
+func isLifecycleHostBlock(blockType string) bool {
+	_, ok := lifecycleHostBlockTypes[blockType]
+	return ok
+}
 
 // Name returns the rule identifier.
 func (r *LifecycleAtEndRule) Name() string {
@@ -140,10 +158,10 @@ func (r *LifecycleAtEndRule) Name() string {
 
 // Description returns a human-readable description of the rule.
 func (r *LifecycleAtEndRule) Description() string {
-	return "Ensures lifecycle block is at the end of resource blocks"
+	return "Ensures lifecycle block is at the end of resource, data, module, and check blocks"
 }
 
-// Check examines resource blocks for lifecycle block positioning.
+// Check examines resource, data, module, and check blocks for lifecycle block positioning.
 func (r *LifecycleAtEndRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Finding, error) {
 	var findings []sdk.Finding
 
@@ -153,7 +171,7 @@ func (r *LifecycleAtEndRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Find
 	}
 
 	for _, block := range hclFile.Blocks {
-		if block.Type != "resource" {
+		if !isLifecycleHostBlock(block.Type) {
 			continue
 		}
 
@@ -182,7 +200,7 @@ func (r *LifecycleAtEndRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Find
 		if lifecycleBlock != nil && lifecycleBlock.Range().End.Line < lastLine {
 			findings = append(findings, sdk.Finding{
 				Rule:     r.Name(),
-				Message:  "lifecycle block should be at the end of the resource block",
+				Message:  "lifecycle block should be at the end of the " + block.Type + " block",
 				File:     ctx.File,
 				Location: sdk.LocationFromRange(lifecycleBlock.Range()),
 				Severity: sdk.SeverityWarning,
@@ -193,17 +211,18 @@ func (r *LifecycleAtEndRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Find
 	return findings, nil
 }
 
-// fixLifecyclePositionContent moves lifecycle block to the end of the resource.
-// Works entirely in memory - takes content as input.
-func (r *LifecycleAtEndRule) fixLifecyclePositionContent(content []byte, filePath string, blockLabels []string) ([]byte, error) {
+// fixLifecyclePositionContent moves the lifecycle block to the end of the
+// matching host block (resource, data, module, or check). Works entirely in
+// memory - takes content as input.
+func (r *LifecycleAtEndRule) fixLifecyclePositionContent(content []byte, filePath, blockType string, blockLabels []string) ([]byte, error) {
 	writeFile, diags := hclwrite.ParseConfig(content, filePath, hcl.InitialPos)
 	if diags.HasErrors() {
 		return nil, diags
 	}
 
-	// Find the resource block
+	// Find the host block
 	for _, block := range writeFile.Body().Blocks() {
-		if block.Type() != "resource" {
+		if block.Type() != blockType {
 			continue
 		}
 		if !MatchBlockLabels(block.Labels(), blockLabels) {
@@ -238,7 +257,7 @@ func (r *LifecycleAtEndRule) fixLifecyclePositionContent(content []byte, filePat
 	return FormatAndCleanBlankLines(writeFile.Bytes()), nil
 }
 
-// Fix moves lifecycle blocks to the end of resource blocks.
+// Fix moves lifecycle blocks to the end of resource, data, module, and check blocks.
 // Works entirely in memory - does NOT write to disk.
 func (r *LifecycleAtEndRule) Fix(ctx *sdk.Context, file *hcl.File) ([]byte, error) {
 	if ctx == nil || file == nil {
@@ -255,10 +274,14 @@ func (r *LifecycleAtEndRule) Fix(ctx *sdk.Context, file *hcl.File) ([]byte, erro
 		return nil, nil
 	}
 
-	// Collect block labels before modifying content
-	var blocksToFix [][]string
+	// Collect (block type, labels) pairs before modifying content
+	type blockRef struct {
+		blockType string
+		labels    []string
+	}
+	var blocksToFix []blockRef
 	for _, block := range hclFile.Blocks {
-		if block.Type != "resource" {
+		if !isLifecycleHostBlock(block.Type) {
 			continue
 		}
 
@@ -282,13 +305,13 @@ func (r *LifecycleAtEndRule) Fix(ctx *sdk.Context, file *hcl.File) ([]byte, erro
 		}
 
 		if lifecycleBlock != nil && lifecycleBlock.Range().End.Line < lastLine {
-			blocksToFix = append(blocksToFix, block.Labels)
+			blocksToFix = append(blocksToFix, blockRef{blockType: block.Type, labels: block.Labels})
 		}
 	}
 
 	// Process each block (re-parse after each modification)
-	for _, labels := range blocksToFix {
-		content, err = r.fixLifecyclePositionContent(content, ctx.File, labels)
+	for _, ref := range blocksToFix {
+		content, err = r.fixLifecyclePositionContent(content, ctx.File, ref.blockType, ref.labels)
 		if err != nil {
 			return nil, err
 		}
@@ -308,7 +331,7 @@ func (r *TagsAtEndRule) Name() string {
 
 // Description returns a human-readable description of the rule.
 func (r *TagsAtEndRule) Description() string {
-	return "Ensures tags/labels are near the end of resource blocks (before lifecycle)"
+	return "Ensures tags/labels appear just before lifecycle in resource/module blocks, after all other attributes and nested blocks"
 }
 
 // Check examines resource blocks for tags/labels positioning.
@@ -343,6 +366,11 @@ func (r *TagsAtEndRule) checkTagsBlock(ctx *sdk.Context, block *hclsyntax.Block)
 	lifecycleBlock := FindNestedBlock(body.Blocks, "lifecycle")
 	tagsLine := tagsAttr.Range().Start.Line
 
+	// Single-finding policy: the "before lifecycle" and "near the end" conditions both
+	// describe the same logical violation (tags is in the wrong spot). Emit the
+	// "before lifecycle" message when applicable since it is more specific; otherwise
+	// fall back to the more general "near the end" message. This avoids two findings
+	// pointing at the same line for a single misplacement.
 	if lifecycleBlock != nil && tagsLine > lifecycleBlock.Range().Start.Line {
 		findings = append(findings, sdk.Finding{
 			Rule:     r.Name(),
@@ -351,9 +379,11 @@ func (r *TagsAtEndRule) checkTagsBlock(ctx *sdk.Context, block *hclsyntax.Block)
 			Location: sdk.LocationFromRange(tagsAttr.Range()),
 			Severity: sdk.SeverityWarning,
 		})
-	}
-
-	if countAttrsAfterTags(body.Attributes, tagsLine) > 2 {
+	} else if countItemsAfterTags(body, tagsLine) > 0 {
+		// Flag any item (attr or non-lifecycle block) after tags. The earlier behavior
+		// (> 2 attrs) tolerated trailing attrs and ignored trailing nested blocks entirely,
+		// so a layout like `tags = {}; ingress {}; egress {}; lifecycle {}` went unflagged
+		// even though tags was nowhere near the end of the block.
 		findings = append(findings, sdk.Finding{
 			Rule:     r.Name(),
 			Message:  "tags should be near the end of the block",
@@ -366,69 +396,194 @@ func (r *TagsAtEndRule) checkTagsBlock(ctx *sdk.Context, block *hclsyntax.Block)
 	return findings
 }
 
+// findTagsAttribute returns the tags-family attribute the rule operates on, with a
+// deterministic priority. `tags` wins over `labels`, which wins over `tags_all`.
+// `tags_all` is provider-managed (derived from inherited tags) and is included only
+// as a fallback for resources that use it directly; otherwise the rule prefers the
+// author-controlled `tags`/`labels`.
 func findTagsAttribute(attrs hclsyntax.Attributes) *hclsyntax.Attribute {
-	for name, attr := range attrs {
-		if name == "tags" || name == "labels" || name == "tags_all" {
+	for _, name := range []string{"tags", "labels", "tags_all"} {
+		if attr, ok := attrs[name]; ok {
 			return attr
 		}
 	}
 	return nil
 }
 
-func countAttrsAfterTags(attrs hclsyntax.Attributes, tagsLine int) int {
+// countItemsAfterTags counts attributes and nested blocks that appear after the tags
+// attribute, excluding the items the rule deliberately treats as trailing:
+//   - `tags_all` (the derived attribute paired with `tags`)
+//   - `depends_on` (a meta-argument that conventionally goes last)
+//   - `lifecycle` (the trailing nested block)
+//
+// The new threshold of > 0 (down from > 2) means a single trailing item flags the
+// violation. The exclusions ensure the rule does not fire on canonical layouts where
+// tags is followed only by depends_on / lifecycle.
+func countItemsAfterTags(body *hclsyntax.Body, tagsLine int) int {
 	count := 0
-	for name, attr := range attrs {
-		if attr.Range().Start.Line > tagsLine && name != "tags_all" {
+	for name, attr := range body.Attributes {
+		if attr.Range().Start.Line > tagsLine && name != "tags_all" && name != "depends_on" {
+			count++
+		}
+	}
+	for _, b := range body.Blocks {
+		if b.Range().Start.Line > tagsLine && b.Type != "lifecycle" {
 			count++
 		}
 	}
 	return count
 }
 
-// Fix moves tags/labels to the end of blocks (before lifecycle if present).
-// Uses line-based reordering to preserve leading comments.
-func (r *TagsAtEndRule) Fix(ctx *sdk.Context, file *hcl.File) ([]byte, error) {
+// Fix moves tags/labels (and tags_all) to land just before any lifecycle block,
+// or at the end of the block body if no lifecycle is present. Other attributes and
+// nested blocks stay in their source positions; only the tags region (including its
+// leading comment) moves. Operates bottom-up so line ranges remain valid across rewrites.
+func (r *TagsAtEndRule) Fix(ctx *sdk.Context, _ *hcl.File) ([]byte, error) {
 	content, err := os.ReadFile(ctx.File)
 	if err != nil {
 		return nil, err
 	}
 
-	hclFile, ok := file.Body.(*hclsyntax.Body)
+	syntaxFile, diags := hclsyntax.ParseConfig(content, ctx.File, hcl.InitialPos)
+	if diags.HasErrors() {
+		return nil, diags
+	}
+	hclFile, ok := syntaxFile.Body.(*hclsyntax.Body)
 	if !ok {
 		return nil, nil
 	}
 
-	// Process each block that has tags
+	var targets []*hclsyntax.Block
 	for _, block := range hclFile.Blocks {
 		if block.Type != "resource" && block.Type != "module" {
 			continue
 		}
-
-		// Check if block has tags
-		hasTags := FindAttribute(block.Body.Attributes, "tags") != nil ||
-			FindAttribute(block.Body.Attributes, "labels") != nil ||
-			FindAttribute(block.Body.Attributes, "tags_all") != nil
-		if !hasTags {
+		if findTagsAttribute(block.Body.Attributes) == nil {
 			continue
 		}
+		targets = append(targets, block)
+	}
+	sort.Slice(targets, func(i, j int) bool {
+		return targets[i].Range().Start.Line > targets[j].Range().Start.Line
+	})
 
-		orderedNames := GetOrderedAttrNames(block.Body)
-		// tags/labels should be at the end (before depends_on)
-		lastAttrs := []string{"tags", "labels", "tags_all", "depends_on"}
-
-		// Use line-based reordering to preserve leading comments
-		content = ReorderBlockAttrsPreservingComments(
-			content,
-			block.Body,
-			block.Range().Start.Line,
-			block.Range().End.Line,
-			orderedNames,
-			nil,
-			lastAttrs,
-		)
+	for _, block := range targets {
+		content = moveTagsBeforeLifecycle(content, block)
 	}
 
 	return FormatAndCleanBlankLines(content), nil
+}
+
+// moveAttrBeforeLifecycle relocates the given attribute (with its leading comment)
+// inside `block` to immediately before any lifecycle nested block, or to the end of
+// the block body when no lifecycle is present. All other body lines remain at their
+// source positions. The move is a no-op when the attribute is already adjacent to
+// the insertion point. Returns content unchanged when attr is nil.
+//
+// Shared by both `style.tags-at-end` (via moveTagsBeforeLifecycle wrapper) and
+// `style.depends-on-order` (via moveDependsOnBeforeLifecycle wrapper).
+func moveAttrBeforeLifecycle(content []byte, block *hclsyntax.Block, attr *hclsyntax.Attribute) []byte {
+	if attr == nil {
+		return content
+	}
+	attrStart := attr.Range().Start.Line
+	attrEnd := attr.Range().End.Line
+
+	var insertBefore int
+	if lifecycle := FindNestedBlock(block.Body.Blocks, "lifecycle"); lifecycle != nil {
+		insertBefore = lifecycle.Range().Start.Line
+	} else {
+		insertBefore = block.Range().End.Line
+	}
+
+	lines := SplitLines(content)
+
+	// No-op when attr is already effectively adjacent to the insertion point: nothing
+	// but blank lines sits between attrEnd+1 and insertBefore-1. A strict `attrEnd+1
+	// == insertBefore` check would miss the common case of one blank line separating
+	// the attribute from `lifecycle`, causing Fix to mutate files that Check considers
+	// clean (the splice runs, FormatAndCleanBlankLines normalises, idempotence holds
+	// but a spurious diff is produced on the first pass).
+	alreadyAdjacent := true
+	for line := attrEnd + 1; line < insertBefore; line++ {
+		if line-1 < 0 || line-1 >= len(lines) {
+			continue
+		}
+		if strings.TrimSpace(lines[line-1]) != "" {
+			alreadyAdjacent = false
+			break
+		}
+	}
+	if alreadyAdjacent {
+		return content
+	}
+
+	// Compute prior boundary for the leading-comment scan: the largest body-item end-line
+	// less than attrStart, falling back to the block's opening line.
+	priorEnd := block.Range().Start.Line
+	for _, a := range block.Body.Attributes {
+		if a.Range().End.Line < attrStart && a.Range().End.Line > priorEnd {
+			priorEnd = a.Range().End.Line
+		}
+	}
+	for _, b := range block.Body.Blocks {
+		if b.Range().End.Line < attrStart && b.Range().End.Line > priorEnd {
+			priorEnd = b.Range().End.Line
+		}
+	}
+
+	// Capture the leading-comment line numbers (not just strings) so we can both emit
+	// the moved region and skip those exact lines from their original position.
+	var commentLineNums []int
+	for lineNum := attrStart - 1; lineNum >= priorEnd+1; lineNum-- {
+		if lineNum-1 < 0 || lineNum-1 >= len(lines) {
+			continue
+		}
+		trimmed := strings.TrimSpace(lines[lineNum-1])
+		if trimmed == "" {
+			continue
+		}
+		if strings.HasPrefix(trimmed, "#") || strings.HasPrefix(trimmed, "//") {
+			commentLineNums = append([]int{lineNum}, commentLineNums...)
+			continue
+		}
+		break
+	}
+
+	moved := make([]string, 0, len(commentLineNums)+(attrEnd-attrStart+1))
+	for _, n := range commentLineNums {
+		moved = append(moved, lines[n-1])
+	}
+	for line := attrStart; line <= attrEnd && line-1 < len(lines); line++ {
+		moved = append(moved, lines[line-1])
+	}
+
+	skipped := make(map[int]bool, len(commentLineNums)+(attrEnd-attrStart+1))
+	for _, n := range commentLineNums {
+		skipped[n] = true
+	}
+	for line := attrStart; line <= attrEnd; line++ {
+		skipped[line] = true
+	}
+
+	result := make([]string, 0, len(lines)+len(moved))
+	for i, line := range lines {
+		lineNum := i + 1
+		if lineNum == insertBefore {
+			result = append(result, moved...)
+		}
+		if !skipped[lineNum] {
+			result = append(result, line)
+		}
+	}
+
+	return []byte(strings.Join(result, "\n") + "\n")
+}
+
+// moveTagsBeforeLifecycle is a thin wrapper around moveAttrBeforeLifecycle targeting
+// the tags-family attribute selected by findTagsAttribute (tags > labels > tags_all).
+func moveTagsBeforeLifecycle(content []byte, block *hclsyntax.Block) []byte {
+	return moveAttrBeforeLifecycle(content, block, findTagsAttribute(block.Body.Attributes))
 }
 
 // DependsOnOrderRule ensures depends_on is at the end of blocks.
@@ -441,7 +596,7 @@ func (r *DependsOnOrderRule) Name() string {
 
 // Description returns a human-readable description of the rule.
 func (r *DependsOnOrderRule) Description() string {
-	return "Ensures depends_on is at the end of resource/module blocks"
+	return "Ensures depends_on appears just before lifecycle in resource/module blocks, after all other attributes and non-lifecycle nested blocks"
 }
 
 // Check examines blocks for depends_on attribute positioning.
@@ -481,6 +636,9 @@ func (r *DependsOnOrderRule) checkDependsOnBlock(ctx *sdk.Context, block *hclsyn
 	lifecycleBlock := FindNestedBlock(body.Blocks, "lifecycle")
 	dependsOnLine := dependsOnAttr.Range().Start.Line
 
+	// Single-finding policy: the "before lifecycle" and "near the end" conditions both
+	// describe the same logical violation. Prefer the more specific "before lifecycle"
+	// message; otherwise fall back to "near the end".
 	if lifecycleBlock != nil && dependsOnLine > lifecycleBlock.Range().Start.Line {
 		findings = append(findings, sdk.Finding{
 			Rule:     r.Name(),
@@ -489,73 +647,86 @@ func (r *DependsOnOrderRule) checkDependsOnBlock(ctx *sdk.Context, block *hclsyn
 			Location: sdk.LocationFromRange(dependsOnAttr.Range()),
 			Severity: sdk.SeverityWarning,
 		})
-	}
-
-	if r.hasAttributesAfterDependsOn(body.Attributes, dependsOnLine) {
+	} else if countItemsAfterDependsOn(body, dependsOnLine) > 0 {
+		// Warning severity: a misplacement that --fix will actively rewrite deserves at
+		// least Warning. Info would hide the finding under default `severity_threshold:
+		// warning` configs, leaving users surprised when `--fix` mutates their file.
 		findings = append(findings, sdk.Finding{
 			Rule:     r.Name(),
-			Message:  "depends_on should be near the end of the block",
+			Message:  "depends_on should come after non-lifecycle nested blocks and before lifecycle (or at the end of the block)",
 			File:     ctx.File,
 			Location: sdk.LocationFromRange(dependsOnAttr.Range()),
-			Severity: sdk.SeverityInfo,
+			Severity: sdk.SeverityWarning,
 		})
 	}
 
 	return findings
 }
 
-func (r *DependsOnOrderRule) hasAttributesAfterDependsOn(attrs hclsyntax.Attributes, dependsOnLine int) bool {
-	endAttrs := map[string]bool{"depends_on": true, "tags": true, "tags_all": true, "labels": true}
-	for name, attr := range attrs {
-		if !endAttrs[name] && attr.Range().Start.Line > dependsOnLine {
-			return true
+// countItemsAfterDependsOn counts attributes and nested blocks that appear after the
+// depends_on attribute, excluding the items conventionally placed at the very tail:
+//   - `tags`, `tags_all`, `labels` (the tags family lives between depends_on and lifecycle)
+//   - `lifecycle` (the trailing nested block)
+//
+// `dependsOnLine` is the depends_on attribute's start line; the `>` comparison ensures
+// depends_on itself is never counted (its own start line is never strictly greater).
+// A single trailing item flags the violation.
+func countItemsAfterDependsOn(body *hclsyntax.Body, dependsOnLine int) int {
+	endAttrs := map[string]bool{"tags": true, "tags_all": true, "labels": true}
+	count := 0
+	for name, attr := range body.Attributes {
+		if attr.Range().Start.Line > dependsOnLine && !endAttrs[name] {
+			count++
 		}
 	}
-	return false
+	for _, b := range body.Blocks {
+		if b.Range().Start.Line > dependsOnLine && b.Type != "lifecycle" {
+			count++
+		}
+	}
+	return count
 }
 
-// Fix moves depends_on to be near the end of blocks.
-// Uses line-based reordering to preserve leading comments.
-func (r *DependsOnOrderRule) Fix(ctx *sdk.Context, file *hcl.File) ([]byte, error) {
-	if ctx == nil || file == nil {
+// Fix moves depends_on to land just before any lifecycle block, or at the end of
+// the block body when no lifecycle is present. Other attributes and nested blocks
+// (e.g. `ordered_placement_strategy` in `aws_ecs_service`) stay at their source
+// positions; only the depends_on region (including its leading comment) moves.
+func (r *DependsOnOrderRule) Fix(ctx *sdk.Context, _ *hcl.File) ([]byte, error) {
+	if ctx == nil {
 		return nil, nil
 	}
-
 	content, err := os.ReadFile(ctx.File)
 	if err != nil {
 		return nil, err
 	}
 
-	hclFile, ok := file.Body.(*hclsyntax.Body)
+	syntaxFile, diags := hclsyntax.ParseConfig(content, ctx.File, hcl.InitialPos)
+	if diags.HasErrors() {
+		return nil, diags
+	}
+	hclFile, ok := syntaxFile.Body.(*hclsyntax.Body)
 	if !ok {
 		return nil, nil
 	}
 
-	// Process each block that has depends_on
+	var targets []*hclsyntax.Block
 	for _, block := range hclFile.Blocks {
 		if !IsDependsOnRelevantBlock(block.Type) {
 			continue
 		}
-
-		// Check if block has depends_on
 		if FindAttribute(block.Body.Attributes, "depends_on") == nil {
 			continue
 		}
+		targets = append(targets, block)
+	}
+	// Bottom-up so each rewrite cannot shift the line ranges of blocks above it.
+	sort.Slice(targets, func(i, j int) bool {
+		return targets[i].Range().Start.Line > targets[j].Range().Start.Line
+	})
 
-		orderedNames := GetOrderedAttrNames(block.Body)
-		// depends_on should be at the very end
-		lastAttrs := []string{"tags", "labels", "tags_all", "depends_on"}
-
-		// Use line-based reordering to preserve leading comments
-		content = ReorderBlockAttrsPreservingComments(
-			content,
-			block.Body,
-			block.Range().Start.Line,
-			block.Range().End.Line,
-			orderedNames,
-			nil,
-			lastAttrs,
-		)
+	for _, block := range targets {
+		dependsOn := FindAttribute(block.Body.Attributes, "depends_on")
+		content = moveAttrBeforeLifecycle(content, block, dependsOn)
 	}
 
 	return FormatAndCleanBlankLines(content), nil
@@ -834,46 +1005,47 @@ func (r *VariableOrderRule) checkAttrPair(ctx *sdk.Context, block *hclsyntax.Blo
 	return nil
 }
 
-// Fix reorders variable attributes to match the standard order.
-// Uses line-based reordering to preserve leading comments.
+// Fix reorders variable attributes and nested blocks to match the canonical order:
+// description, type, default, sensitive, nullable, validation blocks, then everything else.
+// Heredoc bodies live within an attribute's line range and are carried along intact.
 func (r *VariableOrderRule) Fix(ctx *sdk.Context, _ *hcl.File) ([]byte, error) {
 	content, err := os.ReadFile(ctx.File)
 	if err != nil {
 		return nil, err
 	}
 
-	// Parse with hclsyntax to get block positions
 	syntaxFile, diags := hclsyntax.ParseConfig(content, ctx.File, hcl.InitialPos)
 	if diags.HasErrors() {
 		return nil, diags
 	}
-
 	hclFile, ok := syntaxFile.Body.(*hclsyntax.Body)
 	if !ok {
 		return nil, nil
 	}
 
-	// Expected order for variable attributes
 	attrOrder := []string{"description", "type", "default", "sensitive", "nullable"}
+	nestedBlockOrder := []string{"validation"}
 
-	// Process each variable block
+	// Process variable blocks bottom-up: rewriting block N only mutates lines at or below
+	// blockStartLine of N, so blocks above N keep accurate line ranges from the single parse.
+	var variables []*hclsyntax.Block
 	for _, block := range hclFile.Blocks {
-		if block.Type != "variable" {
-			continue
+		if block.Type == "variable" {
+			variables = append(variables, block)
 		}
+	}
+	sort.Slice(variables, func(i, j int) bool {
+		return variables[i].Range().Start.Line > variables[j].Range().Start.Line
+	})
 
-		orderedNames := GetOrderedAttrNames(block.Body)
-
-		// Use line-based reordering to preserve leading comments
-		// For variables, the standard attrs come first in order, everything else after
-		content = ReorderBlockAttrsPreservingComments(
+	for _, block := range variables {
+		content = ReorderBlockBodyPreservingAll(
 			content,
 			block.Body,
 			block.Range().Start.Line,
 			block.Range().End.Line,
-			orderedNames,
 			attrOrder,
-			nil,
+			nestedBlockOrder,
 		)
 	}
 
@@ -987,46 +1159,51 @@ func (r *OutputOrderRule) checkOutputAttrPair(ctx *sdk.Context, block *hclsyntax
 	return nil
 }
 
-// Fix reorders output attributes to match the standard order.
-// Uses line-based reordering to preserve leading comments.
+// Fix reorders output attributes and preserves nested precondition blocks (TF 1.2+).
+//
+// Layout buckets, in order:
+//  1. Known attrs (description, value, sensitive, depends_on) in that order.
+//  2. precondition blocks (in source order if multiple).
+//  3. Any remaining attributes in source order.
+//  4. Any remaining nested blocks in source order.
 func (r *OutputOrderRule) Fix(ctx *sdk.Context, _ *hcl.File) ([]byte, error) {
 	content, err := os.ReadFile(ctx.File)
 	if err != nil {
 		return nil, err
 	}
 
-	// Parse with hclsyntax to get block positions
 	syntaxFile, diags := hclsyntax.ParseConfig(content, ctx.File, hcl.InitialPos)
 	if diags.HasErrors() {
 		return nil, diags
 	}
-
 	hclFile, ok := syntaxFile.Body.(*hclsyntax.Body)
 	if !ok {
 		return nil, nil
 	}
 
-	// Expected order for output attributes
 	attrOrder := []string{"description", "value", "sensitive", "depends_on"}
+	nestedBlockOrder := []string{"precondition"}
 
-	// Process each output block
+	// Process output blocks bottom-up: rewriting block N only mutates lines at or below
+	// blockStartLine of N, so blocks above N keep accurate line ranges from the single parse.
+	var outputs []*hclsyntax.Block
 	for _, block := range hclFile.Blocks {
-		if block.Type != "output" {
-			continue
+		if block.Type == "output" {
+			outputs = append(outputs, block)
 		}
+	}
+	sort.Slice(outputs, func(i, j int) bool {
+		return outputs[i].Range().Start.Line > outputs[j].Range().Start.Line
+	})
 
-		orderedNames := GetOrderedAttrNames(block.Body)
-
-		// Use line-based reordering to preserve leading comments
-		// For outputs, the standard attrs come first in order, everything else after
-		content = ReorderBlockAttrsPreservingComments(
+	for _, block := range outputs {
+		content = ReorderBlockBodyPreservingAll(
 			content,
 			block.Body,
 			block.Range().Start.Line,
 			block.Range().End.Line,
-			orderedNames,
 			attrOrder,
-			nil,
+			nestedBlockOrder,
 		)
 	}
 
@@ -1082,27 +1259,19 @@ func (r *TerraformBlockFirstRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk
 	return findings, nil
 }
 
-// fixFile moves the terraform block to the beginning of the file.
-func (r *TerraformBlockFirstRule) fixFile(filePath string) ([]byte, error) {
-	content, err := os.ReadFile(filePath)
-	if err != nil {
-		return nil, err
-	}
-
-	writeFile, diags := hclwrite.ParseConfig(content, filePath, hcl.InitialPos)
-	if diags.HasErrors() {
-		return nil, diags
-	}
-
-	return ReorderTopLevelBlocks(writeFile), nil
-}
-
-// Fix moves terraform block to the first position.
+// Fix moves the terraform block to the first position via line-range reorder.
+// Attribute order and comments inside every untouched block are byte-for-byte preserved.
+// Shares ReorderTopLevelBlocksByLineRange with ProviderBlockOrderRule.Fix intentionally —
+// both rules consume the same canonical priority order.
 func (r *TerraformBlockFirstRule) Fix(ctx *sdk.Context, _ *hcl.File) ([]byte, error) {
 	if ctx == nil {
 		return nil, nil
 	}
-	return r.fixFile(ctx.File)
+	content, err := os.ReadFile(ctx.File)
+	if err != nil {
+		return nil, err
+	}
+	return ReorderTopLevelBlocksByLineRange(content)
 }
 
 // ProviderBlockOrderRule ensures provider blocks come after terraform block.
@@ -1172,27 +1341,18 @@ func (r *ProviderBlockOrderRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.
 	return findings, nil
 }
 
-// fixFile reorders provider blocks to come after terraform and before resources.
-func (r *ProviderBlockOrderRule) fixFile(filePath string) ([]byte, error) {
-	content, err := os.ReadFile(filePath)
-	if err != nil {
-		return nil, err
-	}
-
-	writeFile, diags := hclwrite.ParseConfig(content, filePath, hcl.InitialPos)
-	if diags.HasErrors() {
-		return nil, diags
-	}
-
-	return ReorderTopLevelBlocks(writeFile), nil
-}
-
-// Fix reorders provider blocks to proper position.
+// Fix reorders provider blocks to the canonical position via line-range reorder.
+// Both rules share the same line-based helper because they consume the same canonical
+// priority order (terraform, provider, variable, locals, data, resource, module, output).
 func (r *ProviderBlockOrderRule) Fix(ctx *sdk.Context, _ *hcl.File) ([]byte, error) {
 	if ctx == nil {
 		return nil, nil
 	}
-	return r.fixFile(ctx.File)
+	content, err := os.ReadFile(ctx.File)
+	if err != nil {
+		return nil, err
+	}
+	return ReorderTopLevelBlocksByLineRange(content)
 }
 
 // AttributeGroupSpacingRule ensures blank lines between attribute groups in blocks.

@@ -30,9 +30,9 @@ func (r *VariablesInFileRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Fin
 		return findings, nil
 	}
 
-	// Skip if this is variables.tf
+	// Skip if this is variables.tf or its singular alias
 	basename := filepath.Base(ctx.File)
-	if basename == "variables.tf" {
+	if basename == "variables.tf" || basename == "variable.tf" {
 		return findings, nil
 	}
 
@@ -78,9 +78,9 @@ func (r *OutputsInFileRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Findi
 		return findings, nil
 	}
 
-	// Skip if this is outputs.tf
+	// Skip if this is outputs.tf or its singular alias
 	basename := filepath.Base(ctx.File)
-	if basename == "outputs.tf" {
+	if basename == "outputs.tf" || basename == "output.tf" {
 		return findings, nil
 	}
 
@@ -126,9 +126,9 @@ func (r *ProvidersInFileRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Fin
 		return findings, nil
 	}
 
-	// Skip if this is providers.tf or versions.tf
+	// Skip if this is providers.tf, its singular alias, or versions.tf
 	basename := filepath.Base(ctx.File)
-	if basename == "providers.tf" || basename == "versions.tf" {
+	if basename == "providers.tf" || basename == "provider.tf" || basename == "versions.tf" {
 		return findings, nil
 	}
 

@@ -287,6 +287,15 @@ func TestTerraformFilesStructureRule(t *testing.T) {
 			wantFindings: 0,
 		},
 		{
+			name:     "variables in singular variable.tf is fine",
+			fileName: "variable.tf",
+			content: `variable "region" {
+  type    = string
+  default = "us-east-1"
+}`,
+			wantFindings: 0,
+		},
+		{
 			name:     "outputs in outputs.tf is fine",
 			fileName: "outputs.tf",
 			content: `output "vpc_id" {
@@ -295,8 +304,24 @@ func TestTerraformFilesStructureRule(t *testing.T) {
 			wantFindings: 0,
 		},
 		{
+			name:     "outputs in singular output.tf is fine",
+			fileName: "output.tf",
+			content: `output "vpc_id" {
+  value = aws_vpc.main.id
+}`,
+			wantFindings: 0,
+		},
+		{
 			name:     "providers in providers.tf is fine",
 			fileName: "providers.tf",
+			content: `provider "aws" {
+  region = "us-east-1"
+}`,
+			wantFindings: 0,
+		},
+		{
+			name:     "providers in singular provider.tf is fine",
+			fileName: "provider.tf",
 			content: `provider "aws" {
   region = "us-east-1"
 }`,
@@ -328,6 +353,15 @@ func TestTerraformFilesStructureRule(t *testing.T) {
 			wantFindings: 1,
 		},
 		{
+			name:     "variable in main.tf when singular variable.tf exists",
+			fileName: "main.tf",
+			content: `variable "region" {
+  type = string
+}`,
+			setupFiles:   []string{"variable.tf"},
+			wantFindings: 1,
+		},
+		{
 			name:     "output in main.tf when outputs.tf exists",
 			fileName: "main.tf",
 			content: `output "vpc_id" {
@@ -337,12 +371,52 @@ func TestTerraformFilesStructureRule(t *testing.T) {
 			wantFindings: 1,
 		},
 		{
+			name:     "output in main.tf when singular output.tf exists",
+			fileName: "main.tf",
+			content: `output "vpc_id" {
+  value = aws_vpc.main.id
+}`,
+			setupFiles:   []string{"output.tf"},
+			wantFindings: 1,
+		},
+		{
 			name:     "provider in main.tf when providers.tf exists",
 			fileName: "main.tf",
 			content: `provider "aws" {
   region = "us-east-1"
 }`,
 			setupFiles:   []string{"providers.tf"},
+			wantFindings: 1,
+		},
+		{
+			name:     "provider in main.tf when singular provider.tf exists",
+			fileName: "main.tf",
+			content: `provider "aws" {
+  region = "us-east-1"
+}`,
+			setupFiles:   []string{"provider.tf"},
+			wantFindings: 1,
+		},
+		{
+			name:     "variable in main.tf when both variables.tf and variable.tf exist (no double-finding)",
+			fileName: "main.tf",
+			content: `variable "region" {
+  type = string
+}`,
+			setupFiles:   []string{"variables.tf", "variable.tf"},
+			wantFindings: 1,
+		},
+		{
+			name:     "terraform block in singular version.tf is treated as ordinary file (not aliased to versions.tf)",
+			fileName: "version.tf",
+			content: `terraform {
+  required_version = ">= 1.0"
+}`,
+			setupFiles: []string{"versions.tf"},
+			// version.tf is not an alias of versions.tf; rule treats it as a non-standard
+			// file. With versions.tf present, the terraform block produces a single finding
+			// pointing at versions.tf (providers.tf path is gated off by the absent file +
+			// !shouldSuggestStandardFile("terraform")).
 			wantFindings: 1,
 		},
 		{
@@ -405,6 +479,64 @@ func TestTerraformFilesStructureRule(t *testing.T) {
 			assert.Len(t, findings, tt.wantFindings)
 		})
 	}
+}
+
+func TestIsStandardFileOrAlias(t *testing.T) {
+	tests := []struct {
+		basename string
+		expected bool
+	}{
+		// Canonical plural forms
+		{"variables.tf", true},
+		{"outputs.tf", true},
+		{"providers.tf", true},
+		{"versions.tf", true},
+		{"locals.tf", true},
+		{"data.tf", true},
+		// Accepted singular aliases
+		{"variable.tf", true},
+		{"output.tf", true},
+		{"provider.tf", true},
+		// Non-standard files
+		{"main.tf", false},
+		{"network.tf", false},
+		{"random.tf", false},
+		{"version.tf", false}, // intentionally not aliased (versions.tf is canonical)
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.basename, func(t *testing.T) {
+			assert.Equal(t, tt.expected, isStandardFileOrAlias(tt.basename))
+		})
+	}
+}
+
+func TestTerraformFilesStructureRule_StandardFileOrAliasExists(t *testing.T) {
+	rule := &TerraformFilesStructureRule{}
+
+	t.Run("singular alias satisfies plural existence", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "variable.tf"), []byte("# alias"), 0o644))
+		require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "output.tf"), []byte("# alias"), 0o644))
+		require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "provider.tf"), []byte("# alias"), 0o644))
+
+		assert.True(t, rule.standardFileOrAliasExists(tmpDir, "variables.tf"))
+		assert.True(t, rule.standardFileOrAliasExists(tmpDir, "outputs.tf"))
+		assert.True(t, rule.standardFileOrAliasExists(tmpDir, "providers.tf"))
+	})
+
+	t.Run("absent file returns false", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		assert.False(t, rule.standardFileOrAliasExists(tmpDir, "outputs.tf"))
+	})
+
+	t.Run("canonical without alias entry still works", func(t *testing.T) {
+		// versions.tf has no aliases registered; verify nil-slice range is safe.
+		tmpDir := t.TempDir()
+		assert.False(t, rule.standardFileOrAliasExists(tmpDir, "versions.tf"))
+		require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "versions.tf"), []byte("# canonical"), 0o644))
+		assert.True(t, rule.standardFileOrAliasExists(tmpDir, "versions.tf"))
+	})
 }
 
 func TestTerraformFilesStructureRule_FileExists(t *testing.T) {

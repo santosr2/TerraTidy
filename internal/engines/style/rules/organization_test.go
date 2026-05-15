@@ -38,6 +38,14 @@ func TestVariablesInFileRule(t *testing.T) {
 			wantFindings: 0,
 		},
 		{
+			name:     "variable in singular variable.tf is valid",
+			filename: "variable.tf",
+			content: `variable "example" {
+  type = string
+}`,
+			wantFindings: 0,
+		},
+		{
 			name:     "variable in main.tf reports finding",
 			filename: "main.tf",
 			content: `variable "example" {
@@ -112,6 +120,14 @@ func TestOutputsInFileRule(t *testing.T) {
 			wantFindings: 0,
 		},
 		{
+			name:     "output in singular output.tf is valid",
+			filename: "output.tf",
+			content: `output "example" {
+  value = "test"
+}`,
+			wantFindings: 0,
+		},
+		{
 			name:     "output in main.tf reports finding",
 			filename: "main.tf",
 			content: `output "example" {
@@ -180,6 +196,22 @@ func TestProvidersInFileRule(t *testing.T) {
   region = "us-east-1"
 }`,
 			wantFindings: 0,
+		},
+		{
+			name:     "provider in singular provider.tf is valid",
+			filename: "provider.tf",
+			content: `provider "aws" {
+  region = "us-east-1"
+}`,
+			wantFindings: 0,
+		},
+		{
+			name:     "provider in singular version.tf reports finding (not aliased)",
+			filename: "version.tf",
+			content: `provider "aws" {
+  region = "us-east-1"
+}`,
+			wantFindings: 1,
 		},
 		{
 			name:     "provider in main.tf reports finding",

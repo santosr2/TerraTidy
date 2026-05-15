@@ -116,7 +116,8 @@ func (f *TextFormatter) Format(findings []sdk.Finding, w io.Writer) error {
 		hasLocation := finding.Location.StartLine > 0
 		if f.Color {
 			if hasLocation {
-				_, _ = fmt.Fprintf(w, "%s%s%s %s:%d:%d: %s %s(%s)%s\n",
+				_, _ = fmt.Fprintf(
+					w, "%s%s%s %s:%d:%d: %s %s(%s)%s\n",
 					iconColor, icon, colorReset,
 					displayFile,
 					finding.Location.StartLine,
@@ -125,7 +126,8 @@ func (f *TextFormatter) Format(findings []sdk.Finding, w io.Writer) error {
 					colorGray, finding.Rule, colorReset,
 				)
 			} else {
-				_, _ = fmt.Fprintf(w, "%s%s%s %s: %s %s(%s)%s\n",
+				_, _ = fmt.Fprintf(
+					w, "%s%s%s %s: %s %s(%s)%s\n",
 					iconColor, icon, colorReset,
 					displayFile,
 					finding.Message,
@@ -134,7 +136,8 @@ func (f *TextFormatter) Format(findings []sdk.Finding, w io.Writer) error {
 			}
 		} else {
 			if hasLocation {
-				_, _ = fmt.Fprintf(w, "%s %s:%d:%d: %s (%s)\n",
+				_, _ = fmt.Fprintf(
+					w, "%s %s:%d:%d: %s (%s)\n",
 					icon,
 					displayFile,
 					finding.Location.StartLine,
@@ -143,7 +146,8 @@ func (f *TextFormatter) Format(findings []sdk.Finding, w io.Writer) error {
 					finding.Rule,
 				)
 			} else {
-				_, _ = fmt.Fprintf(w, "%s %s: %s (%s)\n",
+				_, _ = fmt.Fprintf(
+					w, "%s %s: %s (%s)\n",
 					icon,
 					displayFile,
 					finding.Message,
@@ -376,7 +380,8 @@ func (f *TableFormatter) printFinding(w io.Writer, finding sdk.Finding) {
 	}
 
 	if f.Color {
-		_, _ = fmt.Fprintf(w, "%s%-10s%s %-50s %s\n",
+		_, _ = fmt.Fprintf(
+			w, "%s%-10s%s %-50s %s\n",
 			severityColor, severity, colorReset,
 			location,
 			message,
@@ -497,7 +502,8 @@ func (f *HTMLFormatter) generateHTML(
 	errors, warnings, info int,
 ) string {
 	total := len(findings)
-	return fmt.Sprintf(`<!DOCTYPE html>
+	return fmt.Sprintf(
+		`<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -712,7 +718,8 @@ func (f *HTMLFormatter) generateFindingHTML(finding sdk.Finding) string {
 		fixableBadge = `<span class="badge badge-fixable">Fixable</span>`
 	}
 
-	return fmt.Sprintf(`
+	return fmt.Sprintf(
+		`
             <div class="finding">
                 <div class="finding-icon %s">%s</div>
                 <div class="finding-content">

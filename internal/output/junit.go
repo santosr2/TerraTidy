@@ -148,7 +148,8 @@ func (f *JUnitFormatter) buildTestSuite(file string, findings []sdk.Finding, tim
 		}
 
 		// Build detailed message with location
-		detail := fmt.Sprintf("File: %s\nLine: %d, Column: %d\n\n%s",
+		detail := fmt.Sprintf(
+			"File: %s\nLine: %d, Column: %d\n\n%s",
 			displayFile,
 			findings[i].Location.StartLine,
 			findings[i].Location.StartColumn,

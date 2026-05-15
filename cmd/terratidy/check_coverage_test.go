@@ -445,7 +445,8 @@ func TestChangedFlagConsistency(t *testing.T) {
 	runGit := func(args ...string) {
 		cmd := exec.Command("git", args...)
 		cmd.Dir = dir
-		cmd.Env = append(os.Environ(),
+		cmd.Env = append(
+			os.Environ(),
 			"GIT_AUTHOR_NAME=test",
 			"GIT_AUTHOR_EMAIL=test@test.com",
 			"GIT_COMMITTER_NAME=test",
@@ -568,7 +569,8 @@ func TestChangedFlagWithNestedDirectories(t *testing.T) {
 	runGit := func(args ...string) {
 		cmd := exec.Command("git", args...)
 		cmd.Dir = dir
-		cmd.Env = append(os.Environ(),
+		cmd.Env = append(
+			os.Environ(),
 			"GIT_AUTHOR_NAME=test",
 			"GIT_AUTHOR_EMAIL=test@test.com",
 			"GIT_COMMITTER_NAME=test",

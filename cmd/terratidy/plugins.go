@@ -64,7 +64,8 @@ var pluginsListCmd = &cobra.Command{
 		_, _ = fmt.Fprintln(w, "----\t-------\t----\t-----------")
 
 		for _, p := range pluginList {
-			_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\n",
+			_, _ = fmt.Fprintf(
+				w, "%s\t%s\t%s\t%s\n",
 				p.Metadata.Name,
 				p.Metadata.Version,
 				p.Metadata.Type,

@@ -240,7 +240,7 @@ resource "aws_instance" "web" {
 
 ### lifecycle-at-end
 
-Ensures `lifecycle` block is at the end of resource blocks.
+Ensures `lifecycle` block is at the end of `resource`, `data`, `module`, and `check` blocks.
 
 | Property | Value |
 |----------|-------|
@@ -308,7 +308,7 @@ resource "aws_instance" "web" {
 
 ### depends-on-order
 
-Ensures `depends_on` is at the end of resource/module blocks.
+Ensures `depends_on` is at the end of `resource`, `data`, and `module` blocks (just before any `lifecycle` block).
 
 | Property | Value |
 |----------|-------|
@@ -510,7 +510,8 @@ These rules help enforce consistent file organization patterns. They are **disab
 
 ### variables-in-file
 
-Variables should be defined in `variables.tf`.
+Variables should be defined in `variables.tf`. The singular `variable.tf` is also
+accepted as a valid container; suggestions still point to the canonical `variables.tf`.
 
 | Property | Value |
 |----------|-------|
@@ -534,7 +535,8 @@ resource "aws_instance" "web" {
 
 ### outputs-in-file
 
-Outputs should be defined in `outputs.tf`.
+Outputs should be defined in `outputs.tf`. The singular `output.tf` is also accepted
+as a valid container; suggestions still point to the canonical `outputs.tf`.
 
 | Property | Value |
 |----------|-------|
@@ -554,7 +556,9 @@ output "instance_ip" {
 
 ### providers-in-file
 
-Provider configurations should be in `providers.tf` or `versions.tf`.
+Provider configurations should be in `providers.tf` or `versions.tf`. The singular
+`provider.tf` is also accepted as a valid container; suggestions still point to the
+canonical `providers.tf`.
 
 | Property | Value |
 |----------|-------|
@@ -648,12 +652,16 @@ Enforces standard Terraform file structure conventions.
 | File | Purpose |
 |------|---------|
 | `main.tf` | Primary resources and configuration |
-| `variables.tf` | Variable definitions |
-| `outputs.tf` | Output definitions |
-| `providers.tf` / `versions.tf` | Provider configurations and version constraints |
+| `variables.tf` (or `variable.tf`) | Variable definitions |
+| `outputs.tf` (or `output.tf`) | Output definitions |
+| `providers.tf` (or `provider.tf`) / `versions.tf` | Provider configurations and version constraints |
 | `locals.tf` | Local value definitions |
 | `data.tf` | Data source definitions |
 | `terraform.tf` | Terraform block (required_version, backend, required_providers) |
+
+Singular file names (`variable.tf`, `output.tf`, `provider.tf`) are recognized as
+valid containers. The rule will not suggest moving a block when either the plural
+or singular form already exists in the directory.
 
 **Example:**
 
@@ -894,7 +902,9 @@ These rules enforce comment syntax and formatting. They are **disabled by defaul
 
 ### comment-syntax
 
-Ensures comments use `#` syntax instead of `//`.
+Ensures full-line comments use `#` syntax instead of `//`. Only lines whose first
+non-whitespace characters are `//` are flagged; trailing `//` after a value and
+`#` comments whose body contains `//` (for example URLs) pass through unchanged.
 
 | Property | Value |
 |----------|-------|
@@ -903,14 +913,25 @@ Ensures comments use `#` syntax instead of `//`.
 | Fixable | Yes |
 | Default | **Disabled** |
 
-**Example:**
+**Flagged:**
 
 ```hcl
-// Bad - C-style comment
+// Bad - full-line C-style comment
 resource "aws_instance" "web" { }
+```
 
+`--fix` rewrites the leading `//` to `#` while preserving any text after it.
+
+**Not flagged:**
+
+```hcl
 # Good - HCL-style comment
 resource "aws_instance" "web" { }
+
+# See https://example.com/path - `//` inside a # comment is fine
+resource "aws_instance" "web2" {
+  ami = "ami-12345" // trailing comment after a value is also fine
+}
 ```
 
 ### no-trailing-whitespace

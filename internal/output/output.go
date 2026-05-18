@@ -33,7 +33,7 @@ func DisplayPath(path string, absolutePaths bool) string {
 }
 
 // FormatDiff colorizes unified diff output for terminal display.
-// Headers (--- and +++), hunk markers (@@), removed lines (-), and added lines (+) get colored.
+// Matches git's diff styling: --- red, +++ green, @@ cyan, - red, + green.
 // If color is false, returns the input unchanged.
 func FormatDiff(diff string, color bool) string {
 	if !color || diff == "" {
@@ -46,8 +46,10 @@ func FormatDiff(diff string, color bool) string {
 			result.WriteString("\n")
 		}
 		switch {
-		case strings.HasPrefix(line, "---") || strings.HasPrefix(line, "+++"):
-			result.WriteString(colorCyan + line + colorReset)
+		case strings.HasPrefix(line, "---"):
+			result.WriteString(colorRed + line + colorReset)
+		case strings.HasPrefix(line, "+++"):
+			result.WriteString(colorGreen + line + colorReset)
 		case strings.HasPrefix(line, "@@"):
 			result.WriteString(colorCyan + line + colorReset)
 		case strings.HasPrefix(line, "-"):

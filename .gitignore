@@ -63,6 +63,7 @@ benchmarks/*
 .plans
 .issues
 .history
+.pre-specs
 
 # temp
 temp/

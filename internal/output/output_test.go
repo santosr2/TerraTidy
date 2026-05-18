@@ -1245,14 +1245,13 @@ func TestFormatDiff(t *testing.T) {
 		diff := "--- a/file.tf\n+++ b/file.tf\n@@ -1,3 +1,3 @@\n-old line\n+new line\n context line"
 		result := FormatDiff(diff, true)
 
-		assert.Contains(t, result, "\033[36m--- a/file.tf\033[0m")
-		assert.Contains(t, result, "\033[36m+++ b/file.tf\033[0m")
-		assert.Contains(t, result, "\033[36m@@ -1,3 +1,3 @@\033[0m")
-		assert.Contains(t, result, "\033[31m-old line\033[0m")
-		assert.Contains(t, result, "\033[32m+new line\033[0m")
-		assert.Contains(t, result, "context line")
-		assert.NotContains(t, result, "\033[31mcontext")
-		assert.NotContains(t, result, "\033[32mcontext")
+		want := "\033[31m--- a/file.tf\033[0m\n" +
+			"\033[32m+++ b/file.tf\033[0m\n" +
+			"\033[36m@@ -1,3 +1,3 @@\033[0m\n" +
+			"\033[31m-old line\033[0m\n" +
+			"\033[32m+new line\033[0m\n" +
+			" context line"
+		assert.Equal(t, want, result)
 	})
 
 	t.Run("non-diff text unchanged", func(t *testing.T) {

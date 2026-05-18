@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bytes"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -668,5 +670,313 @@ func TestFmtAllCheckMode(t *testing.T) {
 
 		// Should succeed with no issues
 		assert.NoError(t, err, "fmt --all --check should succeed when no issues exist")
+	})
+}
+
+// TestFmtTextSummarySeparator verifies that `---` appears before fmt and style
+// summary totals in text mode (matching lint/style/policy cadence), and does
+// NOT appear when there are no findings to summarize.
+func TestFmtTextSummarySeparator(t *testing.T) {
+	oldFmtCheck := fmtCheck
+	oldFmtDiff := fmtDiff
+	oldFmtAll := fmtAll
+	oldChanged := changed
+	oldFormat := format
+	oldColor := color
+
+	resetFmtFlags := func() {
+		for _, name := range []string{"check", "diff", "all"} {
+			if f := fmtCmd.Flags().Lookup(name); f != nil {
+				f.Changed = false
+			}
+		}
+	}
+
+	t.Cleanup(func() {
+		fmtCheck = oldFmtCheck
+		fmtDiff = oldFmtDiff
+		fmtAll = oldFmtAll
+		changed = oldChanged
+		format = oldFormat
+		color = oldColor
+		rootCmd.SetArgs(nil)
+		resetFmtFlags()
+	})
+
+	captureStdout := func(t *testing.T, run func()) string {
+		t.Helper()
+		oldStdout := os.Stdout
+		r, w, err := os.Pipe()
+		require.NoError(t, err)
+		os.Stdout = w
+		run()
+		_ = w.Close()
+		os.Stdout = oldStdout
+		var buf bytes.Buffer
+		_, _ = buf.ReadFrom(r)
+		return buf.String()
+	}
+
+	t.Run("fmt with formatted files prints --- before Formatted totals", func(t *testing.T) {
+		resetFmtFlags()
+		dir := t.TempDir()
+		unformatted := `resource "aws_instance" "bad"   {
+ami="ami-123"
+}`
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "bad.tf"), []byte(unformatted), 0o644))
+
+		fmtCheck = false
+		fmtDiff = false
+		fmtAll = false
+		changed = false
+		format = "text"
+		color = false
+
+		out := captureStdout(t, func() {
+			rootCmd.SetArgs([]string{"fmt", dir})
+			_ = rootCmd.Execute()
+		})
+
+		assert.Contains(t, out, "---\nFormatted ", "expected --- separator before Formatted totals")
+	})
+
+	t.Run("fmt with all-formatted files does NOT print --- separator", func(t *testing.T) {
+		resetFmtFlags()
+		dir := t.TempDir()
+		formatted := `resource "aws_instance" "good" {
+  ami = "ami-123"
+}
+`
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "good.tf"), []byte(formatted), 0o644))
+
+		fmtCheck = false
+		fmtDiff = false
+		fmtAll = false
+		changed = false
+		format = "text"
+		color = false
+
+		out := captureStdout(t, func() {
+			rootCmd.SetArgs([]string{"fmt", dir})
+			_ = rootCmd.Execute()
+		})
+
+		assert.NotContains(t, out, "---", "no --- separator when there are no totals to print")
+		assert.Contains(t, out, "All files are properly formatted")
+	})
+
+	t.Run("fmt --all --check with style issues prints --- before Found totals", func(t *testing.T) {
+		resetFmtFlags()
+		dir := t.TempDir()
+		// Style issue: tags should be at end of resource block.
+		content := `resource "aws_instance" "test" {
+  tags = {
+    Name = "test"
+  }
+
+  ami = "ami-123"
+}
+`
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "main.tf"), []byte(content), 0o644))
+
+		fmtCheck = false
+		fmtDiff = false
+		fmtAll = false
+		changed = false
+		format = "text"
+		color = false
+
+		out := captureStdout(t, func() {
+			rootCmd.SetArgs([]string{"fmt", "--all", "--check", dir})
+			_ = rootCmd.Execute()
+		})
+
+		assert.Contains(t, out, "---\nFound ", "expected --- separator before Found style totals")
+	})
+}
+
+// TestFmtStructuredOutput verifies that `fmt --format json` (and other
+// structured formats) emit valid JSON, suppress banners/per-file lines, and
+// surface exit codes through the shared findings-error path.
+func TestFmtStructuredOutput(t *testing.T) {
+	// Save and restore globals to avoid test pollution
+	oldFmtCheck := fmtCheck
+	oldFmtDiff := fmtDiff
+	oldFmtAll := fmtAll
+	oldChanged := changed
+	oldFormat := format
+	oldColor := color
+
+	resetFmtFlags := func() {
+		for _, name := range []string{"check", "diff", "all"} {
+			if f := fmtCmd.Flags().Lookup(name); f != nil {
+				f.Changed = false
+			}
+		}
+	}
+
+	t.Cleanup(func() {
+		fmtCheck = oldFmtCheck
+		fmtDiff = oldFmtDiff
+		fmtAll = oldFmtAll
+		changed = oldChanged
+		format = oldFormat
+		color = oldColor
+		rootCmd.SetArgs(nil)
+		resetFmtFlags()
+	})
+
+	t.Run("check mode with unformatted file produces valid JSON and no banner", func(t *testing.T) {
+		resetFmtFlags()
+
+		dir := t.TempDir()
+		unformattedContent := `resource "aws_instance" "bad"   {
+ami="ami-123"
+}`
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "bad.tf"), []byte(unformattedContent), 0o644))
+
+		// Reset flags
+		fmtCheck = false
+		fmtDiff = false
+		fmtAll = false
+		changed = false
+		format = "json"
+		color = false
+
+		// Capture stdout
+		oldStdout := os.Stdout
+		r, w, err := os.Pipe()
+		require.NoError(t, err)
+		os.Stdout = w
+
+		rootCmd.SetArgs([]string{"fmt", "--check", "--format", "json", dir})
+		runErr := rootCmd.Execute()
+
+		_ = w.Close()
+		os.Stdout = oldStdout
+
+		var buf bytes.Buffer
+		_, _ = buf.ReadFrom(r)
+		out := buf.String()
+
+		// fmt --check on an unformatted file must surface a findings exit error.
+		require.Error(t, runErr, "fmt --check on unformatted file should return ExitError")
+		var exitErr *sdk.ExitError
+		require.True(t, errors.As(runErr, &exitErr), "expected ExitError, got: %v", runErr)
+		assert.Equal(t, sdk.ExitFindings, exitErr.Code)
+
+		// Output must be valid JSON.
+		var payload map[string]any
+		require.NoError(t, json.Unmarshal(buf.Bytes(), &payload), "output should be valid JSON, got: %s", out)
+
+		// Banner text and per-file markers must not appear on stdout in structured mode.
+		assert.NotContains(t, out, "Formatting ")
+		assert.NotContains(t, out, "[!] ")
+		assert.NotContains(t, out, "[+] ")
+		assert.NotContains(t, out, "Re-aligning")
+		assert.NotContains(t, out, "All files are properly formatted")
+
+		// JSON payload should include the fmt finding.
+		assert.Contains(t, out, "fmt.needs-formatting")
+	})
+
+	t.Run("all and check with style issue emits valid JSON with no banner", func(t *testing.T) {
+		resetFmtFlags()
+
+		dir := t.TempDir()
+		// Style issue (tags should be at end of resource block).
+		contentWithStyleIssue := `resource "aws_instance" "test" {
+  tags = {
+    Name = "test"
+  }
+
+  ami           = "ami-123"
+  instance_type = "t2.micro"
+}
+`
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "main.tf"), []byte(contentWithStyleIssue), 0o644))
+
+		fmtCheck = false
+		fmtDiff = false
+		fmtAll = false
+		changed = false
+		format = "json"
+		color = false
+
+		oldStdout := os.Stdout
+		r, w, err := os.Pipe()
+		require.NoError(t, err)
+		os.Stdout = w
+
+		rootCmd.SetArgs([]string{"fmt", "--all", "--check", "--format", "json", dir})
+		runErr := rootCmd.Execute()
+
+		_ = w.Close()
+		os.Stdout = oldStdout
+
+		var buf bytes.Buffer
+		_, _ = buf.ReadFrom(r)
+		out := buf.String()
+
+		// --all --check on a file with a style issue must return ExitFindings.
+		require.Error(t, runErr, "fmt --all --check should error on style issue")
+		var exitErr *sdk.ExitError
+		require.True(t, errors.As(runErr, &exitErr), "expected ExitError, got: %v", runErr)
+		assert.Equal(t, sdk.ExitFindings, exitErr.Code)
+
+		// Output must be valid JSON.
+		var payload map[string]any
+		require.NoError(t, json.Unmarshal(buf.Bytes(), &payload), "output should be valid JSON, got: %s", out)
+
+		// No human-readable banners or sub-banners on stdout.
+		assert.NotContains(t, out, "Checking formatting and style")
+		assert.NotContains(t, out, "Checking style...")
+		assert.NotContains(t, out, "Applying style fixes...")
+		assert.NotContains(t, out, "Re-aligning")
+		assert.NotContains(t, out, "Found ")
+	})
+
+	t.Run("formatted file in check mode emits valid JSON with no findings and no banner", func(t *testing.T) {
+		resetFmtFlags()
+
+		dir := t.TempDir()
+		formattedContent := `resource "aws_instance" "good" {
+  ami           = "ami-123"
+  instance_type = "t2.micro"
+}
+`
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "good.tf"), []byte(formattedContent), 0o644))
+
+		fmtCheck = false
+		fmtDiff = false
+		fmtAll = false
+		changed = false
+		format = "json"
+		color = false
+
+		oldStdout := os.Stdout
+		r, w, err := os.Pipe()
+		require.NoError(t, err)
+		os.Stdout = w
+
+		rootCmd.SetArgs([]string{"fmt", "--check", "--format", "json", dir})
+		runErr := rootCmd.Execute()
+
+		_ = w.Close()
+		os.Stdout = oldStdout
+
+		var buf bytes.Buffer
+		_, _ = buf.ReadFrom(r)
+		out := buf.String()
+
+		assert.NoError(t, runErr, "fmt --check should succeed on formatted files")
+
+		// Output must be valid JSON even when there are no findings.
+		var payload map[string]any
+		require.NoError(t, json.Unmarshal(buf.Bytes(), &payload), "output should be valid JSON, got: %s", out)
+
+		assert.NotContains(t, out, "Formatting ")
+		assert.NotContains(t, out, "All files are properly formatted")
+		assert.NotContains(t, out, "---")
 	})
 }

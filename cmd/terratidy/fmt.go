@@ -63,16 +63,22 @@ Use --all to also apply style fixes (equivalent to running fmt + style --fix).`,
 		fmtCfg := buildFmtConfig(cmd, cfg)
 		engine := fmtengine.New(fmtCfg)
 
-		modeMsg := ""
-		if changed {
-			modeMsg = " (changed files only)"
-		}
-		if fmtAll && fmtCfg.Check {
-			fmt.Printf("Checking formatting and style on %s%s...\n\n", formatFileCount(len(files)), modeMsg)
-		} else if fmtAll {
-			fmt.Printf("Formatting and applying style fixes to %s%s...\n\n", formatFileCount(len(files)), modeMsg)
-		} else {
-			fmt.Printf("Formatting %s%s...\n\n", formatFileCount(len(files)), modeMsg)
+		// Structured output formats (json, sarif, etc.) suppress all human-readable
+		// progress text; findings are emitted through the shared formatter at the end.
+		useStructuredOutput := format != "" && format != "text"
+
+		if !useStructuredOutput {
+			modeMsg := ""
+			if changed {
+				modeMsg = " (changed files only)"
+			}
+			if fmtAll && fmtCfg.Check {
+				fmt.Printf("Checking formatting and style on %s%s...\n\n", formatFileCount(len(files)), modeMsg)
+			} else if fmtAll {
+				fmt.Printf("Formatting and applying style fixes to %s%s...\n\n", formatFileCount(len(files)), modeMsg)
+			} else {
+				fmt.Printf("Formatting %s%s...\n\n", formatFileCount(len(files)), modeMsg)
+			}
 		}
 
 		// Run formatter
@@ -85,44 +91,60 @@ Use --all to also apply style fixes (equivalent to running fmt + style --fix).`,
 		// (fmt.formatted has SeverityInfo which would be filtered out)
 		needsFormatting := 0
 		formatted := 0
-		useAbsolutePaths := getEffectiveAbsolutePaths(cfg)
-		for _, finding := range findings {
-			displayFile := output.DisplayPath(finding.File, useAbsolutePaths)
-			switch finding.Rule {
-			case "fmt.needs-formatting":
-				fmt.Printf("  [!] %s: needs formatting\n", displayFile)
-				needsFormatting++
-			case "fmt.formatted":
-				fmt.Printf("  [+] %s: formatted\n", displayFile)
-				formatted++
+		if !useStructuredOutput {
+			useAbsolutePaths := getEffectiveAbsolutePaths(cfg)
+			for _, finding := range findings {
+				displayFile := output.DisplayPath(finding.File, useAbsolutePaths)
+				switch finding.Rule {
+				case "fmt.needs-formatting":
+					fmt.Printf("  [!] %s: needs formatting\n", displayFile)
+					needsFormatting++
+				case "fmt.formatted":
+					fmt.Printf("  [+] %s: formatted\n", displayFile)
+					formatted++
+				}
+				// Print diff if diff mode is enabled (via CLI or config) and the finding carries one
+				if fmtCfg.Diff && finding.IsDiff {
+					fmt.Println()
+					fmt.Print(output.FormatDiff(finding.Message, color))
+				}
 			}
-			// Print diff if diff mode is enabled (via CLI or config) and the finding carries one
-			if fmtCfg.Diff && finding.IsDiff {
+
+			// Summary for formatting
+			if len(findings) == 0 {
+				fmt.Println("All files are properly formatted")
+			} else if formatted > 0 {
 				fmt.Println()
-				fmt.Print(output.FormatDiff(finding.Message, color))
+				fmt.Println("---")
+				fmt.Printf("Formatted %s\n", formatFileCount(formatted))
+			}
+		} else {
+			// Structured output: count needs-formatting for exit code only.
+			for _, finding := range findings {
+				if finding.Rule == "fmt.needs-formatting" {
+					needsFormatting++
+				}
 			}
 		}
 
-		// Summary for formatting
-		if len(findings) == 0 {
-			fmt.Println("All files are properly formatted")
-		} else if formatted > 0 {
-			fmt.Println()
-			fmt.Printf("Formatted %s\n", formatFileCount(formatted))
-		}
+		// Collect findings to emit via the formatter in structured output mode.
+		var allFindings []sdk.Finding
+		allFindings = append(allFindings, findings...)
 
 		// Track total issues for check mode exit code
 		totalIssues := needsFormatting
 
 		// Run style engine if --all flag is set (in both check and fix modes)
 		if fmtAll {
-			fmt.Println()
-			if fmtCfg.Check {
-				fmt.Println("Checking style...")
-			} else {
-				fmt.Println("Applying style fixes...")
+			if !useStructuredOutput {
+				fmt.Println()
+				if fmtCfg.Check {
+					fmt.Println("Checking style...")
+				} else {
+					fmt.Println("Applying style fixes...")
+				}
+				fmt.Println()
 			}
-			fmt.Println()
 
 			// Load plugin rules if plugins are enabled
 			pluginRules, err := loadPluginRules(cfg)
@@ -144,10 +166,10 @@ Use --all to also apply style fixes (equivalent to running fmt + style --fix).`,
 			styleIssues := 0
 			styleFixed := 0
 			for _, finding := range styleFindings {
-				// Skip diff-only findings (style.diff rule)
+				// Skip diff-only findings (style.diff rule) for issue counting
 				if finding.Rule == "style.diff" {
-					// Print diff if present
-					if fmtCfg.Diff && finding.IsDiff {
+					// Print diff if present (text mode only; structured mode emits via formatter)
+					if !useStructuredOutput && fmtCfg.Diff && finding.IsDiff {
 						fmt.Println()
 						fmt.Print(output.FormatDiff(finding.Message, color))
 					}
@@ -162,38 +184,61 @@ Use --all to also apply style fixes (equivalent to running fmt + style --fix).`,
 				}
 			}
 
+			allFindings = append(allFindings, styleFindings...)
+
 			if fmtCfg.Check {
-				// Check mode: report issues found
 				if styleIssues > 0 {
-					fmt.Printf("Found %d style issue(s) that can be fixed with fmt --all\n", styleIssues)
+					if !useStructuredOutput {
+						fmt.Println("---")
+						fmt.Printf("Found %d style issue(s) that can be fixed with fmt --all\n", styleIssues)
+					}
 					totalIssues += styleIssues
-				} else {
+				} else if !useStructuredOutput {
 					fmt.Println("No style issues found")
 				}
 			} else {
 				// Fix mode: report fixes applied
 				if styleFixed > 0 {
-					fmt.Printf("Fixed %d style issue(s)\n", styleFixed)
+					if !useStructuredOutput {
+						fmt.Println("---")
+						fmt.Printf("Fixed %d style issue(s)\n", styleFixed)
 
-					// Re-run formatter after style fixes to restore proper HCL formatting
-					// (style fixes may disrupt equal sign alignment)
-					fmt.Println()
-					fmt.Println("Re-formatting files...")
+						// Re-run formatter after style fixes to restore proper HCL formatting
+						// (style fixes may disrupt equal sign alignment)
+						fmt.Println()
+						fmt.Println("Re-aligning attributes after style fixes...")
+					}
 					rerunEngine := fmtengine.New(&fmtengine.Config{
 						Check: false,
 						Diff:  false,
 					})
 					if _, err := rerunEngine.Run(context.Background(), files); err != nil {
-						return sdk.NewInternalError(fmt.Errorf("re-formatting files: %w", err))
+						return sdk.NewInternalError(fmt.Errorf("re-aligning attributes: %w", err))
 					}
-					fmt.Println("Done")
-				} else {
+					if !useStructuredOutput {
+						fmt.Println("Done")
+					}
+				} else if !useStructuredOutput {
 					fmt.Println("No style issues to fix")
 				}
 			}
 		}
 
-		// In check mode, return findings error if any issues found
+		// Structured output: emit all findings through the shared formatter.
+		// outputResults handles the exit code for SeverityError findings, so we
+		// only need to add the fmt-specific check-mode short-circuit for the rare
+		// case where check mode produced only info-severity findings.
+		if useStructuredOutput {
+			if err := outputResults(allFindings, "Format summary", cfg); err != nil {
+				return err
+			}
+			if fmtCfg.Check && totalIssues > 0 {
+				return sdk.NewFindingsError()
+			}
+			return nil
+		}
+
+		// In check mode (text), return findings error if any issues found
 		if fmtCfg.Check && totalIssues > 0 {
 			return sdk.NewFindingsError()
 		}

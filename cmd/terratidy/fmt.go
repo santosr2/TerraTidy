@@ -117,6 +117,14 @@ Use --all to also apply style fixes (equivalent to running fmt + style --fix).`,
 				fmt.Println()
 				fmt.Println("---")
 				fmt.Printf("Formatted %s\n", formatFileCount(formatted))
+			} else if fmtCfg.Check && fmtCfg.Diff && needsFormatting > 0 {
+				// In --check --diff mode the per-file `[!]` lines are interleaved
+				// with diff output, so a closing total makes the result scannable.
+				// Bare --check (no diff) keeps the per-file lines as the sole signal
+				// by design — adding a total there is a separate UX decision.
+				fmt.Println()
+				fmt.Println("---")
+				fmt.Printf("Found %d file(s) that can be formatted with 'terratidy fmt'\n", needsFormatting)
 			}
 		} else {
 			// Structured output: count needs-formatting for exit code only.

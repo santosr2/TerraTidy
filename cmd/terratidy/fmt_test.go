@@ -765,6 +765,79 @@ ami="ami-123"
 		assert.Contains(t, out, "All files are properly formatted")
 	})
 
+	t.Run("fmt --check --diff with unformatted files prints Found summary", func(t *testing.T) {
+		resetFmtFlags()
+		dir := t.TempDir()
+		unformatted := `resource "aws_instance" "bad"   {
+ami="ami-123"
+}`
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "bad.tf"), []byte(unformatted), 0o644))
+
+		fmtCheck = false
+		fmtDiff = false
+		fmtAll = false
+		changed = false
+		format = "text"
+		color = false
+
+		out := captureStdout(t, func() {
+			rootCmd.SetArgs([]string{"fmt", "--check", "--diff", dir})
+			_ = rootCmd.Execute()
+		})
+
+		assert.Contains(t, out, "---\nFound 1 file(s) that can be formatted with 'terratidy fmt'\n",
+			"expected --- separator and singular file summary in check+diff mode")
+	})
+
+	t.Run("fmt --check (no diff) does NOT print Found summary", func(t *testing.T) {
+		resetFmtFlags()
+		dir := t.TempDir()
+		unformatted := `resource "aws_instance" "bad"   {
+ami="ami-123"
+}`
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "bad.tf"), []byte(unformatted), 0o644))
+
+		fmtCheck = false
+		fmtDiff = false
+		fmtAll = false
+		changed = false
+		format = "text"
+		color = false
+
+		out := captureStdout(t, func() {
+			rootCmd.SetArgs([]string{"fmt", "--check", dir})
+			_ = rootCmd.Execute()
+		})
+
+		assert.NotContains(t, out, "Found ",
+			"Found summary is scoped to --check --diff; bare --check keeps the per-file lines as the sole signal")
+	})
+
+	t.Run("fmt --check --diff with multiple files uses plural file(s) marker", func(t *testing.T) {
+		resetFmtFlags()
+		dir := t.TempDir()
+		unformatted := `resource "aws_instance" "bad"   {
+ami="ami-123"
+}`
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "a.tf"), []byte(unformatted), 0o644))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "b.tf"), []byte(unformatted), 0o644))
+
+		fmtCheck = false
+		fmtDiff = false
+		fmtAll = false
+		changed = false
+		format = "text"
+		color = false
+
+		out := captureStdout(t, func() {
+			rootCmd.SetArgs([]string{"fmt", "--check", "--diff", dir})
+			_ = rootCmd.Execute()
+		})
+
+		assert.Contains(t, out, "Found 2 file(s) that can be formatted with 'terratidy fmt'\n",
+			"expected aggregate count for both unformatted files")
+	})
+
 	t.Run("fmt --all --check with style issues prints --- before Found totals", func(t *testing.T) {
 		resetFmtFlags()
 		dir := t.TempDir()

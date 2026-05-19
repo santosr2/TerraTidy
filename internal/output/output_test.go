@@ -1235,10 +1235,10 @@ func TestFormatDiff(t *testing.T) {
 		assert.Equal(t, "", result)
 	})
 
-	t.Run("color false returns unchanged", func(t *testing.T) {
+	t.Run("color false preserves content and ensures single trailing newline", func(t *testing.T) {
 		diff := "--- a/file.tf\n+++ b/file.tf\n@@ -1,3 +1,3 @@\n-old\n+new\n context"
 		result := FormatDiff(diff, false)
-		assert.Equal(t, diff, result)
+		assert.Equal(t, diff+"\n", result)
 	})
 
 	t.Run("colorizes diff lines correctly", func(t *testing.T) {
@@ -1250,13 +1250,99 @@ func TestFormatDiff(t *testing.T) {
 			"\033[36m@@ -1,3 +1,3 @@\033[0m\n" +
 			"\033[31m-old line\033[0m\n" +
 			"\033[32m+new line\033[0m\n" +
-			" context line"
+			" context line\n"
 		assert.Equal(t, want, result)
 	})
 
-	t.Run("non-diff text unchanged", func(t *testing.T) {
+	t.Run("non-diff text unchanged apart from trailing newline", func(t *testing.T) {
 		text := "just some text\nwith multiple lines"
 		result := FormatDiff(text, true)
-		assert.Equal(t, text, result)
+		assert.Equal(t, text+"\n", result)
+	})
+
+	t.Run("trailing newline guard normalizes input variants", func(t *testing.T) {
+		// difflib normally emits one trailing "\n"; verify we keep it.
+		withNewline := "--- a\n+++ b\n@@\n-x\n+y\n"
+		assert.Equal(t, withNewline, FormatDiff(withNewline, false))
+
+		// Multiple trailing newlines (extra blank line after final hunk) collapse to one.
+		withExtraBlank := "--- a\n+++ b\n@@\n-x\n+y\n\n"
+		assert.Equal(t, "--- a\n+++ b\n@@\n-x\n+y\n", FormatDiff(withExtraBlank, false))
+
+		// Missing trailing newline gets one appended.
+		noNewline := "--- a\n+++ b\n@@\n-x\n+y"
+		assert.Equal(t, noNewline+"\n", FormatDiff(noNewline, false))
+
+		// Color path applies the same guarantee.
+		colored := FormatDiff(withExtraBlank, true)
+		assert.True(t, strings.HasSuffix(colored, "\033[0m\n"))
+		assert.False(t, strings.HasSuffix(colored, "\n\n"))
+	})
+}
+
+func TestFormatDiffIndented(t *testing.T) {
+	t.Run("empty diff returns empty", func(t *testing.T) {
+		result := FormatDiffIndented("", true, "  ")
+		assert.Equal(t, "", result)
+	})
+
+	t.Run("empty indent leaves output flush-left", func(t *testing.T) {
+		diff := "--- a/file.tf\n+++ b/file.tf\n@@ -1 +1 @@\n-old\n+new"
+
+		// No color: each line passes through unchanged; trailing newline appended by guard.
+		assert.Equal(t, diff+"\n", FormatDiffIndented(diff, false, ""))
+
+		// With color: each line is colorized but unindented (no two-space prefix).
+		want := "\033[31m--- a/file.tf\033[0m\n" +
+			"\033[32m+++ b/file.tf\033[0m\n" +
+			"\033[36m@@ -1 +1 @@\033[0m\n" +
+			"\033[31m-old\033[0m\n" +
+			"\033[32m+new\033[0m\n"
+		assert.Equal(t, want, FormatDiffIndented(diff, true, ""))
+	})
+
+	t.Run("prefixes every non-empty line with indent (no color)", func(t *testing.T) {
+		diff := "--- a/file.tf\n+++ b/file.tf\n@@ -1,3 +1,3 @@\n-old line\n+new line\n context line"
+		result := FormatDiffIndented(diff, false, "  ")
+
+		want := "  --- a/file.tf\n" +
+			"  +++ b/file.tf\n" +
+			"  @@ -1,3 +1,3 @@\n" +
+			"  -old line\n" +
+			"  +new line\n" +
+			"   context line\n"
+		assert.Equal(t, want, result)
+	})
+
+	t.Run("indent precedes color codes", func(t *testing.T) {
+		diff := "--- a/file.tf\n+new"
+		result := FormatDiffIndented(diff, true, "  ")
+
+		want := "  \033[31m--- a/file.tf\033[0m\n" +
+			"  \033[32m+new\033[0m\n"
+		assert.Equal(t, want, result)
+	})
+
+	t.Run("empty lines are not indented (no trailing whitespace)", func(t *testing.T) {
+		diff := "--- a/file.tf\n\n+++ b/file.tf"
+		result := FormatDiffIndented(diff, false, "  ")
+
+		want := "  --- a/file.tf\n\n  +++ b/file.tf\n"
+		assert.Equal(t, want, result)
+	})
+
+	t.Run("trailing newline guard collapses blank lines after final hunk", func(t *testing.T) {
+		// Extra blank line at end (e.g., a producer that double-terminates) collapses.
+		withExtraBlank := "--- a\n+++ b\n@@\n-x\n+y\n\n"
+		want := "  --- a\n  +++ b\n  @@\n  -x\n  +y\n"
+		assert.Equal(t, want, FormatDiffIndented(withExtraBlank, false, "  "))
+
+		// Already correctly terminated input is unchanged content-wise.
+		clean := "--- a\n+++ b\n@@\n-x\n+y\n"
+		assert.Equal(t, want, FormatDiffIndented(clean, false, "  "))
+
+		// Missing trailing newline gets one appended.
+		noNewline := "--- a\n+++ b\n@@\n-x\n+y"
+		assert.Equal(t, want, FormatDiffIndented(noNewline, false, "  "))
 	})
 }

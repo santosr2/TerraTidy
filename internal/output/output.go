@@ -34,10 +34,42 @@ func DisplayPath(path string, absolutePaths bool) string {
 
 // FormatDiff colorizes unified diff output for terminal display.
 // Matches git's diff styling: --- red, +++ green, @@ cyan, - red, + green.
-// If color is false, returns the input unchanged.
+// Always returns the diff with exactly one trailing newline (or "" for empty input)
+// so callers can `fmt.Print` it without padding or stripping blank lines.
+// If color is false, the diff content is unchanged apart from the trailing-newline guard.
 func FormatDiff(diff string, color bool) string {
-	if !color || diff == "" {
+	if diff == "" {
 		return diff
+	}
+	if !color {
+		return ensureTrailingNewline(diff)
+	}
+	// strings.Split on "a\nb\n" yields ["a","b",""], so the loop naturally emits
+	// one extra "\n" at the tail. ensureTrailingNewline collapses it — do not
+	// remove that call without also restructuring this loop.
+	var result strings.Builder
+	lines := strings.Split(diff, "\n")
+	for i, line := range lines {
+		if i > 0 {
+			result.WriteString("\n")
+		}
+		result.WriteString(colorizeDiffLine(line, color))
+	}
+	return ensureTrailingNewline(result.String())
+}
+
+// FormatDiffIndented colorizes a unified diff and prefixes every non-empty
+// line with indent. Use it when the diff is printed under a status line that
+// already carries leading indent (e.g., fmt's "  [+] file.tf: formatted").
+// Empty lines are left flush-left so the output has no trailing whitespace.
+// Pass indent="" to fall back to FormatDiff's flush-left behavior.
+// Always returns exactly one trailing newline (or "" for empty input).
+func FormatDiffIndented(diff string, color bool, indent string) string {
+	if diff == "" {
+		return diff
+	}
+	if indent == "" {
+		return FormatDiff(diff, color)
 	}
 	var result strings.Builder
 	lines := strings.Split(diff, "\n")
@@ -45,22 +77,42 @@ func FormatDiff(diff string, color bool) string {
 		if i > 0 {
 			result.WriteString("\n")
 		}
-		switch {
-		case strings.HasPrefix(line, "---"):
-			result.WriteString(colorRed + line + colorReset)
-		case strings.HasPrefix(line, "+++"):
-			result.WriteString(colorGreen + line + colorReset)
-		case strings.HasPrefix(line, "@@"):
-			result.WriteString(colorCyan + line + colorReset)
-		case strings.HasPrefix(line, "-"):
-			result.WriteString(colorRed + line + colorReset)
-		case strings.HasPrefix(line, "+"):
-			result.WriteString(colorGreen + line + colorReset)
-		default:
-			result.WriteString(line)
+		if line != "" {
+			result.WriteString(indent)
 		}
+		result.WriteString(colorizeDiffLine(line, color))
 	}
-	return result.String()
+	return ensureTrailingNewline(result.String())
+}
+
+// ensureTrailingNewline guarantees the string ends with exactly one "\n".
+// Trims any trailing newlines (collapsing blank lines after the final hunk)
+// then appends a single "\n". Must not be called on an empty string (would
+// return "\n" instead of ""); callers must guard with the `== ""` fast-path.
+func ensureTrailingNewline(s string) string {
+	return strings.TrimRight(s, "\n") + "\n"
+}
+
+// colorizeDiffLine applies git-style ANSI coloring to a single unified diff
+// line. Returns the line unchanged when color is false.
+func colorizeDiffLine(line string, color bool) string {
+	if !color {
+		return line
+	}
+	switch {
+	case strings.HasPrefix(line, "---"):
+		return colorRed + line + colorReset
+	case strings.HasPrefix(line, "+++"):
+		return colorGreen + line + colorReset
+	case strings.HasPrefix(line, "@@"):
+		return colorCyan + line + colorReset
+	case strings.HasPrefix(line, "-"):
+		return colorRed + line + colorReset
+	case strings.HasPrefix(line, "+"):
+		return colorGreen + line + colorReset
+	default:
+		return line
+	}
 }
 
 // ANSI color codes

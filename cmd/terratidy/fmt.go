@@ -106,7 +106,7 @@ Use --all to also apply style fixes (equivalent to running fmt + style --fix).`,
 				// Print diff if diff mode is enabled (via CLI or config) and the finding carries one
 				if fmtCfg.Diff && finding.IsDiff {
 					fmt.Println()
-					fmt.Print(output.FormatDiff(finding.Message, color))
+					fmt.Print(output.FormatDiffIndented(finding.Message, color, "  "))
 				}
 			}
 
@@ -117,6 +117,14 @@ Use --all to also apply style fixes (equivalent to running fmt + style --fix).`,
 				fmt.Println()
 				fmt.Println("---")
 				fmt.Printf("Formatted %s\n", formatFileCount(formatted))
+			} else if fmtCfg.Check && fmtCfg.Diff && needsFormatting > 0 {
+				// In --check --diff mode the per-file `[!]` lines are interleaved
+				// with diff output, so a closing total makes the result scannable.
+				// Bare --check (no diff) keeps the per-file lines as the sole signal
+				// by design — adding a total there is a separate UX decision.
+				fmt.Println()
+				fmt.Println("---")
+				fmt.Printf("Found %d file(s) that can be formatted with 'terratidy fmt'\n", needsFormatting)
 			}
 		} else {
 			// Structured output: count needs-formatting for exit code only.
@@ -168,7 +176,9 @@ Use --all to also apply style fixes (equivalent to running fmt + style --fix).`,
 			for _, finding := range styleFindings {
 				// Skip diff-only findings (style.diff rule) for issue counting
 				if finding.Rule == "style.diff" {
-					// Print diff if present (text mode only; structured mode emits via formatter)
+					// Print diff if present (text mode only; structured mode emits via formatter).
+					// Flush-left (not indented) because there is no per-file status line under
+					// fmt --all for style findings to anchor under.
 					if !useStructuredOutput && fmtCfg.Diff && finding.IsDiff {
 						fmt.Println()
 						fmt.Print(output.FormatDiff(finding.Message, color))

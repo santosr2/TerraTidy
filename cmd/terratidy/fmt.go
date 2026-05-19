@@ -106,7 +106,7 @@ Use --all to also apply style fixes (equivalent to running fmt + style --fix).`,
 				// Print diff if diff mode is enabled (via CLI or config) and the finding carries one
 				if fmtCfg.Diff && finding.IsDiff {
 					fmt.Println()
-					fmt.Print(output.FormatDiff(finding.Message, color))
+					fmt.Print(output.FormatDiffIndented(finding.Message, color, "  "))
 				}
 			}
 
@@ -168,7 +168,9 @@ Use --all to also apply style fixes (equivalent to running fmt + style --fix).`,
 			for _, finding := range styleFindings {
 				// Skip diff-only findings (style.diff rule) for issue counting
 				if finding.Rule == "style.diff" {
-					// Print diff if present (text mode only; structured mode emits via formatter)
+					// Print diff if present (text mode only; structured mode emits via formatter).
+					// Flush-left (not indented) because there is no per-file status line under
+					// fmt --all for style findings to anchor under.
 					if !useStructuredOutput && fmtCfg.Diff && finding.IsDiff {
 						fmt.Println()
 						fmt.Print(output.FormatDiff(finding.Message, color))

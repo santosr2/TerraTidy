@@ -2,7 +2,9 @@
 package main
 
 import (
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -333,6 +335,9 @@ func newFileCollector(recursive bool) *fileCollector {
 func (c *fileCollector) collectPath(path string) error {
 	info, err := os.Stat(path)
 	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return fmt.Errorf("file not found: %s", path)
+		}
 		return fmt.Errorf("stat %s: %w", path, err)
 	}
 

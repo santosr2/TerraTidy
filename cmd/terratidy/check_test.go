@@ -1,10 +1,13 @@
 package main
 
 import (
+	"errors"
+	"path/filepath"
 	"testing"
 
 	"github.com/santosr2/TerraTidy/pkg/sdk"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestCheckCmd(t *testing.T) {
@@ -50,6 +53,32 @@ func TestCheckCmd(t *testing.T) {
 		assert.NotNil(t, flag)
 		assert.Equal(t, "false", flag.DefValue)
 	})
+}
+
+// TestCheckCmd_MissingTargetFile verifies that passing a non-existent target path
+// returns an ExitError with code 3 and a "file not found" message. Previously the
+// CLI exited silently with code 3 and no message.
+func TestCheckCmd_MissingTargetFile(t *testing.T) {
+	resetCheckGlobals(t)
+
+	// Construct a path inside a real temp dir that is guaranteed not to exist —
+	// avoids races with anything that might write to /tmp.
+	missing := filepath.Join(t.TempDir(), "does-not-exist.tf")
+
+	format = "text"
+	cfgFile = ""
+	changed = false
+
+	rootCmd.SetArgs([]string{"check", missing})
+	err := rootCmd.Execute()
+
+	require.Error(t, err, "check command should fail for missing target file")
+
+	var exitErr *sdk.ExitError
+	require.True(t, errors.As(err, &exitErr), "expected ExitError, got: %v", err)
+	assert.Equal(t, sdk.ExitInternal, exitErr.Code, "exit code should be 3 for missing target file")
+	assert.Contains(t, err.Error(), "file not found", "error message should say 'file not found'")
+	assert.Contains(t, err.Error(), missing, "error message should include the missing path")
 }
 
 func TestCountBySeverity(t *testing.T) {

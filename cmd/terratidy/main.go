@@ -21,6 +21,11 @@ func main() {
 	if err := Execute(); err != nil {
 		var exitErr *sdk.ExitError
 		if errors.As(err, &exitErr) {
+			// NewFindingsError sets Err=nil (output is the formatter's job); only
+			// config/internal exits carry a non-nil Err that the user needs to see.
+			if exitErr.Err != nil {
+				_, _ = fmt.Fprintf(os.Stderr, "Error: %v\n", exitErr.Err)
+			}
 			os.Exit(exitErr.Code)
 		}
 		_, _ = fmt.Fprintf(os.Stderr, "Error: %v\n", err)

@@ -10,7 +10,7 @@ These flags are available for all commands:
 | ---------------------- | -------------------------------------------------------------------------------------------------------- |
 | `--config`, `-c`       | Path to configuration file (default: `.terratidy.yaml`)                                                  |
 | `--profile`, `-p`      | Configuration profile to use                                                                             |
-| `--format`, `-f`       | Output format: `text`, `json`, `json-compact`, `sarif`, `html`, `github`, `table`, `junit`, `markdown`   |
+| `--format`, `-f`       | Output format: `text`, `table`, `json`, `json-compact`, `sarif`, `html`, `junit`, `markdown`, `github`   |
 | `--changed`            | Only check files changed in git                                                                          |
 | `--no-recurse`         | Disable recursive directory traversal (scan only specified directories, not subdirectories)             |
 | `--exclude`            | Glob patterns to exclude (repeatable or comma-separated)                                                 |
@@ -273,6 +273,24 @@ When `--diff` is set, each file that needs formatting includes a unified diff in
 - `--diff` alone: formats the file and shows the diff
 - `--check --diff`: shows the diff without modifying files
 
+**`--all` workflow:**
+
+When `fmt --all` applies style fixes (i.e. fix mode, not `--check`), style rewrites can disrupt
+`hclwrite`'s equal-sign alignment. After the style pass reports `Fixed N style issue(s)`, fmt
+prints `Re-aligning attributes after style fixes...` and re-runs the format engine over the
+same files to restore alignment. This second pass only runs when style fixes were applied;
+`fmt --all --check` and `fmt --all` runs that produced no style fixes skip it.
+
+**Structured output (`--format`):**
+
+`fmt` honours the global `--format` flag (`table`, `json`, `json-compact`, `sarif`, `html`,
+`junit`, `markdown`, `github`). When `--format` is anything other than `text` (the default),
+fmt suppresses its human-readable banners (`Formatting N file(s)...`, per-file `[!]`/`[+]`
+lines, the `Re-aligning attributes...` notice, and the trailing summary) and emits all
+findings — including `fmt.needs-formatting` and `fmt.formatted` — through the shared
+formatter at the end. The re-alignment pass under `--all` still runs; only the progress
+text is suppressed. This keeps the structured payload clean for downstream tools.
+
 **Examples:**
 
 ```bash
@@ -285,8 +303,14 @@ terratidy fmt --check
 # Show what would change
 terratidy fmt --check --diff
 
-# Format and apply style fixes
+# Format and apply style fixes (prints "Re-aligning..." after style fixes apply)
 terratidy fmt --all
+
+# Emit findings as JSON for a CI pipeline (no banners, no progress lines)
+terratidy fmt --check --format json
+
+# JSON output also works with --all and --diff (diff text lands in finding messages)
+terratidy fmt --check --all --diff --format json
 ```
 
 **Comparison with style --fix:**

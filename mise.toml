@@ -190,6 +190,15 @@ depends = ["docker:build"]
 run = 'docker run --rm -v "$PWD":/app terratidy-dev check'
 
 # =============================================================================
+# Documentation
+# =============================================================================
+
+[tasks."docs:build"]
+description = "Build documentation site with mkdocs --strict"
+dir = "docs/site"
+run = "uv run --with-requirements requirements.txt --no-project --python 3.13 -- mkdocs build --strict"
+
+# =============================================================================
 # Development Tools
 # =============================================================================
 

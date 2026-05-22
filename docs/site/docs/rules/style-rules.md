@@ -274,14 +274,34 @@ resource "aws_instance" "web" {
 
 ### tags-at-end
 
-Ensures `tags`/`labels` are near the end of resource blocks (before lifecycle).
+Ensures `tags`/`labels` appear just before any `lifecycle` block in `resource`
+and `module` blocks, after all other attributes and nested blocks.
 
 | Property | Value |
 |----------|-------|
 | Rule ID | `style.tags-at-end` |
-| Default Severity | Warning |
+| Default Severity | Warning / Info (see below) |
 | Fixable | Yes |
 | Default | Enabled |
+
+The rule fires when any attribute or nested block appears after `tags`/`labels`,
+other than the three items conventionally tolerated as trailing: `tags_all`
+(provider-derived from inherited tags), `depends_on` (a meta-argument that
+typically goes last), and `lifecycle` (the trailing nested block the fix moves
+`tags` in front of). A single trailing item is enough to flag the violation —
+the older "more than two trailing attributes" threshold was relaxed so that
+layouts like `tags = {} ; ingress {} ; lifecycle {}` no longer pass silently.
+
+Severity is `warning` when `tags`/`labels` is placed **after** a `lifecycle`
+block (the more visually disruptive misplacement). When `tags` is in the wrong
+spot but ahead of any `lifecycle` block (or no `lifecycle` block is present),
+severity is `info`. Both paths share the same fix — moving `tags` to land just
+before `lifecycle`, or at the end of the block if no `lifecycle` is present.
+
+When both `tags` and `tags_all` are present the rule operates on `tags`; `labels`
+takes precedence over `tags_all` for providers that use it. The fix is
+non-destructive: only the `tags` region (including its leading comment) moves;
+other attributes and nested blocks stay in their source positions.
 
 **Example:**
 
@@ -1068,12 +1088,13 @@ resource "aws_instance" "web" {
 
 ## Multi-Pass Fixing
 
-When running with `--fix`, the style engine applies fixes in up to **10 passes**.
-Some rules interact with each other (e.g., reordering attributes may create new spacing issues),
-so the engine re-runs all rules after applying fixes to catch any new violations introduced by the first pass.
+When running with `--fix`, the style engine applies fixes in a loop until a fixed point is
+reached. Some rules interact with each other (e.g., reordering attributes may create new
+spacing issues), so the engine re-runs all rules after applying fixes to catch any new
+violations introduced by the previous pass.
 
 ```bash
-# Fix mode applies up to 10 passes automatically
+# Fix mode loops until no further fixes apply
 terratidy style --fix
 
 # Show what would change without modifying files
@@ -1083,11 +1104,27 @@ terratidy style --fix --diff
 Each pass:
 
 1. Parses the file fresh
-2. Runs all enabled rules
-3. Applies fixes from fixable findings
-4. If any fixes were applied, continues to the next pass
+2. Hashes the pre-fix content, checks it against the set of hashes seen this run, and adds it to that set on non-cycle passes
+3. Runs all enabled rules
+4. Applies fixes from fixable findings
+5. If any fixes were applied, continues to the next pass
 
-The engine stops early if no fixes are applied in a pass, so most files only need 1-2 passes.
+The engine stops as soon as a pass applies no fixes (fixed point), so most files only need
+1-2 passes. There is no arbitrary pass cap: termination is driven by content stabilization,
+not by counting passes.
+
+**Cycle detection.** If a pass reads content whose hash matches a previously-seen pass, the
+engine concludes a rule's `Fix()` re-triggers its own finding (or two rules ping-pong the
+same content). Rather than loop forever or silently truncate, it emits a `style.fix-loop`
+error finding naming the last rule applied before the cycle was detected and stops further
+fix passes for that file. Findings already accumulated from earlier passes are still
+returned alongside the `style.fix-loop` finding. This is a hard error (severity: error) —
+the affected file should be inspected and the offending rule reported as a bug.
+
+When invoked via `terratidy fmt --all` (fix mode), a final HCL format pass runs after all style
+fixes have been applied, to restore equal-sign alignment that style rewrites can disrupt. See
+the [`--all` workflow](../user-guide/commands.md#terratidy-fmt) section of the commands reference
+for details.
 
 ### Comment Preservation
 

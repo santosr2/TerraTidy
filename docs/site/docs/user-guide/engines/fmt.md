@@ -50,7 +50,21 @@ TerraTidy provides different commands for different formatting needs:
 
 - **`fmt`**: Applies HCL formatting rules (indentation, alignment, spacing). This is equivalent to `terraform fmt`.
 - **`style --fix`**: Applies TerraTidy style rules (naming conventions, block ordering, file organization) without HCL formatting.
-- **`fmt --all`**: Combines both - first formats files, then applies style fixes. Use this when you want complete code cleanup.
+- **`fmt --all`**: Combines both - first formats files, then applies style fixes.
+  After the style pass, a final format pass re-runs to restore equal-sign
+  alignment that style rewrites can disrupt (announced as
+  `Re-aligning attributes after style fixes...`). See
+  [`commands.md#terratidy-fmt`](../commands.md#terratidy-fmt) for the full workflow.
+
+## Structured Output (`--format`)
+
+`fmt` honours the global `--format` flag, which accepts
+`text` (default), `table`, `json`, `json-compact`, `sarif`, `html`, `junit`, `markdown`,
+or `github`. When `--format` is anything other than `text`, fmt suppresses its
+human-readable banners and progress lines and emits all findings — including
+`fmt.needs-formatting` and `fmt.formatted` — through the shared formatter at the end. The
+`--all` re-alignment pass still runs; only its progress text is suppressed. See
+[`commands.md#terratidy-fmt`](../commands.md#terratidy-fmt) for examples.
 
 ## Configuration
 

@@ -2,6 +2,7 @@ package style
 
 import (
 	"context"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -1381,6 +1382,37 @@ resource "aws_instance" "test2" {
 	require.NoError(t, err)
 	assert.Equal(t, os.FileMode(0o755), info.Mode().Perm(),
 		"diff preview restore must preserve original file mode")
+}
+
+// TestEngine_DiffCaptureReadError verifies that when Diff=true and the target
+// file is unreadable, the engine surfaces the "reading file for diff" error
+// branch from checkFile. Setup: a chmod-0 fixture makes os.ReadFile fail with
+// EACCES on the originalContent capture, before the per-pass loop ever runs.
+// Skipped on Windows and when running as root, where mode-based access control
+// does not apply.
+func TestEngine_DiffCaptureReadError(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Unix-style file permissions don't apply on Windows")
+	}
+	if os.Geteuid() == 0 {
+		t.Skip("running as root bypasses mode-based access control")
+	}
+
+	dir := t.TempDir()
+	tmpFile := filepath.Join(dir, "test.tf")
+	require.NoError(t, os.WriteFile(tmpFile, []byte(`resource "aws_instance" "test" {}`+"\n"), 0o644))
+	require.NoError(t, os.Chmod(tmpFile, 0o000), "make file unreadable so ReadFile fails")
+	// Restore permissions so t.TempDir cleanup can remove the file.
+	t.Cleanup(func() { _ = os.Chmod(tmpFile, 0o600) })
+
+	engine := New(&Config{Diff: true, Rules: make(map[string]RuleConfig)})
+	_, err := engine.Run(context.Background(), []string{tmpFile})
+	require.Error(t, err, "expected error from unreadable file in Diff mode")
+	assert.Contains(t, err.Error(), "reading file for diff",
+		"error should be wrapped with the diff-capture context from checkFile")
+	// ErrorIs traverses %w wrapping; this catches regressions that drop the
+	// wrap and replace the cause with a fmt.Errorf("%v", ...) string.
+	assert.ErrorIs(t, err, fs.ErrPermission, "underlying cause should remain reachable via errors.Is")
 }
 
 // TestEngine_WriteFileError verifies that a write failure during fix-apply

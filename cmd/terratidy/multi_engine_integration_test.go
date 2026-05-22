@@ -3,6 +3,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"os"
 	"path/filepath"
@@ -329,4 +330,96 @@ instance_type="t2.micro"
 	// The fixture is designed to trigger both lint and policy findings.
 	assert.True(t, hasLint || hasPolicy,
 		"at least one enabled engine (lint or policy) should produce findings")
+}
+
+// TestFmt_NoPhantomFixOnSecondRun locks in the spec success criterion:
+// "Running fmt --all twice on the same tree results in zero changes the
+// second time (no phantom-fix bug)." The original bug (reproduced 2026-04-30
+// against workera-iac) had the engine reporting "Fixed N style issue(s)" on
+// runs where the file content was actually unchanged — lifecycle-at-end and
+// tags-at-end fixes cancelled each other out. The hash-based fixed-point
+// detection in internal/engines/style/style.go:152-188 prevents this by
+// refusing to write content the engine has already seen.
+//
+// The fixture is constructed so the FIRST run genuinely modifies the file
+// (blank-line-between-blocks adds a blank line between the two resources)
+// AND triggers the lifecycle-at-end + tags-at-end pair that historically
+// drove the phantom-fix. The second run must produce zero file changes —
+// even though the engine still emits Fixable findings for those rules (the
+// tags-at-end Fix being a no-op for tags-already-after-lifecycle is tracked
+// in .issues/tech_debt.md under the 2026-05-20 entry), the file content
+// must not move.
+func TestFmt_NoPhantomFixOnSecondRun(t *testing.T) {
+	resetCheckGlobals(t) // also saves/restores `format`
+	// Pin text output explicitly. In structured output mode (format="json"
+	// and friends), the engine's hash-based fixed-point detection surfaces
+	// a style.fix-loop error finding from the tags-at-end no-op Fix above,
+	// which outputResults converts to an exit-1 error and would mask the
+	// real bytes.Equal assertion. Text mode discards the fix-loop finding
+	// silently, which is the user-facing behaviour this test cares about.
+	format = "text"
+	// resetCheckGlobals does not cover fmt-only flags; clean them up here.
+	t.Cleanup(func() {
+		fmtCheck = false
+		fmtDiff = false
+		fmtAll = false
+	})
+
+	// Fixture:
+	//   - Missing blank line between two top-level resources triggers
+	//     blank-line-between-blocks, which the first run actually fixes.
+	//   - Resource "b" has lifecycle in the middle and tags at the bottom —
+	//     the original phantom-fix pattern. Rules fire on every pass but
+	//     their fixes are no-ops on the canonical-ish post-first-run state.
+	dir := t.TempDir()
+	original := `resource "aws_instance" "a" {
+  ami = "ami-1"
+}
+resource "aws_instance" "b" {
+  ami = "ami-2"
+
+  lifecycle {
+    create_before_destroy = true
+  }
+
+  tags = {
+    Name = "b"
+  }
+}
+`
+	tfFile := filepath.Join(dir, "main.tf")
+	require.NoError(t, os.WriteFile(tfFile, []byte(original), 0o644))
+
+	// First run: applies fmt + style fixes. Must produce real content change
+	// so this test is not vacuously verifying "no-op on a clean file".
+	fmtAll = true
+	rootCmd.SetArgs([]string{"fmt", "--all", dir})
+	require.NoError(t, rootCmd.Execute(), "first fmt --all run failed")
+
+	afterFirst, err := os.ReadFile(tfFile)
+	require.NoError(t, err, "reading file after first run")
+	require.NotEqual(t, string(original), string(afterFirst),
+		"first fmt --all run was a no-op — fixture does not exercise the regression "+
+			"(check that blank-line-between-blocks is enabled by default and that the "+
+			"two top-level resources are still missing a blank line in the fixture)")
+
+	// Second run: must produce zero file changes. Even if rules still emit
+	// findings whose Fix is a no-op (Phase 7 B1: tags-at-end "before
+	// lifecycle" fix is a no-op for tags-after-lifecycle cases), the engine's
+	// hash-based fixed-point detection MUST prevent the file from being
+	// rewritten with identical content.
+	rootCmd.SetArgs([]string{"fmt", "--all", dir})
+	require.NoError(t, rootCmd.Execute(), "second fmt --all run failed")
+
+	afterSecond, err := os.ReadFile(tfFile)
+	require.NoError(t, err, "reading file after second run")
+
+	if !bytes.Equal(afterFirst, afterSecond) {
+		t.Fatalf(
+			"phantom-fix regression: fmt --all second run modified the file\n"+
+				"--- after first run (%d bytes) ---\n%s\n"+
+				"--- after second run (%d bytes) ---\n%s",
+			len(afterFirst), afterFirst, len(afterSecond), afterSecond,
+		)
+	}
 }

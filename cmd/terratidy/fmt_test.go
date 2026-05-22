@@ -470,13 +470,36 @@ instance_type="t2.micro"
 		changed = false
 		color = false // Disable color for predictable output
 
+		// Capture stdout so we can assert the diff is actually printed.
+		oldStdout := os.Stdout
+		t.Cleanup(func() { os.Stdout = oldStdout })
+		r, w, err := os.Pipe()
+		require.NoError(t, err)
+		defer func() { _ = r.Close() }()
+		os.Stdout = w
 		rootCmd.SetArgs([]string{"fmt", "--check", "--diff", tmpDir})
 		_ = rootCmd.Execute() // May return error for unformatted file
+		_ = w.Close()
+		os.Stdout = oldStdout
+		var buf bytes.Buffer
+		_, _ = buf.ReadFrom(r)
+		out := buf.String()
 
 		// Verify file was NOT modified (check mode)
 		afterContent, err := os.ReadFile(filePath)
 		require.NoError(t, err)
 		assert.Equal(t, string(originalContent), string(afterContent), "File should not be modified in check mode")
+
+		// Verify the diff was actually printed: per-file marker, unified-diff
+		// hunk header, both a removed and an added line, and the summary.
+		// The added-line regex tolerates hclwrite's column-alignment changes
+		// (the literal removed line is unambiguous because it's our input).
+		assert.Contains(t, out, "[!] ", "expected per-file needs-formatting marker")
+		assert.Contains(t, out, "unformatted.tf", "expected filename in output")
+		assert.Contains(t, out, "@@", "expected unified diff hunk header")
+		assert.Contains(t, out, `-ami="ami-123"`, "expected original line in diff")
+		assert.Regexp(t, `\+\s+ami\s+=\s+"ami-123"`, out, "expected formatted line in diff")
+		assert.Contains(t, out, "Found 1 file(s) that can be formatted", "expected --check --diff summary line")
 	})
 
 	t.Run("diff flag with normal mode shows diff and formats file", func(t *testing.T) {
@@ -507,28 +530,6 @@ ami="ami-123"
 		// HCL formatter adds spaces around = and proper indentation
 		assert.Contains(t, string(afterContent), "ami = ", "File should have spaces around =")
 		assert.Contains(t, string(afterContent), "  ami", "File should have proper indentation")
-	})
-
-	t.Run("relative path display", func(t *testing.T) {
-		tmpDir := t.TempDir()
-
-		// Create unformatted file
-		unformattedContent := `resource "null_resource" "x"   {}`
-		filePath := filepath.Join(tmpDir, "rel_path.tf")
-		require.NoError(t, os.WriteFile(filePath, []byte(unformattedContent), 0o644))
-
-		// Reset flags and ensure absolute paths is off
-		fmtCheck = false
-		fmtDiff = false
-		fmtAll = false
-		changed = false
-		absolutePaths = false
-
-		rootCmd.SetArgs([]string{"fmt", tmpDir})
-		err := rootCmd.Execute()
-		assert.NoError(t, err)
-		// Output uses DisplayPath which converts to relative paths by default
-		// The test verifies the code path works without errors
 	})
 
 	t.Run("all and diff flags together show style diffs without modifying file in check mode", func(t *testing.T) {

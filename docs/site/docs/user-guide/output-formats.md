@@ -12,9 +12,9 @@ TerraTidy supports multiple output formats for different use cases.
 | `json-compact` | `--format json-compact` | Single-line JSON               | Logging, streaming        |
 | `sarif`        | `--format sarif`        | SARIF 2.1.0 format             | GitHub Code Scanning      |
 | `html`         | `--format html`         | Visual HTML report             | Reports, sharing          |
-| `github`       | `--format github`       | GitHub Actions workflow cmds   | GitHub Actions inline     |
 | `junit`        | `--format junit`        | JUnit XML format               | CI/CD (Jenkins, GitLab)   |
 | `markdown`     | `--format markdown`     | Markdown summary               | PR comments, summaries    |
+| `github`       | `--format github`       | GitHub Actions workflow cmds   | GitHub Actions inline     |
 
 ## Usage
 

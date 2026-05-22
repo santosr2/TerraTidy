@@ -51,7 +51,6 @@ terratidy fix
 ## Getting Help
 
 - [GitHub Issues](https://github.com/santosr2/TerraTidy/issues) - Report bugs and request features
-- [Documentation](/) - Read the full documentation
 - [Examples](https://github.com/santosr2/TerraTidy/tree/main/examples) - See example configurations
 
 ## License

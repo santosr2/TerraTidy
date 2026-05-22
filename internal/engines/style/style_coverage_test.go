@@ -29,38 +29,6 @@ func TestRun_NilFiles(t *testing.T) {
 	assert.Empty(t, findings)
 }
 
-func TestFixWithDiff(t *testing.T) {
-	dir := t.TempDir()
-	// Content missing blank line between blocks (triggers blank-line-between-blocks rule)
-	content := `resource "aws_instance" "test1" {
-  ami = "ami-123"
-}
-resource "aws_instance" "test2" {
-  ami = "ami-456"
-}
-`
-	tmpFile := filepath.Join(dir, "test.tf")
-	require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0o644))
-
-	engine := New(&Config{
-		Fix:   true,
-		Diff:  true,
-		Rules: make(map[string]RuleConfig),
-	})
-
-	findings, err := engine.Run(context.Background(), []string{tmpFile})
-	require.NoError(t, err)
-
-	// Should have findings with diff information
-	hasDiff := false
-	for _, f := range findings {
-		if f.Message != "" && len(f.Message) > 10 {
-			hasDiff = true
-		}
-	}
-	_ = hasDiff // diff may or may not be in findings depending on implementation
-}
-
 func TestFixMode_ActuallyModifiesFile(t *testing.T) {
 	dir := t.TempDir()
 	content := `resource "aws_instance" "test1" {

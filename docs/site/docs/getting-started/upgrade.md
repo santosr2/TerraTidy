@@ -139,6 +139,75 @@ JSON field names changed to snake_case for consistency:
 |--------|-------|
 | `goVersion` | `go_version` |
 
+### v0.2.0-alpha.5: SDK `Finding.Fix` Replaced with `Fixable` Flag
+
+Applies to authors of Go SDK plugins (`pkg/sdk`). The `Finding.Fix *FixResult`
+field and the `FixResult` struct have been removed. `Check()` no longer
+precomputes fix content; the style engine calls `Fixer.Fix()` lazily, only when
+running in fix or diff mode.
+
+| Before | After |
+|--------|-------|
+| `Finding.Fix *FixResult` | `Finding.Fixable bool` |
+| `FixResult.Content []byte` | Removed — call `Fixer.Fix()` to obtain content |
+| `FixResult.Diff string` | Use `Finding.Message` + `Finding.IsDiff bool` |
+
+**Migration for SDK plugin authors:**
+
+```go
+// Before: Check() returned a Finding with precomputed fix content.
+func (r *MyRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Finding, error) {
+    fixed := applyFix(file)
+    return []sdk.Finding{{
+        Rule:    "my-rule",
+        Message: "issue found",
+        Fix:     &sdk.FixResult{Content: fixed},
+    }}, nil
+}
+
+// After: Check() reports findings only; Fix() produces the corrected bytes.
+func (r *MyRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Finding, error) {
+    return []sdk.Finding{{
+        Rule:    "my-rule",
+        Message: "issue found",
+    }}, nil
+}
+
+func (r *MyRule) Fix(ctx *sdk.Context, file *hcl.File) ([]byte, error) {
+    return applyFix(file), nil
+}
+```
+
+The engine sets `Finding.Fixable = true` automatically for any rule that
+implements `sdk.Fixer`. The field is read-only from a plugin perspective; the
+engine populates it.
+
+**Migration for finding consumers (formatters, IDE integrations):**
+
+```go
+// Before: nil-check on the pointer field.
+for _, f := range findings {
+    if f.Fix != nil {
+        renderFixable(f, f.Fix.Diff)
+    } else {
+        renderPlain(f)
+    }
+}
+
+// After: read the boolean flag; if the message carries a diff, route it
+// through a diff renderer.
+for _, f := range findings {
+    switch {
+    case f.IsDiff:
+        renderDiff(f, f.Message)
+    case f.Fixable:
+        renderFixable(f)
+    default:
+        renderPlain(f)
+    }
+}
+```
+
 ### Pre-release to Stable
 
 When TerraTidy reaches v1.0.0, expect:

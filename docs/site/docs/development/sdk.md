@@ -114,6 +114,11 @@ A finding with `IsDiff` set to `true` carries a unified diff in `Message` instea
 of a description. The CLI gates diff rendering on this field; the JSON output
 format exposes it as `"is_diff": true`.
 
+Plugin authors migrating from the pre-`Fixable` SDK (where `Finding.Fix` was a
+`*FixResult` pointer carrying precomputed bytes and a diff string) should see
+the [upgrade guide migration note](../getting-started/upgrade.md#v020-alpha5-sdk-findingfix-replaced-with-fixable-flag)
+for a before/after walk-through.
+
 ## Location
 
 Represents a source code location. This type replaces direct use of `hcl.Range` in the public API.

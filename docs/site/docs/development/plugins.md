@@ -52,10 +52,19 @@ Rules that support auto-fixing also implement `sdk.Fixer`:
 
 ```go
 type Fixer interface {
-    // Fix applies an automatic fix and returns the corrected file bytes
-    Fix(ctx *sdk.Context, file *hcl.File) ([]byte, error)
+    // Fix returns the set of byte-range edits the engine should apply to the
+    // file's current content. Return nil, nil (or a *FixResult with no edits)
+    // when no fix is applicable; the engine treats either form as a no-op.
+    //
+    // Multiple findings against the same file each call Fix independently; the
+    // engine collects every returned edit and applies them in a single pass.
+    // See FixResult for the exact ordering, overlap, and whole-file rules.
+    Fix(ctx *sdk.Context, file *hcl.File) (*sdk.FixResult, error)
 }
 ```
+
+See [`TextEdit`](sdk.md#textedit) and [`FixResult`](sdk.md#fixresult) for
+byte-offset semantics, apply order, and the whole-file exclusivity rule.
 
 ### Context
 
@@ -87,8 +96,9 @@ type Finding struct {
 ```
 
 A finding is auto-fixable when `Fixable` is `true`. The engine sets this based on
-whether the rule implements `Fixer`; rules must not set it directly. Fix bytes
-are computed lazily by calling `Fixer.Fix(ctx, file)` only when needed.
+whether the rule implements `Fixer`; rules must not set it directly. The
+`FixResult.Edits` are computed lazily by calling `Fixer.Fix(ctx, file)` only
+when needed (in fix or diff mode).
 
 ### Severity
 
@@ -222,8 +232,12 @@ func (r *RequireTagsRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Finding
 }
 
 // Optional: implement sdk.Fixer for auto-fix support
-// func (r *RequireTagsRule) Fix(_ *sdk.Context, _ *hcl.File) ([]byte, error) {
-//     return fixedContent, nil
+// func (r *RequireTagsRule) Fix(_ *sdk.Context, _ *hcl.File) (*sdk.FixResult, error) {
+//     return &sdk.FixResult{Edits: []sdk.TextEdit{{
+//         Start:       findingStart,
+//         End:         findingEnd,
+//         Replacement: []byte("corrected"),
+//     }}}, nil
 // }
 ```
 

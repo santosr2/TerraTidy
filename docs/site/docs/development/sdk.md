@@ -33,10 +33,22 @@ Rules that support auto-fixing also implement `Fixer`:
 
 ```go
 type Fixer interface {
-    // Fix applies an automatic fix and returns the corrected file content.
-    Fix(ctx *Context, file *hcl.File) ([]byte, error)
+    // Fix returns the set of byte-range edits the engine should apply to the
+    // file's current content. Return nil, nil (or a *FixResult with no edits)
+    // when no fix is applicable; the engine treats either form as a no-op.
+    //
+    // Multiple findings against the same file each call Fix independently; the
+    // engine collects every returned edit and applies them in a single pass.
+    // See FixResult for the exact ordering, overlap, and whole-file rules.
+    Fix(ctx *Context, file *hcl.File) (*FixResult, error)
 }
 ```
+
+`Fix` no longer returns the rewritten file in full. Rules describe the change
+as one or more `TextEdit`s wrapped in a `*FixResult`; the engine collects edits
+across all fixable findings and applies them in a single pass. See the
+[TextEdit](#textedit) and [FixResult](#fixresult) sections below for the byte-offset
+semantics and the whole-file exclusivity rule.
 
 ## Engine Interface
 
@@ -107,7 +119,7 @@ type Finding struct {
 
 A finding is auto-fixable when `Fixable` is `true`. The engine sets this field by
 type-asserting the rule against `sdk.Fixer` and stamping it on every finding the
-rule produces. To compute the actual fix bytes, the engine calls
+rule produces. To collect the `TextEdit`s, the engine calls
 `Fixer.Fix(ctx, file)` lazily — only in fix or diff mode.
 
 A finding with `IsDiff` set to `true` carries a unified diff in `Message` instead
@@ -117,7 +129,88 @@ format exposes it as `"is_diff": true`.
 Plugin authors migrating from the pre-`Fixable` SDK (where `Finding.Fix` was a
 `*FixResult` pointer carrying precomputed bytes and a diff string) should see
 the [upgrade guide migration note](../getting-started/upgrade.md#v020-alpha5-sdk-findingfix-replaced-with-fixable-flag)
-for a before/after walk-through.
+for a before/after walk-through. The `FixResult` name has since been
+reintroduced for an unrelated purpose; see [FixResult](#fixresult) below.
+
+## TextEdit
+
+A single byte-range edit. Rules return one or more `TextEdit`s inside a
+[`FixResult`](#fixresult); the engine sorts edits by `Start` in descending order
+and applies them in a single write per pass.
+
+```go
+type TextEdit struct {
+    // Start is the inclusive byte offset where the edit begins.
+    Start int `json:"start"`
+    // End is the exclusive byte offset where the edit ends. End must be >= Start
+    // and <= len(content); the engine bounds-checks every edit and errors otherwise.
+    End int `json:"end"`
+    // Replacement is the bytes to insert in place of content[Start:End].
+    // An empty or nil slice means deletion.
+    Replacement []byte `json:"replacement"`
+}
+```
+
+Offsets are **half-open**: `[Start, End)`.
+
+| Shape          | Start vs End                                | Replacement       |
+| -------------- | ------------------------------------------- | ----------------- |
+| Pure insertion | `Start == End`                              | non-empty         |
+| Pure deletion  | `Start < End`                               | empty or nil      |
+| Replacement    | `Start < End`                               | non-empty         |
+| Whole-file     | `Start == 0 && End == len(content)`         | the entire rewrite |
+
+Whole-file edits trigger exclusive-this-pass behavior; see
+[FixResult](#fixresult).
+
+## FixResult
+
+The return value of `Fixer.Fix`. Wraps the edits a single `Fix` call produced.
+
+```go
+type FixResult struct {
+    // Edits is the set of byte-range edits to apply. An empty or nil slice
+    // indicates no fix; equivalent to returning a nil *FixResult.
+    Edits []TextEdit `json:"edits"`
+}
+```
+
+The struct shape (rather than a bare `[]TextEdit`) is a forward-compat hatch:
+future fields can be added without changing the `Fixer` signature again.
+
+### Apply order
+
+The engine sorts edits by `Start` in **descending** order before applying, so
+earlier (lower-offset) splices do not invalidate the byte offsets of later
+edits in the same pass. Rule authors may return edits in any order.
+
+### Whole-file exclusivity
+
+If any edit collected in a pass has `Start == 0 && End == len(content)`, it is
+applied alone — all other edits in the same pass are discarded and re-emit
+against the rewritten content on the next pass. This avoids ambiguous
+interactions between whole-file rewriters and narrow edits.
+
+Rules migrating from the old `[]byte`-returning `Fix` can build a whole-file
+`FixResult` directly:
+
+```go
+&sdk.FixResult{Edits: []sdk.TextEdit{{
+    Start:       0,
+    End:         len(original),
+    Replacement: newContent,
+}}}
+```
+
+Return `nil, nil` when `newContent` equals `original` to signal a no-op fix.
+
+!!! note "Name reuse"
+    The `FixResult` name was previously used (pre-v0.2.0-alpha.5) for a
+    different type carrying precomputed bytes and a diff string. That type was
+    removed alongside the `Finding.Fix` field. The current `FixResult` is
+    unrelated to the old shape. See the
+    [upgrade guide](../getting-started/upgrade.md#v020-alpha5-sdk-fixerfix-returns-fixresult-instead-of-byte)
+    for the chronology.
 
 ## Location
 
@@ -197,7 +290,11 @@ func (r *MyRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Finding, error) 
 }
 
 // Optional: implement sdk.Fixer for auto-fix support
-// func (r *MyRule) Fix(ctx *sdk.Context, file *hcl.File) ([]byte, error) {
-//     return fixedContent, nil
+// func (r *MyRule) Fix(ctx *sdk.Context, file *hcl.File) (*sdk.FixResult, error) {
+//     return &sdk.FixResult{Edits: []sdk.TextEdit{{
+//         Start:       findingStart,
+//         End:         findingEnd,
+//         Replacement: []byte("corrected"),
+//     }}}, nil
 // }
 ```

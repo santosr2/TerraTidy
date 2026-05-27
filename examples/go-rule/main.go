@@ -76,7 +76,8 @@ func (r *RequireTagsRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Finding
 }
 
 // Optional: implement sdk.Fixer interface for auto-fix support
-// func (r *RequireTagsRule) Fix(ctx *sdk.Context, file *hcl.File) ([]byte, error) {
-//     // Return modified file content
-//     return fixedContent, nil
+// func (r *RequireTagsRule) Fix(ctx *sdk.Context, file *hcl.File) (*sdk.FixResult, error) {
+//     // Return nil for no-op, or build a *sdk.FixResult with one or more
+//     // sdk.TextEdit byte-range edits to splice into the file.
+//     return nil, nil
 // }

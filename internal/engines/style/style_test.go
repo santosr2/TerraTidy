@@ -1,6 +1,7 @@
 package style
 
 import (
+	"bytes"
 	"context"
 	"io/fs"
 	"os"
@@ -10,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/hashicorp/hcl/v2"
+	"github.com/hashicorp/hcl/v2/hclparse"
 	"github.com/santosr2/TerraTidy/internal/config"
 	"github.com/santosr2/TerraTidy/internal/engines/style/rules"
 	"github.com/santosr2/TerraTidy/pkg/sdk"
@@ -1445,6 +1447,703 @@ resource "aws_instance" "test2" {
 	engine := New(&Config{Fix: true, Rules: make(map[string]RuleConfig)})
 	_, err := engine.Run(context.Background(), []string{tmpFile})
 	require.Error(t, err, "expected error from read-only file write")
-	assert.Contains(t, err.Error(), "writing fix for",
-		"error should be wrapped with the rule context from applyFixes")
+	assert.Contains(t, err.Error(), "writing fixes for",
+		"error should be wrapped with the rule-list context from applyFixes")
+	assert.Contains(t, err.Error(), "style.blank-line-between-blocks",
+		"error should name the rule(s) whose edits were in flight")
+}
+
+// TestCollectStuckFixableRules exercises the helper that powers the
+// stuck-rule branch of the fix-loop guard in checkFile. The function must
+// (a) skip findings whose Fixable flag is false, (b) deduplicate rule names
+// that appear more than once, (c) preserve source order on first occurrence,
+// and (d) return nil when no Fixable finding is present.
+func TestCollectStuckFixableRules(t *testing.T) {
+	tests := []struct {
+		name     string
+		findings []sdk.Finding
+		want     []string
+	}{
+		{
+			name:     "empty input returns nil",
+			findings: nil,
+			want:     nil,
+		},
+		{
+			name: "no fixable findings returns nil",
+			findings: []sdk.Finding{
+				{Rule: "rule-a", Fixable: false},
+				{Rule: "rule-b", Fixable: false},
+			},
+			want: nil,
+		},
+		{
+			name: "non-fixable findings are skipped",
+			findings: []sdk.Finding{
+				{Rule: "rule-a", Fixable: false},
+				{Rule: "rule-b", Fixable: true},
+				{Rule: "rule-c", Fixable: false},
+			},
+			want: []string{"rule-b"},
+		},
+		{
+			name: "duplicate fixable rule names are deduplicated",
+			findings: []sdk.Finding{
+				{Rule: "rule-a", Fixable: true},
+				{Rule: "rule-a", Fixable: true},
+				{Rule: "rule-b", Fixable: true},
+				{Rule: "rule-a", Fixable: true},
+			},
+			want: []string{"rule-a", "rule-b"},
+		},
+		{
+			name: "source order is preserved on first occurrence",
+			findings: []sdk.Finding{
+				{Rule: "rule-z", Fixable: true},
+				{Rule: "rule-a", Fixable: true},
+				{Rule: "rule-m", Fixable: true},
+			},
+			want: []string{"rule-z", "rule-a", "rule-m"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := collectStuckFixableRules(tt.findings)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+// stubNarrowEditRule is a parameterized Fixer that emits a single narrow
+// TextEdit at a configured byte range. Tests use two instances at disjoint
+// ranges to exercise applyFixes's multi-edit splice path without relying on
+// real rules whose tests live in the (currently mid-migration) rules
+// subpackage.
+type stubNarrowEditRule struct {
+	name        string
+	startOffset int
+	endOffset   int
+	replacement []byte
+}
+
+func (r *stubNarrowEditRule) Name() string        { return r.name }
+func (r *stubNarrowEditRule) Description() string { return "Test stub: emits one narrow edit" }
+
+func (r *stubNarrowEditRule) Check(ctx *sdk.Context, _ *hcl.File) ([]sdk.Finding, error) {
+	return []sdk.Finding{{
+		Rule:     r.name,
+		Message:  "stub narrow-edit finding",
+		File:     ctx.File,
+		Severity: sdk.SeverityWarning,
+		Fixable:  true,
+	}}, nil
+}
+
+func (r *stubNarrowEditRule) Fix(_ *sdk.Context, _ *hcl.File) (*sdk.FixResult, error) {
+	return &sdk.FixResult{
+		Edits: []sdk.TextEdit{{
+			Start:       r.startOffset,
+			End:         r.endOffset,
+			Replacement: r.replacement,
+		}},
+	}, nil
+}
+
+// TestApplyFixes_MultipleNonOverlappingEdits asserts that applyFixes splices
+// two narrow edits from two distinct rules in a single pass — exactly one
+// os.WriteFile call, both rule names returned in appliedRules, and the
+// resulting content matches the descending-Start splice of both edits.
+//
+// The single-write assertion is the load-bearing guarantee: before the Phase 4
+// byte-range refactor, N independent fixes required N passes (and N writes).
+// The new contract collapses them into one write per pass when ranges don't
+// conflict.
+//
+// Two sub-tests exercise the splice math: equal-length replacements (trivial
+// offset preservation) and asymmetric-length replacements (the right-edit
+// shifts later content, the left-edit must still land at its original offset
+// because descending-Start splices the right edge first).
+func TestApplyFixes_MultipleNonOverlappingEdits(t *testing.T) {
+	type editSpec struct {
+		marker      string
+		replacement []byte
+	}
+
+	tests := []struct {
+		name     string
+		original []byte
+		left     editSpec
+		right    editSpec
+		expected []byte
+	}{
+		{
+			name:     "equal_length_replacements",
+			original: []byte("# AAAA BBBB CCCC\n"),
+			left:     editSpec{marker: "AAAA", replacement: []byte("aaaa")},
+			right:    editSpec{marker: "CCCC", replacement: []byte("cccc")},
+			expected: []byte("# aaaa BBBB cccc\n"),
+		},
+		{
+			// Asymmetric-length replacements stress the descending-Start
+			// splice: the right edit ("CCCC" → 8 bytes) expands the tail,
+			// then the left edit ("AAAA" → 2 bytes) shrinks the head. The
+			// invariant being checked is that the left edit applies at its
+			// ORIGINAL offset, not a post-right-splice offset.
+			name:     "asymmetric_length_replacements",
+			original: []byte("# AAAA BBBB CCCC\n"),
+			left:     editSpec{marker: "AAAA", replacement: []byte("xx")},
+			right:    editSpec{marker: "CCCC", replacement: []byte("yyyyyyyy")},
+			expected: []byte("# xx BBBB yyyyyyyy\n"),
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			tmpFile := filepath.Join(dir, "narrow.tf")
+			require.NoError(t, os.WriteFile(tmpFile, tc.original, 0o644))
+
+			leftStart := bytes.Index(tc.original, []byte(tc.left.marker))
+			require.GreaterOrEqual(t, leftStart, 0, "test fixture must contain left marker")
+			rightStart := bytes.Index(tc.original, []byte(tc.right.marker))
+			require.GreaterOrEqual(t, rightStart, 0, "test fixture must contain right marker")
+
+			ruleLeft := &stubNarrowEditRule{
+				name:        "test.stub-narrow-left",
+				startOffset: leftStart,
+				endOffset:   leftStart + len(tc.left.marker),
+				replacement: tc.left.replacement,
+			}
+			ruleRight := &stubNarrowEditRule{
+				name:        "test.stub-narrow-right",
+				startOffset: rightStart,
+				endOffset:   rightStart + len(tc.right.marker),
+				replacement: tc.right.replacement,
+			}
+
+			engine := New(&Config{Fix: true, Rules: make(map[string]RuleConfig)}, ruleLeft, ruleRight)
+
+			var writeCount int
+			var capturedContent []byte
+			engine.writeFn = func(name string, data []byte, perm os.FileMode) error {
+				writeCount++
+				capturedContent = append([]byte(nil), data...)
+				return os.WriteFile(name, data, perm)
+			}
+
+			parser := hclparse.NewParser()
+			file, diags := parser.ParseHCL(tc.original, tmpFile)
+			require.False(t, diags.HasErrors(), "test fixture must parse: %s", diags.Error())
+
+			ruleCtx := &sdk.Context{
+				Context: context.Background(),
+				Options: make(map[string]any),
+				WorkDir: ".",
+				File:    tmpFile,
+			}
+			findings := []sdk.Finding{
+				{Rule: ruleLeft.Name(), File: tmpFile, Fixable: true, Severity: sdk.SeverityWarning},
+				{Rule: ruleRight.Name(), File: tmpFile, Fixable: true, Severity: sdk.SeverityWarning},
+			}
+
+			applied, err := engine.applyFixes(ruleCtx, file, findings, 0o644)
+			require.NoError(t, err)
+
+			// Load-bearing assertion: one pass means one write.
+			assert.Equal(t, 1, writeCount,
+				"applyFixes must perform exactly one os.WriteFile call for two non-overlapping edits")
+			assert.ElementsMatch(t, []string{ruleLeft.Name(), ruleRight.Name()}, applied,
+				"appliedRules must contain both contributing rule names")
+			assert.Equal(t, tc.expected, capturedContent,
+				"single write must contain both narrow replacements spliced from one pass")
+
+			onDisk, err := os.ReadFile(tmpFile)
+			require.NoError(t, err)
+			assert.Equal(t, tc.expected, onDisk,
+				"on-disk content must match the single write (consistency check)")
+		})
+	}
+}
+
+// TestApplyFixes_OverlappingEdits_DefersSecond asserts that when two edits
+// conflict (same byte range, or partially-overlapping ranges), only the first
+// by source order is applied this pass; the conflicting later edit is dropped
+// from the retained set and re-emerges on the next pass when checkFile re-runs
+// Check against the updated content. The single-pass contract is the unit
+// under test here; multi-pass convergence is covered by Engine.Run tests.
+//
+// Two sub-cases exercise both branches of editsConflict: same-Start
+// (unconditional conflict regardless of End), and the half-open range
+// intersection branch (positions shared by two distinct Start offsets).
+func TestApplyFixes_OverlappingEdits_DefersSecond(t *testing.T) {
+	type editSpec struct {
+		start, end  int
+		replacement []byte
+	}
+
+	tests := []struct {
+		name     string
+		original []byte
+		first    editSpec
+		second   editSpec
+		expected []byte
+	}{
+		{
+			// Same-Start branch of editsConflict: first wins, second deferred.
+			name:     "same_range",
+			original: []byte("# AAAA BBBB\n"),
+			first:    editSpec{start: 2, end: 6, replacement: []byte("xxxx")},
+			second:   editSpec{start: 2, end: 6, replacement: []byte("yyyy")},
+			expected: []byte("# xxxx BBBB\n"),
+		},
+		{
+			// Half-open range intersection branch: original is "# abcdef\n"
+			// (indices: '#'=0, ' '=1, 'a'=2, 'b'=3, 'c'=4, 'd'=5, 'e'=6, 'f'=7).
+			// [3,6) covers 'bcd'; [4,7) covers 'cde'. Shared positions 4 and 5.
+			// Distinct Start offsets so the same-Start short-circuit doesn't fire.
+			// First retained, second deferred → only 'bcd' becomes "ZZZ".
+			name:     "partial_overlap",
+			original: []byte("# abcdef\n"),
+			first:    editSpec{start: 3, end: 6, replacement: []byte("ZZZ")},
+			second:   editSpec{start: 4, end: 7, replacement: []byte("WWW")},
+			expected: []byte("# aZZZef\n"),
+		},
+		{
+			// Zero-width-inside-range branch of editsConflict: a zero-width
+			// insertion's offset lies strictly inside the other edit's
+			// half-open range. The half-open intersection check at
+			// max(Start) < min(End) misses this (min(End) equals the
+			// insertion's offset, so 3 < 3 is false); the dedicated
+			// zero-width branch catches it. Without this branch
+			// FuzzApplyFixesSorting found a divergence between the engine's
+			// descending splice and an ascending-with-shift reference.
+			//
+			// Original "# abcde\n" with first = replace [2,5)="abc" → "X"
+			// and second = insert "Y" at offset 3 (strictly inside [2,5)).
+			// First retained, second deferred → "# Xde\n"; the insertion
+			// re-anchors next pass against the rewritten content.
+			name:     "zero_width_inside_range",
+			original: []byte("# abcde\n"),
+			first:    editSpec{start: 2, end: 5, replacement: []byte("X")},
+			second:   editSpec{start: 3, end: 3, replacement: []byte("Y")},
+			expected: []byte("# Xde\n"),
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			tmpFile := filepath.Join(dir, "overlap.tf")
+			require.NoError(t, os.WriteFile(tmpFile, tc.original, 0o644))
+
+			ruleFirst := &stubNarrowEditRule{
+				name:        "test.stub-overlap-first",
+				startOffset: tc.first.start,
+				endOffset:   tc.first.end,
+				replacement: tc.first.replacement,
+			}
+			ruleSecond := &stubNarrowEditRule{
+				name:        "test.stub-overlap-second",
+				startOffset: tc.second.start,
+				endOffset:   tc.second.end,
+				replacement: tc.second.replacement,
+			}
+
+			engine := New(&Config{Fix: true, Rules: make(map[string]RuleConfig)}, ruleFirst, ruleSecond)
+
+			var writeCount int
+			var capturedContent []byte
+			engine.writeFn = func(name string, data []byte, perm os.FileMode) error {
+				writeCount++
+				capturedContent = append([]byte(nil), data...)
+				return os.WriteFile(name, data, perm)
+			}
+
+			parser := hclparse.NewParser()
+			file, diags := parser.ParseHCL(tc.original, tmpFile)
+			require.False(t, diags.HasErrors(), "test fixture must parse: %s", diags.Error())
+
+			ruleCtx := &sdk.Context{
+				Context: context.Background(),
+				Options: make(map[string]any),
+				WorkDir: ".",
+				File:    tmpFile,
+			}
+			// Order is load-bearing: ruleFirst's finding precedes ruleSecond's,
+			// so the conflict-resolution loop retains ruleFirst's edit and
+			// drops ruleSecond's.
+			findings := []sdk.Finding{
+				{Rule: ruleFirst.Name(), File: tmpFile, Fixable: true, Severity: sdk.SeverityWarning},
+				{Rule: ruleSecond.Name(), File: tmpFile, Fixable: true, Severity: sdk.SeverityWarning},
+			}
+
+			applied, err := engine.applyFixes(ruleCtx, file, findings, 0o644)
+			require.NoError(t, err)
+
+			assert.Equal(t, 1, writeCount,
+				"applyFixes must perform exactly one os.WriteFile call even when edits conflict")
+			assert.Equal(t, []string{ruleFirst.Name()}, applied,
+				"appliedRules must contain only the first rule by source order; the deferred edit does not appear in this pass's report")
+			assert.Equal(t, tc.expected, capturedContent,
+				"single write must contain only the first rule's replacement; the second's edit is deferred to a later pass")
+
+			onDisk, err := os.ReadFile(tmpFile)
+			require.NoError(t, err)
+			assert.Equal(t, tc.expected, onDisk,
+				"on-disk content must match the single write (consistency check)")
+		})
+	}
+}
+
+// TestApplyFixes_WholeFileEdit_ExclusiveOfOthers asserts that when one rule
+// emits a whole-file edit (Start=0, End=len(content)) and another rule emits
+// a narrow edit in the same pass, applyFixes applies the whole-file edit
+// alone and defers the narrow edit. The single-pass contract under test:
+// appliedRules contains only the whole-file rule, exactly one write occurs,
+// and the written content matches the whole-file replacement verbatim.
+//
+// Exclusivity must be source-order independent: the whole-file branch at
+// style.go scans every collected edit looking for one that covers the full
+// file, so registering the narrow rule first must not let the narrow edit
+// sneak through ahead of the whole-file replacement. Two sub-cases cover
+// both orderings to pin this invariant.
+//
+// Multi-pass convergence (next pass picks up the deferred narrow edit
+// re-emitted against the rewritten content) is covered by Engine.Run tests;
+// this single-pass unit test exercises the exclusivity branch directly.
+func TestApplyFixes_WholeFileEdit_ExclusiveOfOthers(t *testing.T) {
+	original := []byte("# AAAA BBBB\n")
+	wholeFileReplacement := []byte("ENTIRELY NEW\n")
+	narrowMarker := "AAAA"
+	narrowReplacement := []byte("aaaa")
+
+	tests := []struct {
+		name string
+		// orderWholeFileFirst controls the source order of the findings slice.
+		// True: whole-file finding precedes narrow finding, so the whole-file
+		// edit is collected[0] and the exclusivity loop finds it on its first
+		// iteration.
+		// False: narrow finding precedes whole-file finding, so the loop must
+		// scan past collected[0] before finding the whole-file edit at
+		// collected[1]. Both orderings must yield the same result — the
+		// invariant under test is source-order independence.
+		orderWholeFileFirst bool
+	}{
+		{name: "whole_file_registered_first", orderWholeFileFirst: true},
+		{name: "narrow_registered_first", orderWholeFileFirst: false},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			tmpFile := filepath.Join(dir, "whole.tf")
+			require.NoError(t, os.WriteFile(tmpFile, original, 0o644))
+
+			narrowStart := bytes.Index(original, []byte(narrowMarker))
+			require.GreaterOrEqual(t, narrowStart, 0, "test fixture must contain narrow marker")
+
+			wholeFileRule := &stubNarrowEditRule{
+				name:        "test.stub-whole-file",
+				startOffset: 0,
+				endOffset:   len(original),
+				replacement: wholeFileReplacement,
+			}
+			narrowRule := &stubNarrowEditRule{
+				name:        "test.stub-narrow",
+				startOffset: narrowStart,
+				endOffset:   narrowStart + len(narrowMarker),
+				replacement: narrowReplacement,
+			}
+
+			engine := New(&Config{Fix: true, Rules: make(map[string]RuleConfig)}, wholeFileRule, narrowRule)
+
+			var writeCount int
+			var capturedContent []byte
+			engine.writeFn = func(name string, data []byte, perm os.FileMode) error {
+				writeCount++
+				capturedContent = append([]byte(nil), data...)
+				return os.WriteFile(name, data, perm)
+			}
+
+			parser := hclparse.NewParser()
+			file, diags := parser.ParseHCL(original, tmpFile)
+			require.False(t, diags.HasErrors(), "test fixture must parse: %s", diags.Error())
+
+			ruleCtx := &sdk.Context{
+				Context: context.Background(),
+				Options: make(map[string]any),
+				WorkDir: ".",
+				File:    tmpFile,
+			}
+
+			wholeFinding := sdk.Finding{Rule: wholeFileRule.Name(), File: tmpFile, Fixable: true, Severity: sdk.SeverityWarning}
+			narrowFinding := sdk.Finding{Rule: narrowRule.Name(), File: tmpFile, Fixable: true, Severity: sdk.SeverityWarning}
+
+			var findings []sdk.Finding
+			if tc.orderWholeFileFirst {
+				findings = []sdk.Finding{wholeFinding, narrowFinding}
+			} else {
+				findings = []sdk.Finding{narrowFinding, wholeFinding}
+			}
+
+			applied, err := engine.applyFixes(ruleCtx, file, findings, 0o644)
+			require.NoError(t, err)
+
+			assert.Equal(t, 1, writeCount,
+				"applyFixes must perform exactly one os.WriteFile call when a whole-file edit is present")
+			assert.Equal(t, []string{wholeFileRule.Name()}, applied,
+				"appliedRules must contain only the whole-file rule; the narrow edit is deferred")
+			assert.Equal(t, wholeFileReplacement, capturedContent,
+				"single write must contain the whole-file replacement only; the narrow edit's bytes must not appear")
+
+			onDisk, err := os.ReadFile(tmpFile)
+			require.NoError(t, err)
+			assert.Equal(t, wholeFileReplacement, onDisk,
+				"on-disk content must match the single write (consistency check)")
+		})
+	}
+}
+
+// TestApplyFixes_OutOfBoundsEdit_Errors asserts that applyFixes rejects any
+// edit violating the half-open [Start, End) invariants BEFORE writing,
+// surfacing a rule-attributed error and leaving the file untouched.
+//
+// The three bounds-check branches at style.go:478-488 are:
+//
+//   - Start < 0
+//   - End < Start
+//   - End > len(content)
+//
+// One sub-case per branch pins both the trigger condition and the branch's
+// specific error wording so a future refactor cannot silently widen the
+// accepted range. Per sub-case the assertions verify (a) an error is
+// returned, (b) the error contains the originating rule name, (c) the error
+// matches the branch's exact wording, (d) no file write occurs (writeFn seam
+// counter remains zero), (e) the file's mode is unchanged, and (f) the
+// file's content is unchanged. The mode and content checks pin the
+// no-side-effects invariant — applyFixes must abort before writeFixed runs,
+// so the defensive Chmod inside writeFixed never fires either.
+func TestApplyFixes_OutOfBoundsEdit_Errors(t *testing.T) {
+	// 12-byte original: positions 0..11; len(content) == 12.
+	original := []byte("# AAAA BBBB\n")
+
+	tests := []struct {
+		name     string
+		ruleName string
+		// start, end describe the (deliberately invalid) edit emitted by
+		// the stub rule. Replacement is irrelevant — the bounds-check fires
+		// before any splice attempt — so it stays constant across sub-cases.
+		start, end int
+		// wantErrFragment pins the specific branch's error wording. The
+		// bounds-check order in applyFixes is (1) Start<0, (2) End<Start,
+		// (3) End>len, so each sub-case is constructed to trip exactly one.
+		wantErrFragment string
+	}{
+		{
+			name:            "start_negative",
+			ruleName:        "test.stub-negative-start",
+			start:           -1, // Start<0 fires first regardless of End
+			end:             4,
+			wantErrFragment: "edit start -1 is negative",
+		},
+		{
+			name:            "end_precedes_start",
+			ruleName:        "test.stub-end-before-start",
+			start:           6,
+			end:             2, // End<Start fires before End>len would
+			wantErrFragment: "edit end 2 precedes start 6",
+		},
+		{
+			name:            "end_exceeds_content_length",
+			ruleName:        "test.stub-end-past-eof",
+			start:           2,
+			end:             len(original) + 5, // 17 > 12
+			wantErrFragment: "edit end 17 exceeds content length 12",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			tmpFile := filepath.Join(dir, "oob.tf")
+			require.NoError(t, os.WriteFile(tmpFile, original, 0o644))
+
+			// Snapshot the post-WriteFile mode rather than asserting against
+			// a literal 0o644 — keeps the test independent of the runner's
+			// umask while still letting us detect a stray Chmod on the
+			// error path.
+			beforeStat, err := os.Stat(tmpFile)
+			require.NoError(t, err)
+			beforeMode := beforeStat.Mode().Perm()
+
+			rule := &stubNarrowEditRule{
+				name:        tc.ruleName,
+				startOffset: tc.start,
+				endOffset:   tc.end,
+				replacement: []byte("UNUSED"),
+			}
+
+			engine := New(&Config{Fix: true, Rules: make(map[string]RuleConfig)}, rule)
+
+			var writeCount int
+			engine.writeFn = func(name string, data []byte, perm os.FileMode) error {
+				writeCount++
+				return os.WriteFile(name, data, perm)
+			}
+
+			parser := hclparse.NewParser()
+			file, diags := parser.ParseHCL(original, tmpFile)
+			require.False(t, diags.HasErrors(), "test fixture must parse: %s", diags.Error())
+
+			ruleCtx := &sdk.Context{
+				Context: context.Background(),
+				Options: make(map[string]any),
+				WorkDir: ".",
+				File:    tmpFile,
+			}
+			findings := []sdk.Finding{
+				{Rule: rule.Name(), File: tmpFile, Fixable: true, Severity: sdk.SeverityWarning},
+			}
+
+			// Pass a captured mode (0o600) distinct from the on-disk mode
+			// (0o644 minus umask). If applyFixes ever invoked writeFixed on
+			// the error path, writeFixed's defensive Chmod would force the
+			// file to 0o600 — the mode-preservation assert below would
+			// catch the regression.
+			applied, err := engine.applyFixes(ruleCtx, file, findings, 0o600)
+			require.Error(t, err, "applyFixes must reject out-of-bounds edits")
+			assert.Nil(t, applied, "appliedRules must be nil on the bounds-check error path")
+
+			assert.Contains(t, err.Error(), "fix from",
+				"error must use the consistent 'fix from <rule>' prefix from applyFixes")
+			assert.Contains(t, err.Error(), tc.ruleName,
+				"error must name the originating rule so the user can locate the offending fixer")
+			assert.Contains(t, err.Error(), tc.wantErrFragment,
+				"error must identify the specific bounds-check branch")
+
+			assert.Zero(t, writeCount,
+				"writeFn must not be invoked when the bounds-check fails — the abort happens before writeFixed runs")
+
+			afterStat, err := os.Stat(tmpFile)
+			require.NoError(t, err)
+			assert.Equal(t, beforeMode, afterStat.Mode().Perm(),
+				"file mode must be preserved on the bounds-check error path (no write, no Chmod)")
+
+			onDisk, err := os.ReadFile(tmpFile)
+			require.NoError(t, err)
+			assert.Equal(t, original, onDisk,
+				"file content must be preserved on the bounds-check error path")
+		})
+	}
+}
+
+// TestEngine_MultiFinding_SinglePass closes the integration loop for the
+// byte-range-textedits change. It exercises Engine.Run on a multi-rule
+// fixture with the writeFn seam wired to a capturing closure, and pins
+// convergence + a bounded write count.
+//
+// With current Phase-3 wrap-only rules, every fix is a whole-file edit and
+// whole-file exclusivity at style.go:493 picks one rule per pass — so
+// writeCount == 3 today. Once the CST refactor at
+// .specs/style-engine-cst-refactor.md replaces whole-file edits with
+// narrow edits, the same fixture converges in one pass with one write;
+// the upper bound and convergence assertions remain valid then, and the
+// test naturally observes writeCount == 1 without any code change.
+//
+// Companion: TestApplyFixes_MultipleNonOverlappingEdits pins the
+// writeCount == 1 contract for narrow edits via stub rules at the
+// applyFixes boundary. This test closes the integration loop with real
+// rules through Engine.Run.
+func TestEngine_MultiFinding_SinglePass(t *testing.T) {
+	// Fixture triggers three independent opt-in fixable rules:
+	//   1. style.comment-syntax        — `// header` → `# header`
+	//   2. style.no-trailing-whitespace — trailing spaces after `ami = "ami-123"`
+	//   3. style.no-consecutive-blank-lines — two blank lines collapse to one
+	//
+	// The `triggers = { foo = "bar" }` populated map keeps the fixture immune
+	// to a future no-empty-blocks rule extension that might match `{}`. No
+	// default-on rule fires here: blank-line-between-blocks is satisfied (a
+	// blank line exists between the resources) and attribute-group-spacing
+	// has nothing to group (one attribute per block).
+	fixture := "// header comment\n" +
+		"resource \"aws_instance\" \"test\" {\n" +
+		"  ami = \"ami-123\"   \n" +
+		"}\n" +
+		"\n" +
+		"\n" +
+		"resource \"null_resource\" \"two\" {\n" +
+		"  triggers = { foo = \"bar\" }\n" +
+		"}\n"
+
+	expectedCanonical := "# header comment\n" +
+		"resource \"aws_instance\" \"test\" {\n" +
+		"  ami = \"ami-123\"\n" +
+		"}\n" +
+		"\n" +
+		"resource \"null_resource\" \"two\" {\n" +
+		"  triggers = { foo = \"bar\" }\n" +
+		"}\n"
+
+	dir := t.TempDir()
+	tmpFile := filepath.Join(dir, "main.tf")
+	require.NoError(t, os.WriteFile(tmpFile, []byte(fixture), 0o644))
+
+	// Enable the three opt-in rules; everything else falls back to the engine's
+	// default config (which leaves them at their registered defaults).
+	engine := New(&Config{
+		Fix: true,
+		Rules: map[string]RuleConfig{
+			"style.comment-syntax":             {Enabled: config.BoolPtr(true)},
+			"style.no-trailing-whitespace":     {Enabled: config.BoolPtr(true)},
+			"style.no-consecutive-blank-lines": {Enabled: config.BoolPtr(true)},
+		},
+	})
+
+	var writeCount int
+	var writtenContents [][]byte
+	engine.writeFn = func(name string, data []byte, perm os.FileMode) error {
+		writeCount++
+		writtenContents = append(writtenContents, append([]byte(nil), data...))
+		return os.WriteFile(name, data, perm)
+	}
+
+	_, err := engine.Run(context.Background(), []string{tmpFile})
+	require.NoError(t, err)
+
+	// Engine must have written at least once — the fixture is not canonical.
+	require.Positive(t, writeCount,
+		"engine must invoke writeFn at least once to fix the non-canonical fixture")
+
+	// Three distinct fixable rules fire on the original fixture. Whole-file
+	// exclusivity caps applyFixes at one rule per pass, so writeCount is
+	// bounded above by 3 today. The post-CST world tightens this to 1.
+	const fixableRuleCount = 3
+	assert.LessOrEqual(t, writeCount, fixableRuleCount,
+		"writeCount must not exceed the count of distinct fixable rules with findings on the fixture")
+
+	// Convergence: the on-disk file matches the canonical form, and the loop
+	// terminated on a no-edit pass (so the last captured write IS the canonical
+	// form — no thrashing after the converged state was reached).
+	onDisk, err := os.ReadFile(tmpFile)
+	require.NoError(t, err)
+	assert.Equal(t, expectedCanonical, string(onDisk),
+		"engine.Run must converge the fixture to canonical form")
+
+	require.NotEmpty(t, writtenContents,
+		"writtenContents must have at least one entry because writeCount > 0")
+	assert.Equal(t, expectedCanonical, string(writtenContents[len(writtenContents)-1]),
+		"the last write captured by writeFn must equal the canonical form")
+
+	// Per-pass single-write invariant: writeFn is the engine's only path to
+	// os.WriteFile from the fix loop, and writeFixed (its sole caller inside
+	// applyFixes) is invoked at most once per pass. Therefore the captured
+	// writeCount equals the number of fix-applying passes — and each pass
+	// contributed exactly one write. Successive writes must produce distinct
+	// content (each pass advances the file state), guarding against a buggy
+	// applyFixes that wrote the same bytes twice within a single pass.
+	for i := 1; i < len(writtenContents); i++ {
+		assert.NotEqual(t, writtenContents[i-1], writtenContents[i],
+			"consecutive writes must produce distinct content — each fix-applying pass must advance the file state, not re-emit the previous state")
+	}
 }

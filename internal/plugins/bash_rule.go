@@ -159,7 +159,7 @@ func (r *BashRule) Check(ctx *sdk.Context, _ *hcl.File) ([]sdk.Finding, error) {
 }
 
 // Fix is not supported for Bash rules.
-func (r *BashRule) Fix(_ *sdk.Context, _ *hcl.File) ([]byte, error) {
+func (r *BashRule) Fix(_ *sdk.Context, _ *hcl.File) (*sdk.FixResult, error) {
 	return nil, nil
 }
 

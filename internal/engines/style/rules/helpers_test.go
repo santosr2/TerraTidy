@@ -7,6 +7,7 @@ import (
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/hclsyntax"
 	"github.com/hashicorp/hcl/v2/hclwrite"
+	"github.com/santosr2/TerraTidy/pkg/sdk"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -1737,5 +1738,73 @@ terraform { required_version = ">= 1.0" }
 			`variable "b"`,
 			`variable "a"`,
 		})
+	})
+}
+
+func TestWholeFileEdit(t *testing.T) {
+	t.Run("no-op when content is identical", func(t *testing.T) {
+		original := []byte("resource \"x\" \"y\" {}\n")
+		result := WholeFileEdit(original, original)
+		assert.Nil(t, result, "byte-equal inputs must produce a nil result (no-op)")
+	})
+
+	t.Run("no-op when both are nil", func(t *testing.T) {
+		assert.Nil(t, WholeFileEdit(nil, nil))
+	})
+
+	t.Run("no-op when both are empty but different identities", func(t *testing.T) {
+		assert.Nil(t, WholeFileEdit([]byte{}, []byte{}))
+		assert.Nil(t, WholeFileEdit(nil, []byte{}))
+		assert.Nil(t, WholeFileEdit([]byte{}, nil))
+	})
+
+	t.Run("single covering edit when content changed", func(t *testing.T) {
+		original := []byte("foo")
+		newContent := []byte("bar baz")
+
+		result := WholeFileEdit(original, newContent)
+		require.NotNil(t, result)
+		require.Len(t, result.Edits, 1)
+
+		edit := result.Edits[0]
+		assert.Equal(t, 0, edit.Start, "Start must be 0 for whole-file edit")
+		assert.Equal(t, len(original), edit.End, "End must equal len(original) for whole-file edit")
+		assert.Equal(t, newContent, edit.Replacement, "Replacement must be the new content")
+	})
+
+	t.Run("pure insertion when original is nil", func(t *testing.T) {
+		newContent := []byte("inserted")
+
+		result := WholeFileEdit(nil, newContent)
+		require.NotNil(t, result)
+		require.Len(t, result.Edits, 1)
+
+		edit := result.Edits[0]
+		assert.Equal(t, 0, edit.Start)
+		assert.Equal(t, 0, edit.End, "End must be 0 when original is nil (pure insertion)")
+		assert.Equal(t, newContent, edit.Replacement)
+	})
+
+	t.Run("pure deletion when new content is nil", func(t *testing.T) {
+		original := []byte("delete me")
+
+		result := WholeFileEdit(original, nil)
+		require.NotNil(t, result)
+		require.Len(t, result.Edits, 1)
+
+		edit := result.Edits[0]
+		assert.Equal(t, 0, edit.Start)
+		assert.Equal(t, len(original), edit.End)
+		assert.Empty(t, edit.Replacement, "nil replacement signals pure deletion")
+	})
+
+	t.Run("returned shape matches sdk.FixResult contract", func(t *testing.T) {
+		original := []byte("a")
+		newContent := []byte("b")
+
+		got := WholeFileEdit(original, newContent)
+		require.NotNil(t, got)
+		assert.IsType(t, &sdk.FixResult{}, got)
+		assert.IsType(t, []sdk.TextEdit{}, got.Edits)
 	})
 }

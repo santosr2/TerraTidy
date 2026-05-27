@@ -123,9 +123,10 @@ func TestForEachCountFirstRule(t *testing.T) {
 
 		result, err := rule.Fix(ctx, hclFile)
 		require.NoError(t, err)
-		assert.NotNil(t, result)
+		require.NotNil(t, result)
+		require.Len(t, result.Edits, 1)
 		// for_each should be near the beginning
-		resultStr := string(result)
+		resultStr := string(result.Edits[0].Replacement)
 		forEachIdx := indexOf(resultStr, "for_each")
 		amiIdx := indexOf(resultStr, "ami")
 		assert.Less(t, forEachIdx, amiIdx)
@@ -155,8 +156,9 @@ func TestForEachCountFirstRule(t *testing.T) {
 		result, err := rule.Fix(ctx, hclFile)
 		require.NoError(t, err)
 		require.NotNil(t, result)
+		require.Len(t, result.Edits, 1)
 
-		resultStr := string(result)
+		resultStr := string(result.Edits[0].Replacement)
 		// Comments should be preserved
 		assert.Contains(t, resultStr, "# This is an important comment about the instance")
 		assert.Contains(t, resultStr, "# It spans multiple lines")
@@ -334,9 +336,10 @@ func TestLifecycleAtEndRule(t *testing.T) {
 		result, err := rule.Fix(ctx, hclFile)
 		require.NoError(t, err)
 		require.NotNil(t, result)
+		require.Len(t, result.Edits, 1)
 
 		// Verify lifecycle is now after ami and instance_type
-		resultStr := string(result)
+		resultStr := string(result.Edits[0].Replacement)
 		lifecycleIdx := indexOf(resultStr, "lifecycle")
 		amiIdx := indexOf(resultStr, "ami")
 		assert.Greater(t, lifecycleIdx, amiIdx, "lifecycle should be after ami")
@@ -367,8 +370,9 @@ func TestLifecycleAtEndRule(t *testing.T) {
 		result, err := rule.Fix(ctx, hclFile)
 		require.NoError(t, err)
 		require.NotNil(t, result)
+		require.Len(t, result.Edits, 1)
 
-		resultStr := string(result)
+		resultStr := string(result.Edits[0].Replacement)
 		lifecycleIdx := indexOf(resultStr, "lifecycle")
 		ownersIdx := indexOf(resultStr, "owners")
 		assert.Greater(t, lifecycleIdx, ownersIdx, "lifecycle should be after owners in data block")
@@ -399,8 +403,9 @@ func TestLifecycleAtEndRule(t *testing.T) {
 		result, err := rule.Fix(ctx, hclFile)
 		require.NoError(t, err)
 		require.NotNil(t, result)
+		require.Len(t, result.Edits, 1)
 
-		resultStr := string(result)
+		resultStr := string(result.Edits[0].Replacement)
 		lifecycleIdx := indexOf(resultStr, "lifecycle")
 		cidrIdx := indexOf(resultStr, "cidr_block")
 		assert.Greater(t, lifecycleIdx, cidrIdx, "lifecycle should be after cidr_block in module block")
@@ -440,8 +445,9 @@ data "aws_ami" "example" {
 		result, err := rule.Fix(ctx, hclFile)
 		require.NoError(t, err)
 		require.NotNil(t, result)
+		require.Len(t, result.Edits, 1)
 
-		resultStr := string(result)
+		resultStr := string(result.Edits[0].Replacement)
 		// Resource block: lifecycle should come after ami.
 		amiIdx := indexOf(resultStr, "ami =")
 		// First lifecycle occurrence is in the resource block.
@@ -550,9 +556,10 @@ func TestTagsAtEndRule(t *testing.T) {
 		result, err := rule.Fix(ctx, hclFile)
 		require.NoError(t, err)
 		require.NotNil(t, result)
+		require.Len(t, result.Edits, 1)
 
 		// Verify tags is now after ami (at end of attributes)
-		resultStr := string(result)
+		resultStr := string(result.Edits[0].Replacement)
 		tagsIdx := indexOf(resultStr, "tags")
 		amiIdx := indexOf(resultStr, "ami")
 		assert.Greater(t, tagsIdx, amiIdx, "tags should be after ami")
@@ -580,8 +587,9 @@ func TestTagsAtEndRule(t *testing.T) {
 		result, err := rule.Fix(ctx, hclFile)
 		require.NoError(t, err)
 		require.NotNil(t, result)
+		require.Len(t, result.Edits, 1)
 
-		resultStr := string(result)
+		resultStr := string(result.Edits[0].Replacement)
 		// Comments should be preserved
 		assert.Contains(t, resultStr, "# This comment describes the AMI")
 		assert.Contains(t, resultStr, "# This comment describes the instance type")
@@ -736,11 +744,11 @@ func TestTagsAtEndRule(t *testing.T) {
 		ctx := &sdk.Context{File: tmpFile}
 		first, err := rule.Fix(ctx, &hcl.File{Body: mustParseBody(t, content)})
 		require.NoError(t, err)
-		require.NoError(t, os.WriteFile(tmpFile, first, 0o644))
+		require.NoError(t, os.WriteFile(tmpFile, first.Edits[0].Replacement, 0o644))
 
-		second, err := rule.Fix(ctx, &hcl.File{Body: mustParseBody(t, string(first))})
+		second, err := rule.Fix(ctx, &hcl.File{Body: mustParseBody(t, string(first.Edits[0].Replacement))})
 		require.NoError(t, err)
-		assert.Equal(t, string(first), string(second), "Fix(Fix(x)) must equal Fix(x)")
+		assert.Nil(t, second, "Fix(Fix(x)) must equal Fix(x)")
 	})
 
 	t.Run("Fix is idempotent after first-pass move with leading comment", func(t *testing.T) {
@@ -767,13 +775,13 @@ func TestTagsAtEndRule(t *testing.T) {
 		ctx := &sdk.Context{File: tmpFile}
 		first, err := rule.Fix(ctx, nil)
 		require.NoError(t, err)
-		require.NoError(t, os.WriteFile(tmpFile, first, 0o644))
+		require.NoError(t, os.WriteFile(tmpFile, first.Edits[0].Replacement, 0o644))
 
 		second, err := rule.Fix(ctx, nil)
 		require.NoError(t, err)
-		assert.Equal(t, string(first), string(second), "Fix(Fix(x)) must equal Fix(x) after a real move")
+		assert.Nil(t, second, "Fix(Fix(x)) must equal Fix(x) after a real move")
 		// Comment must still be present after both passes.
-		assert.Contains(t, string(second), "# important: tag this carefully")
+		assert.Contains(t, string(first.Edits[0].Replacement), "# important: tag this carefully")
 	})
 
 	t.Run("findTagsAttribute prefers tags over tags_all", func(t *testing.T) {
@@ -794,7 +802,9 @@ func TestTagsAtEndRule(t *testing.T) {
 		ctx := &sdk.Context{File: tmpFile}
 		result, err := rule.Fix(ctx, nil)
 		require.NoError(t, err)
-		out := string(result)
+		require.NotNil(t, result)
+		require.Len(t, result.Edits, 1)
+		out := string(result.Edits[0].Replacement)
 
 		// `tags` moves to the end; `tags_all` stays in its original (after-`instance_type`)
 		// position since findTagsAttribute targets `tags` first.
@@ -917,9 +927,10 @@ func TestDependsOnOrderRule(t *testing.T) {
 		result, err := rule.Fix(ctx, hclFile)
 		require.NoError(t, err)
 		require.NotNil(t, result)
+		require.Len(t, result.Edits, 1)
 
 		// Verify depends_on is now after ami
-		resultStr := string(result)
+		resultStr := string(result.Edits[0].Replacement)
 		dependsOnIdx := indexOf(resultStr, "depends_on")
 		amiIdx := indexOf(resultStr, "ami")
 		assert.Greater(t, dependsOnIdx, amiIdx, "depends_on should be after ami")
@@ -947,8 +958,9 @@ func TestDependsOnOrderRule(t *testing.T) {
 		result, err := rule.Fix(ctx, hclFile)
 		require.NoError(t, err)
 		require.NotNil(t, result)
+		require.Len(t, result.Edits, 1)
 
-		resultStr := string(result)
+		resultStr := string(result.Edits[0].Replacement)
 		// Comments should be preserved
 		assert.Contains(t, resultStr, "# This is the AMI comment")
 		assert.Contains(t, resultStr, "# This describes the instance type")
@@ -1092,12 +1104,12 @@ func TestDependsOnOrderRule(t *testing.T) {
 		ctx := &sdk.Context{File: tmpFile}
 		first, err := rule.Fix(ctx, nil)
 		require.NoError(t, err)
-		require.NoError(t, os.WriteFile(tmpFile, first, 0o644))
+		require.NoError(t, os.WriteFile(tmpFile, first.Edits[0].Replacement, 0o644))
 
 		second, err := rule.Fix(ctx, nil)
 		require.NoError(t, err)
-		assert.Equal(t, string(first), string(second), "Fix(Fix(x)) must equal Fix(x) after a real move")
-		assert.Contains(t, string(second), "# waits for vpc")
+		assert.Nil(t, second, "Fix(Fix(x)) must equal Fix(x) after a real move")
+		assert.Contains(t, string(first.Edits[0].Replacement), "# waits for vpc")
 	})
 
 	t.Run("Check accepts canonical depends_on then tags then lifecycle layout", func(t *testing.T) {
@@ -1269,7 +1281,7 @@ resource "aws_instance" "second" {
 		ctx := &sdk.Context{File: tmpFile}
 		result, err := rule.Fix(ctx, nil)
 		require.NoError(t, err)
-		assert.Equal(t, content, string(result), "Fix should be a no-op when depends_on is already correctly placed (even with blank-line gap)")
+		assert.Nil(t, result, "Fix should be a no-op when depends_on is already correctly placed (even with blank-line gap) — nil FixResult under the new contract")
 	})
 
 	t.Run("Fix is idempotent when depends_on is already adjacent to lifecycle with a blank line gap", func(t *testing.T) {
@@ -1293,14 +1305,17 @@ resource "aws_instance" "second" {
 		ctx := &sdk.Context{File: tmpFile}
 		first, err := rule.Fix(ctx, nil)
 		require.NoError(t, err)
-		require.NoError(t, os.WriteFile(tmpFile, first, 0o644))
+		// Already-converged input: first pass is a no-op (nil FixResult). The on-disk
+		// content is unchanged, so a second pass is also a no-op and the depends_on /
+		// lifecycle ordering observable on disk is the input content itself.
+		require.Nil(t, first, "blank line between depends_on and lifecycle must not produce a diff")
 
 		second, err := rule.Fix(ctx, nil)
 		require.NoError(t, err)
-		assert.Equal(t, string(first), string(second), "blank line between depends_on and lifecycle must not break idempotence")
-		// depends_on still appears before lifecycle.
-		dependsIdx := strings.Index(string(second), "depends_on")
-		lifecycleIdx := strings.Index(string(second), "lifecycle {")
+		assert.Nil(t, second, "blank line between depends_on and lifecycle must not break idempotence")
+		// depends_on still appears before lifecycle in the original content.
+		dependsIdx := strings.Index(content, "depends_on")
+		lifecycleIdx := strings.Index(content, "lifecycle {")
 		assert.Less(t, dependsIdx, lifecycleIdx)
 	})
 }
@@ -1401,9 +1416,10 @@ func TestSourceVersionGroupedRule(t *testing.T) {
 		result, err := rule.Fix(ctx, hclFile)
 		require.NoError(t, err)
 		require.NotNil(t, result)
+		require.Len(t, result.Edits, 1)
 
 		// Verify source is now before name
-		resultStr := string(result)
+		resultStr := string(result.Edits[0].Replacement)
 		sourceIdx := indexOf(resultStr, "source")
 		nameIdx := indexOf(resultStr, "name")
 		assert.Less(t, sourceIdx, nameIdx, "source should be before name")
@@ -1432,8 +1448,9 @@ func TestSourceVersionGroupedRule(t *testing.T) {
 		result, err := rule.Fix(ctx, hclFile)
 		require.NoError(t, err)
 		require.NotNil(t, result)
+		require.Len(t, result.Edits, 1)
 
-		resultStr := string(result)
+		resultStr := string(result.Edits[0].Replacement)
 		// Comments should be preserved
 		assert.Contains(t, resultStr, "# Comment about module identifier")
 		assert.Contains(t, resultStr, "# Comment about settings")
@@ -1777,9 +1794,14 @@ func TestVariableOrderRule(t *testing.T) {
 			ctx := &sdk.Context{File: tmpFile}
 			result, err := rule.Fix(ctx, nil)
 			require.NoError(t, err)
-			require.NotNil(t, result)
 
-			output := string(result)
+			// A nil FixResult means the rule was a no-op (already-canonical input);
+			// the file content is preserved on disk, so use the input as observed output.
+			output := tt.input
+			if result != nil {
+				require.Len(t, result.Edits, 1)
+				output = string(result.Edits[0].Replacement)
+			}
 			assertOrderedSubstrings(t, output, tt.wantOrder)
 			for _, want := range tt.wantKeep {
 				assert.Contains(t, output, want, "should retain: %s", want)
@@ -1808,11 +1830,11 @@ func TestVariableOrderRule(t *testing.T) {
 		ctx := &sdk.Context{File: tmpFile}
 		first, err := rule.Fix(ctx, nil)
 		require.NoError(t, err)
-		require.NoError(t, os.WriteFile(tmpFile, first, 0o644))
+		require.NoError(t, os.WriteFile(tmpFile, first.Edits[0].Replacement, 0o644))
 
 		second, err := rule.Fix(ctx, nil)
 		require.NoError(t, err)
-		assert.Equal(t, string(first), string(second), "Fix(Fix(content)) must equal Fix(content)")
+		assert.Nil(t, second, "Fix(Fix(content)) must equal Fix(content)")
 	})
 
 	t.Run("Fix handles multiple variables in one file", func(t *testing.T) {
@@ -1834,7 +1856,9 @@ variable "second" {
 		ctx := &sdk.Context{File: tmpFile}
 		result, err := rule.Fix(ctx, nil)
 		require.NoError(t, err)
-		output := string(result)
+		require.NotNil(t, result)
+		require.Len(t, result.Edits, 1)
+		output := string(result.Edits[0].Replacement)
 		assertOrderedSubstrings(t, output, []string{
 			`description = "First var"`,
 			`type        = string`,
@@ -2022,9 +2046,14 @@ func TestOutputOrderRule(t *testing.T) {
 			ctx := &sdk.Context{File: tmpFile}
 			result, err := rule.Fix(ctx, nil)
 			require.NoError(t, err)
-			require.NotNil(t, result)
 
-			output := string(result)
+			// A nil FixResult means the rule was a no-op (already-canonical input);
+			// the file content is preserved on disk, so use the input as observed output.
+			output := tt.input
+			if result != nil {
+				require.Len(t, result.Edits, 1)
+				output = string(result.Edits[0].Replacement)
+			}
 			assertOrderedSubstrings(t, output, tt.wantOrder)
 			for _, want := range tt.wantKeep {
 				assert.Contains(t, output, want, "should retain: %s", want)
@@ -2051,11 +2080,11 @@ func TestOutputOrderRule(t *testing.T) {
 		ctx := &sdk.Context{File: tmpFile}
 		first, err := rule.Fix(ctx, nil)
 		require.NoError(t, err)
-		require.NoError(t, os.WriteFile(tmpFile, first, 0o644))
+		require.NoError(t, os.WriteFile(tmpFile, first.Edits[0].Replacement, 0o644))
 
 		second, err := rule.Fix(ctx, nil)
 		require.NoError(t, err)
-		assert.Equal(t, string(first), string(second), "Fix(Fix(content)) must equal Fix(content)")
+		assert.Nil(t, second, "Fix(Fix(content)) must equal Fix(content)")
 	})
 
 	t.Run("Fix handles multiple outputs in one file", func(t *testing.T) {
@@ -2077,7 +2106,9 @@ output "second" {
 		ctx := &sdk.Context{File: tmpFile}
 		result, err := rule.Fix(ctx, nil)
 		require.NoError(t, err)
-		assertOrderedSubstrings(t, string(result), []string{
+		require.NotNil(t, result)
+		require.Len(t, result.Edits, 1)
+		assertOrderedSubstrings(t, string(result.Edits[0].Replacement), []string{
 			`description = "First"`,
 			`value       = "1"`,
 			`description = "Second"`,
@@ -2247,11 +2278,11 @@ terraform {
 		ctx := &sdk.Context{File: tmpFile}
 		first, err := rule.Fix(ctx, nil)
 		require.NoError(t, err)
-		require.NoError(t, os.WriteFile(tmpFile, first, 0o644))
+		require.NoError(t, os.WriteFile(tmpFile, first.Edits[0].Replacement, 0o644))
 
 		second, err := rule.Fix(ctx, nil)
 		require.NoError(t, err)
-		assert.Equal(t, string(first), string(second), "Fix(Fix(content)) must equal Fix(content)")
+		assert.Nil(t, second, "Fix(Fix(content)) must equal Fix(content)")
 	})
 }
 
@@ -2436,11 +2467,11 @@ resource "aws_instance" "x" {
 		ctx := &sdk.Context{File: tmpFile}
 		first, err := rule.Fix(ctx, nil)
 		require.NoError(t, err)
-		require.NoError(t, os.WriteFile(tmpFile, first, 0o644))
+		require.NoError(t, os.WriteFile(tmpFile, first.Edits[0].Replacement, 0o644))
 
 		second, err := rule.Fix(ctx, nil)
 		require.NoError(t, err)
-		assert.Equal(t, string(first), string(second), "Fix(Fix(content)) must equal Fix(content)")
+		assert.Nil(t, second, "Fix(Fix(content)) must equal Fix(content)")
 	})
 }
 
@@ -2458,7 +2489,8 @@ func runRuleFix(t *testing.T, rule sdk.Rule, content string) string {
 	result, err := fixer.Fix(ctx, nil)
 	require.NoError(t, err)
 	require.NotNil(t, result)
-	return string(result)
+	require.Len(t, result.Edits, 1)
+	return string(result.Edits[0].Replacement)
 }
 
 func TestIsDependsOnRelevantBlock(t *testing.T) {
@@ -2622,9 +2654,10 @@ func TestAttributeGroupSpacingRule_Fix(t *testing.T) {
 		result, err := rule.Fix(ctx, hclFile)
 		require.NoError(t, err)
 		require.NotNil(t, result)
+		require.Len(t, result.Edits, 1)
 
 		// Check that blank line was added after for_each
-		resultStr := string(result)
+		resultStr := string(result.Edits[0].Replacement)
 		assert.Contains(t, resultStr, "for_each      = var.instances\n\n  ami")
 	})
 
@@ -2652,9 +2685,10 @@ func TestAttributeGroupSpacingRule_Fix(t *testing.T) {
 		result, err := rule.Fix(ctx, hclFile)
 		require.NoError(t, err)
 		require.NotNil(t, result)
+		require.Len(t, result.Edits, 1)
 
 		// Check that blank line was added before tags
-		resultStr := string(result)
+		resultStr := string(result.Edits[0].Replacement)
 		assert.Contains(t, resultStr, "instance_type = \"t2.micro\"\n\n  tags")
 	})
 }

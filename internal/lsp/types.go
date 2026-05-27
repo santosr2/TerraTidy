@@ -1,6 +1,9 @@
 package lsp
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"sort"
+)
 
 // RequestMessage represents an LSP request message
 type RequestMessage struct {
@@ -311,4 +314,43 @@ type DidChangeConfigurationParams struct {
 	// Settings contains the actual configuration values.
 	// For TerraTidy, this has the same shape as InitializationOptions.
 	Settings *InitializationOptions `json:"settings,omitempty"`
+}
+
+// byteRangeToLSPRange converts the half-open byte range [start, end) in content
+// to an LSP Range. Character offsets are bytes within the line, matching the
+// existing handleFormatting convention. CRLF counts as two bytes; negative
+// offsets are clamped at zero. Offsets past len(content) yield a Position whose
+// character exceeds the final line's length — callers should bounds-check.
+//
+// Builds a newline-offset table per call (O(N)) and resolves each offset by
+// binary search (O(log L)). Safe to invoke in loops over many TextEdits.
+func byteRangeToLSPRange(content []byte, start, end int) Range {
+	lineStarts := lineStartOffsets(content)
+	return Range{
+		Start: byteOffsetToPosition(start, lineStarts),
+		End:   byteOffsetToPosition(end, lineStarts),
+	}
+}
+
+func lineStartOffsets(content []byte) []int {
+	starts := []int{0}
+	for i, b := range content {
+		if b == '\n' {
+			starts = append(starts, i+1)
+		}
+	}
+	return starts
+}
+
+func byteOffsetToPosition(offset int, lineStarts []int) Position {
+	if offset < 0 {
+		offset = 0
+	}
+	// SearchInts returns the first index whose lineStart is > offset; the
+	// containing line is therefore one index earlier.
+	line := sort.SearchInts(lineStarts, offset+1) - 1
+	return Position{
+		Line:      line,
+		Character: offset - lineStarts[line],
+	}
 }

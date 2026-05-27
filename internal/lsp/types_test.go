@@ -213,3 +213,111 @@ func TestCodeAction_JSONRoundtrip(t *testing.T) {
 	require.NotNil(t, decoded.Edit)
 	assert.Len(t, decoded.Edit.Changes, 1)
 }
+
+func TestByteRangeToLSPRange(t *testing.T) {
+	tests := []struct {
+		name    string
+		content string
+		start   int
+		end     int
+		want    Range
+	}{
+		{
+			name:    "single-line edit",
+			content: "resource \"x\" {}",
+			start:   9,
+			end:     12,
+			want: Range{
+				Start: Position{Line: 0, Character: 9},
+				End:   Position{Line: 0, Character: 12},
+			},
+		},
+		{
+			name:    "multi-line edit",
+			content: "line0\nline1\nline2\n",
+			start:   3,
+			end:     14,
+			want: Range{
+				Start: Position{Line: 0, Character: 3},
+				End:   Position{Line: 2, Character: 2},
+			},
+		},
+		{
+			name:    "edit at file start",
+			content: "abc\ndef",
+			start:   0,
+			end:     0,
+			want: Range{
+				Start: Position{Line: 0, Character: 0},
+				End:   Position{Line: 0, Character: 0},
+			},
+		},
+		{
+			name:    "edit spanning final character",
+			content: "abc\ndef",
+			start:   4,
+			end:     7,
+			want: Range{
+				Start: Position{Line: 1, Character: 0},
+				End:   Position{Line: 1, Character: 3},
+			},
+		},
+		{
+			name:    "empty file",
+			content: "",
+			start:   0,
+			end:     0,
+			want: Range{
+				Start: Position{Line: 0, Character: 0},
+				End:   Position{Line: 0, Character: 0},
+			},
+		},
+		{
+			name:    "CRLF content treats CR as line-trailing byte",
+			content: "abc\r\nxyz",
+			start:   3, // CR position — still on line 0, character 3
+			end:     5, // first byte of line 1 ('x') — character 0
+			want: Range{
+				Start: Position{Line: 0, Character: 3},
+				End:   Position{Line: 1, Character: 0},
+			},
+		},
+		{
+			name:    "end-of-line position with no trailing newline",
+			content: "alpha",
+			start:   5,
+			end:     5,
+			want: Range{
+				Start: Position{Line: 0, Character: 5},
+				End:   Position{Line: 0, Character: 5},
+			},
+		},
+		{
+			name:    "offset at line start of newline-terminated file",
+			content: "abc\n",
+			start:   4,
+			end:     4,
+			want: Range{
+				Start: Position{Line: 1, Character: 0},
+				End:   Position{Line: 1, Character: 0},
+			},
+		},
+		{
+			name:    "negative offset clamps to file start",
+			content: "abc",
+			start:   -5,
+			end:     -1,
+			want: Range{
+				Start: Position{Line: 0, Character: 0},
+				End:   Position{Line: 0, Character: 0},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := byteRangeToLSPRange([]byte(tt.content), tt.start, tt.end)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}

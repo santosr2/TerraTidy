@@ -121,18 +121,13 @@ func (r *NoLeadingTrailingBlankLinesRule) checkBlock(ctx *sdk.Context, block *hc
 	return findings
 }
 
-// fixFile removes leading/trailing blank lines inside blocks.
-func (r *NoLeadingTrailingBlankLinesRule) fixFile(filePath string) ([]byte, error) {
-	content, err := os.ReadFile(filePath)
+// Fix removes leading/trailing blank lines inside blocks.
+func (r *NoLeadingTrailingBlankLinesRule) Fix(ctx *sdk.Context, _ *hcl.File) (*sdk.FixResult, error) {
+	content, err := os.ReadFile(ctx.File)
 	if err != nil {
 		return nil, err
 	}
-	return FormatAndCleanBlankLines(content), nil
-}
-
-// Fix removes leading/trailing blank lines inside blocks.
-func (r *NoLeadingTrailingBlankLinesRule) Fix(ctx *sdk.Context, _ *hcl.File) ([]byte, error) {
-	return r.fixFile(ctx.File)
+	return WholeFileEdit(content, FormatAndCleanBlankLines(content)), nil
 }
 
 // BlankLineBetweenBlocksRule ensures blank lines between top-level blocks.
@@ -243,15 +238,6 @@ func (r *BlankLineBetweenBlocksRule) Check(ctx *sdk.Context, file *hcl.File) ([]
 	return findings, nil
 }
 
-// fixFile fixes blank line issues in the file.
-func (r *BlankLineBetweenBlocksRule) fixFile(filePath string) ([]byte, error) {
-	content, err := os.ReadFile(filePath)
-	if err != nil {
-		return nil, err
-	}
-	return r.fixContent(content, filePath)
-}
-
 // fixContent fixes blank line issues in the provided content.
 func (r *BlankLineBetweenBlocksRule) fixContent(content []byte, filePath string) ([]byte, error) {
 	// Parse to get block positions
@@ -344,8 +330,16 @@ func (r *BlankLineBetweenBlocksRule) fixContent(content []byte, filePath string)
 }
 
 // Fix corrects blank line issues between blocks.
-func (r *BlankLineBetweenBlocksRule) Fix(ctx *sdk.Context, _ *hcl.File) ([]byte, error) {
-	return r.fixFile(ctx.File)
+func (r *BlankLineBetweenBlocksRule) Fix(ctx *sdk.Context, _ *hcl.File) (*sdk.FixResult, error) {
+	content, err := os.ReadFile(ctx.File)
+	if err != nil {
+		return nil, err
+	}
+	newContent, err := r.fixContent(content, ctx.File)
+	if err != nil {
+		return nil, err
+	}
+	return WholeFileEdit(content, newContent), nil
 }
 
 // NoEmptyBlocksRule ensures blocks have content.

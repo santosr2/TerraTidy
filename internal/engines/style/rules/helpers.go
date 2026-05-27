@@ -2,6 +2,7 @@
 package rules
 
 import (
+	"bytes"
 	"regexp"
 	"sort"
 	"strings"
@@ -9,7 +10,42 @@ import (
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/hclsyntax"
 	"github.com/hashicorp/hcl/v2/hclwrite"
+	"github.com/santosr2/TerraTidy/pkg/sdk"
 )
+
+// WholeFileEdit wraps a whole-file rewrite as a single [sdk.TextEdit] that
+// covers the original content's byte range. Rules that rewrite the entire file
+// (the dominant pattern today) use this helper to migrate from the legacy
+// []byte return to the byte-range [sdk.FixResult] contract without changing
+// their algorithm.
+//
+// Returns nil when newContent is byte-identical to original (no-op fix),
+// matching the prior contract where rules returned nil bytes to signal "no
+// change". Otherwise returns a single [sdk.TextEdit] spanning the full original
+// byte range with newContent as the replacement.
+//
+// A nil original is treated as length 0, so passing (nil, []byte("x")) emits a
+// pure insertion at offset 0.
+//
+// Exclusive-this-pass semantic: per [sdk.FixResult], when the engine collects a
+// whole-file edit (Start == 0 && End == len(content)) in the same pass as
+// narrow edits, the whole-file edit is applied alone and the narrow edits are
+// discarded for that pass (they re-emit against the rewritten content on the
+// next pass). Rules using this helper therefore suppress co-applied narrow
+// edits in the same pass — this is intentional and matches today's
+// one-fix-per-pass behavior.
+func WholeFileEdit(original, newContent []byte) *sdk.FixResult {
+	if bytes.Equal(original, newContent) {
+		return nil
+	}
+	return &sdk.FixResult{
+		Edits: []sdk.TextEdit{{
+			Start:       0,
+			End:         len(original),
+			Replacement: newContent,
+		}},
+	}
+}
 
 // Case convention regexes for naming validation.
 var (

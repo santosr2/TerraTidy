@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"os"
+	"sort"
 
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/hclparse"
@@ -21,6 +22,11 @@ import (
 type Engine struct {
 	config *Config
 	rules  []sdk.Rule
+	// writeFn is the function used to persist fixed file content. Defaults to
+	// os.WriteFile in New(); tests substitute a capturing closure that records
+	// invocation count and the content written, so applyFixes's
+	// one-write-per-pass invariant can be asserted directly.
+	writeFn func(name string, data []byte, perm os.FileMode) error
 }
 
 // Config holds the style engine configuration
@@ -78,8 +84,9 @@ func New(config *Config, pluginRules ...sdk.Rule) *Engine {
 	}
 
 	engine := &Engine{
-		config: config,
-		rules:  []sdk.Rule{},
+		config:  config,
+		rules:   []sdk.Rule{},
+		writeFn: os.WriteFile,
 	}
 
 	// Register built-in rules
@@ -157,7 +164,7 @@ func (e *Engine) checkFile(path string) ([]sdk.Finding, error) {
 	// right behavior: we emit a style.fix-loop error finding instead of either
 	// silently truncating (the old 10-pass cap) or looping forever.
 	seenHashes := make(map[[sha256.Size]byte]struct{})
-	var lastAppliedRule string
+	var lastAppliedRules []string
 
 	for pass := 0; ; pass++ {
 		// Always read fresh content for each pass
@@ -170,19 +177,8 @@ func (e *Engine) checkFile(path string) ([]sdk.Finding, error) {
 		if _, seen := seenHashes[contentHash]; seen {
 			// The hash check runs before applying a fix this pass, so a repeat
 			// implies that at least one prior pass applied a fix — therefore
-			// lastAppliedRule is always populated when this branch fires.
-			allFindings = append(allFindings, sdk.Finding{
-				Rule: "style.fix-loop",
-				Message: fmt.Sprintf(
-					"fix loop detected: applying %q reproduced a previously-seen file state. "+
-						"This is the last rule applied before the cycle was detected; another "+
-						"rule may also be involved in a ping-pong cycle. Aborting to avoid an "+
-						"infinite fix loop.",
-					lastAppliedRule,
-				),
-				File:     path,
-				Severity: sdk.SeverityError,
-			})
+			// lastAppliedRules is always populated when this branch fires.
+			allFindings = append(allFindings, hashCycleFixLoopFinding(path, lastAppliedRules))
 			break
 		}
 		seenHashes[contentHash] = struct{}{}
@@ -232,15 +228,22 @@ func (e *Engine) checkFile(path string) ([]sdk.Finding, error) {
 		// In fix mode or diff preview mode, apply fixes and potentially loop for another pass
 		// When Diff=true with Fix=false, we still apply fixes to generate preview diff
 		if (e.config.Fix || e.config.Diff) && len(findings) > 0 {
-			appliedRule, err := e.applyFixes(ruleCtx, file, findings, mode)
+			appliedRules, err := e.applyFixes(ruleCtx, file, findings, mode)
 			if err != nil {
 				return nil, fmt.Errorf("applying fixes: %w", err)
 			}
 
-			// If we applied a fix, loop again to catch any new issues
-			if appliedRule != "" {
-				lastAppliedRule = appliedRule
+			// If we applied any fixes, loop again to catch any new issues.
+			if len(appliedRules) > 0 {
+				lastAppliedRules = appliedRules
 				continue
+			}
+
+			// applyFixes produced no edits despite Fixable findings being
+			// present, which means a rule keeps reporting an issue it never
+			// converges on. Surface it as a fix-loop instead of dropping it.
+			if stuck := stuckRuleFixLoopFinding(findings, path); stuck != nil {
+				allFindings = append(allFindings, *stuck)
 			}
 		}
 
@@ -311,6 +314,69 @@ func (e *Engine) runEnabledRules(ruleCtx *sdk.Context, file *hcl.File) ([]sdk.Fi
 	return findings, nil
 }
 
+// collectStuckFixableRules returns the deduplicated, source-ordered set of
+// rule names from findings that are marked Fixable. The checkFile loop calls
+// this when applyFixes produced no edits despite Fixable findings being
+// present, which signals a stuck-rule cycle (the rule keeps reporting an
+// issue it never converges on). Returns nil when no fixable rule is present.
+func collectStuckFixableRules(findings []sdk.Finding) []string {
+	var stuck []string
+	seen := make(map[string]struct{})
+	for i := range findings {
+		if !findings[i].Fixable {
+			continue
+		}
+		name := findings[i].Rule
+		if _, ok := seen[name]; ok {
+			continue
+		}
+		seen[name] = struct{}{}
+		stuck = append(stuck, name)
+	}
+	return stuck
+}
+
+// hashCycleFixLoopFinding builds the fix-loop finding emitted when checkFile
+// reads file content whose hash matches a previously-seen pass — the classic
+// ping-pong (or self-undo) cycle the hash-based guard exists to catch.
+// lastAppliedRules names every rule whose edits landed in the pass just
+// before the cycle was detected.
+func hashCycleFixLoopFinding(path string, lastAppliedRules []string) sdk.Finding {
+	return sdk.Finding{
+		Rule: "style.fix-loop",
+		Message: fmt.Sprintf(
+			"fix loop detected: applying %v reproduced a previously-seen file state. "+
+				"These are the rules applied in the last pass before the cycle was detected. "+
+				"Aborting to avoid an infinite fix loop.",
+			lastAppliedRules,
+		),
+		File:     path,
+		Severity: sdk.SeverityError,
+	}
+}
+
+// stuckRuleFixLoopFinding builds the degenerate-fix-loop finding emitted when
+// applyFixes returns no edits despite Fixable findings being reported. Returns
+// nil in the common "no fix needed this pass" case so callers can branch on
+// the return value without pre-checking. Severity mirrors the hash-collision
+// fix-loop emission in checkFile.
+func stuckRuleFixLoopFinding(findings []sdk.Finding, path string) *sdk.Finding {
+	stuck := collectStuckFixableRules(findings)
+	if len(stuck) == 0 {
+		return nil
+	}
+	return &sdk.Finding{
+		Rule: "style.fix-loop",
+		Message: fmt.Sprintf(
+			"fix loop detected: %v reported fixable findings but produced no edits this pass. "+
+				"The file state did not converge. Aborting to avoid an infinite fix loop.",
+			stuck,
+		),
+		File:     path,
+		Severity: sdk.SeverityError,
+	}
+}
+
 // generateDiff creates a diff finding comparing original content with the current file.
 func (e *Engine) generateDiff(path string, originalContent []byte) (*sdk.Finding, error) {
 	fixedContent, err := os.ReadFile(path)
@@ -346,56 +412,196 @@ func (e *Engine) generateDiff(path string, originalContent []byte) (*sdk.Finding
 	}, nil
 }
 
-// applyFixes applies ONE auto-fix to the file per pass.
-// Returns the name of the rule whose fix was applied, or "" if no fix ran.
+// applyFixes collects byte-range edits from every fixable finding, resolves
+// overlaps, and applies the non-conflicting edits in a single write. It
+// returns the deduplicated set of rule names whose edits were applied this
+// pass — an empty slice when no fix ran.
 //
-// Dispatch: for each finding marked Fixable, look up the originating rule by name
-// and invoke its Fixer.Fix(ctx, file) method. The first non-nil byte content
-// returned wins; it is written to disk and the rule name is returned. The
-// multi-pass loop in checkFile re-reads the file and re-runs rules after each
-// fix, so subsequent fixes are computed against the updated content.
+// Algorithm (in order):
+//  1. For each finding marked Fixable, invoke the originating rule's
+//     Fixer.Fix(ctx, file) and collect every emitted TextEdit. A nil
+//     FixResult or empty Edits slice contributes no edits; a Fix error
+//     aborts the pass and propagates up.
+//  2. Bounds-check every collected edit (Start >= 0, Start <= End,
+//     End <= len(content)). An out-of-bounds edit returns an error naming
+//     the offending rule.
+//  3. Whole-file exclusivity: if any collected edit covers the full file
+//     (Start == 0 && End == len(content)), apply it alone and discard every
+//     other edit this pass. Whole-file ties resolve in source order. Narrow
+//     edits re-emit against the rewritten content on the next pass.
+//  4. Overlap resolution: walk collected edits in source order and keep an
+//     edit iff it does not conflict with any already-kept edit. Two edits
+//     conflict iff they share a Start offset or their half-open byte ranges
+//     overlap. Dropped edits re-emit on the next pass.
+//  5. Sort retained edits by Start in descending order, then splice each into
+//     a fresh copy of the content. Descending order keeps the byte offsets
+//     of remaining edits valid as earlier (right-side) splices land.
+//  6. Write the spliced content with the captured mode, then defensively
+//     Chmod to restore the mode in case WriteFile recreated the file.
 //
-// Note: each rule's Fix() must converge — repeated applications must eventually
-// reach a fixed point. If the file returns to a previously-seen state, the
-// multi-pass loop's hash-based cycle detector fires and emits a style.fix-loop
-// error finding instead of looping forever.
-func (e *Engine) applyFixes(ctx *sdk.Context, file *hcl.File, findings []sdk.Finding, mode os.FileMode) (string, error) {
+// The hash-based fix-loop guard in checkFile catches rules that re-emit
+// indefinitely against the updated content; this function is responsible
+// only for converging a single pass's edits.
+func (e *Engine) applyFixes(ctx *sdk.Context, file *hcl.File, findings []sdk.Finding, mode os.FileMode) ([]string, error) {
+	type collectedEdit struct {
+		rule string
+		edit sdk.TextEdit
+	}
+
+	content := file.Bytes
+
+	var collected []collectedEdit
 	for i := range findings {
 		if !findings[i].Fixable {
 			continue
 		}
-
-		fixer := e.findFixerByRuleName(findings[i].Rule)
+		fixer := e.FindFixerByRuleName(findings[i].Rule)
 		if fixer == nil {
 			continue
 		}
-
-		content, err := fixer.Fix(ctx, file)
+		result, err := fixer.Fix(ctx, file)
 		if err != nil {
-			return "", fmt.Errorf("computing fix for %s: %w", findings[i].Rule, err)
+			return nil, fmt.Errorf("computing fix for %s: %w", findings[i].Rule, err)
 		}
-		if content == nil {
+		if result == nil {
 			continue
 		}
-
-		if err := os.WriteFile(ctx.File, content, mode); err != nil {
-			return "", fmt.Errorf("writing fix for %s: %w", findings[i].Rule, err)
+		ruleName := findings[i].Rule
+		for _, te := range result.Edits {
+			collected = append(collected, collectedEdit{rule: ruleName, edit: te})
 		}
-		// Defensive Chmod: WriteFile preserves mode on truncation, but if the
-		// file was recreated for any reason, ensure original mode wins over umask.
-		if err := os.Chmod(ctx.File, mode); err != nil {
-			return "", fmt.Errorf("restoring mode after fix for %s: %w", findings[i].Rule, err)
-		}
-		return findings[i].Rule, nil
 	}
 
-	return "", nil
+	if len(collected) == 0 {
+		return nil, nil
+	}
+
+	for _, ce := range collected {
+		if ce.edit.Start < 0 {
+			return nil, fmt.Errorf("fix from %s: edit start %d is negative", ce.rule, ce.edit.Start)
+		}
+		if ce.edit.End < ce.edit.Start {
+			return nil, fmt.Errorf("fix from %s: edit end %d precedes start %d", ce.rule, ce.edit.End, ce.edit.Start)
+		}
+		if ce.edit.End > len(content) {
+			return nil, fmt.Errorf("fix from %s: edit end %d exceeds content length %d", ce.rule, ce.edit.End, len(content))
+		}
+	}
+
+	// Whole-file exclusivity requires End == len(content) — a zero-width
+	// insertion at offset 0 (End == 0 on a non-empty file) does NOT qualify.
+	for _, ce := range collected {
+		if ce.edit.Start == 0 && ce.edit.End == len(content) {
+			return e.writeFixed(ctx.File, ce.edit.Replacement, mode, []string{ce.rule})
+		}
+	}
+
+	retained := make([]collectedEdit, 0, len(collected))
+	for _, ce := range collected {
+		conflict := false
+		for _, kept := range retained {
+			if editsConflict(ce.edit, kept.edit) {
+				conflict = true
+				break
+			}
+		}
+		if !conflict {
+			retained = append(retained, ce)
+		}
+	}
+
+	sort.SliceStable(retained, func(i, j int) bool {
+		return retained[i].edit.Start > retained[j].edit.Start
+	})
+
+	newContent := append([]byte(nil), content...)
+	for _, ce := range retained {
+		// Splice in three parts: newContent[:Start] + Replacement + newContent[End:].
+		// Descending-Start ordering plus the no-overlap invariant guarantees
+		// ce.edit.End <= len(newContent) at every iteration, so the right slice is
+		// always valid.
+		leftLen := ce.edit.Start
+		rightLen := len(newContent) - ce.edit.End
+		spliced := make([]byte, 0, leftLen+len(ce.edit.Replacement)+rightLen)
+		spliced = append(spliced, newContent[:ce.edit.Start]...)
+		spliced = append(spliced, ce.edit.Replacement...)
+		spliced = append(spliced, newContent[ce.edit.End:]...)
+		newContent = spliced
+	}
+
+	applied := make([]string, 0, len(retained))
+	seen := make(map[string]struct{}, len(retained))
+	for _, ce := range retained {
+		if _, dup := seen[ce.rule]; dup {
+			continue
+		}
+		seen[ce.rule] = struct{}{}
+		applied = append(applied, ce.rule)
+	}
+
+	return e.writeFixed(ctx.File, newContent, mode, applied)
 }
 
-// findFixerByRuleName returns the rule registered under the given name as an
+// editsConflict reports whether two edits cannot be co-applied in a single
+// pass under the descending-Start splice rule. The relation is symmetric, so
+// caller ordering does not matter. Conflicts come in three flavors:
+//
+//  1. Same-Start: no defined application order between them.
+//  2. Half-open ranges share at least one byte position
+//     (max(Start) < min(End)). Touching ranges (a.End == b.Start) do not
+//     conflict.
+//  3. One edit is zero-width (Start == End) and its offset lies strictly
+//     inside the other edit's half-open range (open interval (Start, End)).
+//     A zero-width insertion at a position about to be deleted is ambiguous:
+//     the descending-Start splice produces a deterministic result, but the
+//     insertion point's anchor is gone from the original document. The
+//     conflict drops the insertion so it can re-anchor against the rewritten
+//     content on the next pass. Boundary cases do not conflict in this
+//     branch: a zero-width edit at the other's Start is caught by branch 1
+//     (same-Start), and a zero-width edit at the other's End is the
+//     adjacent-touching case (a.End == b.Start), which is always allowed.
+func editsConflict(a, b sdk.TextEdit) bool {
+	if a.Start == b.Start {
+		return true
+	}
+	if max(a.Start, b.Start) < min(a.End, b.End) {
+		return true
+	}
+	if a.Start == a.End && a.Start > b.Start && a.Start < b.End {
+		return true
+	}
+	if b.Start == b.End && b.Start > a.Start && b.Start < a.End {
+		return true
+	}
+	return false
+}
+
+// writeFixed persists the spliced content with the captured mode and reports
+// which rules contributed. Writes go through e.writeFn (test seam, defaults to
+// os.WriteFile). The defensive Chmod after the write guards against the file
+// being recreated (umask wins over the mode otherwise). The applied rule names
+// are interpolated into the error so a write failure points at which fixes
+// were in flight.
+func (e *Engine) writeFixed(path string, content []byte, mode os.FileMode, applied []string) ([]string, error) {
+	if err := e.writeFn(path, content, mode); err != nil {
+		return nil, fmt.Errorf("writing fixes for %v: %w", applied, err)
+	}
+	if err := os.Chmod(path, mode); err != nil {
+		return nil, fmt.Errorf("restoring mode after fixes for %v: %w", applied, err)
+	}
+	return applied, nil
+}
+
+// FindFixerByRuleName returns the rule registered under the given name as an
 // sdk.Fixer, or nil if no rule with that name is registered or it does not
-// implement Fixer.
-func (e *Engine) findFixerByRuleName(name string) sdk.Fixer {
+// implement Fixer. The lookup matches against Rule.Name(); for built-in rules
+// this is identical to the diagnostic Code reported in findings, but plugin
+// authors should be aware the two are conceptually distinct.
+//
+// Callers outside this package (notably the LSP server's code-action handler)
+// must snapshot the engine pointer under the appropriate read lock before
+// invoking this method, since concurrent reloads may swap the rule set.
+func (e *Engine) FindFixerByRuleName(name string) sdk.Fixer {
 	for _, r := range e.rules {
 		if r.Name() != name {
 			continue

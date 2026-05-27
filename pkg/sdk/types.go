@@ -108,6 +108,54 @@ type Finding struct {
 	IsDiff bool `json:"is_diff,omitempty"`
 }
 
+// TextEdit describes a single byte-range edit to file content. Rules that
+// implement Fixer return one or more TextEdits inside a FixResult; the engine
+// collects edits from all fixable findings in a pass, sorts them by Start in
+// descending order, then applies them in a single write.
+//
+// Offsets are half-open: [Start, End). A pure insertion has Start == End and
+// non-empty Replacement. A pure deletion has Start < End and an empty (or nil)
+// Replacement. A whole-file edit has Start == 0 and End == len(content); see
+// FixResult for the exclusive-this-pass semantic.
+type TextEdit struct {
+	// Start is the inclusive byte offset where the edit begins.
+	Start int `json:"start"`
+	// End is the exclusive byte offset where the edit ends. End must be >= Start
+	// and <= len(content); the engine bounds-checks every edit and errors otherwise.
+	End int `json:"end"`
+	// Replacement is the bytes to insert in place of content[Start:End].
+	// An empty or nil slice means deletion.
+	Replacement []byte `json:"replacement"`
+}
+
+// FixResult wraps the set of byte-range edits produced by a single Fixer.Fix
+// call. Rules return a *FixResult; a nil result (or a non-nil result with no
+// edits) means no fix is applicable, equivalent to returning nil from the
+// previous []byte-returning signature.
+//
+// The struct shape (rather than a bare []TextEdit) is a forward-compat hatch:
+// future fields like RequiresReparse can be added without churning the Fixer
+// signature again.
+//
+// Apply order: the engine sorts edits by Start in descending order before
+// applying, so earlier (lower-offset) splices do not invalidate the byte
+// offsets of later edits in the same pass.
+//
+// Whole-file exclusivity: if any edit collected in a pass has
+// Start == 0 && End == len(content), it is applied alone — all other edits in
+// the same pass are discarded and will re-emit against the rewritten content
+// on the next pass. This avoids ambiguous interactions between whole-file
+// rewriters and narrow edits.
+//
+// NOTE: FixResult name was previously used (pre-v0.2.0-alpha.5) for a different
+// type carrying precomputed bytes and a diff. The new type is unrelated to the
+// old shape. See docs/site/docs/getting-started/upgrade.md for the chronology.
+type FixResult struct {
+	// Edits is the set of byte-range edits to apply. An empty or nil slice
+	// indicates no fix; equivalent to returning a nil *FixResult.
+	Edits []TextEdit `json:"edits"`
+}
+
 // Context provides runtime information to rules during execution. Each rule
 // invocation receives a Context with the current file path, working directory,
 // and any rule-specific configuration from .terratidy.yaml.
@@ -144,9 +192,14 @@ type Rule interface {
 // Fixer is an optional interface for rules that support auto-fixing.
 // Rules that implement both Rule and Fixer can automatically correct issues.
 type Fixer interface {
-	// Fix applies an automatic fix and returns the corrected file content as bytes.
-	// Return nil, nil if no fix is needed.
-	Fix(ctx *Context, file *hcl.File) ([]byte, error)
+	// Fix returns the set of byte-range edits the engine should apply to the
+	// file's current content. Return nil, nil (or a *FixResult with no edits)
+	// when no fix is applicable; the engine treats either form as a no-op.
+	//
+	// Multiple findings against the same file each call Fix independently; the
+	// engine collects every returned edit and applies them in a single pass.
+	// See FixResult for the exact ordering, overlap, and whole-file rules.
+	Fix(ctx *Context, file *hcl.File) (*FixResult, error)
 }
 
 // Engine defines the interface for analysis engines (fmt, style, lint, policy).

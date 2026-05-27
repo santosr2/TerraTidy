@@ -85,8 +85,8 @@ func (r *ForEachCountFirstRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.F
 
 // Fix moves for_each/count to be first attribute in each block.
 // Uses line-based reordering to preserve leading comments.
-func (r *ForEachCountFirstRule) Fix(ctx *sdk.Context, file *hcl.File) ([]byte, error) {
-	content, err := os.ReadFile(ctx.File)
+func (r *ForEachCountFirstRule) Fix(ctx *sdk.Context, file *hcl.File) (*sdk.FixResult, error) {
+	originalContent, err := os.ReadFile(ctx.File)
 	if err != nil {
 		return nil, err
 	}
@@ -95,6 +95,8 @@ func (r *ForEachCountFirstRule) Fix(ctx *sdk.Context, file *hcl.File) ([]byte, e
 	if !ok {
 		return nil, nil
 	}
+
+	content := originalContent
 
 	// Process each block that has for_each or count
 	for _, block := range hclFile.Blocks {
@@ -128,7 +130,7 @@ func (r *ForEachCountFirstRule) Fix(ctx *sdk.Context, file *hcl.File) ([]byte, e
 		)
 	}
 
-	return FormatAndCleanBlankLines(content), nil
+	return WholeFileEdit(originalContent, FormatAndCleanBlankLines(content)), nil
 }
 
 // LifecycleAtEndRule ensures lifecycle block is at the end of resource, data,
@@ -259,12 +261,12 @@ func (r *LifecycleAtEndRule) fixLifecyclePositionContent(content []byte, filePat
 
 // Fix moves lifecycle blocks to the end of resource, data, module, and check blocks.
 // Works entirely in memory - does NOT write to disk.
-func (r *LifecycleAtEndRule) Fix(ctx *sdk.Context, file *hcl.File) ([]byte, error) {
+func (r *LifecycleAtEndRule) Fix(ctx *sdk.Context, file *hcl.File) (*sdk.FixResult, error) {
 	if ctx == nil || file == nil {
 		return nil, nil
 	}
 
-	content, err := os.ReadFile(ctx.File)
+	originalContent, err := os.ReadFile(ctx.File)
 	if err != nil {
 		return nil, err
 	}
@@ -309,6 +311,8 @@ func (r *LifecycleAtEndRule) Fix(ctx *sdk.Context, file *hcl.File) ([]byte, erro
 		}
 	}
 
+	content := originalContent
+
 	// Process each block (re-parse after each modification)
 	for _, ref := range blocksToFix {
 		content, err = r.fixLifecyclePositionContent(content, ctx.File, ref.blockType, ref.labels)
@@ -318,7 +322,7 @@ func (r *LifecycleAtEndRule) Fix(ctx *sdk.Context, file *hcl.File) ([]byte, erro
 		// Do NOT write to disk - work entirely in memory
 	}
 
-	return content, nil
+	return WholeFileEdit(originalContent, content), nil
 }
 
 // TagsAtEndRule ensures tags/labels are at the end of resource blocks (before lifecycle).
@@ -438,13 +442,13 @@ func countItemsAfterTags(body *hclsyntax.Body, tagsLine int) int {
 // or at the end of the block body if no lifecycle is present. Other attributes and
 // nested blocks stay in their source positions; only the tags region (including its
 // leading comment) moves. Operates bottom-up so line ranges remain valid across rewrites.
-func (r *TagsAtEndRule) Fix(ctx *sdk.Context, _ *hcl.File) ([]byte, error) {
-	content, err := os.ReadFile(ctx.File)
+func (r *TagsAtEndRule) Fix(ctx *sdk.Context, _ *hcl.File) (*sdk.FixResult, error) {
+	originalContent, err := os.ReadFile(ctx.File)
 	if err != nil {
 		return nil, err
 	}
 
-	syntaxFile, diags := hclsyntax.ParseConfig(content, ctx.File, hcl.InitialPos)
+	syntaxFile, diags := hclsyntax.ParseConfig(originalContent, ctx.File, hcl.InitialPos)
 	if diags.HasErrors() {
 		return nil, diags
 	}
@@ -467,11 +471,12 @@ func (r *TagsAtEndRule) Fix(ctx *sdk.Context, _ *hcl.File) ([]byte, error) {
 		return targets[i].Range().Start.Line > targets[j].Range().Start.Line
 	})
 
+	content := originalContent
 	for _, block := range targets {
 		content = moveTagsBeforeLifecycle(content, block)
 	}
 
-	return FormatAndCleanBlankLines(content), nil
+	return WholeFileEdit(originalContent, FormatAndCleanBlankLines(content)), nil
 }
 
 // moveAttrBeforeLifecycle relocates the given attribute (with its leading comment)
@@ -691,16 +696,16 @@ func countItemsAfterDependsOn(body *hclsyntax.Body, dependsOnLine int) int {
 // the block body when no lifecycle is present. Other attributes and nested blocks
 // (e.g. `ordered_placement_strategy` in `aws_ecs_service`) stay at their source
 // positions; only the depends_on region (including its leading comment) moves.
-func (r *DependsOnOrderRule) Fix(ctx *sdk.Context, _ *hcl.File) ([]byte, error) {
+func (r *DependsOnOrderRule) Fix(ctx *sdk.Context, _ *hcl.File) (*sdk.FixResult, error) {
 	if ctx == nil {
 		return nil, nil
 	}
-	content, err := os.ReadFile(ctx.File)
+	originalContent, err := os.ReadFile(ctx.File)
 	if err != nil {
 		return nil, err
 	}
 
-	syntaxFile, diags := hclsyntax.ParseConfig(content, ctx.File, hcl.InitialPos)
+	syntaxFile, diags := hclsyntax.ParseConfig(originalContent, ctx.File, hcl.InitialPos)
 	if diags.HasErrors() {
 		return nil, diags
 	}
@@ -724,12 +729,13 @@ func (r *DependsOnOrderRule) Fix(ctx *sdk.Context, _ *hcl.File) ([]byte, error) 
 		return targets[i].Range().Start.Line > targets[j].Range().Start.Line
 	})
 
+	content := originalContent
 	for _, block := range targets {
 		dependsOn := FindAttribute(block.Body.Attributes, "depends_on")
 		content = moveAttrBeforeLifecycle(content, block, dependsOn)
 	}
 
-	return FormatAndCleanBlankLines(content), nil
+	return WholeFileEdit(originalContent, FormatAndCleanBlankLines(content)), nil
 }
 
 // SourceVersionGroupedRule ensures source and version are grouped together in module blocks.
@@ -832,8 +838,8 @@ func (r *SourceVersionGroupedRule) checkVersionFollowsSource(
 
 // Fix reorders source/version to be at the start of module blocks (after for_each/count).
 // Uses line-based reordering to preserve leading comments.
-func (r *SourceVersionGroupedRule) Fix(ctx *sdk.Context, file *hcl.File) ([]byte, error) {
-	content, err := os.ReadFile(ctx.File)
+func (r *SourceVersionGroupedRule) Fix(ctx *sdk.Context, file *hcl.File) (*sdk.FixResult, error) {
+	originalContent, err := os.ReadFile(ctx.File)
 	if err != nil {
 		return nil, err
 	}
@@ -842,6 +848,8 @@ func (r *SourceVersionGroupedRule) Fix(ctx *sdk.Context, file *hcl.File) ([]byte
 	if !ok {
 		return nil, nil
 	}
+
+	content := originalContent
 
 	// Process each module block that has source
 	for _, block := range hclFile.Blocks {
@@ -871,7 +879,7 @@ func (r *SourceVersionGroupedRule) Fix(ctx *sdk.Context, file *hcl.File) ([]byte
 		)
 	}
 
-	return FormatAndCleanBlankLines(content), nil
+	return WholeFileEdit(originalContent, FormatAndCleanBlankLines(content)), nil
 }
 
 // VariableOrderRule ensures variable blocks follow standard ordering.
@@ -1008,13 +1016,13 @@ func (r *VariableOrderRule) checkAttrPair(ctx *sdk.Context, block *hclsyntax.Blo
 // Fix reorders variable attributes and nested blocks to match the canonical order:
 // description, type, default, sensitive, nullable, validation blocks, then everything else.
 // Heredoc bodies live within an attribute's line range and are carried along intact.
-func (r *VariableOrderRule) Fix(ctx *sdk.Context, _ *hcl.File) ([]byte, error) {
-	content, err := os.ReadFile(ctx.File)
+func (r *VariableOrderRule) Fix(ctx *sdk.Context, _ *hcl.File) (*sdk.FixResult, error) {
+	originalContent, err := os.ReadFile(ctx.File)
 	if err != nil {
 		return nil, err
 	}
 
-	syntaxFile, diags := hclsyntax.ParseConfig(content, ctx.File, hcl.InitialPos)
+	syntaxFile, diags := hclsyntax.ParseConfig(originalContent, ctx.File, hcl.InitialPos)
 	if diags.HasErrors() {
 		return nil, diags
 	}
@@ -1038,6 +1046,7 @@ func (r *VariableOrderRule) Fix(ctx *sdk.Context, _ *hcl.File) ([]byte, error) {
 		return variables[i].Range().Start.Line > variables[j].Range().Start.Line
 	})
 
+	content := originalContent
 	for _, block := range variables {
 		content = ReorderBlockBodyPreservingAll(
 			content,
@@ -1049,7 +1058,7 @@ func (r *VariableOrderRule) Fix(ctx *sdk.Context, _ *hcl.File) ([]byte, error) {
 		)
 	}
 
-	return FormatAndCleanBlankLines(content), nil
+	return WholeFileEdit(originalContent, FormatAndCleanBlankLines(content)), nil
 }
 
 // OutputOrderRule ensures output blocks follow standard ordering.
@@ -1166,13 +1175,13 @@ func (r *OutputOrderRule) checkOutputAttrPair(ctx *sdk.Context, block *hclsyntax
 //  2. precondition blocks (in source order if multiple).
 //  3. Any remaining attributes in source order.
 //  4. Any remaining nested blocks in source order.
-func (r *OutputOrderRule) Fix(ctx *sdk.Context, _ *hcl.File) ([]byte, error) {
-	content, err := os.ReadFile(ctx.File)
+func (r *OutputOrderRule) Fix(ctx *sdk.Context, _ *hcl.File) (*sdk.FixResult, error) {
+	originalContent, err := os.ReadFile(ctx.File)
 	if err != nil {
 		return nil, err
 	}
 
-	syntaxFile, diags := hclsyntax.ParseConfig(content, ctx.File, hcl.InitialPos)
+	syntaxFile, diags := hclsyntax.ParseConfig(originalContent, ctx.File, hcl.InitialPos)
 	if diags.HasErrors() {
 		return nil, diags
 	}
@@ -1196,6 +1205,7 @@ func (r *OutputOrderRule) Fix(ctx *sdk.Context, _ *hcl.File) ([]byte, error) {
 		return outputs[i].Range().Start.Line > outputs[j].Range().Start.Line
 	})
 
+	content := originalContent
 	for _, block := range outputs {
 		content = ReorderBlockBodyPreservingAll(
 			content,
@@ -1207,7 +1217,7 @@ func (r *OutputOrderRule) Fix(ctx *sdk.Context, _ *hcl.File) ([]byte, error) {
 		)
 	}
 
-	return FormatAndCleanBlankLines(content), nil
+	return WholeFileEdit(originalContent, FormatAndCleanBlankLines(content)), nil
 }
 
 // TerraformBlockFirstRule ensures terraform block is first in the file.
@@ -1263,7 +1273,7 @@ func (r *TerraformBlockFirstRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk
 // Attribute order and comments inside every untouched block are byte-for-byte preserved.
 // Shares ReorderTopLevelBlocksByLineRange with ProviderBlockOrderRule.Fix intentionally —
 // both rules consume the same canonical priority order.
-func (r *TerraformBlockFirstRule) Fix(ctx *sdk.Context, _ *hcl.File) ([]byte, error) {
+func (r *TerraformBlockFirstRule) Fix(ctx *sdk.Context, _ *hcl.File) (*sdk.FixResult, error) {
 	if ctx == nil {
 		return nil, nil
 	}
@@ -1271,7 +1281,11 @@ func (r *TerraformBlockFirstRule) Fix(ctx *sdk.Context, _ *hcl.File) ([]byte, er
 	if err != nil {
 		return nil, err
 	}
-	return ReorderTopLevelBlocksByLineRange(content)
+	newContent, err := ReorderTopLevelBlocksByLineRange(content)
+	if err != nil {
+		return nil, err
+	}
+	return WholeFileEdit(content, newContent), nil
 }
 
 // ProviderBlockOrderRule ensures provider blocks come after terraform block.
@@ -1344,7 +1358,7 @@ func (r *ProviderBlockOrderRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.
 // Fix reorders provider blocks to the canonical position via line-range reorder.
 // Both rules share the same line-based helper because they consume the same canonical
 // priority order (terraform, provider, variable, locals, data, resource, module, output).
-func (r *ProviderBlockOrderRule) Fix(ctx *sdk.Context, _ *hcl.File) ([]byte, error) {
+func (r *ProviderBlockOrderRule) Fix(ctx *sdk.Context, _ *hcl.File) (*sdk.FixResult, error) {
 	if ctx == nil {
 		return nil, nil
 	}
@@ -1352,7 +1366,11 @@ func (r *ProviderBlockOrderRule) Fix(ctx *sdk.Context, _ *hcl.File) ([]byte, err
 	if err != nil {
 		return nil, err
 	}
-	return ReorderTopLevelBlocksByLineRange(content)
+	newContent, err := ReorderTopLevelBlocksByLineRange(content)
+	if err != nil {
+		return nil, err
+	}
+	return WholeFileEdit(content, newContent), nil
 }
 
 // AttributeGroupSpacingRule ensures blank lines between attribute groups in blocks.
@@ -1660,15 +1678,15 @@ func (r *AttributeGroupSpacingRule) fixBlockContent(content []byte, filePath, bl
 
 // Fix adds blank lines between attribute groups.
 // Works entirely in memory - does NOT write to disk.
-func (r *AttributeGroupSpacingRule) Fix(ctx *sdk.Context, file *hcl.File) ([]byte, error) {
-	content, err := os.ReadFile(ctx.File)
+func (r *AttributeGroupSpacingRule) Fix(ctx *sdk.Context, file *hcl.File) (*sdk.FixResult, error) {
+	originalContent, err := os.ReadFile(ctx.File)
 	if err != nil {
 		return nil, err
 	}
 
 	hclFile, ok := file.Body.(*hclsyntax.Body)
 	if !ok {
-		return content, nil
+		return nil, nil
 	}
 
 	// Collect block info before modifying content (line numbers will change)
@@ -1685,6 +1703,8 @@ func (r *AttributeGroupSpacingRule) Fix(ctx *sdk.Context, file *hcl.File) ([]byt
 		blocks = append(blocks, blockInfo{blockType: block.Type, labels: block.Labels})
 	}
 
+	content := originalContent
+
 	// Process each block (re-parse after each modification)
 	for _, bi := range blocks {
 		content, err = r.fixBlockContent(content, ctx.File, bi.blockType, bi.labels)
@@ -1694,5 +1714,5 @@ func (r *AttributeGroupSpacingRule) Fix(ctx *sdk.Context, file *hcl.File) ([]byt
 		// Do NOT write to disk - work entirely in memory
 	}
 
-	return content, nil
+	return WholeFileEdit(originalContent, content), nil
 }

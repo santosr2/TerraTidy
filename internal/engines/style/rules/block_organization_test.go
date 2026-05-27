@@ -153,9 +153,11 @@ func TestMetaArgumentsOrderRule(t *testing.T) {
 		result, err := rule.Fix(ctx, hclFile)
 		require.NoError(t, err)
 		require.NotNil(t, result)
+		require.Len(t, result.Edits, 1)
+		fixed := result.Edits[0].Replacement
 
 		// Parse the result and verify for_each comes before depends_on
-		fixedFile, diags := hclsyntax.ParseConfig(result, tmpFile, hcl.InitialPos)
+		fixedFile, diags := hclsyntax.ParseConfig(fixed, tmpFile, hcl.InitialPos)
 		require.False(t, diags.HasErrors())
 
 		body := fixedFile.Body.(*hclsyntax.Body)
@@ -287,9 +289,11 @@ func TestLifecycleAttributeOrderRule(t *testing.T) {
 		result, err := rule.Fix(ctx, hclFile)
 		require.NoError(t, err)
 		require.NotNil(t, result)
+		require.Len(t, result.Edits, 1)
+		fixed := result.Edits[0].Replacement
 
 		// Verify the fixed content has correct order
-		fixedFile, diags := hclsyntax.ParseConfig(result, tmpFile, hcl.InitialPos)
+		fixedFile, diags := hclsyntax.ParseConfig(fixed, tmpFile, hcl.InitialPos)
 		require.False(t, diags.HasErrors())
 
 		body := fixedFile.Body.(*hclsyntax.Body)

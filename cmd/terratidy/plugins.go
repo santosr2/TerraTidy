@@ -206,8 +206,10 @@ func (r *ExampleRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Finding, er
 	return nil, nil
 }
 
-func (r *ExampleRule) Fix(ctx *sdk.Context, file *hcl.File) ([]byte, error) {
-	// Implement fix logic if auto-fixable
+func (r *ExampleRule) Fix(ctx *sdk.Context, file *hcl.File) (*sdk.FixResult, error) {
+	// Implement fix logic if auto-fixable.
+	// Return nil for no-op, or build a *sdk.FixResult with one or more
+	// sdk.TextEdit byte-range edits to splice into the file.
 	return nil, nil
 }
 `, pluginName, pluginName, pluginName, pluginName)

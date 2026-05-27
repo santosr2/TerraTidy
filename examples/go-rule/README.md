@@ -18,8 +18,11 @@ is for local development; remove it when building against a released version.
 
 ## Build
 
+`go.sum` is gitignored (regenerated locally), so the first build needs `go mod tidy`:
+
 ```bash
 cd examples/go-rule
+go mod tidy
 go build -buildmode=plugin -o require-tags.so
 ```
 

@@ -339,6 +339,10 @@ func TestPluginsInitCmd_Scaffold(t *testing.T) {
 	assert.Contains(t, output, "Plugin project created")
 	assert.Contains(t, output, "my-test-plugin")
 	assert.Contains(t, output, "Next steps")
+	// `make tidy` must appear in the Next steps so users resolve deps + generate
+	// go.sum before `make build` (otherwise the first build fails with
+	// "missing go.sum entry").
+	assert.Contains(t, output, "make tidy")
 
 	// Verify scaffold files were created
 	pluginDir := filepath.Join(tmpDir, "my-test-plugin")
@@ -368,6 +372,19 @@ func TestPluginsInitCmd_Scaffold(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, string(makefileContent), "build:")
 	assert.Contains(t, string(makefileContent), "buildmode=plugin")
+	// `tidy` target is required so users (and CI) can regenerate go.sum after
+	// scaffold or after dependency changes without remembering the raw `go mod tidy` command.
+	assert.Contains(t, string(makefileContent), "tidy:")
+	assert.Contains(t, string(makefileContent), "go mod tidy")
+
+	// .gitignore must exclude the built .so (build artifact) but NOT go.sum
+	// (scaffolded plugins use a released TerraTidy version, so go.sum is reproducible).
+	gitignorePath := filepath.Join(pluginDir, ".gitignore")
+	assert.FileExists(t, gitignorePath)
+	gitignoreContent, err := os.ReadFile(gitignorePath)
+	require.NoError(t, err)
+	assert.Contains(t, string(gitignoreContent), "*.so")
+	assert.NotContains(t, string(gitignoreContent), "go.sum")
 }
 
 func TestPluginsInitCmd_ExistingFile(t *testing.T) {

@@ -154,6 +154,11 @@ running in fix or diff mode.
 
 **Migration for SDK plugin authors:**
 
+> **Note:** This signature is accurate as of v0.2.0-alpha.5. It was superseded
+> by the byte-range edits change documented below — see the next upgrade
+> section. The migration story shown here remains historically faithful; do
+> not copy this signature for new code.
+
 ```go
 // Before: Check() returned a Finding with precomputed fix content.
 func (r *MyRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Finding, error) {

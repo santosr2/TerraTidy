@@ -121,10 +121,14 @@ type TextEdit struct {
 	// Start is the inclusive byte offset where the edit begins.
 	Start int `json:"start"`
 	// End is the exclusive byte offset where the edit ends. End must be >= Start
-	// and <= len(content); the engine bounds-checks every edit and errors otherwise.
+	// and <= len(content) when the edit is applied. Callers must ensure this
+	// invariant; the engine rejects out-of-bounds edits with an error.
 	End int `json:"end"`
 	// Replacement is the bytes to insert in place of content[Start:End].
 	// An empty or nil slice means deletion.
+	//
+	// NOTE: When JSON-encoded, Replacement is base64-encoded per
+	// encoding/json's default []byte convention.
 	Replacement []byte `json:"replacement"`
 }
 

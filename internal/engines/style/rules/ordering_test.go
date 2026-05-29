@@ -795,16 +795,7 @@ func TestTagsAtEndRule(t *testing.T) {
   tags_all       = { Name = "user-tag", Inherited = "x" }
 }
 `
-		tmpDir := t.TempDir()
-		tmpFile := filepath.Join(tmpDir, "test.tf")
-		require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0o644))
-
-		ctx := &sdk.Context{File: tmpFile}
-		result, err := rule.Fix(ctx, nil)
-		require.NoError(t, err)
-		require.NotNil(t, result)
-		require.Len(t, result.Edits, 1)
-		out := string(result.Edits[0].Replacement)
+		out := runRuleFix(t, rule, content)
 
 		// `tags` moves to the end; `tags_all` stays in its original (after-`instance_type`)
 		// position since findTagsAttribute targets `tags` first.
@@ -1849,16 +1840,7 @@ variable "second" {
   description = "Second var"
 }
 `
-		tmpDir := t.TempDir()
-		tmpFile := filepath.Join(tmpDir, "test.tf")
-		require.NoError(t, os.WriteFile(tmpFile, []byte(input), 0o644))
-
-		ctx := &sdk.Context{File: tmpFile}
-		result, err := rule.Fix(ctx, nil)
-		require.NoError(t, err)
-		require.NotNil(t, result)
-		require.Len(t, result.Edits, 1)
-		output := string(result.Edits[0].Replacement)
+		output := runRuleFix(t, rule, input)
 		assertOrderedSubstrings(t, output, []string{
 			`description = "First var"`,
 			`type        = string`,
@@ -2099,16 +2081,7 @@ output "second" {
   description = "Second"
 }
 `
-		tmpDir := t.TempDir()
-		tmpFile := filepath.Join(tmpDir, "test.tf")
-		require.NoError(t, os.WriteFile(tmpFile, []byte(input), 0o644))
-
-		ctx := &sdk.Context{File: tmpFile}
-		result, err := rule.Fix(ctx, nil)
-		require.NoError(t, err)
-		require.NotNil(t, result)
-		require.Len(t, result.Edits, 1)
-		assertOrderedSubstrings(t, string(result.Edits[0].Replacement), []string{
+		assertOrderedSubstrings(t, runRuleFix(t, rule, input), []string{
 			`description = "First"`,
 			`value       = "1"`,
 			`description = "Second"`,
@@ -2476,6 +2449,8 @@ resource "aws_instance" "x" {
 }
 
 // runRuleFix writes content to a tmp file, runs rule.Fix, and returns the output as a string.
+// Asserts exactly one TextEdit in the result, so it cannot be used for no-op cases
+// (rules that return nil) or rules that emit multiple edits per pass.
 func runRuleFix(t *testing.T, rule sdk.Rule, content string) string {
 	t.Helper()
 	fixer, ok := rule.(sdk.Fixer)

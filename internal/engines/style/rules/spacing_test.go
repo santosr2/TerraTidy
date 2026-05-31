@@ -236,6 +236,27 @@ resource "aws_instance" "b" {
 		require.NoError(t, err)
 		assert.NotNil(t, result)
 	})
+
+	t.Run("Fix is a no-op on already-correctly-spaced blocks", func(t *testing.T) {
+		// Already-canonical input: exactly one blank line between blocks.
+		// Fix must return nil FixResult so the engine writes nothing back.
+		content := `resource "aws_instance" "a" {
+  ami = "ami-123"
+}
+
+resource "aws_instance" "b" {
+  ami = "ami-456"
+}
+`
+		tmpDir := t.TempDir()
+		tmpFile := filepath.Join(tmpDir, "test.tf")
+		require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0o644))
+
+		ctx := &sdk.Context{File: tmpFile}
+		result, err := rule.Fix(ctx, nil)
+		require.NoError(t, err)
+		assert.Nil(t, result, "already-canonical input must produce no edits")
+	})
 }
 
 func TestNoEmptyBlocksRule(t *testing.T) {

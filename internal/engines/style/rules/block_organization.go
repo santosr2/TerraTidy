@@ -109,6 +109,20 @@ func (r *MetaArgumentsOrderRule) checkBlock(ctx *sdk.Context, block *hclsyntax.B
 
 // Fix reorders meta-arguments in all blocks.
 func (r *MetaArgumentsOrderRule) Fix(ctx *sdk.Context, file *hcl.File) (*sdk.FixResult, error) {
+	// Short-circuit when nothing needs reordering. Without this guard,
+	// ReorderBlockAttrs below removes and re-adds attributes via
+	// SetAttributeRaw, which triggers hclwrite to re-align them — producing
+	// a byte-different output even when the source order is already
+	// canonical. Calling Check first matches LifecycleAttributeOrderRule's
+	// no-op contract and keeps the engine from writing spurious edits.
+	findings, err := r.Check(ctx, file)
+	if err != nil {
+		return nil, err
+	}
+	if len(findings) == 0 {
+		return nil, nil
+	}
+
 	content, err := os.ReadFile(ctx.File)
 	if err != nil {
 		return nil, err

@@ -177,6 +177,33 @@ func TestMetaArgumentsOrderRule(t *testing.T) {
 
 		assert.Greater(t, dependsOnLine, forEachLine, "depends_on should come after for_each")
 	})
+
+	t.Run("Fix is a no-op on already-correctly-ordered meta-arguments", func(t *testing.T) {
+		// Canonical order: for_each → provider → regular attrs → depends_on.
+		// Fix must return nil FixResult so the engine writes nothing back.
+		tmpDir := t.TempDir()
+		tmpFile := filepath.Join(tmpDir, "test.tf")
+		content := `resource "aws_instance" "web" {
+  for_each = var.instances
+  provider = aws.west
+
+  ami           = "ami-123"
+  instance_type = "t2.micro"
+
+  depends_on = [aws_vpc.main]
+}
+`
+		require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0o644))
+
+		file, diags := hclsyntax.ParseConfig([]byte(content), tmpFile, hcl.InitialPos)
+		require.False(t, diags.HasErrors())
+		hclFile := &hcl.File{Body: file.Body}
+		ctx := &sdk.Context{File: tmpFile}
+
+		result, err := rule.Fix(ctx, hclFile)
+		require.NoError(t, err)
+		assert.Nil(t, result, "already-canonical input must produce no edits")
+	})
 }
 
 func TestLifecycleAttributeOrderRule(t *testing.T) {
@@ -321,6 +348,34 @@ func TestLifecycleAttributeOrderRule(t *testing.T) {
 		}
 
 		assert.Greater(t, ignoreChangesLine, createBeforeDestroyLine, "ignore_changes should come after create_before_destroy")
+	})
+
+	t.Run("Fix is a no-op on already-correctly-ordered lifecycle attributes", func(t *testing.T) {
+		// Canonical lifecycle order. Fix must return nil FixResult so the
+		// engine writes nothing back.
+		tmpDir := t.TempDir()
+		tmpFile := filepath.Join(tmpDir, "test.tf")
+		content := `resource "aws_instance" "web" {
+  ami           = "ami-123"
+  instance_type = "t2.micro"
+
+  lifecycle {
+    create_before_destroy = true
+    prevent_destroy       = false
+    ignore_changes        = [tags]
+  }
+}
+`
+		require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0o644))
+
+		file, diags := hclsyntax.ParseConfig([]byte(content), tmpFile, hcl.InitialPos)
+		require.False(t, diags.HasErrors())
+		hclFile := &hcl.File{Body: file.Body}
+		ctx := &sdk.Context{File: tmpFile}
+
+		result, err := rule.Fix(ctx, hclFile)
+		require.NoError(t, err)
+		assert.Nil(t, result, "already-canonical input must produce no edits")
 	})
 }
 

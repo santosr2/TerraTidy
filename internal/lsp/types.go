@@ -3,6 +3,8 @@ package lsp
 import (
 	"encoding/json"
 	"sort"
+	"unicode/utf16"
+	"unicode/utf8"
 )
 
 // RequestMessage represents an LSP request message
@@ -317,18 +319,22 @@ type DidChangeConfigurationParams struct {
 }
 
 // byteRangeToLSPRange converts the half-open byte range [start, end) in content
-// to an LSP Range. Character offsets are bytes within the line, matching the
-// existing handleFormatting convention. CRLF counts as two bytes; negative
-// offsets are clamped at zero. Offsets past len(content) yield a Position whose
-// character exceeds the final line's length — callers should bounds-check.
+// to an LSP Range. The LSP spec defines Position.character as a UTF-16
+// code-unit offset from the line start, so multi-byte runes (e.g. an em-dash
+// in a comment, CJK in a string literal, or a supplementary-plane emoji that
+// occupies a surrogate pair) are counted correctly rather than as raw bytes.
+// CRLF counts as two UTF-16 code units; negative offsets clamp at zero;
+// offsets past len(content) clamp at end-of-file.
 //
 // Builds a newline-offset table per call (O(N)) and resolves each offset by
-// binary search (O(log L)). Safe to invoke in loops over many TextEdits.
+// binary search (O(log L)). Per-line UTF-16 conversion is O(byteOffsetInLine);
+// safe to invoke in loops over many TextEdits because each line is decoded
+// once per Position computation, not once per code unit.
 func byteRangeToLSPRange(content []byte, start, end int) Range {
 	lineStarts := lineStartOffsets(content)
 	return Range{
-		Start: byteOffsetToPosition(start, lineStarts),
-		End:   byteOffsetToPosition(end, lineStarts),
+		Start: byteOffsetToPosition(content, start, lineStarts),
+		End:   byteOffsetToPosition(content, end, lineStarts),
 	}
 }
 
@@ -342,15 +348,37 @@ func lineStartOffsets(content []byte) []int {
 	return starts
 }
 
-func byteOffsetToPosition(offset int, lineStarts []int) Position {
+// byteOffsetToPosition converts a byte offset into an LSP Position whose
+// character field is a UTF-16 code-unit count, per the LSP spec. Out-of-range
+// offsets clamp to file boundaries. Malformed UTF-8 inside the line is treated
+// as one code unit per byte so the returned character count stays monotonically
+// aligned with the byte offset rather than drifting silently.
+func byteOffsetToPosition(content []byte, offset int, lineStarts []int) Position {
 	if offset < 0 {
 		offset = 0
+	}
+	if offset > len(content) {
+		offset = len(content)
 	}
 	// SearchInts returns the first index whose lineStart is > offset; the
 	// containing line is therefore one index earlier.
 	line := sort.SearchInts(lineStarts, offset+1) - 1
-	return Position{
-		Line:      line,
-		Character: offset - lineStarts[line],
+	if line < 0 {
+		line = 0
 	}
+	lineStart := lineStarts[line]
+
+	character := 0
+	for i := lineStart; i < offset; {
+		r, size := utf8.DecodeRune(content[i:])
+		if r == utf8.RuneError && size == 1 {
+			// Malformed byte: count as 1 code unit to keep alignment.
+			character++
+			i++
+			continue
+		}
+		character += utf16.RuneLen(r)
+		i += size
+	}
+	return Position{Line: line, Character: character}
 }

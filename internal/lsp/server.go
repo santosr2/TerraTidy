@@ -1026,19 +1026,12 @@ func (s *Server) handleFormatting(msg RequestMessage) error {
 	return s.sendResult(msg.ID, edits)
 }
 
-// wholeFileRange returns the LSP Range covering the entire document. End is
-// computed in characters-as-bytes within the final line, matching the
-// convention handleFormatting has used since the LSP shipped.
+// wholeFileRange returns the LSP Range covering the entire document. Delegates
+// to byteRangeToLSPRange so the final-line character count is in UTF-16 code
+// units, matching the LSP spec for any document whose last line contains
+// multi-byte runes.
 func wholeFileRange(original string) Range {
-	lines := strings.Count(original, "\n")
-	lastLineLen := len(original)
-	if idx := strings.LastIndex(original, "\n"); idx >= 0 {
-		lastLineLen = len(original) - idx - 1
-	}
-	return Range{
-		Start: Position{Line: 0, Character: 0},
-		End:   Position{Line: lines, Character: lastLineLen},
-	}
+	return byteRangeToLSPRange([]byte(original), 0, len(original))
 }
 
 // handleCodeAction handles textDocument/codeAction request.

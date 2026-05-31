@@ -154,6 +154,11 @@ running in fix or diff mode.
 
 **Migration for SDK plugin authors:**
 
+> **Note:** This signature is accurate as of v0.2.0-alpha.5. It was superseded
+> by the byte-range edits change documented below — see the next upgrade
+> section. The migration story shown here remains historically faithful; do
+> not copy this signature for new code.
+
 ```go
 // Before: Check() returned a Finding with precomputed fix content.
 func (r *MyRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Finding, error) {
@@ -174,7 +179,7 @@ func (r *MyRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Finding, error) 
 }
 
 func (r *MyRule) Fix(ctx *sdk.Context, file *hcl.File) ([]byte, error) {
-    return applyFix(file), nil
+    return applyFix(file), nil // your existing fix logic, returning rewritten bytes
 }
 ```
 
@@ -207,6 +212,107 @@ for _, f := range findings {
     }
 }
 ```
+
+### v0.2.0-alpha.5: SDK `Fixer.Fix` Returns `*FixResult` Instead of `[]byte`
+
+Applies to authors of Go SDK plugins (`pkg/sdk`). The `Fixer.Fix` method now
+returns a `*FixResult` carrying one or more byte-range `TextEdit`s, replacing
+the previous "rewrite the whole file as `[]byte`" contract. This lets the
+engine collect edits from every fixable finding in a file and apply them in a
+single write, instead of looping one rule at a time.
+
+YAML and Bash rule authors are **not affected** — those rule types don't write
+Go and their plugin stubs remain non-fixing.
+
+| Before | After |
+|--------|-------|
+| `Fix(ctx, file) ([]byte, error)` | `Fix(ctx, file) (*FixResult, error)` |
+| Return `nil` for no-op | Return `nil` *or* `&FixResult{}` with no edits |
+| Engine rewrites the whole file each pass | Engine splices byte ranges in descending `Start` order |
+
+!!! note "`FixResult` name reuse"
+    The `FixResult` type name was previously used in the SDK (pre-v0.2.0-alpha.5)
+    for an unrelated type (`{Content []byte; Diff string}`) that has since been
+    removed — see [v0.2.0-alpha.5: SDK `Finding.Fix` Replaced with `Fixable` Flag](#v020-alpha5-sdk-findingfix-replaced-with-fixable-flag).
+    The new `FixResult` introduced here has a different shape (`{Edits []TextEdit}`)
+    and is unrelated to the old type. A reader walking the upgrade history
+    chronologically sees the removal first, then the reintroduction.
+
+**Migration for SDK plugin authors:**
+
+The fastest migration is to wrap your existing whole-file output as a single
+`TextEdit` spanning the full input range. This preserves your rule's existing
+algorithm; the engine handles the byte-range splice for you.
+
+```go
+import (
+    "bytes"
+
+    "github.com/hashicorp/hcl/v2"
+    "github.com/santosr2/TerraTidy/pkg/sdk"
+)
+
+// Before: return the rewritten file as []byte.
+func (r *MyRule) Fix(ctx *sdk.Context, file *hcl.File) ([]byte, error) {
+    return applyFix(file), nil // your existing fix logic, returning rewritten bytes
+}
+
+// After: wrap the rewritten content as a whole-file TextEdit; return nil for
+// no-op (engine treats nil result or empty Edits the same as no fix).
+func (r *MyRule) Fix(ctx *sdk.Context, file *hcl.File) (*sdk.FixResult, error) {
+    original := file.Bytes
+    fixed := applyFix(file) // your existing fix logic, returning rewritten bytes
+    if bytes.Equal(original, fixed) {
+        return nil, nil
+    }
+    return &sdk.FixResult{
+        Edits: []sdk.TextEdit{{
+            Start:       0,
+            End:         len(original),
+            Replacement: fixed,
+        }},
+    }, nil
+}
+```
+
+The `bytes.Equal` guard matches the prior contract where rules returned nil
+bytes to signal "no change". TerraTidy's in-repo style rules use a shared
+`WholeFileEdit` helper at `internal/engines/style/rules/helpers.go` that
+collapses these lines — feel free to copy it into your own plugin module if
+you have many rules following this pattern.
+
+**Producing narrow edits (recommended for new rules):**
+
+```go
+func (r *MyRule) Fix(ctx *sdk.Context, file *hcl.File) (*sdk.FixResult, error) {
+    return &sdk.FixResult{
+        Edits: []sdk.TextEdit{
+            // Delete bytes [42, 50).
+            {Start: 42, End: 50, Replacement: nil},
+            // Insert " # tidied" at offset 100.
+            {Start: 100, End: 100, Replacement: []byte(" # tidied")},
+        },
+    }, nil
+}
+```
+
+Offsets are half-open `[Start, End)`. The engine sorts edits by `Start`
+descending before applying, so earlier splices don't invalidate later offsets.
+Out-of-bounds edits (`End > len(content)`) are rejected with an error. Return
+`nil, nil` (or `&sdk.FixResult{}` with no edits) when no fix is applicable;
+the engine treats both forms identically as a no-op.
+
+**Whole-file exclusivity:** if any edit in a pass spans the entire file
+(`Start == 0 && End == len(content)`), it is applied alone — all other edits
+in the same pass are discarded and re-emit against the rewritten content on
+the next pass. This avoids ambiguous interactions between whole-file rewriters
+and narrow edits.
+
+See the SDK reference for the full contract:
+[`Fixer` interface](../development/sdk.md#rule-interface),
+[`TextEdit`](../development/sdk.md#textedit), and
+[`FixResult`](../development/sdk.md#fixresult) — including the apply ordering,
+overlap rules, and field semantics.
 
 ### Pre-release to Stable
 

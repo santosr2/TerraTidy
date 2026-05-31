@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/santosr2/TerraTidy/internal/config"
+	"github.com/santosr2/TerraTidy/internal/engines/format"
 	"github.com/santosr2/TerraTidy/internal/engines/lint"
 	"github.com/santosr2/TerraTidy/internal/engines/style"
 	"github.com/santosr2/TerraTidy/internal/plugins"
@@ -1502,7 +1503,10 @@ func TestServer_HandleCodeAction(t *testing.T) {
 		require.NoError(t, err)
 
 		output := out.String()
-		assert.Contains(t, output, "Fix:")
+		// styleEngine is nil here so buildFixerEdits short-circuits and the
+		// diagnostic bucket falls through to the shared format-fallback
+		// CodeAction, which now uses the generic "Format document" title.
+		assert.Contains(t, output, "Format document")
 		assert.Contains(t, output, `"edit"`)
 		assert.Contains(t, output, `"changes"`)
 	})
@@ -1567,6 +1571,350 @@ func TestServer_HandleCodeAction(t *testing.T) {
 		output := out.String()
 		assert.Contains(t, output, `[]`)
 	})
+}
+
+// TestServer_HandleCodeAction_PerFindingEdits verifies that handleCodeAction
+// emits one CodeAction per diagnostic (rather than a single global fix), each
+// tagged with its originating rule code and tied back to its diagnostic.
+//
+// Rationale for what is — and isn't — asserted: the byte-range-textedits work
+// migrates Fixer to return []TextEdit, but the rule bodies in this PR still
+// return a single whole-file edit via WholeFileEdit (Phase 3 is wrap-only).
+// So both CodeActions in this test carry a whole-file LSP TextEdit covering
+// the entire document, and asserting "ranges don't overlap" would be a
+// guaranteed false negative until the CST refactor narrows the per-rule edits.
+// The behavior tested here — N diagnostics → N CodeActions, each tied to its
+// own rule + diagnostic — is the architectural change LSP-side; the narrowness
+// assertion belongs on the CST PR.
+func TestServer_HandleCodeAction_PerFindingEdits(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Fixture triggers two rules:
+	//   - style.comment-syntax  (// comment on line 1)
+	//   - style.tags-at-end     (ami attribute appears after tags inside the resource)
+	tfContent := `// header comment
+resource "aws_instance" "x" {
+  tags = {
+    Name = "test"
+  }
+  ami = "ami-123"
+}
+`
+	testFile := filepath.Join(tmpDir, "main.tf")
+	require.NoError(t, os.WriteFile(testFile, []byte(tfContent), 0o644))
+
+	out := &bytes.Buffer{}
+	server := NewServer(strings.NewReader(""), out)
+	server.workspaceRoot = tmpDir
+	server.styleEngine = style.New(nil)
+
+	uri := pathToFileURI(testFile)
+	server.documents[uri] = &Document{
+		URI:     uri,
+		Content: tfContent,
+		Version: 1,
+	}
+
+	// Diagnostic.Message values are placeholders — the LSP code-action path
+	// keys on Code, not Message, so synthetic strings keep the test decoupled
+	// from rule output wording.
+	commentDiag := Diagnostic{
+		Range:    Range{Start: Position{Line: 0, Character: 0}, End: Position{Line: 0, Character: 17}},
+		Code:     "style.comment-syntax",
+		Message:  "synthetic: comment-syntax finding",
+		Severity: 3,
+	}
+	tagsDiag := Diagnostic{
+		Range:    Range{Start: Position{Line: 2, Character: 2}, End: Position{Line: 2, Character: 6}},
+		Code:     "style.tags-at-end",
+		Message:  "synthetic: tags-at-end finding",
+		Severity: 2,
+	}
+
+	params := CodeActionParams{
+		TextDocument: TextDocumentIdentifier{URI: uri},
+		Range:        Range{Start: Position{Line: 0}, End: Position{Line: 6}},
+		Context:      CodeActionContext{Diagnostics: []Diagnostic{commentDiag, tagsDiag}},
+	}
+	paramsJSON, err := json.Marshal(params)
+	require.NoError(t, err)
+
+	require.NoError(t, server.handleCodeAction(RequestMessage{
+		JSONRPC: "2.0",
+		ID:      json.RawMessage(`1`),
+		Method:  "textDocument/codeAction",
+		Params:  paramsJSON,
+	}))
+
+	actions := extractCodeActionsFromResponse(t, out.String())
+	require.Len(t, actions, 2, "expected one CodeAction per diagnostic")
+
+	// Map by rule code so assertions don't depend on iteration order of the
+	// diagnostics slice.
+	byCode := make(map[string]CodeAction, len(actions))
+	for _, a := range actions {
+		require.Len(t, a.Diagnostics, 1, "each CodeAction should carry its single originating diagnostic")
+		byCode[a.Diagnostics[0].Code] = a
+	}
+
+	for _, code := range []string{"style.comment-syntax", "style.tags-at-end"} {
+		action, ok := byCode[code]
+		require.Truef(t, ok, "missing CodeAction for diagnostic %q", code)
+		assert.Containsf(t, action.Title, code, "CodeAction title should reference the originating rule")
+		assert.Equal(t, "quickfix", action.Kind)
+		assert.True(t, action.IsPreferred)
+		require.NotNil(t, action.Edit, "CodeAction must carry a WorkspaceEdit")
+		edits := action.Edit.Changes[uri]
+		require.NotEmpty(t, edits, "CodeAction must carry at least one TextEdit for the document URI")
+	}
+}
+
+// TestServer_HandleCodeAction_FallbackToFormatForUnknownCode verifies that
+// when a diagnostic's Code does not match any registered Fixer rule, the
+// handler falls back to the legacy whole-file format quickfix. This preserves
+// the pre-byte-range-textedits behavior for lint codes and any other
+// diagnostics whose origin isn't a style.Fixer (see handleCodeAction godoc).
+//
+// The fixture uses unformatted HCL (no spaces around '=') so the format
+// engine produces a non-trivial result; the diagnostic carries a made-up
+// Code so FindFixerByRuleName returns nil and the fallback branch fires.
+func TestServer_HandleCodeAction_FallbackToFormatForUnknownCode(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Unformatted: missing spaces around '='. format.Format will canonicalize.
+	tfContent := "resource \"test\" \"x\" {\n  ami=\"val\"\n}\n"
+	testFile := filepath.Join(tmpDir, "main.tf")
+	require.NoError(t, os.WriteFile(testFile, []byte(tfContent), 0o644))
+
+	out := &bytes.Buffer{}
+	server := NewServer(strings.NewReader(""), out)
+	server.workspaceRoot = tmpDir
+	// Engine is wired so the fallback is hit via the lookup-miss branch
+	// rather than the styleEng==nil short-circuit.
+	server.styleEngine = style.New(nil)
+
+	uri := pathToFileURI(testFile)
+	server.documents[uri] = &Document{
+		URI:     uri,
+		Content: tfContent,
+		Version: 1,
+	}
+
+	// Code is intentionally not a registered style rule. Anything that
+	// FindFixerByRuleName can't resolve will do; using a lint-style code
+	// mirrors the real-world case (lint findings never have a style Fixer).
+	unknownDiag := Diagnostic{
+		Range:    Range{Start: Position{Line: 1, Character: 2}, End: Position{Line: 1, Character: 5}},
+		Code:     "lint.no-such-rule",
+		Message:  "synthetic: diagnostic without a Fixer",
+		Severity: 2,
+	}
+
+	params := CodeActionParams{
+		TextDocument: TextDocumentIdentifier{URI: uri},
+		Range:        Range{Start: Position{Line: 0}, End: Position{Line: 2}},
+		Context:      CodeActionContext{Diagnostics: []Diagnostic{unknownDiag}},
+	}
+	paramsJSON, err := json.Marshal(params)
+	require.NoError(t, err)
+
+	require.NoError(t, server.handleCodeAction(RequestMessage{
+		JSONRPC: "2.0",
+		ID:      json.RawMessage(`1`),
+		Method:  "textDocument/codeAction",
+		Params:  paramsJSON,
+	}))
+
+	actions := extractCodeActionsFromResponse(t, out.String())
+	require.Len(t, actions, 1, "fallback should emit exactly one CodeAction for the diagnostic")
+
+	action := actions[0]
+	assert.Equal(t, "Format document", action.Title, "format fallback uses a generic title, not per-diagnostic")
+	assert.Equal(t, "quickfix", action.Kind)
+	assert.True(t, action.IsPreferred)
+	require.Len(t, action.Diagnostics, 1)
+	assert.Equal(t, "lint.no-such-rule", action.Diagnostics[0].Code)
+
+	require.NotNil(t, action.Edit, "CodeAction must carry a WorkspaceEdit")
+	edits := action.Edit.Changes[uri]
+	require.Len(t, edits, 1, "format fallback always emits exactly one whole-file TextEdit")
+
+	edit := edits[0]
+	wantRange := wholeFileRange(tfContent)
+	assert.Equal(t, wantRange, edit.Range, "fallback edit must cover the whole document")
+	wantText := string(format.Format([]byte(tfContent)))
+	assert.Equal(t, wantText, edit.NewText, "fallback NewText must be the format-canonicalized content")
+}
+
+// TestServer_HandleCodeAction_FallbackAggregatesMultipleDiagnostics verifies
+// that when multiple diagnostics in one request all fall back to the format
+// quickfix (no matching Fixer for any of their codes), the response carries
+// a SINGLE "Format document" action whose Diagnostics field collects all of
+// them, rather than N duplicate format-quickfix actions. Avoids cluttering
+// the editor's quick-fix menu with N copies of the same edit.
+func TestServer_HandleCodeAction_FallbackAggregatesMultipleDiagnostics(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Unformatted: missing spaces around '='. format.Format will canonicalize,
+	// so formatEdits is non-nil for the aggregation path to fire.
+	tfContent := "resource \"test\" \"x\" {\n  ami=\"val\"\n  type=\"t2.micro\"\n}\n"
+	testFile := filepath.Join(tmpDir, "main.tf")
+	require.NoError(t, os.WriteFile(testFile, []byte(tfContent), 0o644))
+
+	out := &bytes.Buffer{}
+	server := NewServer(strings.NewReader(""), out)
+	server.workspaceRoot = tmpDir
+	server.styleEngine = style.New(nil)
+
+	uri := pathToFileURI(testFile)
+	server.documents[uri] = &Document{
+		URI:     uri,
+		Content: tfContent,
+		Version: 1,
+	}
+
+	// Three lint-style diagnostics, none mapped to a style Fixer; all three
+	// must fall through to the shared format fallback.
+	diags := []Diagnostic{
+		{
+			Range:    Range{Start: Position{Line: 1, Character: 2}, End: Position{Line: 1, Character: 5}},
+			Code:     "lint.rule-a",
+			Message:  "synthetic: first unresolved",
+			Severity: 2,
+		},
+		{
+			Range:    Range{Start: Position{Line: 2, Character: 2}, End: Position{Line: 2, Character: 6}},
+			Code:     "lint.rule-b",
+			Message:  "synthetic: second unresolved",
+			Severity: 2,
+		},
+		{
+			Range:    Range{Start: Position{Line: 0, Character: 0}, End: Position{Line: 0, Character: 21}},
+			Code:     "lint.rule-c",
+			Message:  "synthetic: third unresolved",
+			Severity: 1,
+		},
+	}
+
+	params := CodeActionParams{
+		TextDocument: TextDocumentIdentifier{URI: uri},
+		Range:        Range{Start: Position{Line: 0}, End: Position{Line: 3}},
+		Context:      CodeActionContext{Diagnostics: diags},
+	}
+	paramsJSON, err := json.Marshal(params)
+	require.NoError(t, err)
+
+	require.NoError(t, server.handleCodeAction(RequestMessage{
+		JSONRPC: "2.0",
+		ID:      json.RawMessage(`1`),
+		Method:  "textDocument/codeAction",
+		Params:  paramsJSON,
+	}))
+
+	actions := extractCodeActionsFromResponse(t, out.String())
+	require.Len(t, actions, 1, "three unresolved diagnostics should aggregate into one format-fallback action")
+
+	action := actions[0]
+	assert.Equal(t, "Format document", action.Title)
+	assert.Equal(t, "quickfix", action.Kind)
+	require.Len(t, action.Diagnostics, 3, "fallback action must reference every diagnostic it resolves")
+
+	gotCodes := make([]string, len(action.Diagnostics))
+	for i, d := range action.Diagnostics {
+		gotCodes[i] = d.Code
+	}
+	assert.ElementsMatch(t, []string{"lint.rule-a", "lint.rule-b", "lint.rule-c"}, gotCodes)
+
+	require.NotNil(t, action.Edit)
+	edits := action.Edit.Changes[uri]
+	require.Len(t, edits, 1, "single shared whole-file format edit")
+}
+
+// TestServer_HandleCodeAction_FixerNoOpFallsThrough verifies the path where a
+// rule's Fixer is found and invoked but returns no edits (nil FixResult). In
+// that case buildFixerEdits returns nil and the handler falls back to the
+// whole-file format quickfix. When the format engine is also a no-op (already
+// canonical content) no CodeAction is emitted for the diagnostic at all.
+//
+// This covers the `result == nil || len(result.Edits) == 0` branch of
+// buildFixerEdits which is otherwise only exercised via direct unit tests of
+// the helper. Using already-canonical content lets us trigger it end-to-end
+// through a real registered Fixer without needing to inject a stub.
+func TestServer_HandleCodeAction_FixerNoOpFallsThrough(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Canonical content: blank line between blocks, no formatting drift.
+	// BlankLineBetweenBlocksRule.Fix returns nil FixResult for this input
+	// (already-correctly-spaced); format.Format is also a no-op.
+	tfContent := `resource "aws_instance" "a" {
+  ami = "ami-123"
+}
+
+resource "aws_instance" "b" {
+  ami = "ami-456"
+}
+`
+	testFile := filepath.Join(tmpDir, "main.tf")
+	require.NoError(t, os.WriteFile(testFile, []byte(tfContent), 0o644))
+
+	out := &bytes.Buffer{}
+	server := NewServer(strings.NewReader(""), out)
+	server.workspaceRoot = tmpDir
+	server.styleEngine = style.New(nil)
+
+	uri := pathToFileURI(testFile)
+	server.documents[uri] = &Document{
+		URI:     uri,
+		Content: tfContent,
+		Version: 1,
+	}
+
+	// Synthetic diagnostic carrying a real rule code so the Fixer lookup
+	// succeeds. Fix will return nil because content is already canonical.
+	noopDiag := Diagnostic{
+		Range:    Range{Start: Position{Line: 0, Character: 0}, End: Position{Line: 0, Character: 28}},
+		Code:     "style.blank-line-between-blocks",
+		Message:  "synthetic: rule that is a no-op on this content",
+		Severity: 3,
+	}
+
+	params := CodeActionParams{
+		TextDocument: TextDocumentIdentifier{URI: uri},
+		Range:        Range{Start: Position{Line: 0}, End: Position{Line: 6}},
+		Context:      CodeActionContext{Diagnostics: []Diagnostic{noopDiag}},
+	}
+	paramsJSON, err := json.Marshal(params)
+	require.NoError(t, err)
+
+	require.NoError(t, server.handleCodeAction(RequestMessage{
+		JSONRPC: "2.0",
+		ID:      json.RawMessage(`1`),
+		Method:  "textDocument/codeAction",
+		Params:  paramsJSON,
+	}))
+
+	actions := extractCodeActionsFromResponse(t, out.String())
+	assert.Empty(t, actions, "no CodeAction should be emitted when both Fixer and format fallback are no-ops")
+}
+
+// extractCodeActionsFromResponse parses the LSP-framed response written to the
+// server's writer and returns the []CodeAction in the response's result field.
+func extractCodeActionsFromResponse(t *testing.T, framed string) []CodeAction {
+	t.Helper()
+	sep := "\r\n\r\n"
+	idx := strings.Index(framed, sep)
+	require.GreaterOrEqual(t, idx, 0, "response missing LSP header separator: %q", framed)
+	body := framed[idx+len(sep):]
+
+	var resp ResponseMessage
+	require.NoError(t, json.Unmarshal([]byte(body), &resp))
+	require.Nil(t, resp.Error, "expected successful response, got error: %+v", resp.Error)
+
+	raw, err := json.Marshal(resp.Result)
+	require.NoError(t, err)
+	var actions []CodeAction
+	require.NoError(t, json.Unmarshal(raw, &actions))
+	return actions
 }
 
 func TestServer_Run_EOF(t *testing.T) {

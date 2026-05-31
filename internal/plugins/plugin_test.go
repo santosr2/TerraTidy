@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/hashicorp/hcl/v2"
+	"github.com/santosr2/TerraTidy/internal/engines/style/rules"
 	"github.com/santosr2/TerraTidy/pkg/sdk"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -79,7 +80,7 @@ func (r *fakeRule) Check(_ *sdk.Context, _ *hcl.File) ([]sdk.Finding, error) {
 	return nil, nil
 }
 
-func (r *fakeRule) Fix(_ *sdk.Context, _ *hcl.File) ([]byte, error) {
+func (r *fakeRule) Fix(_ *sdk.Context, _ *hcl.File) (*sdk.FixResult, error) {
 	return nil, nil
 }
 
@@ -677,11 +678,11 @@ func TestManager_RegisterMultipleFormattersWithSameName(t *testing.T) {
 	assert.Equal(t, formatter2, formatters["duplicate"])
 }
 
-// fakeFixableRule is a rule that returns actual fix bytes.
+// fakeFixableRule is a rule that returns a precomputed fix result.
 type fakeFixableRule struct {
-	name     string
-	findings []sdk.Finding
-	fixBytes []byte
+	name      string
+	findings  []sdk.Finding
+	fixResult *sdk.FixResult
 }
 
 func (r *fakeFixableRule) Name() string        { return r.name }
@@ -690,14 +691,18 @@ func (r *fakeFixableRule) Check(_ *sdk.Context, _ *hcl.File) ([]sdk.Finding, err
 	return r.findings, nil
 }
 
-func (r *fakeFixableRule) Fix(_ *sdk.Context, _ *hcl.File) ([]byte, error) {
-	return r.fixBytes, nil
+func (r *fakeFixableRule) Fix(_ *sdk.Context, _ *hcl.File) (*sdk.FixResult, error) {
+	return r.fixResult, nil
 }
 
 // TestGoPluginRuleFixApplied verifies that when a rule implements Fix()
-// and returns non-nil bytes, those bytes are available for applying.
+// and returns a non-nil FixResult, those edits are available for applying.
 func TestGoPluginRuleFixApplied(t *testing.T) {
-	t.Run("rule with fix implementation returns fix bytes", func(t *testing.T) {
+	t.Run("rule with fix implementation returns fix result", func(t *testing.T) {
+		originalContent := []byte(`resource "aws_instance" "test" {
+  ami = "ami-123"
+}
+`)
 		fixedContent := []byte(`resource "aws_instance" "test" {
   ami           = "ami-123"
   instance_type = "t2.micro"
@@ -711,14 +716,18 @@ func TestGoPluginRuleFixApplied(t *testing.T) {
 			findings: []sdk.Finding{
 				{Rule: "fixable-rule", Message: "Missing tags"},
 			},
-			fixBytes: fixedContent,
+			fixResult: rules.WholeFileEdit(originalContent, fixedContent),
 		}
 
-		// Verify Fix() returns the expected bytes
+		// Verify Fix() returns a single whole-file edit covering the original range.
 		ctx := &sdk.Context{File: "test.tf"}
 		result, err := rule.Fix(ctx, nil)
 		require.NoError(t, err)
-		assert.Equal(t, fixedContent, result)
+		require.NotNil(t, result)
+		require.Len(t, result.Edits, 1)
+		assert.Equal(t, 0, result.Edits[0].Start)
+		assert.Equal(t, len(originalContent), result.Edits[0].End)
+		assert.Equal(t, fixedContent, result.Edits[0].Replacement)
 	})
 
 	t.Run("rule without fix returns nil", func(t *testing.T) {
@@ -732,10 +741,11 @@ func TestGoPluginRuleFixApplied(t *testing.T) {
 
 	t.Run("fixable rule registered with manager", func(t *testing.T) {
 		manager := NewManager(nil, false)
+		originalContent := []byte("original content")
 		fixedContent := []byte("fixed content")
 		rule := &fakeFixableRule{
-			name:     "managed-fixable-rule",
-			fixBytes: fixedContent,
+			name:      "managed-fixable-rule",
+			fixResult: rules.WholeFileEdit(originalContent, fixedContent),
 		}
 
 		manager.RegisterRule(rule)
@@ -749,7 +759,11 @@ func TestGoPluginRuleFixApplied(t *testing.T) {
 
 		result, err := fixer.Fix(&sdk.Context{}, nil)
 		require.NoError(t, err)
-		assert.Equal(t, fixedContent, result)
+		require.NotNil(t, result)
+		require.Len(t, result.Edits, 1)
+		assert.Equal(t, 0, result.Edits[0].Start)
+		assert.Equal(t, len(originalContent), result.Edits[0].End)
+		assert.Equal(t, fixedContent, result.Edits[0].Replacement)
 	})
 }
 

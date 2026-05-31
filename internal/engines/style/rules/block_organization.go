@@ -108,7 +108,21 @@ func (r *MetaArgumentsOrderRule) checkBlock(ctx *sdk.Context, block *hclsyntax.B
 }
 
 // Fix reorders meta-arguments in all blocks.
-func (r *MetaArgumentsOrderRule) Fix(ctx *sdk.Context, file *hcl.File) ([]byte, error) {
+func (r *MetaArgumentsOrderRule) Fix(ctx *sdk.Context, file *hcl.File) (*sdk.FixResult, error) {
+	// Short-circuit when nothing needs reordering. Without this guard,
+	// ReorderBlockAttrs below removes and re-adds attributes via
+	// SetAttributeRaw, which triggers hclwrite to re-align them — producing
+	// a byte-different output even when the source order is already
+	// canonical. Calling Check first matches LifecycleAttributeOrderRule's
+	// no-op contract and keeps the engine from writing spurious edits.
+	findings, err := r.Check(ctx, file)
+	if err != nil {
+		return nil, err
+	}
+	if len(findings) == 0 {
+		return nil, nil
+	}
+
 	content, err := os.ReadFile(ctx.File)
 	if err != nil {
 		return nil, err
@@ -149,7 +163,7 @@ func (r *MetaArgumentsOrderRule) Fix(ctx *sdk.Context, file *hcl.File) ([]byte, 
 		ReorderBlockAttrs(block.Body(), orderedNames, firstAttrs, lastAttrs)
 	}
 
-	return FormatAndCleanBlankLines(writeFile.Bytes()), nil
+	return WholeFileEdit(content, FormatAndCleanBlankLines(writeFile.Bytes())), nil
 }
 
 // LifecycleAttributeOrderRule ensures lifecycle block attributes are ordered correctly.
@@ -256,7 +270,7 @@ func (r *LifecycleAttributeOrderRule) checkLifecycleBlock(ctx *sdk.Context, life
 }
 
 // Fix reorders lifecycle attributes in all blocks.
-func (r *LifecycleAttributeOrderRule) Fix(ctx *sdk.Context, _ *hcl.File) ([]byte, error) {
+func (r *LifecycleAttributeOrderRule) Fix(ctx *sdk.Context, _ *hcl.File) (*sdk.FixResult, error) {
 	content, err := os.ReadFile(ctx.File)
 	if err != nil {
 		return nil, err
@@ -309,7 +323,7 @@ func (r *LifecycleAttributeOrderRule) Fix(ctx *sdk.Context, _ *hcl.File) ([]byte
 		}
 	}
 
-	return FormatAndCleanBlankLines(writeFile.Bytes()), nil
+	return WholeFileEdit(content, FormatAndCleanBlankLines(writeFile.Bytes())), nil
 }
 
 // NestedBlockOrderRule ensures nested blocks follow consistent ordering.

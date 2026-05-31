@@ -165,8 +165,11 @@ resource "aws_instance" "web" {
 
 		result, err := rule.Fix(ctx, hclFile)
 		require.NoError(t, err)
-		assert.Contains(t, string(result), "# This should be fixed")
-		assert.NotContains(t, string(result), "// This should be fixed")
+		require.NotNil(t, result)
+		require.Len(t, result.Edits, 1)
+		fixed := string(result.Edits[0].Replacement)
+		assert.Contains(t, fixed, "# This should be fixed")
+		assert.NotContains(t, fixed, "// This should be fixed")
 	})
 
 	t.Run("Fix preserves hash comments containing URLs verbatim", func(t *testing.T) {
@@ -185,13 +188,10 @@ resource "aws_instance" "web" {
 		ctx := &sdk.Context{File: tmpFile}
 		result, err := rule.Fix(ctx, nil)
 		require.NoError(t, err)
-		out := string(result)
-
-		// Hash comments untouched.
-		assert.Contains(t, out, "# https://github.com/hashicorp/terraform")
-		assert.Contains(t, out, "# also fine: // does not break me")
-		// Trailing `//` after a value is intentionally NOT rewritten (scope: full-line only).
-		assert.Contains(t, out, `ami = "ami-123" // trailing remains as //`)
+		// All hash comments and inline `//` are out of scope (full-line only). Fix is a
+		// no-op, which the new contract surfaces as a nil FixResult — original bytes
+		// are preserved on disk by the engine.
+		assert.Nil(t, result)
 	})
 
 	t.Run("Fix preserves leading whitespace when converting // to #", func(t *testing.T) {
@@ -207,8 +207,11 @@ resource "aws_instance" "web" {
 		ctx := &sdk.Context{File: tmpFile}
 		result, err := rule.Fix(ctx, nil)
 		require.NoError(t, err)
-		assert.Contains(t, string(result), "  # indented comment")
-		assert.NotContains(t, string(result), "  // indented comment")
+		require.NotNil(t, result)
+		require.Len(t, result.Edits, 1)
+		fixed := string(result.Edits[0].Replacement)
+		assert.Contains(t, fixed, "  # indented comment")
+		assert.NotContains(t, fixed, "  // indented comment")
 	})
 
 	t.Run("Fix rewrites only the first // on a multi-slash comment line", func(t *testing.T) {
@@ -220,8 +223,10 @@ resource "aws_instance" "web" {
 		ctx := &sdk.Context{File: tmpFile}
 		result, err := rule.Fix(ctx, nil)
 		require.NoError(t, err)
+		require.NotNil(t, result)
+		require.Len(t, result.Edits, 1)
 		// First `//` becomes `#`; the second `//` (inside the comment body) is preserved.
-		assert.Contains(t, string(result), "# foo // bar")
+		assert.Contains(t, string(result.Edits[0].Replacement), "# foo // bar")
 	})
 
 	t.Run("Fix is idempotent", func(t *testing.T) {
@@ -239,11 +244,14 @@ resource "x" "y" {
 
 		first, err := rule.Fix(ctx, nil)
 		require.NoError(t, err)
-		require.NoError(t, os.WriteFile(tmpFile, first, 0o644))
+		require.NotNil(t, first)
+		require.Len(t, first.Edits, 1)
+		firstBytes := first.Edits[0].Replacement
+		require.NoError(t, os.WriteFile(tmpFile, firstBytes, 0o644))
 
 		second, err := rule.Fix(ctx, nil)
 		require.NoError(t, err)
-		assert.Equal(t, string(first), string(second), "Fix(Fix(x)) must equal Fix(x)")
+		assert.Nil(t, second, "Fix(Fix(x)) must be a no-op — converged content produces nil FixResult")
 	})
 }
 
@@ -321,9 +329,12 @@ func TestNoTrailingWhitespaceRule(t *testing.T) {
 
 		result, err := rule.Fix(ctx, hclFile)
 		require.NoError(t, err)
+		require.NotNil(t, result)
+		require.Len(t, result.Edits, 1)
+		fixed := string(result.Edits[0].Replacement)
 		// Check that trailing whitespace is removed
-		assert.NotContains(t, string(result), "{  \n")
-		assert.NotContains(t, string(result), "\"  \n")
+		assert.NotContains(t, fixed, "{  \n")
+		assert.NotContains(t, fixed, "\"  \n")
 	})
 }
 
@@ -510,9 +521,11 @@ resource "aws_instance" "api" {
 
 		result, err := rule.Fix(ctx, hclFile)
 		require.NoError(t, err)
+		require.NotNil(t, result)
+		require.Len(t, result.Edits, 1)
 
 		// Count blank lines between resources
-		lines := SplitLines(result)
+		lines := SplitLines(result.Edits[0].Replacement)
 		consecutiveBlank := 0
 		maxConsecutive := 0
 		for _, line := range lines {

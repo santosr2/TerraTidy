@@ -7,6 +7,7 @@ import (
 
 	"github.com/hashicorp/hcl/v2"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestContext(t *testing.T) {
@@ -80,7 +81,7 @@ type fakeRule struct {
 	name        string
 	description string
 	checkFunc   func(*Context, *hcl.File) ([]Finding, error)
-	fixFunc     func(*Context, *hcl.File) ([]byte, error)
+	fixFunc     func(*Context, *hcl.File) (*FixResult, error)
 }
 
 func (r *fakeRule) Name() string        { return r.name }
@@ -92,7 +93,7 @@ func (r *fakeRule) Check(ctx *Context, file *hcl.File) ([]Finding, error) {
 	return nil, nil
 }
 
-func (r *fakeRule) Fix(ctx *Context, file *hcl.File) ([]byte, error) {
+func (r *fakeRule) Fix(ctx *Context, file *hcl.File) (*FixResult, error) {
 	if r.fixFunc != nil {
 		return r.fixFunc(ctx, file)
 	}
@@ -122,8 +123,8 @@ func TestRuleInterface(t *testing.T) {
 	t.Run("mock rule implements Fixer", func(t *testing.T) {
 		rule := &fakeRule{
 			name: "fixable-rule",
-			fixFunc: func(_ *Context, _ *hcl.File) ([]byte, error) {
-				return []byte("fixed"), nil
+			fixFunc: func(_ *Context, _ *hcl.File) (*FixResult, error) {
+				return &FixResult{Edits: []TextEdit{{Start: 3, End: 7, Replacement: []byte("fixed")}}}, nil
 			},
 		}
 
@@ -131,7 +132,11 @@ func TestRuleInterface(t *testing.T) {
 
 		fixed, err := rule.Fix(nil, nil)
 		assert.NoError(t, err)
-		assert.Equal(t, []byte("fixed"), fixed)
+		require.NotNil(t, fixed)
+		require.Len(t, fixed.Edits, 1)
+		assert.Equal(t, 3, fixed.Edits[0].Start)
+		assert.Equal(t, 7, fixed.Edits[0].End)
+		assert.Equal(t, []byte("fixed"), fixed.Edits[0].Replacement)
 	})
 
 	t.Run("rule with nil functions", func(t *testing.T) {

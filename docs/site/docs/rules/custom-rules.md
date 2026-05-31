@@ -18,9 +18,13 @@ Rules that support auto-fixing also implement `sdk.Fixer`:
 
 ```go
 type Fixer interface {
-    Fix(ctx *sdk.Context, file *hcl.File) ([]byte, error)
+    Fix(ctx *sdk.Context, file *hcl.File) (*sdk.FixResult, error)
 }
 ```
+
+See [`TextEdit`](../development/sdk.md#textedit) and
+[`FixResult`](../development/sdk.md#fixresult) for byte-offset semantics,
+apply order, and the whole-file exclusivity rule.
 
 The `sdk.Context` provides runtime information:
 

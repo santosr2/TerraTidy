@@ -10,6 +10,7 @@ import (
 
 	"github.com/hashicorp/hcl/v2"
 	"github.com/santosr2/TerraTidy/internal/config"
+	"github.com/santosr2/TerraTidy/internal/engines/style/rules"
 	"github.com/santosr2/TerraTidy/pkg/sdk"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -202,7 +203,7 @@ func (r *stubErroringFixerRule) Check(ctx *sdk.Context, _ *hcl.File) ([]sdk.Find
 	}}, nil
 }
 
-func (r *stubErroringFixerRule) Fix(_ *sdk.Context, _ *hcl.File) ([]byte, error) {
+func (r *stubErroringFixerRule) Fix(_ *sdk.Context, _ *hcl.File) (*sdk.FixResult, error) {
 	return nil, assert.AnError
 }
 
@@ -526,7 +527,7 @@ func (r *stubMarkerRemoverRule) Check(ctx *sdk.Context, _ *hcl.File) ([]sdk.Find
 	return findings, nil
 }
 
-func (r *stubMarkerRemoverRule) Fix(ctx *sdk.Context, _ *hcl.File) ([]byte, error) {
+func (r *stubMarkerRemoverRule) Fix(ctx *sdk.Context, _ *hcl.File) (*sdk.FixResult, error) {
 	content, err := os.ReadFile(ctx.File)
 	if err != nil {
 		return nil, err
@@ -536,7 +537,7 @@ func (r *stubMarkerRemoverRule) Fix(ctx *sdk.Context, _ *hcl.File) ([]byte, erro
 		if strings.HasPrefix(strings.TrimSpace(line), "# REMOVE_ME") {
 			out := append([]string{}, lines[:i]...)
 			out = append(out, lines[i+1:]...)
-			return []byte(strings.Join(out, "\n")), nil
+			return rules.WholeFileEdit(content, []byte(strings.Join(out, "\n"))), nil
 		}
 	}
 	return nil, nil
@@ -588,11 +589,16 @@ func (r *stubSelfTriggeringFixerRule) Check(ctx *sdk.Context, _ *hcl.File) ([]sd
 	}}, nil
 }
 
-func (r *stubSelfTriggeringFixerRule) Fix(ctx *sdk.Context, _ *hcl.File) ([]byte, error) {
-	// Return content unchanged: the rule's Check() will keep reporting the same
-	// finding on the next pass, which is exactly the self-loop pattern the
-	// hash-based guard exists to catch.
-	return os.ReadFile(ctx.File)
+func (r *stubSelfTriggeringFixerRule) Fix(ctx *sdk.Context, _ *hcl.File) (*sdk.FixResult, error) {
+	// Return content unchanged: WholeFileEdit(c, c) collapses to a nil
+	// FixResult, so applyFixes sees "no edits applied" while Check keeps
+	// reporting a Fixable finding. The stuck-rule branch of the fix-loop
+	// guard in checkFile must fire on this combination.
+	content, err := os.ReadFile(ctx.File)
+	if err != nil {
+		return nil, err
+	}
+	return rules.WholeFileEdit(content, content), nil
 }
 
 // TestCheckFile_FixLoopGuard_DetectsSelfLoop verifies that a rule whose Fix()
@@ -656,12 +662,12 @@ func (r *stubSwapRuleAToB) Check(ctx *sdk.Context, _ *hcl.File) ([]sdk.Finding, 
 	}}, nil
 }
 
-func (r *stubSwapRuleAToB) Fix(ctx *sdk.Context, _ *hcl.File) ([]byte, error) {
+func (r *stubSwapRuleAToB) Fix(ctx *sdk.Context, _ *hcl.File) (*sdk.FixResult, error) {
 	content, err := os.ReadFile(ctx.File)
 	if err != nil {
 		return nil, err
 	}
-	return []byte(strings.Replace(string(content), "PING_A", "PING_B", 1)), nil
+	return rules.WholeFileEdit(content, []byte(strings.Replace(string(content), "PING_A", "PING_B", 1))), nil
 }
 
 // stubSwapRuleBToA mirrors stubSwapRuleAToB in the opposite direction.
@@ -686,12 +692,12 @@ func (r *stubSwapRuleBToA) Check(ctx *sdk.Context, _ *hcl.File) ([]sdk.Finding, 
 	}}, nil
 }
 
-func (r *stubSwapRuleBToA) Fix(ctx *sdk.Context, _ *hcl.File) ([]byte, error) {
+func (r *stubSwapRuleBToA) Fix(ctx *sdk.Context, _ *hcl.File) (*sdk.FixResult, error) {
 	content, err := os.ReadFile(ctx.File)
 	if err != nil {
 		return nil, err
 	}
-	return []byte(strings.Replace(string(content), "PING_B", "PING_A", 1)), nil
+	return rules.WholeFileEdit(content, []byte(strings.Replace(string(content), "PING_B", "PING_A", 1))), nil
 }
 
 // TestCheckFile_FixLoopGuard_DetectsPingPong verifies that the hash-based guard
@@ -726,9 +732,9 @@ resource "aws_instance" "test" {
 	}
 	require.NotNil(t, loopFinding, "ping-pong cycle must produce a style.fix-loop finding")
 	assert.Equal(t, sdk.SeverityError, loopFinding.Severity)
-	// lastAppliedRule names whichever rule fired most recently before the
-	// cycle was detected. Either is acceptable; the test asserts only that
-	// the message names one of the two cycling rules.
+	// lastAppliedRules names the rule(s) that fired in the pass just before
+	// the cycle was detected. Either rule from the ping-pong pair is
+	// acceptable; the test asserts only that the message names one of them.
 	matches := strings.Contains(loopFinding.Message, "test.stub-swap-a-to-b") ||
 		strings.Contains(loopFinding.Message, "test.stub-swap-b-to-a")
 	assert.True(t, matches, "fix-loop message must name one of the cycling rules; got: %s",

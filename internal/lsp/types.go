@@ -1,6 +1,11 @@
 package lsp
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"sort"
+	"unicode/utf16"
+	"unicode/utf8"
+)
 
 // RequestMessage represents an LSP request message
 type RequestMessage struct {
@@ -41,11 +46,14 @@ type InitializeParams struct {
 	InitializationOptions *InitializationOptions `json:"initializationOptions,omitempty"`
 }
 
-// InitializationOptions represents client-provided options from the editor
+// InitializationOptions represents client-provided options from the editor.
+// The server only ever unmarshals this type (it is wire-format input from the
+// LSP client), so json marshal-time tag options like omitzero/omitempty are
+// intentionally omitted on the engines field — they would have no effect.
 type InitializationOptions struct {
 	Profile           string        `json:"profile,omitempty"`
 	ConfigPath        string        `json:"configPath,omitempty"`
-	Engines           EngineToggles `json:"engines,omitzero"`
+	Engines           EngineToggles `json:"engines"`
 	SeverityThreshold string        `json:"severityThreshold,omitempty"`
 	FormatOnSave      bool          `json:"formatOnSave,omitempty"`
 	RunOnSave         bool          `json:"runOnSave,omitempty"`
@@ -60,10 +68,11 @@ type EngineToggles struct {
 	Policy bool `json:"policy"`
 }
 
-// ClientCapabilities represents client capabilities
+// ClientCapabilities represents client capabilities. The server only
+// unmarshals this type; marshal-time tag options are intentionally omitted.
 type ClientCapabilities struct {
-	TextDocument TextDocumentClientCapabilities `json:"textDocument,omitzero"`
-	Workspace    WorkspaceClientCapabilities    `json:"workspace,omitzero"`
+	TextDocument TextDocumentClientCapabilities `json:"textDocument"`
+	Workspace    WorkspaceClientCapabilities    `json:"workspace"`
 }
 
 // TextDocumentClientCapabilities represents text document capabilities
@@ -311,4 +320,69 @@ type DidChangeConfigurationParams struct {
 	// Settings contains the actual configuration values.
 	// For TerraTidy, this has the same shape as InitializationOptions.
 	Settings *InitializationOptions `json:"settings,omitempty"`
+}
+
+// byteRangeToLSPRange converts the half-open byte range [start, end) in content
+// to an LSP Range. The LSP spec defines Position.character as a UTF-16
+// code-unit offset from the line start, so multi-byte runes (e.g. an em-dash
+// in a comment, CJK in a string literal, or a supplementary-plane emoji that
+// occupies a surrogate pair) are counted correctly rather than as raw bytes.
+// CRLF counts as two UTF-16 code units; negative offsets clamp at zero;
+// offsets past len(content) clamp at end-of-file.
+//
+// Builds a newline-offset table per call (O(N)) and resolves each offset by
+// binary search (O(log L)). Per-line UTF-16 conversion is O(byteOffsetInLine);
+// safe to invoke in loops over many TextEdits because each line is decoded
+// once per Position computation, not once per code unit.
+func byteRangeToLSPRange(content []byte, start, end int) Range {
+	lineStarts := lineStartOffsets(content)
+	return Range{
+		Start: byteOffsetToPosition(content, start, lineStarts),
+		End:   byteOffsetToPosition(content, end, lineStarts),
+	}
+}
+
+func lineStartOffsets(content []byte) []int {
+	starts := []int{0}
+	for i, b := range content {
+		if b == '\n' {
+			starts = append(starts, i+1)
+		}
+	}
+	return starts
+}
+
+// byteOffsetToPosition converts a byte offset into an LSP Position whose
+// character field is a UTF-16 code-unit count, per the LSP spec. Out-of-range
+// offsets clamp to file boundaries. Malformed UTF-8 inside the line is treated
+// as one code unit per byte so the returned character count stays monotonically
+// aligned with the byte offset rather than drifting silently.
+func byteOffsetToPosition(content []byte, offset int, lineStarts []int) Position {
+	if offset < 0 {
+		offset = 0
+	}
+	if offset > len(content) {
+		offset = len(content)
+	}
+	// SearchInts returns the first index whose lineStart is > offset; the
+	// containing line is therefore one index earlier.
+	line := sort.SearchInts(lineStarts, offset+1) - 1
+	if line < 0 {
+		line = 0
+	}
+	lineStart := lineStarts[line]
+
+	character := 0
+	for i := lineStart; i < offset; {
+		r, size := utf8.DecodeRune(content[i:])
+		if r == utf8.RuneError && size == 1 {
+			// Malformed byte: count as 1 code unit to keep alignment.
+			character++
+			i++
+			continue
+		}
+		character += utf16.RuneLen(r)
+		i += size
+	}
+	return Position{Line: line, Character: character}
 }

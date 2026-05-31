@@ -87,8 +87,14 @@ type Finding struct {
 ```
 
 `Fixable` is set by the engine based on whether the rule implements `sdk.Fixer`.
-The engine calls `Fixer.Fix(ctx, file)` lazily — only when applying fixes —
-instead of asking rules to precompute fix bytes during `Check()`.
+The engine calls `Fixer.Fix(ctx, file)` lazily — only when applying fixes — to
+obtain a `*sdk.FixResult` carrying the `TextEdit`s to apply, instead of asking
+rules to precompute fix output during `Check()`. The engine sorts all collected
+edits by `Start` descending and splices them in a single write per file, so
+earlier (lower-offset) splices do not invalidate later edits in the same pass.
+
+See [`TextEdit`](sdk.md#textedit) and [`FixResult`](sdk.md#fixresult) for
+byte-offset semantics, apply order, and the whole-file exclusivity rule.
 
 `IsDiff` is set by the fmt and style engines when `Message` contains a unified
 diff; the CLI uses it to route diff content through a renderer instead of

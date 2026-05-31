@@ -48,7 +48,7 @@ type Rule interface {
 
 // Rules that support auto-fixing also implement Fixer
 type Fixer interface {
-    Fix(ctx *sdk.Context, file *hcl.File) ([]byte, error)
+    Fix(ctx *sdk.Context, file *hcl.File) (*sdk.FixResult, error)
 }
 ```
 
@@ -263,8 +263,10 @@ func (r *MyRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Finding, error) 
 }
 
 // Optional: implement sdk.Fixer for auto-fix support
-// func (r *MyRule) Fix(ctx *sdk.Context, file *hcl.File) ([]byte, error) {
-//     return fixedContent, nil
+// func (r *MyRule) Fix(ctx *sdk.Context, file *hcl.File) (*sdk.FixResult, error) {
+//     // Return nil for no-op, or build a *sdk.FixResult with one or more
+//     // sdk.TextEdit byte-range edits to splice into the file.
+//     return nil, nil
 // }
 ```
 

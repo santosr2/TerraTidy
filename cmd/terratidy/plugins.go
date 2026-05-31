@@ -206,8 +206,10 @@ func (r *ExampleRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Finding, er
 	return nil, nil
 }
 
-func (r *ExampleRule) Fix(ctx *sdk.Context, file *hcl.File) ([]byte, error) {
-	// Implement fix logic if auto-fixable
+func (r *ExampleRule) Fix(ctx *sdk.Context, file *hcl.File) (*sdk.FixResult, error) {
+	// Implement fix logic if auto-fixable.
+	// Return nil for no-op, or build a *sdk.FixResult with one or more
+	// sdk.TextEdit byte-range edits to splice into the file.
 	return nil, nil
 }
 `, pluginName, pluginName, pluginName, pluginName)
@@ -233,7 +235,10 @@ require github.com/santosr2/TerraTidy v%s
 		// Create Makefile
 		makefileContent := fmt.Sprintf(`# %s Plugin Makefile
 
-.PHONY: build install clean
+.PHONY: tidy build install clean
+
+tidy:
+	go mod tidy
 
 build:
 	go build -buildmode=plugin -o %s.so
@@ -251,12 +256,22 @@ clean:
 			return sdk.NewInternalError(fmt.Errorf("writing Makefile: %w", err))
 		}
 
+		// Create .gitignore. go.sum is intentionally NOT ignored: scaffolded plugins
+		// reference a released TerraTidy version (no `replace` directive), so go.sum
+		// is reproducible and should be committed for build determinism.
+		gitignoreContent := "# Built plugin binary\n*.so\n"
+		gitignorePath := filepath.Join(dir, ".gitignore")
+		if err := os.WriteFile(gitignorePath, []byte(gitignoreContent), 0o600); err != nil {
+			return sdk.NewInternalError(fmt.Errorf("writing .gitignore: %w", err))
+		}
+
 		fmt.Printf("Plugin project created: %s\n", dir)
 		fmt.Println("\nNext steps:")
 		fmt.Printf("  1. cd %s\n", pluginName)
-		fmt.Println("  2. Edit main.go to implement your rules")
-		fmt.Println("  3. make build")
-		fmt.Println("  4. make install")
+		fmt.Println("  2. make tidy")
+		fmt.Println("  3. Edit main.go to implement your rules")
+		fmt.Println("  4. make build")
+		fmt.Println("  5. make install")
 		return nil
 	},
 }

@@ -109,13 +109,15 @@ func TestNoLeadingTrailingBlankLinesRule(t *testing.T) {
 		ctx := &sdk.Context{File: tmpFile}
 		result, err := rule.Fix(ctx, nil)
 		require.NoError(t, err)
-		assert.NotNil(t, result)
+		require.NotNil(t, result)
+		require.Len(t, result.Edits, 1)
+		fixed := string(result.Edits[0].Replacement)
 		// Should remove leading blank line (after {)
-		assert.NotContains(t, string(result), "{\n\n  ami")
+		assert.NotContains(t, fixed, "{\n\n  ami")
 		// Should remove trailing blank line (before })
-		assert.NotContains(t, string(result), "micro\"\n\n}")
+		assert.NotContains(t, fixed, "micro\"\n\n}")
 		// Internal blank line should be preserved
-		assert.Contains(t, string(result), "ami-123\"\n\n  instance_type")
+		assert.Contains(t, fixed, "ami-123\"\n\n  instance_type")
 	})
 }
 
@@ -208,9 +210,10 @@ resource "aws_instance" "b" {
 		ctx := &sdk.Context{File: tmpFile}
 		result, err := rule.Fix(ctx, nil)
 		require.NoError(t, err)
-		assert.NotNil(t, result)
+		require.NotNil(t, result)
+		require.Len(t, result.Edits, 1)
 		// Should have blank line between blocks
-		assert.Contains(t, string(result), "}\n\nresource")
+		assert.Contains(t, string(result.Edits[0].Replacement), "}\n\nresource")
 	})
 
 	t.Run("Fix removes extra blank lines", func(t *testing.T) {
@@ -232,6 +235,27 @@ resource "aws_instance" "b" {
 		result, err := rule.Fix(ctx, nil)
 		require.NoError(t, err)
 		assert.NotNil(t, result)
+	})
+
+	t.Run("Fix is a no-op on already-correctly-spaced blocks", func(t *testing.T) {
+		// Already-canonical input: exactly one blank line between blocks.
+		// Fix must return nil FixResult so the engine writes nothing back.
+		content := `resource "aws_instance" "a" {
+  ami = "ami-123"
+}
+
+resource "aws_instance" "b" {
+  ami = "ami-456"
+}
+`
+		tmpDir := t.TempDir()
+		tmpFile := filepath.Join(tmpDir, "test.tf")
+		require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0o644))
+
+		ctx := &sdk.Context{File: tmpFile}
+		result, err := rule.Fix(ctx, nil)
+		require.NoError(t, err)
+		assert.Nil(t, result, "already-canonical input must produce no edits")
 	})
 }
 
@@ -323,9 +347,11 @@ resource "aws_instance" "b" {
 	result, err := rule.Fix(ctx, nil)
 	require.NoError(t, err)
 	require.NotNil(t, result)
+	require.Len(t, result.Edits, 1)
+	fixed := string(result.Edits[0].Replacement)
 
 	// Should have exactly one blank line between blocks
-	lines := strings.Split(string(result), "\n")
+	lines := strings.Split(fixed, "\n")
 	blankCount := 0
 	inBlanks := false
 	for _, line := range lines {
@@ -340,6 +366,6 @@ resource "aws_instance" "b" {
 	}
 
 	// The fix should collapse multiple blanks to one
-	assert.Contains(t, string(result), "}\n\nresource", "should have exactly one blank line")
-	assert.NotContains(t, string(result), "}\n\n\nresource", "should not have multiple consecutive blanks")
+	assert.Contains(t, fixed, "}\n\nresource", "should have exactly one blank line")
+	assert.NotContains(t, fixed, "}\n\n\nresource", "should not have multiple consecutive blanks")
 }

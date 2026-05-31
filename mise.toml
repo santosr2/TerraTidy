@@ -198,6 +198,11 @@ description = "Build documentation site with mkdocs --strict"
 dir = "docs/site"
 run = "uv run --with-requirements requirements.txt --no-project --python 3.13 -- mkdocs build --strict"
 
+[tasks."docs:serve"]
+description = "Serve documentation site locally with live reload at http://127.0.0.1:8000"
+dir = "docs/site"
+run = "uv run --with-requirements requirements.txt --no-project --python 3.13 -- mkdocs serve"
+
 # =============================================================================
 # Development Tools
 # =============================================================================

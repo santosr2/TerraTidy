@@ -65,7 +65,13 @@ commit_preprocessors = [
   { pattern = '\s*\(#([0-9]+)\)', replace = "" },
 ]
 # regex for parsing and grouping commits
+# Breaking-change parsers are listed FIRST because git-cliff applies parsers
+# in order and stops at the first match. A `feat!:` or `refactor!:` commit
+# must route to "Breaking Changes" before the bare `^feat` / `^refactor`
+# rules absorb it into Added/Changed.
 commit_parsers = [
+  { body = ".*BREAKING CHANGE", group = "Breaking Changes" },
+  { message = "^[a-z]+(\\([^)]+\\))?!:", group = "Breaking Changes" },
   { message = "^feat", group = "Added" },
   { message = "^fix", group = "Fixed" },
   { message = "^doc", group = "Documentation" },

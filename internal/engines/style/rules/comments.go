@@ -67,14 +67,6 @@ func (r *CommentSyntaxRule) hasDoubleSlashComment(line string) bool {
 	return strings.HasPrefix(strings.TrimSpace(line), "//")
 }
 
-func (r *CommentSyntaxRule) fixFile(filePath string) ([]byte, error) {
-	content, err := os.ReadFile(filePath)
-	if err != nil {
-		return nil, err
-	}
-	return r.fixContent(content), nil
-}
-
 func (r *CommentSyntaxRule) fixContent(content []byte) []byte {
 	lines := SplitLines(content)
 	var result []string
@@ -103,8 +95,12 @@ func (r *CommentSyntaxRule) fixLine(line string) string {
 }
 
 // Fix replaces // comments with # comments.
-func (r *CommentSyntaxRule) Fix(ctx *sdk.Context, _ *hcl.File) ([]byte, error) {
-	return r.fixFile(ctx.File)
+func (r *CommentSyntaxRule) Fix(ctx *sdk.Context, _ *hcl.File) (*sdk.FixResult, error) {
+	content, err := os.ReadFile(ctx.File)
+	if err != nil {
+		return nil, err
+	}
+	return WholeFileEdit(content, r.fixContent(content)), nil
 }
 
 // NoTrailingWhitespaceRule ensures no trailing whitespace on lines.
@@ -157,14 +153,6 @@ func (r *NoTrailingWhitespaceRule) Check(ctx *sdk.Context, _ *hcl.File) ([]sdk.F
 	return findings, nil
 }
 
-func (r *NoTrailingWhitespaceRule) fixFile(filePath string) ([]byte, error) {
-	content, err := os.ReadFile(filePath)
-	if err != nil {
-		return nil, err
-	}
-	return r.fixContent(content), nil
-}
-
 func (r *NoTrailingWhitespaceRule) fixContent(content []byte) []byte {
 	lines := SplitLines(content)
 	var result []string
@@ -177,8 +165,12 @@ func (r *NoTrailingWhitespaceRule) fixContent(content []byte) []byte {
 }
 
 // Fix removes trailing whitespace from all lines.
-func (r *NoTrailingWhitespaceRule) Fix(ctx *sdk.Context, _ *hcl.File) ([]byte, error) {
-	return r.fixFile(ctx.File)
+func (r *NoTrailingWhitespaceRule) Fix(ctx *sdk.Context, _ *hcl.File) (*sdk.FixResult, error) {
+	content, err := os.ReadFile(ctx.File)
+	if err != nil {
+		return nil, err
+	}
+	return WholeFileEdit(content, r.fixContent(content)), nil
 }
 
 // ConsistentQuotesRule ensures consistent quote style.
@@ -316,14 +308,6 @@ func (r *NoConsecutiveBlankLinesRule) Check(ctx *sdk.Context, _ *hcl.File) ([]sd
 	return findings, nil
 }
 
-func (r *NoConsecutiveBlankLinesRule) fixFile(filePath string) ([]byte, error) {
-	content, err := os.ReadFile(filePath)
-	if err != nil {
-		return nil, err
-	}
-	return r.fixContent(content), nil
-}
-
 func (r *NoConsecutiveBlankLinesRule) fixContent(content []byte) []byte {
 	lines := SplitLines(content)
 	var result []string
@@ -348,6 +332,10 @@ func (r *NoConsecutiveBlankLinesRule) fixContent(content []byte) []byte {
 }
 
 // Fix removes consecutive blank lines, keeping only one.
-func (r *NoConsecutiveBlankLinesRule) Fix(ctx *sdk.Context, _ *hcl.File) ([]byte, error) {
-	return r.fixFile(ctx.File)
+func (r *NoConsecutiveBlankLinesRule) Fix(ctx *sdk.Context, _ *hcl.File) (*sdk.FixResult, error) {
+	content, err := os.ReadFile(ctx.File)
+	if err != nil {
+		return nil, err
+	}
+	return WholeFileEdit(content, r.fixContent(content)), nil
 }

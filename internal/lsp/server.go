@@ -18,6 +18,8 @@ import (
 	"time"
 
 	"github.com/fsnotify/fsnotify"
+	"github.com/hashicorp/hcl/v2"
+	"github.com/hashicorp/hcl/v2/hclparse"
 	"github.com/santosr2/TerraTidy/internal/buildinfo"
 	"github.com/santosr2/TerraTidy/internal/config"
 	"github.com/santosr2/TerraTidy/internal/engines/format"
@@ -1017,26 +1019,31 @@ func (s *Server) handleFormatting(msg RequestMessage) error {
 		return s.sendResult(msg.ID, []TextEdit{})
 	}
 
-	// Return a single edit replacing the entire document
-	lines := strings.Count(original, "\n")
-	lastLineLen := len(original)
-	if idx := strings.LastIndex(original, "\n"); idx >= 0 {
-		lastLineLen = len(original) - idx - 1
-	}
-
-	edits := []TextEdit{
-		{
-			Range: Range{
-				Start: Position{Line: 0, Character: 0},
-				End:   Position{Line: lines, Character: lastLineLen},
-			},
-			NewText: formatted,
-		},
-	}
+	edits := []TextEdit{{
+		Range:   wholeFileRange(original),
+		NewText: formatted,
+	}}
 	return s.sendResult(msg.ID, edits)
 }
 
-// handleCodeAction handles textDocument/codeAction request
+// wholeFileRange returns the LSP Range covering the entire document. Delegates
+// to byteRangeToLSPRange so the final-line character count is in UTF-16 code
+// units, matching the LSP spec for any document whose last line contains
+// multi-byte runes.
+func wholeFileRange(original string) Range {
+	return byteRangeToLSPRange([]byte(original), 0, len(original))
+}
+
+// handleCodeAction handles textDocument/codeAction request.
+//
+// For each incoming diagnostic the handler tries to find the originating
+// style rule via Engine.FindFixerByRuleName and ask it for byte-range edits
+// against the unsaved buffer. Diagnostics whose code doesn't map to a
+// Fixer-implementing rule (or whose Fix returns nothing) fall back to the
+// whole-file format quickfix the LSP has always offered.
+//
+// Parse failures and Fix errors are silent — the diagnostic simply yields no
+// code action, matching the spec acceptance criterion for malformed HCL.
 func (s *Server) handleCodeAction(msg RequestMessage) error {
 	var params CodeActionParams
 	if err := json.Unmarshal(msg.Params, &params); err != nil {
@@ -1045,6 +1052,12 @@ func (s *Server) handleCodeAction(msg RequestMessage) error {
 
 	uri := params.TextDocument.URI
 
+	// Snapshot the document content under docMu. The unlock before computing
+	// edits is safe: a concurrent didChange may update doc.Content, but the
+	// parsed AST and the byte-offset translation below both reference this
+	// `original` snapshot, so the edits remain self-consistent. The editor
+	// reconciles against its current buffer via the versioned document
+	// sync the LSP spec already mandates.
 	s.docMu.RLock()
 	doc, ok := s.documents[uri]
 	var original string
@@ -1057,47 +1070,193 @@ func (s *Server) handleCodeAction(msg RequestMessage) error {
 		return s.sendResult(msg.ID, []CodeAction{})
 	}
 
-	// Compute the formatted version once for all fix actions
-	formatted := string(format.Format([]byte(original)))
-	hasFormatFix := formatted != original
+	content := []byte(original)
 
-	var actions []CodeAction
+	// Snapshot the style engine pointer once under the engine lock so
+	// concurrent config reloads can't swap the rule set mid-iteration.
+	s.engineMu.RLock()
+	styleEng := s.styleEngine
+	s.engineMu.RUnlock()
+
+	// Persist the unsaved buffer to a request-private temp file so rule
+	// Fix() bodies that read ctx.File from disk see the in-memory content,
+	// and so that concurrent getDiagnostics on the same URI (which writes
+	// to the document's shared tempFile) cannot race the bytes out from
+	// underneath us. Parse the same bytes so AST and disk match. If any
+	// step fails, parsedFile is nil and every diagnostic falls through to
+	// the format fallback.
+	parsedFile, ctxFile, cleanup := s.prepareFixerInputs(uri, content)
+	defer cleanup()
+
+	formatEdits := buildFormatFallbackEdits(original)
+
+	// Per-diagnostic Fixer actions are emitted as we go. Diagnostics with no
+	// matching Fixer bucket into a single shared format-fallback action so
+	// the response carries one "Format document" entry rather than N copies
+	// of the same whole-file edit (one per unresolved diagnostic).
+	actions := make([]CodeAction, 0, len(params.Context.Diagnostics))
+	var fallbackDiags []Diagnostic
 	for i := range params.Context.Diagnostics {
-		if params.Context.Diagnostics[i].Code == "" {
+		diag := params.Context.Diagnostics[i]
+		if diag.Code == "" {
 			continue
 		}
 
-		// Offer a format-based fix for diagnostics when formatting changes the file
-		if hasFormatFix {
-			lines := strings.Count(original, "\n")
-			lastLineLen := len(original)
-			if idx := strings.LastIndex(original, "\n"); idx >= 0 {
-				lastLineLen = len(original) - idx - 1
-			}
-
-			actions = append(actions, CodeAction{
-				Title:       fmt.Sprintf("Fix: %s", params.Context.Diagnostics[i].Code),
-				Kind:        "quickfix",
-				Diagnostics: []Diagnostic{params.Context.Diagnostics[i]},
-				IsPreferred: true,
-				Edit: &WorkspaceEdit{
-					Changes: map[string][]TextEdit{
-						uri: {
-							{
-								Range: Range{
-									Start: Position{Line: 0, Character: 0},
-									End:   Position{Line: lines, Character: lastLineLen},
-								},
-								NewText: formatted,
-							},
-						},
-					},
-				},
-			})
+		edits := s.buildFixerEdits(styleEng, parsedFile, ctxFile, content, diag.Code)
+		if edits != nil {
+			actions = append(actions, codeActionFor(uri, diag, edits))
+			continue
 		}
+		if formatEdits != nil {
+			fallbackDiags = append(fallbackDiags, diag)
+		}
+	}
+	if len(fallbackDiags) > 0 {
+		actions = append(actions, formatFallbackAction(uri, fallbackDiags, formatEdits))
 	}
 
 	return s.sendResult(msg.ID, actions)
+}
+
+// formatFallbackAction wraps the shared whole-file format edit as a single
+// CodeAction carrying every diagnostic that had no per-rule Fixer. Aggregating
+// here keeps the response from emitting one "Format document" action per
+// unresolved diagnostic, which would clutter the editor's quick-fix menu with
+// N copies of the same fix.
+func formatFallbackAction(uri string, diags []Diagnostic, edits []TextEdit) CodeAction {
+	return CodeAction{
+		Title:       "Format document",
+		Kind:        "quickfix",
+		Diagnostics: diags,
+		IsPreferred: true,
+		Edit: &WorkspaceEdit{
+			Changes: map[string][]TextEdit{uri: edits},
+		},
+	}
+}
+
+// prepareFixerInputs writes the unsaved buffer to a request-private temp file
+// and parses it so per-finding Fixers receive an AST and an on-disk ctx.File
+// that match. The temp file is created via os.CreateTemp inside the session
+// temp dir (or the system temp dir as fallback) so it cannot race with the
+// document's long-lived diagnostics temp file. The returned cleanup is always
+// safe to call — it is a no-op when no file was created.
+//
+// Returns (nil, "", noop) if the URI is invalid, path validation fails, the
+// temp file can't be created or written, or the buffer is not parseable
+// HCL/JSON. Callers must treat a nil parsed file as "no Fixer path available;
+// use the format fallback for every diagnostic."
+func (s *Server) prepareFixerInputs(uri string, content []byte) (*hcl.File, string, func()) {
+	noop := func() {}
+
+	filePath := uriToPath(uri)
+	if filePath == "" {
+		return nil, "", noop
+	}
+	if _, err := s.validateWorkspacePath(filePath); err != nil {
+		s.logDebug("code action path validation failed for %s: %v", uri, err)
+		return nil, "", noop
+	}
+
+	ext := filepath.Ext(filePath)
+	if ext == "" {
+		ext = ".tf"
+	}
+	tempDir := s.sessionTempDir
+	if tempDir == "" {
+		tempDir = os.TempDir()
+	}
+	f, err := os.CreateTemp(tempDir, "terratidy-ca-*"+ext)
+	if err != nil {
+		return nil, "", noop
+	}
+	tempFile := f.Name()
+	_ = f.Close()
+	cleanup := func() { _ = os.Remove(tempFile) }
+
+	if err := os.WriteFile(tempFile, content, 0o600); err != nil {
+		cleanup()
+		return nil, "", noop
+	}
+
+	parser := hclparse.NewParser()
+	file, diags := parser.ParseHCL(content, tempFile)
+	if diags.HasErrors() {
+		file, diags = parser.ParseJSON(content, tempFile)
+	}
+	if diags.HasErrors() || file == nil {
+		cleanup()
+		return nil, "", noop
+	}
+	return file, tempFile, cleanup
+}
+
+// buildFixerEdits looks up the rule named by ruleCode on styleEng, invokes
+// its Fixer against the parsed buffer, and translates the resulting byte-range
+// edits to LSP TextEdits. Returns nil if any precondition is missing (no
+// engine, no parsed file, no Fixer for this rule), if Fix errors, or if Fix
+// returns no edits — callers then fall through to the format fallback.
+//
+// ctx.WorkDir is the LSP server's workspaceRoot rather than ".". Unlike the
+// CLI's checkFile path (which runs from the user's shell cwd and treats "."
+// as authoritative), the LSP knows the project root from its initialize
+// params, so passing it through gives rule fixers a meaningful absolute path
+// to resolve relative references against. Empty workspaceRoot is acceptable
+// — no in-tree Fixer currently reads ctx.WorkDir, so the field is best-effort.
+func (s *Server) buildFixerEdits(styleEng *style.Engine, parsedFile *hcl.File, ctxFile string, content []byte, ruleCode string) []TextEdit {
+	if styleEng == nil || parsedFile == nil {
+		return nil
+	}
+	fixer := styleEng.FindFixerByRuleName(ruleCode)
+	if fixer == nil {
+		return nil
+	}
+	ctx := &sdk.Context{
+		Context: context.Background(),
+		Options: make(map[string]any),
+		WorkDir: s.workspaceRoot,
+		File:    ctxFile,
+	}
+	result, err := fixer.Fix(ctx, parsedFile)
+	if err != nil || result == nil || len(result.Edits) == 0 {
+		return nil
+	}
+	edits := make([]TextEdit, 0, len(result.Edits))
+	for _, te := range result.Edits {
+		edits = append(edits, TextEdit{
+			Range:   byteRangeToLSPRange(content, te.Start, te.End),
+			NewText: string(te.Replacement),
+		})
+	}
+	return edits
+}
+
+// buildFormatFallbackEdits computes the legacy whole-file format quickfix.
+// Returns nil when formatting leaves the content unchanged so the caller can
+// distinguish "no fallback available" from "fallback is a no-op."
+func buildFormatFallbackEdits(original string) []TextEdit {
+	formatted := string(format.Format([]byte(original)))
+	if formatted == original {
+		return nil
+	}
+	return []TextEdit{{
+		Range:   wholeFileRange(original),
+		NewText: formatted,
+	}}
+}
+
+// codeActionFor wraps a set of edits into a quickfix CodeAction tied to the
+// diagnostic that produced them.
+func codeActionFor(uri string, diag Diagnostic, edits []TextEdit) CodeAction {
+	return CodeAction{
+		Title:       fmt.Sprintf("Fix: %s", diag.Code),
+		Kind:        "quickfix",
+		Diagnostics: []Diagnostic{diag},
+		IsPreferred: true,
+		Edit: &WorkspaceEdit{
+			Changes: map[string][]TextEdit{uri: edits},
+		},
+	}
 }
 
 // publishDiagnostics runs TerraTidy and publishes diagnostics

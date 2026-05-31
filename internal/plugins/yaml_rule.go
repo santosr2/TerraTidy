@@ -164,7 +164,7 @@ func (r *YAMLRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Finding, error
 }
 
 // Fix is not supported for YAML rules.
-func (r *YAMLRule) Fix(_ *sdk.Context, _ *hcl.File) ([]byte, error) {
+func (r *YAMLRule) Fix(_ *sdk.Context, _ *hcl.File) (*sdk.FixResult, error) {
 	return nil, nil
 }
 

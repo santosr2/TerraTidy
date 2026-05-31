@@ -24,8 +24,12 @@ import (
 // change". Otherwise returns a single [sdk.TextEdit] spanning the full original
 // byte range with newContent as the replacement.
 //
-// A nil original is treated as length 0, so passing (nil, []byte("x")) emits a
-// pure insertion at offset 0.
+// A nil or empty original is treated as length 0 and produces an insertion at
+// offset 0 — only valid when the on-disk file is also empty. Passing nil for a
+// non-empty file would emit a zero-width insertion (Start=0, End=0) that does
+// NOT qualify as a whole-file edit under the engine's apply path (which checks
+// End == len(file.Bytes)); callers that want a whole-file rewrite must pass
+// the actual file bytes as original.
 //
 // Exclusive-this-pass semantic: per [sdk.FixResult], when the engine collects a
 // whole-file edit (Start == 0 && End == len(content)) in the same pass as

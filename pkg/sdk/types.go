@@ -203,6 +203,12 @@ type Fixer interface {
 	// Multiple findings against the same file each call Fix independently; the
 	// engine collects every returned edit and applies them in a single pass.
 	// See FixResult for the exact ordering, overlap, and whole-file rules.
+	//
+	// Same-Start tie-break: if two rules emit edits with the same Start
+	// offset (even if their End offsets differ), the engine applies at most
+	// one of them per pass; the other is deferred and re-emits on the next
+	// fix pass against the rewritten content. Rules should not assume their
+	// edit always lands on the first pass.
 	Fix(ctx *Context, file *hcl.File) (*FixResult, error)
 }
 

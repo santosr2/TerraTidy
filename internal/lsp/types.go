@@ -46,11 +46,14 @@ type InitializeParams struct {
 	InitializationOptions *InitializationOptions `json:"initializationOptions,omitempty"`
 }
 
-// InitializationOptions represents client-provided options from the editor
+// InitializationOptions represents client-provided options from the editor.
+// The server only ever unmarshals this type (it is wire-format input from the
+// LSP client), so json marshal-time tag options like omitzero/omitempty are
+// intentionally omitted on the engines field — they would have no effect.
 type InitializationOptions struct {
 	Profile           string        `json:"profile,omitempty"`
 	ConfigPath        string        `json:"configPath,omitempty"`
-	Engines           EngineToggles `json:"engines,omitzero"`
+	Engines           EngineToggles `json:"engines"`
 	SeverityThreshold string        `json:"severityThreshold,omitempty"`
 	FormatOnSave      bool          `json:"formatOnSave,omitempty"`
 	RunOnSave         bool          `json:"runOnSave,omitempty"`
@@ -65,10 +68,11 @@ type EngineToggles struct {
 	Policy bool `json:"policy"`
 }
 
-// ClientCapabilities represents client capabilities
+// ClientCapabilities represents client capabilities. The server only
+// unmarshals this type; marshal-time tag options are intentionally omitted.
 type ClientCapabilities struct {
-	TextDocument TextDocumentClientCapabilities `json:"textDocument,omitzero"`
-	Workspace    WorkspaceClientCapabilities    `json:"workspace,omitzero"`
+	TextDocument TextDocumentClientCapabilities `json:"textDocument"`
+	Workspace    WorkspaceClientCapabilities    `json:"workspace"`
 }
 
 // TextDocumentClientCapabilities represents text document capabilities

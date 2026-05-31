@@ -1090,27 +1090,49 @@ func (s *Server) handleCodeAction(msg RequestMessage) error {
 
 	formatEdits := buildFormatFallbackEdits(original)
 
+	// Per-diagnostic Fixer actions are emitted as we go. Diagnostics with no
+	// matching Fixer bucket into a single shared format-fallback action so
+	// the response carries one "Format document" entry rather than N copies
+	// of the same whole-file edit (one per unresolved diagnostic).
 	actions := make([]CodeAction, 0, len(params.Context.Diagnostics))
+	var fallbackDiags []Diagnostic
 	for i := range params.Context.Diagnostics {
 		diag := params.Context.Diagnostics[i]
 		if diag.Code == "" {
 			continue
 		}
 
-		// Per-rule Fixer wins when available; otherwise fall back to the
-		// pre-rewrite whole-file format quickfix so lint codes and unknown
-		// codes keep getting a usable action.
 		edits := s.buildFixerEdits(styleEng, parsedFile, ctxFile, content, diag.Code)
-		if edits == nil {
-			edits = formatEdits
-		}
-		if edits == nil {
+		if edits != nil {
+			actions = append(actions, codeActionFor(uri, diag, edits))
 			continue
 		}
-		actions = append(actions, codeActionFor(uri, diag, edits))
+		if formatEdits != nil {
+			fallbackDiags = append(fallbackDiags, diag)
+		}
+	}
+	if len(fallbackDiags) > 0 {
+		actions = append(actions, formatFallbackAction(uri, fallbackDiags, formatEdits))
 	}
 
 	return s.sendResult(msg.ID, actions)
+}
+
+// formatFallbackAction wraps the shared whole-file format edit as a single
+// CodeAction carrying every diagnostic that had no per-rule Fixer. Aggregating
+// here keeps the response from emitting one "Format document" action per
+// unresolved diagnostic, which would clutter the editor's quick-fix menu with
+// N copies of the same fix.
+func formatFallbackAction(uri string, diags []Diagnostic, edits []TextEdit) CodeAction {
+	return CodeAction{
+		Title:       "Format document",
+		Kind:        "quickfix",
+		Diagnostics: diags,
+		IsPreferred: true,
+		Edit: &WorkspaceEdit{
+			Changes: map[string][]TextEdit{uri: edits},
+		},
+	}
 }
 
 // prepareFixerInputs writes the unsaved buffer to a request-private temp file

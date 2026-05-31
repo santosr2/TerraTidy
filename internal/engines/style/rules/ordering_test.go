@@ -1274,41 +1274,6 @@ resource "aws_instance" "second" {
 		require.NoError(t, err)
 		assert.Nil(t, result, "Fix should be a no-op when depends_on is already correctly placed (even with blank-line gap) — nil FixResult under the new contract")
 	})
-
-	t.Run("Fix is idempotent when depends_on is already adjacent to lifecycle with a blank line gap", func(t *testing.T) {
-		// Edge case the prior reviewer flagged: when there is a blank line between
-		// depends_on and lifecycle, the splice still runs but should produce visually
-		// identical output. Verifies that the no-op guard plus FormatAndCleanBlankLines
-		// converge after one pass.
-		content := `resource "aws_instance" "x" {
-  ami        = "ami-123"
-  depends_on = [aws_vpc.main]
-
-  lifecycle {
-    prevent_destroy = true
-  }
-}
-`
-		tmpDir := t.TempDir()
-		tmpFile := filepath.Join(tmpDir, "test.tf")
-		require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0o644))
-
-		ctx := &sdk.Context{File: tmpFile}
-		first, err := rule.Fix(ctx, nil)
-		require.NoError(t, err)
-		// Already-converged input: first pass is a no-op (nil FixResult). The on-disk
-		// content is unchanged, so a second pass is also a no-op and the depends_on /
-		// lifecycle ordering observable on disk is the input content itself.
-		require.Nil(t, first, "blank line between depends_on and lifecycle must not produce a diff")
-
-		second, err := rule.Fix(ctx, nil)
-		require.NoError(t, err)
-		assert.Nil(t, second, "blank line between depends_on and lifecycle must not break idempotence")
-		// depends_on still appears before lifecycle in the original content.
-		dependsIdx := strings.Index(content, "depends_on")
-		lifecycleIdx := strings.Index(content, "lifecycle {")
-		assert.Less(t, dependsIdx, lifecycleIdx)
-	})
 }
 
 func TestSourceVersionGroupedRule(t *testing.T) {
@@ -1514,6 +1479,7 @@ func TestVariableOrderRule(t *testing.T) {
 		input     string
 		wantOrder []string // substrings that must appear in this top-down order in the output
 		wantKeep  []string // substrings that must remain present anywhere
+		wantNoOp  bool     // true when the input is already canonical; Fix must return nil
 	}{
 		{
 			name: "type before description gets reordered",
@@ -1576,6 +1542,7 @@ func TestVariableOrderRule(t *testing.T) {
 }
 `,
 			wantOrder: []string{`type = string`, `validation {`, `condition     = length(var.name) > 0`},
+			wantNoOp:  true,
 		},
 		{
 			name: "description-only variable left unchanged",
@@ -1584,6 +1551,7 @@ func TestVariableOrderRule(t *testing.T) {
 }
 `,
 			wantOrder: []string{`description = "Name of the thing"`},
+			wantNoOp:  true,
 		},
 		{
 			name:  "empty variable body left unchanged",
@@ -1591,6 +1559,7 @@ func TestVariableOrderRule(t *testing.T) {
 			wantOrder: []string{
 				`variable "name" {`,
 			},
+			wantNoOp: true,
 		},
 		{
 			name: "interleaved validation moves to end after all known attrs",
@@ -1786,10 +1755,11 @@ func TestVariableOrderRule(t *testing.T) {
 			result, err := rule.Fix(ctx, nil)
 			require.NoError(t, err)
 
-			// A nil FixResult means the rule was a no-op (already-canonical input);
-			// the file content is preserved on disk, so use the input as observed output.
 			output := tt.input
-			if result != nil {
+			if tt.wantNoOp {
+				assert.Nil(t, result, "already-canonical input must produce no edits")
+			} else {
+				require.NotNil(t, result, "mutating case must produce a FixResult")
 				require.Len(t, result.Edits, 1)
 				output = string(result.Edits[0].Replacement)
 			}
@@ -1920,6 +1890,7 @@ func TestOutputOrderRule(t *testing.T) {
 		input     string
 		wantOrder []string
 		wantKeep  []string
+		wantNoOp  bool // true when the input is already canonical; Fix must return nil
 	}{
 		{
 			name: "value before description gets reordered",
@@ -2015,7 +1986,11 @@ func TestOutputOrderRule(t *testing.T) {
   # forgotten trailing note
 }
 `,
-			wantKeep: []string{`# forgotten trailing note`},
+			wantOrder: []string{
+				`description = "Example output"`,
+				`value       = "test"`,
+				`# forgotten trailing note`,
+			},
 		},
 	}
 
@@ -2029,10 +2004,11 @@ func TestOutputOrderRule(t *testing.T) {
 			result, err := rule.Fix(ctx, nil)
 			require.NoError(t, err)
 
-			// A nil FixResult means the rule was a no-op (already-canonical input);
-			// the file content is preserved on disk, so use the input as observed output.
 			output := tt.input
-			if result != nil {
+			if tt.wantNoOp {
+				assert.Nil(t, result, "already-canonical input must produce no edits")
+			} else {
+				require.NotNil(t, result, "mutating case must produce a FixResult")
 				require.Len(t, result.Edits, 1)
 				output = string(result.Edits[0].Replacement)
 			}

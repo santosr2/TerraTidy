@@ -14,8 +14,9 @@ import {
 // Global LSP client instance
 let client: LanguageClient | undefined;
 
-// Output channel for logging
-let outputChannel: vscode.OutputChannel;
+// Output channel for logging. vscode-languageclient v10 requires a LogOutputChannel
+// for the client's outputChannel/traceOutputChannel options.
+let outputChannel: vscode.LogOutputChannel;
 
 // Config change listener (tracked to avoid subscription leaks on restart)
 let configListener: vscode.Disposable | undefined;
@@ -36,7 +37,7 @@ function resolveExecutablePath(execPath: string): string {
 
 // Extension activation
 export async function activate(context: vscode.ExtensionContext) {
-  outputChannel = vscode.window.createOutputChannel('TerraTidy');
+  outputChannel = vscode.window.createOutputChannel('TerraTidy', { log: true });
   context.subscriptions.push(outputChannel);
 
   // Start the LSP client

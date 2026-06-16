@@ -40,6 +40,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
+          # For Dependabot PRs, check out the branch head instead of the PR merge ref
+          # so the regenerated bun.lock commits onto the branch tip and pushes back as a
+          # fast-forward. Empty string falls back to the default (merge ref) for everyone else.
+          ref: ${{ github.actor == 'dependabot[bot]' && github.head_ref || '' }}
           # Persist credentials for Dependabot lockfile commits
           persist-credentials: ${{ github.actor == 'dependabot[bot]' }}
 
@@ -86,7 +90,7 @@ jobs:
             git config user.email "49699333+dependabot[bot]@users.noreply.github.com"
             git add bun.lock
             git commit -m "chore(vscode): update bun.lock for Dependabot PR"
-            # actions/checkout leaves a detached HEAD, so push explicitly to the PR branch
+            # Push explicitly to the PR head ref (checkout above put us on the branch tip)
             git push origin "HEAD:${HEAD_REF}"
           fi
 

@@ -1,6 +1,10 @@
 package rules
 
 import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/hashicorp/hcl/v2"
@@ -246,4 +250,93 @@ func BenchmarkAllRules_LargeConfig(b *testing.B) {
 			_, _ = rule.Check(ctx, file)
 		}
 	}
+}
+
+// singleFindingTagsAtEndHCL is one resource block with tags placed after lifecycle —
+// produces exactly one finding from TagsAtEndRule.Check and one target for Fix.
+const singleFindingTagsAtEndHCL = `resource "aws_instance" "example" {
+  ami           = "ami-12345678"
+  instance_type = "t3.micro"
+
+  lifecycle {
+    prevent_destroy = true
+  }
+
+  tags = {
+    Name = "example"
+  }
+}
+`
+
+// generateMultiFindingTagsAtEndHCL returns HCL with n resource blocks, each with tags
+// placed after lifecycle. Produces n findings and n Fix targets for the multi-finding
+// arm of BenchmarkStructuralFix.
+func generateMultiFindingTagsAtEndHCL(n int) string {
+	var sb strings.Builder
+	for i := 0; i < n; i++ {
+		fmt.Fprintf(&sb, `resource "aws_instance" "r%d" {
+  ami           = "ami-12345678"
+  instance_type = "t3.micro"
+
+  lifecycle {
+    prevent_destroy = true
+  }
+
+  tags = {
+    Name = "r%d"
+  }
+}
+
+`, i, i)
+	}
+	return sb.String()
+}
+
+// BenchmarkStructuralFix measures a Fix that performs structural ordering
+// changes — the representative shape upcoming CST-based rules will follow.
+// Acts as the pre-migration baseline that follow-up CST rule work compares
+// against.
+//
+// Pre-migration baseline captured 2026-06-16 on the line-based TagsAtEndRule.Fix path (linux/amd64, Intel i7-9750H @ 2.60GHz):
+//
+//	SingleFinding:  99,803 ns/op,  80,568 B/op,   242 allocs/op
+//	MultiFinding:  833,152 ns/op, 798,777 B/op, 2,907 allocs/op
+//
+// Source: go test -bench=BenchmarkStructuralFix -benchmem -benchtime=3s -count=3 -cpu=1 ./internal/engines/style/rules/
+// Performance budget for the CST migration: SingleFinding regression ≤10% vs. these numbers on the same hardware. Use -cpu=1 — default scheduling has 2-3x variance on this hardware.
+func BenchmarkStructuralFix(b *testing.B) {
+	rule := &TagsAtEndRule{}
+
+	b.Run("SingleFinding", func(b *testing.B) {
+		tmpDir := b.TempDir()
+		tmpFile := filepath.Join(tmpDir, "single.tf")
+		if err := os.WriteFile(tmpFile, []byte(singleFindingTagsAtEndHCL), 0o600); err != nil {
+			b.Fatalf("write fixture: %v", err)
+		}
+		ctx := &sdk.Context{File: tmpFile}
+
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			if _, err := rule.Fix(ctx, nil); err != nil {
+				b.Fatalf("fix: %v", err)
+			}
+		}
+	})
+
+	b.Run("MultiFinding", func(b *testing.B) {
+		content := generateMultiFindingTagsAtEndHCL(10)
+		tmpDir := b.TempDir()
+		tmpFile := filepath.Join(tmpDir, "multi.tf")
+		if err := os.WriteFile(tmpFile, []byte(content), 0o600); err != nil {
+			b.Fatalf("write fixture: %v", err)
+		}
+		ctx := &sdk.Context{File: tmpFile}
+
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			if _, err := rule.Fix(ctx, nil); err != nil {
+				b.Fatalf("fix: %v", err)
+			}
+		}
+	})
 }

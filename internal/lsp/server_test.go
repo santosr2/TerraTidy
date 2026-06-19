@@ -3,6 +3,7 @@ package lsp
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -14,6 +15,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/hashicorp/hcl/v2"
+	"github.com/hashicorp/hcl/v2/hclparse"
 	"github.com/santosr2/TerraTidy/internal/config"
 	"github.com/santosr2/TerraTidy/internal/engines/format"
 	"github.com/santosr2/TerraTidy/internal/engines/lint"
@@ -1895,6 +1898,155 @@ resource "aws_instance" "b" {
 
 	actions := extractCodeActionsFromResponse(t, out.String())
 	assert.Empty(t, actions, "no CodeAction should be emitted when both Fixer and format fallback are no-ops")
+}
+
+// errorStubFixer is an sdk.Fixer whose Fix returns a predetermined error and an
+// explicit nil *sdk.FixResult. It records that Fix ran so tests can assert the
+// shim path actually invoked the underlying Fixer (and didn't short-circuit
+// before reaching it).
+type errorStubFixer struct {
+	err       error
+	fixCalled bool
+}
+
+func (f *errorStubFixer) Fix(_ *sdk.Context, _ *hcl.File) (*sdk.FixResult, error) {
+	f.fixCalled = true
+	return nil, f.err
+}
+
+// TestServer_BuildFixerEdits_ReturnsNilWhenFixerErrors pins the unit-level
+// "no edits on error" contract of (*Server).buildFixerEdits: when the
+// registered Fixer's Fix returns an error, the helper must return nil/empty
+// edits regardless of what else is in the FixResult. A regression that leaked
+// a partially-built edits slice on error would fail this test before the
+// LSP-boundary integration test below runs.
+func TestServer_BuildFixerEdits_ReturnsNilWhenFixerErrors(t *testing.T) {
+	const ruleCode = "test.simulated-failure"
+	tfContent := "resource \"test\" \"x\" {\n  ami=\"val\"\n}\n"
+
+	server := NewServer(strings.NewReader(""), &bytes.Buffer{})
+	server.styleEngine = style.New(nil)
+
+	stub := &errorStubFixer{err: errors.New("simulated fix failure")}
+	server.styleEngine.RegisterFixerForTesting(ruleCode, stub)
+
+	content := []byte(tfContent)
+	parser := hclparse.NewParser()
+	parsedFile, parseDiags := parser.ParseHCL(content, "test.tf")
+	require.False(t, parseDiags.HasErrors(), "fixture must parse cleanly: %v", parseDiags)
+
+	edits := server.buildFixerEdits(server.styleEngine, parsedFile, "test.tf", content, ruleCode)
+	assert.Empty(t, edits, "buildFixerEdits must return nil/empty when the Fixer returns an error")
+	assert.True(t, stub.fixCalled, "the registered Fixer's Fix must actually run — buildFixerEdits must not short-circuit before invoking it")
+}
+
+// TestServer_HandleCodeAction_FallbackWhenFixerErrors covers the err != nil
+// branch of buildFixerEdits end-to-end through handleCodeAction — the only
+// branch not exercised by the other code-action tests in this file. A stub
+// Fixer registered via the test seam returns an error from Fix; the handler
+// must drop that diagnostic's per-rule CodeAction and fall through to the
+// shared "Format document" quickfix.
+//
+// Three assertions pin the LSP-boundary contract:
+//
+//  1. The stub's Fix ran — handleCodeAction reached the shim and did not
+//     short-circuit before invoking the registered Fixer.
+//  2. The response contains exactly one "Format document" quickfix
+//     CodeAction whose edits are the whole-file format result.
+//  3. No CodeAction's title equals "Fix: <ruleCode>" — guards against a
+//     regression where buildFixerEdits leaks partial edits on error and
+//     codeActionFor turns them into a sibling action next to the fallback.
+//
+// assert.Len (not require.Len) on the action count is intentional so
+// assertion (3)'s loop still runs in the regression case where two
+// actions appear instead of one — that's the exact scenario assertion
+// (3) is meant to catch.
+func TestServer_HandleCodeAction_FallbackWhenFixerErrors(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Unformatted content so the format-fallback path produces a non-trivial
+	// edit (missing spaces around '='). If formatting were a no-op the
+	// fallback would emit no CodeAction at all and assertion (2) would not
+	// distinguish "fallback fired" from "fallback was a no-op".
+	tfContent := "resource \"test\" \"x\" {\n  ami=\"val\"\n}\n"
+	testFile := filepath.Join(tmpDir, "main.tf")
+	require.NoError(t, os.WriteFile(testFile, []byte(tfContent), 0o644))
+
+	out := &bytes.Buffer{}
+	server := NewServer(strings.NewReader(""), out)
+	server.workspaceRoot = tmpDir
+	server.styleEngine = style.New(nil)
+
+	const ruleCode = "test.simulated-failure"
+	stub := &errorStubFixer{err: errors.New("simulated fix failure")}
+	server.styleEngine.RegisterFixerForTesting(ruleCode, stub)
+
+	uri := pathToFileURI(testFile)
+	server.documents[uri] = &Document{
+		URI:     uri,
+		Content: tfContent,
+		Version: 1,
+	}
+
+	diag := Diagnostic{
+		Range:    Range{Start: Position{Line: 1, Character: 2}, End: Position{Line: 1, Character: 5}},
+		Code:     ruleCode,
+		Message:  "synthetic: stub Fixer that errors",
+		Severity: 2,
+	}
+
+	params := CodeActionParams{
+		TextDocument: TextDocumentIdentifier{URI: uri},
+		Range:        Range{Start: Position{Line: 0}, End: Position{Line: 2}},
+		Context:      CodeActionContext{Diagnostics: []Diagnostic{diag}},
+	}
+	paramsJSON, err := json.Marshal(params)
+	require.NoError(t, err)
+
+	require.NoError(t, server.handleCodeAction(RequestMessage{
+		JSONRPC: "2.0",
+		ID:      json.RawMessage(`1`),
+		Method:  "textDocument/codeAction",
+		Params:  paramsJSON,
+	}))
+
+	// Assertion (1): the LSP path reached the stub (no upstream bypass).
+	assert.True(t, stub.fixCalled, "handleCodeAction must invoke the registered Fixer's Fix even when it errors")
+
+	actions := extractCodeActionsFromResponse(t, out.String())
+
+	// Assertion (2): exactly one "Format document" quickfix CodeAction.
+	// assert (not require) so assertion (3)'s loop still runs if a leak
+	// causes len(actions) == 2.
+	assert.Len(t, actions, 1, "errored Fixer should bucket into the single shared format-fallback action")
+
+	// Assertion (3): no CodeAction title is "Fix: <ruleCode>" (the shape
+	// codeActionFor produces when buildFixerEdits returns non-empty edits).
+	// The stub never returns edits, so such an action could only appear
+	// via a buildFixerEdits leak on error.
+	leakedTitle := fmt.Sprintf("Fix: %s", ruleCode)
+	var fallback *CodeAction
+	for i := range actions {
+		assert.NotEqualf(t, leakedTitle, actions[i].Title,
+			"no CodeAction should derive from the errored Fixer (would indicate buildFixerEdits leaked partial edits on error)")
+		if actions[i].Title == "Format document" {
+			fallback = &actions[i]
+		}
+	}
+
+	require.NotNil(t, fallback, "response must contain a Format document fallback action")
+	assert.Equal(t, "quickfix", fallback.Kind)
+	assert.True(t, fallback.IsPreferred)
+	require.Len(t, fallback.Diagnostics, 1)
+	assert.Equal(t, ruleCode, fallback.Diagnostics[0].Code, "fallback action must reference the originating diagnostic")
+
+	require.NotNil(t, fallback.Edit, "fallback CodeAction must carry a WorkspaceEdit")
+	edits := fallback.Edit.Changes[uri]
+	require.Len(t, edits, 1, "format fallback emits exactly one whole-file TextEdit")
+	wantRange := wholeFileRange(tfContent)
+	assert.Equal(t, wantRange, edits[0].Range, "fallback edit must cover the whole document")
+	wantText := string(format.Format([]byte(tfContent)))
+	assert.Equal(t, wantText, edits[0].NewText, "fallback NewText must be the format-canonicalized content")
 }
 
 // extractCodeActionsFromResponse parses the LSP-framed response written to the

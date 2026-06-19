@@ -3,6 +3,7 @@ package style
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -2146,4 +2147,61 @@ func TestEngine_MultiFinding_SinglePass(t *testing.T) {
 		assert.NotEqual(t, writtenContents[i-1], writtenContents[i],
 			"consecutive writes must produce distinct content — each fix-applying pass must advance the file state, not re-emit the previous state")
 	}
+}
+
+// stubFixer is a minimal sdk.Fixer used to drive RegisterFixerForTesting in
+// unit tests. The Fix method returns the configured result and error verbatim;
+// FixCalled records that Fix ran so tests can assert delegation.
+type stubFixer struct {
+	result    *sdk.FixResult
+	err       error
+	fixCalled bool
+}
+
+func (s *stubFixer) Fix(_ *sdk.Context, _ *hcl.File) (*sdk.FixResult, error) {
+	s.fixCalled = true
+	return s.result, s.err
+}
+
+// TestEngine_RegisterFixerForTesting pins the contract of the test-only seam:
+// the registered name is discoverable via FindFixerByRuleName, and the returned
+// Fixer delegates Fix to the supplied stub. The shim's Check is a no-op (no
+// findings, no error) so the registered name does not produce diagnostics on
+// its own, which the second sub-test asserts directly.
+func TestEngine_RegisterFixerForTesting(t *testing.T) {
+	t.Run("delegates Fix to registered fixer and propagates errors", func(t *testing.T) {
+		engine := New(&Config{Rules: make(map[string]RuleConfig)})
+
+		wantErr := errors.New("simulated fix failure")
+		stub := &stubFixer{result: nil, err: wantErr}
+		engine.RegisterFixerForTesting("test.simulated-failure", stub)
+
+		fixer := engine.FindFixerByRuleName("test.simulated-failure")
+		require.NotNil(t, fixer, "FindFixerByRuleName must discover the registered name")
+
+		result, err := fixer.Fix(&sdk.Context{Context: context.Background()}, nil)
+		assert.Nil(t, result, "stub returns nil FixResult; the shim must propagate it without wrapping")
+		assert.ErrorIs(t, err, wantErr, "shim must propagate the underlying Fixer's error verbatim")
+		assert.True(t, stub.fixCalled, "delegation must invoke the registered fixer's Fix")
+	})
+
+	t.Run("Check returns no findings so the shim does not emit diagnostics", func(t *testing.T) {
+		engine := New(&Config{Rules: make(map[string]RuleConfig)})
+		engine.RegisterFixerForTesting("test.no-diagnostic-shim", &stubFixer{})
+
+		// Find the registered shim in the rule slice and call Check directly.
+		// The shim is the last appended rule, so iterate from the end.
+		var shim sdk.Rule
+		for i := len(engine.rules) - 1; i >= 0; i-- {
+			if engine.rules[i].Name() == "test.no-diagnostic-shim" {
+				shim = engine.rules[i]
+				break
+			}
+		}
+		require.NotNil(t, shim, "registered shim must be present in engine.rules")
+
+		findings, err := shim.Check(&sdk.Context{Context: context.Background()}, nil)
+		assert.NoError(t, err, "shim Check must not error")
+		assert.Empty(t, findings, "shim Check must return no findings — diagnostics come from real rules, not the test seam")
+	})
 }

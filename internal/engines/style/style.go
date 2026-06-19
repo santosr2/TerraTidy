@@ -614,6 +614,38 @@ func (e *Engine) FindFixerByRuleName(name string) sdk.Fixer {
 	return nil
 }
 
+// RegisterFixerForTesting is test-only and not goroutine-safe. Tests using it
+// must not run in parallel with other code that reads the registry (LSP
+// CodeAction handlers, format/style runs). Use a single-threaded test or a
+// per-test Engine instance.
+//
+// The seam wraps the supplied Fixer in a shim that satisfies sdk.Rule under the
+// given name, then appends it to the engine's rule slice so FindFixerByRuleName
+// finds it. The shim's Check returns no findings, so the registered name does
+// not produce diagnostics on its own; callers exercising the Fix path must
+// seed the diagnostic through a real rule or drive it directly.
+func (e *Engine) RegisterFixerForTesting(name string, fixer sdk.Fixer) {
+	e.rules = append(e.rules, &fixerForTesting{name: name, fixer: fixer})
+}
+
+// fixerForTesting adapts an sdk.Fixer into an sdk.Rule that can be appended to
+// Engine.rules. Test-only — created exclusively by RegisterFixerForTesting.
+type fixerForTesting struct {
+	name  string
+	fixer sdk.Fixer
+}
+
+func (f *fixerForTesting) Name() string        { return f.name }
+func (f *fixerForTesting) Description() string { return "test-only fixer shim" }
+
+func (f *fixerForTesting) Check(_ *sdk.Context, _ *hcl.File) ([]sdk.Finding, error) {
+	return nil, nil
+}
+
+func (f *fixerForTesting) Fix(ctx *sdk.Context, file *hcl.File) (*sdk.FixResult, error) {
+	return f.fixer.Fix(ctx, file)
+}
+
 // getRuleConfig returns the configuration for a rule
 func (e *Engine) getRuleConfig(ruleName string) RuleConfig {
 	if cfg, ok := e.config.Rules[ruleName]; ok {

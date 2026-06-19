@@ -2164,7 +2164,7 @@ func (s *stubFixer) Fix(_ *sdk.Context, _ *hcl.File) (*sdk.FixResult, error) {
 }
 
 // TestEngine_RegisterFixerForTesting pins the contract of the test-only seam:
-// the registered name is discoverable via FindFixerByRuleName, and the returned
+// the registered name is discoverable via Engine.Fixer, and the returned
 // Fixer delegates Fix to the supplied stub. The shim's Check is a no-op (no
 // findings, no error) so the registered name does not produce diagnostics on
 // its own, which the second sub-test asserts directly.
@@ -2176,8 +2176,8 @@ func TestEngine_RegisterFixerForTesting(t *testing.T) {
 		stub := &stubFixer{result: nil, err: wantErr}
 		engine.RegisterFixerForTesting("test.simulated-failure", stub)
 
-		fixer := engine.FindFixerByRuleName("test.simulated-failure")
-		require.NotNil(t, fixer, "FindFixerByRuleName must discover the registered name")
+		fixer := engine.Fixer("test.simulated-failure")
+		require.NotNil(t, fixer, "Engine.Fixer must discover the registered name")
 
 		result, err := fixer.Fix(&sdk.Context{Context: context.Background()}, nil)
 		assert.Nil(t, result, "stub returns nil FixResult; the shim must propagate it without wrapping")

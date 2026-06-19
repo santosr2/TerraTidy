@@ -1680,7 +1680,7 @@ resource "aws_instance" "x" {
 //
 // The fixture uses unformatted HCL (no spaces around '=') so the format
 // engine produces a non-trivial result; the diagnostic carries a made-up
-// Code so FindFixerByRuleName returns nil and the fallback branch fires.
+// Code so Engine.Fixer returns nil and the fallback branch fires.
 func TestServer_HandleCodeAction_FallbackToFormatForUnknownCode(t *testing.T) {
 	tmpDir := t.TempDir()
 
@@ -1704,7 +1704,7 @@ func TestServer_HandleCodeAction_FallbackToFormatForUnknownCode(t *testing.T) {
 	}
 
 	// Code is intentionally not a registered style rule. Anything that
-	// FindFixerByRuleName can't resolve will do; using a lint-style code
+	// Engine.Fixer can't resolve will do; using a lint-style code
 	// mirrors the real-world case (lint findings never have a style Fixer).
 	unknownDiag := Diagnostic{
 		Range:    Range{Start: Position{Line: 1, Character: 2}, End: Position{Line: 1, Character: 5}},

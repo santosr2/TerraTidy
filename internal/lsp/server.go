@@ -1037,8 +1037,8 @@ func wholeFileRange(original string) Range {
 // handleCodeAction handles textDocument/codeAction request.
 //
 // For each incoming diagnostic the handler tries to find the originating
-// style rule via Engine.FindFixerByRuleName and ask it for byte-range edits
-// against the unsaved buffer. Diagnostics whose code doesn't map to a
+// style rule via Engine.Fixer and ask it for byte-range edits against the
+// unsaved buffer. Diagnostics whose code doesn't map to a
 // Fixer-implementing rule (or whose Fix returns nothing) fall back to the
 // whole-file format quickfix the LSP has always offered.
 //
@@ -1207,7 +1207,7 @@ func (s *Server) buildFixerEdits(styleEng *style.Engine, parsedFile *hcl.File, c
 	if styleEng == nil || parsedFile == nil {
 		return nil
 	}
-	fixer := styleEng.FindFixerByRuleName(ruleCode)
+	fixer := styleEng.Fixer(ruleCode)
 	if fixer == nil {
 		return nil
 	}

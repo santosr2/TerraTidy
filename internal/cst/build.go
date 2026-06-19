@@ -128,7 +128,6 @@ func buildBody(
 			cstBlock, newCursor := buildBlock(
 				content, tokens, item.block, leading, leadingStart, bodyEndByte,
 			)
-			cstBlock.parentBody = body
 			body.Items = append(body.Items, cstBlock)
 			cursor = newCursor
 		}
@@ -277,6 +276,13 @@ func classifyGap(
 // `\n` is in the gap but is a TERMINATOR, not a blank). chunkGap detects
 // this by checking whether the first newline in the gap closes a partial
 // line.
+//
+// Chunk byte ranges always abut at line boundaries: a blank chunk ends at
+// the byte right after its last `\n`, and a comment chunk starts at the
+// line-start of its first comment. Together with structural items whose
+// rawStart is extended backward to line-start via lineStartBefore, this
+// produces a partition of the gap where every byte lives in exactly one
+// owner — no overlap, no gap, no indent bytes orphaned between chunks.
 func chunkGap(content []byte, tokens hclsyntax.Tokens, start, end int) []gapChunk {
 	comments := commentsInRange(content, tokens, start, end)
 
@@ -296,13 +302,16 @@ func chunkGap(content []byte, tokens hclsyntax.Tokens, start, end int) []gapChun
 				chunks = append(chunks, gapChunk{
 					kind:    chunkBlank,
 					startBy: cursor,
-					endBy:   commentStart,
+					endBy:   lastNewlineEnd(content, cursor, commentStart),
 					blanks:  b,
 				})
 			}
 		}
 
-		runStart := commentStart
+		runStart := lineStartBefore(content, commentStart)
+		if runStart < cursor {
+			runStart = cursor
+		}
 		runEnd := c.tokenEnd
 		run := []Comment{c.comment}
 		j := i + 1
@@ -332,7 +341,7 @@ func chunkGap(content []byte, tokens hclsyntax.Tokens, start, end int) []gapChun
 			chunks = append(chunks, gapChunk{
 				kind:    chunkBlank,
 				startBy: cursor,
-				endBy:   end,
+				endBy:   lastNewlineEnd(content, cursor, end),
 				blanks:  b,
 			})
 		}
@@ -352,7 +361,7 @@ func chunkAllBlanks(content []byte, start, end int) []gapChunk {
 	return []gapChunk{{
 		kind:    chunkBlank,
 		startBy: start,
-		endBy:   end,
+		endBy:   lastNewlineEnd(content, start, end),
 		blanks:  b,
 	}}
 }
@@ -484,6 +493,7 @@ func buildAttribute(
 	if leadingStart >= 0 {
 		rawStart = leadingStart
 	}
+	rawStart = lineStartBefore(content, rawStart)
 
 	inline, afterInline := findInlineComment(content, tokens, attrEnd, a.SrcRange.End.Line, bodyEndByte)
 	rawEnd := afterInline
@@ -551,11 +561,62 @@ func consumeLineTerminator(content []byte, fromByte, bodyEndByte int) int {
 	return fromByte
 }
 
+// lineStartBefore returns the byte offset of the start of the line that
+// contains byteOffset — the byte right after the most recent `\n` strictly
+// before byteOffset, or 0 if there is no preceding `\n`. Used by
+// buildAttribute and buildBlock to extend rawStart backward to capture the
+// leading indentation of a nested item, so the item's raw byte slice carries
+// the indent verbatim. With raws extended this way, Block.writeRegenerated
+// can emit body items with their original indentation intact when an
+// ancestor block regenerates around a mutated body.
+func lineStartBefore(content []byte, byteOffset int) int {
+	if byteOffset > len(content) {
+		byteOffset = len(content)
+	}
+	for i := byteOffset - 1; i >= 0; i-- {
+		if content[i] == '\n' {
+			return i + 1
+		}
+	}
+	return 0
+}
+
+// lastNewlineEnd returns the byte offset right after the last `\n` in
+// content[start:end), or start if no newline is found. Used by chunkGap to
+// terminate a blank chunk at a line boundary so the bytes between the last
+// blank `\n` and the next item's identifier (the next item's leading
+// indentation, captured by lineStartBefore) do not also land inside the
+// blank chunk's raw — overlap would corrupt serialization.
+func lastNewlineEnd(content []byte, start, end int) int {
+	if end > len(content) {
+		end = len(content)
+	}
+	if start < 0 {
+		start = 0
+	}
+	for i := end - 1; i >= start; i-- {
+		if content[i] == '\n' {
+			return i + 1
+		}
+	}
+	return start
+}
+
 // buildBlock constructs a CST Block, recursing into the block body with
 // DefaultBlockBodyPolicy() (nested-block default).
 //
 // Returns the block and the byte cursor advanced past the closing brace
 // and its line terminator.
+//
+// headerRaw captures bytes from the line-start of the leading content (or
+// of the block-type identifier when there are no leading comments) through
+// the opening brace, any inline opening-brace comment, and its line
+// terminator. footerRaw captures bytes from the line-start of the closing
+// brace through the closing brace, any inline closing-brace comment, and
+// its line terminator. Block.writeRegenerated emits headerRaw + body items
+// + footerRaw, so mutations on a nested Body are always visible at the
+// file root without any dirty-marking walk — the always-regenerate path is
+// the contract.
 func buildBlock(
 	content []byte,
 	tokens hclsyntax.Tokens,
@@ -564,12 +625,22 @@ func buildBlock(
 	leadingStart int,
 	bodyEndByte int,
 ) (*Block, int) {
-	rawStart := b.Range().Start.Byte
+	headerStart := b.Range().Start.Byte
 	if leadingStart >= 0 {
-		rawStart = leadingStart
+		headerStart = leadingStart
 	}
+	headerStart = lineStartBefore(content, headerStart)
 	closeEnd := b.CloseBraceRange.End.Byte
-	rawEnd := consumeLineTerminator(content, closeEnd, bodyEndByte)
+	footerEnd := consumeLineTerminator(content, closeEnd, bodyEndByte)
+
+	// Inline blocks (opening and closing braces on the same source line, e.g.
+	// `locals {}` or `provider "aws" {}`) capture the entire block as
+	// wholeRaw and skip the headerRaw/Body/footerRaw split. Splitting an
+	// inline block would put body items into both the header and the footer
+	// (the body content lives between same-line `{` and `}`, with no `\n`
+	// to anchor a clean boundary), so emit it as one unit instead. Body items
+	// are still parsed for Find* lookups; mutations are not reflected.
+	inline := b.OpenBraceRange.End.Line == b.CloseBraceRange.Start.Line
 
 	labels := make([]Label, 0, len(b.Labels))
 	for i, l := range b.Labels {
@@ -591,7 +662,7 @@ func buildBlock(
 		content, tokens, innerStart, b.OpenBraceRange.End.Line, innerEnd,
 	)
 	// Closing-brace inline comment (e.g. `} # end of resource`). Bound by
-	// the post-block cursor — same bound buildBlock uses for rawEnd.
+	// the post-block cursor — same bound buildBlock uses for footerEnd.
 	closeComment, _ := findInlineComment(
 		content, tokens, b.CloseBraceRange.End.Byte, b.CloseBraceRange.End.Line, bodyEndByte,
 	)
@@ -610,8 +681,17 @@ func buildBlock(
 		OpeningBraceComment: openComment,
 		Body:                nestedBody,
 		ClosingBraceComment: closeComment,
-		raw:                 bytes.Clone(content[rawStart:rawEnd]),
 	}
-	nestedBody.parentBlock = cstBlock
-	return cstBlock, rawEnd
+	if inline {
+		cstBlock.wholeRaw = bytes.Clone(content[headerStart:footerEnd])
+	} else {
+		headerEnd := consumeLineTerminator(content, b.OpenBraceRange.End.Byte, b.CloseBraceRange.Start.Byte)
+		footerStart := lineStartBefore(content, b.CloseBraceRange.Start.Byte)
+		if footerStart < headerEnd {
+			footerStart = headerEnd
+		}
+		cstBlock.headerRaw = bytes.Clone(content[headerStart:headerEnd])
+		cstBlock.footerRaw = bytes.Clone(content[footerStart:footerEnd])
+	}
+	return cstBlock, footerEnd
 }

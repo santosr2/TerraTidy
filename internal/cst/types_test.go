@@ -29,11 +29,6 @@ func TestRawBytes_ReturnsStoredBytes(t *testing.T) {
 			want: []byte("name = \"value\"\n"),
 		},
 		{
-			name: "Block populated",
-			item: &Block{raw: []byte("resource \"x\" \"y\" {}\n")},
-			want: []byte("resource \"x\" \"y\" {}\n"),
-		},
-		{
 			name: "BlankLine populated",
 			item: &BlankLine{Count: 2, raw: []byte("\n\n")},
 			want: []byte("\n\n"),
@@ -63,7 +58,6 @@ func TestRawBytes_NilWhenMutated(t *testing.T) {
 		item BodyItem
 	}{
 		{"Attribute zero-value", &Attribute{}},
-		{"Block zero-value", &Block{}},
 		{"BlankLine zero-value", &BlankLine{}},
 		{"StandaloneComment zero-value", &StandaloneComment{}},
 	}
@@ -72,6 +66,36 @@ func TestRawBytes_NilWhenMutated(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			assert.Nil(t, tc.item.RawBytes())
+		})
+	}
+}
+
+// TestBlockRawBytes_AlwaysNil pins the contract that Block.RawBytes()
+// returns nil unconditionally — Blocks are written via the regeneration
+// path (headerRaw + Body.writeTo + footerRaw), so any nested-Body
+// mutation is visible at the file root by construction. A regression
+// that returned headerRaw or footerRaw here would reintroduce the
+// dirty-marking requirement.
+func TestBlockRawBytes_AlwaysNil(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name  string
+		block *Block
+	}{
+		{"zero-value", &Block{}},
+		{"with headerRaw", &Block{headerRaw: []byte("resource \"x\" \"y\" {\n")}},
+		{"with footerRaw", &Block{footerRaw: []byte("}\n")}},
+		{"with both", &Block{
+			headerRaw: []byte("resource \"x\" \"y\" {\n"),
+			footerRaw: []byte("}\n"),
+		}},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			assert.Nil(t, tc.block.RawBytes())
 		})
 	}
 }

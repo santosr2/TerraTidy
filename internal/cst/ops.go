@@ -30,6 +30,11 @@ package cst
 // StandaloneComment with the same content.
 //
 // A Move to the item's current index is a successful no-op.
+//
+// Serialization sees the mutation automatically: Block.RawBytes() returns
+// nil, so ancestor blocks always regenerate from headerRaw + Body.writeTo
+// + footerRaw, and Body.writeTo walks the (now-reshuffled) Items slice.
+// No dirty-marking walk required.
 func (b *Body) Move(item BodyItem, newIndex int) bool {
 	src := indexOf(b.Items, item)
 	if src < 0 {
@@ -42,7 +47,6 @@ func (b *Body) Move(item BodyItem, newIndex int) bool {
 		return true
 	}
 	b.Items = moveSlice(b.Items, src, newIndex)
-	b.markDirty()
 	return true
 }
 
@@ -94,21 +98,14 @@ func (b *Body) MoveAfter(src, dst BodyItem) bool {
 // existing item rather than Insert-after-Remove, which is two passes for
 // no benefit.
 //
-// When item is a *Block, Insert wires its parentBody pointer so future
-// mutations on the inserted block's body propagate dirty-marking back up
-// the tree.
+// Serialization sees the insert automatically: ancestor blocks regenerate
+// from headerRaw + Body.writeTo + footerRaw on every walk, and Body.writeTo
+// iterates the (now-extended) Items slice.
 func (b *Body) Insert(item BodyItem, index int) bool {
 	if item == nil || index < 0 || index > len(b.Items) {
 		return false
 	}
 	b.Items = insertSlice(b.Items, index, item)
-	if blk, ok := item.(*Block); ok {
-		blk.parentBody = b
-		if blk.Body != nil {
-			blk.Body.parentBlock = blk
-		}
-	}
-	b.markDirty()
 	return true
 }
 
@@ -121,20 +118,12 @@ func (b *Body) Insert(item BodyItem, index int) bool {
 // Future: a BlankLinePolicy hook could let callers opt into collapsing
 // double-blank-line runs created by Remove. No existing structural rule
 // needs it, so the hook is deliberately not added yet.
-//
-// When item is a *Block, Remove clears its parentBody pointer so a stale
-// back-link doesn't trip up dirty-marking if the removed block is later
-// re-inserted into a different body.
 func (b *Body) Remove(item BodyItem) bool {
 	idx := indexOf(b.Items, item)
 	if idx < 0 {
 		return false
 	}
 	b.Items = append(b.Items[:idx], b.Items[idx+1:]...)
-	if blk, ok := item.(*Block); ok {
-		blk.parentBody = nil
-	}
-	b.markDirty()
 	return true
 }
 
@@ -242,30 +231,4 @@ func insertSlice(items []BodyItem, index int, item BodyItem) []BodyItem {
 	copy(items[index+1:], items[index:])
 	items[index] = item
 	return items
-}
-
-// markDirty invalidates the raw bytes of every Block on the path from this
-// Body up to the file root. Without this walk, a mutation deep inside a
-// nested body would be invisible: Serialize sees the unchanged Block.raw
-// of every ancestor, writes it verbatim, and never descends to discover
-// the mutation. Each invalidated ancestor's RawBytes() now returns nil,
-// forcing Serialize to take its writeRegenerated path, which iterates the
-// (mutated) Body.
-//
-// Top-level Body has parentBlock == nil, so markDirty is a no-op there —
-// the top-level Body.writeTo iterates items directly and reflects any
-// mutation without needing invalidation.
-//
-// The walk terminates on the first ancestor with no parent — either a
-// Block whose parentBody is nil (a detached subtree, possibly mid-Insert
-// elsewhere) or the file root.
-func (b *Body) markDirty() {
-	blk := b.parentBlock
-	for blk != nil {
-		blk.raw = nil
-		if blk.parentBody == nil {
-			return
-		}
-		blk = blk.parentBody.parentBlock
-	}
 }

@@ -268,7 +268,25 @@ func TestBuild_SingleBlock(t *testing.T) {
 		require.True(t, ok)
 		require.Len(t, blk.LeadingComments, 1)
 		assert.Equal(t, CommentHash, blk.LeadingComments[0].Style)
-		assert.Equal(t, []byte(content), blk.RawBytes())
+		assert.Nil(t, blk.RawBytes(),
+			"Block.RawBytes always returns nil; bytes round-trip via headerRaw+Body+footerRaw")
+		assert.Equal(t, []byte(content), f.Bytes(),
+			"the whole leading-comment + block round-trips byte-for-byte")
+	})
+
+	t.Run("inline single-attribute block captured as wholeRaw", func(t *testing.T) {
+		t.Parallel()
+		// HCL allows single-line blocks only when they hold exactly one
+		// attribute. Inline blocks (opening + closing brace on the same
+		// line) take a wholeRaw fast path: their entire source bytes are
+		// stored verbatim and emitted as one unit, skipping the
+		// header/Body/footer split that multi-line blocks use.
+		content := "locals { x = 1 }\n"
+		f, err := Build([]byte(content), "x.tf", DefaultTopLevelPolicy())
+		require.NoError(t, err)
+		require.Len(t, f.Body.Items, 1)
+		assert.Equal(t, content, string(f.Bytes()),
+			"inline block round-trips byte-for-byte via wholeRaw")
 	})
 }
 

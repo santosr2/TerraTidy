@@ -8,6 +8,7 @@ import (
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/hclsyntax"
 	"github.com/hashicorp/hcl/v2/hclwrite"
+	"github.com/santosr2/TerraTidy/internal/cst"
 	"github.com/santosr2/TerraTidy/pkg/sdk"
 )
 
@@ -439,44 +440,69 @@ func countItemsAfterTags(body *hclsyntax.Body, tagsLine int) int {
 }
 
 // Fix moves tags/labels (and tags_all) to land just before any lifecycle block,
-// or at the end of the block body if no lifecycle is present. Other attributes and
-// nested blocks stay in their source positions; only the tags region (including its
-// leading comment) moves. Operates bottom-up so line ranges remain valid across rewrites.
+// or at the last position in the block body when no lifecycle is present. Other
+// attributes and nested blocks stay in their source positions; only the tags
+// region (including its leading comment) moves. Direction-agnostic: tags below
+// lifecycle is relocated above lifecycle in the same call.
 func (r *TagsAtEndRule) Fix(ctx *sdk.Context, _ *hcl.File) (*sdk.FixResult, error) {
 	originalContent, err := os.ReadFile(ctx.File)
 	if err != nil {
 		return nil, err
 	}
 
-	syntaxFile, diags := hclsyntax.ParseConfig(originalContent, ctx.File, hcl.InitialPos)
-	if diags.HasErrors() {
-		return nil, diags
-	}
-	hclFile, ok := syntaxFile.Body.(*hclsyntax.Body)
-	if !ok {
-		return nil, nil
+	file, parseErr := cst.Build(originalContent, ctx.File, cst.DefaultTopLevelPolicy())
+	if parseErr != nil {
+		// No-op on parse error: do not mutate a partial tree, and do not
+		// surface the diagnostic as a Fix error (Check already produced it).
+		return nil, nil //nolint:nilerr // parse error already surfaced by Check; Fix preserves no-op contract on partial trees
 	}
 
-	var targets []*hclsyntax.Block
-	for _, block := range hclFile.Blocks {
+	for _, item := range file.Body.Items {
+		block, ok := item.(*cst.Block)
+		if !ok {
+			continue
+		}
 		if block.Type != "resource" && block.Type != "module" {
 			continue
 		}
-		if findTagsAttribute(block.Body.Attributes) == nil {
-			continue
+		moveTagsAttrToEnd(block.Body)
+	}
+
+	return WholeFileEdit(originalContent, file.Bytes()), nil
+}
+
+// moveTagsAttrToEnd relocates the tags-family attribute in body (priority:
+// tags > labels > tags_all) to immediately before any lifecycle nested block,
+// or to the last position in the body when no lifecycle is present. A no-op
+// when no tags-family attribute exists, when the attribute is already in the
+// canonical position, or when body is nil.
+func moveTagsAttrToEnd(body *cst.Body) {
+	if body == nil {
+		return
+	}
+	tagsAttr := findTagsCSTAttribute(body)
+	if tagsAttr == nil {
+		return
+	}
+	if lifecycle := body.FindBlock("lifecycle"); lifecycle != nil {
+		body.MoveBefore(tagsAttr, lifecycle)
+		return
+	}
+	body.Move(tagsAttr, len(body.Items)-1)
+}
+
+// findTagsCSTAttribute returns the tags-family attribute in body with a
+// deterministic priority. `tags` wins over `labels`, which wins over
+// `tags_all`. `tags_all` is provider-managed (derived from inherited tags)
+// and is included only as a fallback for resources that use it directly;
+// otherwise the rule prefers the author-controlled `tags`/`labels`.
+func findTagsCSTAttribute(body *cst.Body) *cst.Attribute {
+	for _, name := range []string{"tags", "labels", "tags_all"} {
+		if attr := body.FindAttribute(name); attr != nil {
+			return attr
 		}
-		targets = append(targets, block)
 	}
-	sort.Slice(targets, func(i, j int) bool {
-		return targets[i].Range().Start.Line > targets[j].Range().Start.Line
-	})
-
-	content := originalContent
-	for _, block := range targets {
-		content = moveTagsBeforeLifecycle(content, block)
-	}
-
-	return WholeFileEdit(originalContent, FormatAndCleanBlankLines(content)), nil
+	return nil
 }
 
 // moveAttrBeforeLifecycle relocates the given attribute (with its leading comment)
@@ -485,8 +511,7 @@ func (r *TagsAtEndRule) Fix(ctx *sdk.Context, _ *hcl.File) (*sdk.FixResult, erro
 // source positions. The move is a no-op when the attribute is already adjacent to
 // the insertion point. Returns content unchanged when attr is nil.
 //
-// Shared by both `style.tags-at-end` (via moveTagsBeforeLifecycle wrapper) and
-// `style.depends-on-order` (via moveDependsOnBeforeLifecycle wrapper).
+// Used directly by `style.depends-on-order`.
 func moveAttrBeforeLifecycle(content []byte, block *hclsyntax.Block, attr *hclsyntax.Attribute) []byte {
 	if attr == nil {
 		return content
@@ -583,12 +608,6 @@ func moveAttrBeforeLifecycle(content []byte, block *hclsyntax.Block, attr *hclsy
 	}
 
 	return []byte(strings.Join(result, "\n") + "\n")
-}
-
-// moveTagsBeforeLifecycle is a thin wrapper around moveAttrBeforeLifecycle targeting
-// the tags-family attribute selected by findTagsAttribute (tags > labels > tags_all).
-func moveTagsBeforeLifecycle(content []byte, block *hclsyntax.Block) []byte {
-	return moveAttrBeforeLifecycle(content, block, findTagsAttribute(block.Body.Attributes))
 }
 
 // DependsOnOrderRule ensures depends_on is at the end of blocks.

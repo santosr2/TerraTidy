@@ -742,11 +742,11 @@ func TestTagsAtEndRule(t *testing.T) {
 		require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0o644))
 
 		ctx := &sdk.Context{File: tmpFile}
-		first, err := rule.Fix(ctx, &hcl.File{Body: mustParseBody(t, content)})
+		first, err := rule.Fix(ctx, nil)
 		require.NoError(t, err)
 		require.NoError(t, os.WriteFile(tmpFile, first.Edits[0].Replacement, 0o644))
 
-		second, err := rule.Fix(ctx, &hcl.File{Body: mustParseBody(t, string(first.Edits[0].Replacement))})
+		second, err := rule.Fix(ctx, nil)
 		require.NoError(t, err)
 		assert.Nil(t, second, "Fix(Fix(x)) must equal Fix(x)")
 	})
@@ -830,12 +830,160 @@ func TestTagsAtEndRule(t *testing.T) {
 	})
 }
 
-// mustParseBody parses HCL content and returns its body, failing the test on error.
-func mustParseBody(t *testing.T, content string) hcl.Body {
-	t.Helper()
-	file, diags := hclsyntax.ParseConfig([]byte(content), "test.tf", hcl.InitialPos)
-	require.False(t, diags.HasErrors())
-	return file.Body
+// TestTagsAtEnd_BelowLifecycle_RelocatesAbove pins the 2026-05-20 bug fix.
+//
+// Pre-CST, the line-based Fix short-circuited as "already adjacent" when tags
+// was authored below lifecycle because its line-counting check only handled
+// one direction (attrEnd >= insertBefore). The CST Move is direction-agnostic,
+// so the same call that handles "tags above misplaced" also handles "tags
+// below misplaced". The fixture mirrors a terraform/modules/acm/main.tf shape
+// that triggered the original no-op.
+func TestTagsAtEnd_BelowLifecycle_RelocatesAbove(t *testing.T) {
+	rule := &TagsAtEndRule{}
+	content := `resource "aws_acm_certificate" "x" {
+  domain_name       = "example.com"
+  validation_method = "DNS"
+  lifecycle {
+    create_before_destroy = true
+  }
+  tags = { Name = "cert" }
+}
+`
+	out := runRuleFix(t, rule, content)
+
+	// tags now sits immediately above lifecycle.
+	assertOrderedSubstrings(t, out, []string{
+		"\n  domain_name",
+		"\n  validation_method",
+		"\n  tags",
+		"\n  lifecycle {",
+		"create_before_destroy = true",
+	})
+
+	// Exact-alignment assertions are deliberate: unchanged items must
+	// round-trip byte-for-byte through the CST, never re-aligned. Do not
+	// relax these to alignment-agnostic anchors — that would weaken
+	// coverage of the CST's unchanged-region preservation invariant.
+	assert.Contains(t, out, `domain_name       = "example.com"`)
+	assert.Contains(t, out, `validation_method = "DNS"`)
+	assert.Contains(t, out, `tags = { Name = "cert" }`)
+	assert.Contains(t, out, "create_before_destroy = true")
+
+	// No comment loss: the input has none, and none must appear.
+	assert.NotContains(t, out, "#")
+	assert.NotContains(t, out, "//")
+}
+
+// TestTagsAtEnd_BelowLifecycle_WithLeadingComment_RelocatesAbove verifies
+// that a leading comment on tags travels with the attribute when the
+// direction-agnostic Move relocates tags from below lifecycle to above it.
+// The pre-CST line-based path would have re-discovered the comment via line
+// scanning; the CST path carries it as part of the attribute's raw bytes.
+// The "free carriage" claim of the migration needs explicit coverage for
+// the upward-move direction.
+func TestTagsAtEnd_BelowLifecycle_WithLeadingComment_RelocatesAbove(t *testing.T) {
+	rule := &TagsAtEndRule{}
+	content := `resource "aws_acm_certificate" "x" {
+  domain_name       = "example.com"
+  validation_method = "DNS"
+  lifecycle {
+    create_before_destroy = true
+  }
+  # remove * from the beginning before importing into Vanta
+  tags = { Name = "cert" }
+}
+`
+	out := runRuleFix(t, rule, content)
+
+	// Both the comment and tags now sit immediately above lifecycle, in
+	// their original relative order.
+	assertOrderedSubstrings(t, out, []string{
+		"\n  domain_name",
+		"\n  validation_method",
+		"\n  # remove * from the beginning before importing into Vanta",
+		"\n  tags",
+		"\n  lifecycle {",
+	})
+
+	// Comment content preserved verbatim.
+	assert.Contains(t, out, "# remove * from the beginning before importing into Vanta")
+}
+
+// TestTagsAtEnd_Labels_BelowLifecycle_RelocatesAbove covers the `labels` arm
+// of findTagsCSTAttribute's priority list. The pre-existing tags-vs-tags_all
+// priority test stops at the first iteration; a labels-only fixture is the
+// only way the second iteration's return path is reached.
+func TestTagsAtEnd_Labels_BelowLifecycle_RelocatesAbove(t *testing.T) {
+	rule := &TagsAtEndRule{}
+	content := `module "cluster" {
+  source = "./cluster"
+  lifecycle {
+    create_before_destroy = true
+  }
+  labels = { env = "prod" }
+}
+`
+	out := runRuleFix(t, rule, content)
+
+	assertOrderedSubstrings(t, out, []string{
+		"\n  source",
+		"\n  labels",
+		"\n  lifecycle {",
+		"create_before_destroy = true",
+	})
+}
+
+// TestTagsAtEnd_Fix_SkipsBlocksWithoutTags pins the no-op path in
+// moveTagsAttrToEnd / findTagsCSTAttribute for resource and module blocks
+// that have no tags-family attribute. Fix iterates every resource/module
+// block (Check's filter is not reused), so this path is real, not defensive.
+// The second resource carries tags below lifecycle so Fix produces a real
+// edit; the first must round-trip byte-for-byte through the no-op path.
+func TestTagsAtEnd_Fix_SkipsBlocksWithoutTags(t *testing.T) {
+	rule := &TagsAtEndRule{}
+	content := `resource "aws_vpc" "no_tags" {
+  cidr_block = "10.0.0.0/16"
+}
+
+resource "aws_acm_certificate" "with_tags" {
+  domain_name = "example.com"
+  lifecycle {
+    create_before_destroy = true
+  }
+  tags = { Name = "cert" }
+}
+`
+	out := runRuleFix(t, rule, content)
+
+	// The first block is untouched: no tags to move, no shape change.
+	assert.Contains(t, out, `resource "aws_vpc" "no_tags" {
+  cidr_block = "10.0.0.0/16"
+}`)
+
+	// The second block has tags relocated above lifecycle.
+	assertOrderedSubstrings(t, out, []string{
+		"aws_acm_certificate",
+		"\n  domain_name",
+		"\n  tags",
+		"\n  lifecycle {",
+	})
+}
+
+// TestTagsAtEnd_Fix_ParseErrorReturnsNoOp pins the contract documented on
+// Fix: when cst.Build fails to parse, Fix returns (nil, nil) rather than
+// surfacing the diagnostic. Check has already reported the parse error, and
+// mutating a partial tree would be unsafe.
+func TestTagsAtEnd_Fix_ParseErrorReturnsNoOp(t *testing.T) {
+	rule := &TagsAtEndRule{}
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "broken.tf")
+	// Unclosed block: hclsyntax cannot produce a usable tree.
+	require.NoError(t, os.WriteFile(tmpFile, []byte(`resource "aws_x" "y" {
+`), 0o644))
+
+	result, err := rule.Fix(&sdk.Context{File: tmpFile}, nil)
+	require.NoError(t, err)
+	assert.Nil(t, result)
 }
 
 func TestDependsOnOrderRule(t *testing.T) {

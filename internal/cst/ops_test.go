@@ -719,13 +719,13 @@ func TestRoundTrip_AfterInsertAndRemove(t *testing.T) {
 	assert.Equal(t, itemKinds(f.Body.Items), itemKinds(f2.Body.Items))
 }
 
-// TestInsert_BlockWiresParentage pins that Insert of a *Block sets up the
-// back-pointer chain so subsequent mutations on the inserted block's body
-// invalidate ancestor raw bytes and reflect in serialize output. Without
-// the parentage wiring at ops.go:97-104, mutations on the inserted block's
-// body would be invisible — Serialize would write the surrounding bytes
-// unaware of the change.
-func TestInsert_BlockWiresParentage(t *testing.T) {
+// TestInsert_NestedMutationVisibleAtFileRoot pins that mutations on an
+// inserted *Block's body propagate to the top-level Serialize output.
+// The contract holds by construction: Block.RawBytes() always returns
+// nil, so every ancestor block regenerates from headerRaw + Body.writeTo
+// + footerRaw on every call to File.Bytes — there is no fast-path raw
+// emission that could shadow a nested mutation.
+func TestInsert_NestedMutationVisibleAtFileRoot(t *testing.T) {
 	t.Parallel()
 
 	f, err := Build([]byte("a = 1\n"), "x.tf", DefaultTopLevelPolicy())
@@ -751,11 +751,6 @@ func TestInsert_BlockWiresParentage(t *testing.T) {
 	require.NotNil(t, it)
 	require.True(t, freshBlk.Body.Move(it, 0))
 
-	// Serialize and re-Build. If parentage wiring is intact, markDirty
-	// propagated through freshBlk's parentBody (= f.Body), but f.Body has
-	// no parentBlock so the walk stops at the top — meanwhile freshBlk's
-	// own raw is nil from construction, so it always regenerates. The
-	// post-move order must round-trip.
 	out := f.Bytes()
 	f2, err := Build(out, "x.tf", DefaultTopLevelPolicy())
 	require.NoError(t, err)
@@ -766,10 +761,12 @@ func TestInsert_BlockWiresParentage(t *testing.T) {
 		"mutation on inserted block's body must reflect in serialize output")
 }
 
-// TestRemove_BlockClearsParentage pins the safety contract that a Remove'd
-// *Block has its parentBody cleared, so a stale back-link does not trip
-// markDirty into invalidating a body the block is no longer part of.
-func TestRemove_BlockClearsParentage(t *testing.T) {
+// TestRemove_BlockProducesRoundTrip pins that a *Block removed from a
+// body disappears from the serialized output and the resulting bytes
+// re-Build into the expected CST. With the always-regenerate path,
+// Remove is the simplest possible operation — strike the slice entry and
+// let the next File.Bytes walk skip it.
+func TestRemove_BlockProducesRoundTrip(t *testing.T) {
 	t.Parallel()
 
 	content := "resource \"aws_instance\" \"web\" {\n  ami = \"ami-1\"\n}\n" +
@@ -782,8 +779,6 @@ func TestRemove_BlockClearsParentage(t *testing.T) {
 	removed := blocks[0]
 
 	require.True(t, f.Body.Remove(removed))
-	assert.Nil(t, removed.parentBody,
-		"removed block must have parentBody cleared to prevent stale back-link")
 
 	// Round-trip: the removed block is absent from the re-Built CST.
 	out := f.Bytes()
@@ -795,15 +790,13 @@ func TestRemove_BlockClearsParentage(t *testing.T) {
 		"only the second resource block must remain after Remove")
 }
 
-// TestRemove_DetachedSubtreeStopsMarkDirtyWalk pins the detached-subtree
-// guard in markDirty: when a Block is Removed from its parent body, its
-// parentBody is cleared, but the block's own nested Body still has its
-// parentBlock pointing back at the (now-detached) block. A subsequent
-// mutation on the detached subtree's inner body must terminate the
-// dirty-marking walk at the detached block — there is no live ancestor
-// above it, so propagating further would corrupt an unrelated tree if the
-// detached block were ever Insert-ed elsewhere later.
-func TestRemove_DetachedSubtreeStopsMarkDirtyWalk(t *testing.T) {
+// TestRemove_DetachedSubtreeMutationSafe pins that mutating the inner
+// body of a Removed (now-detached) Block does not corrupt the live tree.
+// With dirty-marking gone, this becomes trivial — there are no
+// back-pointers from a detached block into the live tree, so mutation on
+// the detached subtree is a local edit and the live tree's File.Bytes
+// output is unaffected.
+func TestRemove_DetachedSubtreeMutationSafe(t *testing.T) {
 	t.Parallel()
 
 	content := "resource \"aws_instance\" \"web\" {\n  ami = \"ami-1\"\n  instance_type = \"t3.micro\"\n}\n"
@@ -813,23 +806,25 @@ func TestRemove_DetachedSubtreeStopsMarkDirtyWalk(t *testing.T) {
 	res := f.Body.FindBlock("resource")
 	require.NotNil(t, res)
 	require.True(t, f.Body.Remove(res))
-	require.Nil(t, res.parentBody, "Remove must clear parentBody on the detached block")
 
-	// Mutate the detached subtree's body. markDirty walks:
-	// res.Body.parentBlock = res (raw cleared); res.parentBody = nil → return.
-	// No crash, no nil-deref, the walk terminates cleanly.
+	// Mutate the detached subtree's body. No crash, no leak into the live
+	// tree — f's serialized output stays empty regardless.
 	it := res.Body.FindAttribute("instance_type")
 	require.NotNil(t, it)
 	require.True(t, res.Body.Move(it, 0))
-	assert.Nil(t, res.raw, "detached block's own raw is still invalidated")
+
+	assert.Empty(t, f.Body.Items,
+		"live tree must be empty after Remove; detached-subtree mutation must not re-enter it")
+	assert.Equal(t, "", string(f.Bytes()),
+		"live tree serializes as empty even though the detached subtree was mutated")
 }
 
-// TestMove_ThreeLevelDeepInvalidatesAllAncestors pins that markDirty walks
-// to the file root through every Block on the path. A mutation three levels
-// deep — module → resource → lifecycle — must propagate through both
-// ancestor blocks. This exercises the loop iteration path in markDirty
-// (ops.go markDirty walk) that two-level tests do not reach.
-func TestMove_ThreeLevelDeepInvalidatesAllAncestors(t *testing.T) {
+// TestMove_ThreeLevelDeepRoundTripsThroughEveryAncestor pins that a
+// mutation three levels deep — module → resource → lifecycle — reflects
+// in the top-level serialized output. Every ancestor block regenerates
+// via writeRegenerated on every File.Bytes call, so the mutation is
+// visible by construction; no dirty-marking walk required.
+func TestMove_ThreeLevelDeepRoundTripsThroughEveryAncestor(t *testing.T) {
 	t.Parallel()
 
 	content := "module \"outer\" {\n" +
@@ -852,15 +847,9 @@ func TestMove_ThreeLevelDeepInvalidatesAllAncestors(t *testing.T) {
 	lifecycle := inner.Body.FindBlock("lifecycle")
 	require.NotNil(t, lifecycle)
 
-	// Mutation at the deepest body must invalidate raw on both outer and
-	// inner blocks — otherwise Serialize at file root would write outer.raw
-	// verbatim and the mutation would be invisible.
 	prevent := lifecycle.Body.FindAttribute("prevent_destroy")
 	require.NotNil(t, prevent)
 	require.True(t, lifecycle.Body.Move(prevent, 0))
-
-	assert.Nil(t, outer.raw, "outermost ancestor raw must be invalidated by markDirty walk")
-	assert.Nil(t, inner.raw, "intermediate ancestor raw must be invalidated by markDirty walk")
 
 	out := f.Bytes()
 	f2, err := Build(out, "x.tf", DefaultTopLevelPolicy())
@@ -929,4 +918,131 @@ func TestMove_InsideBlockBody(t *testing.T) {
 			break
 		}
 	}
+}
+
+// TestMove_NestedBodyByteExactRoundTrip pins that a Move inside a nested
+// block body produces byte-exact output with original indentation
+// preserved. The mutation reorders items inside the body; every other
+// byte — block header, footer, and item indentation — round-trips
+// verbatim through the headerRaw + Body.writeTo + footerRaw path. A
+// regression that drops the leading-indent capture in buildAttribute or
+// the headerRaw/footerRaw split would surface as a flush-left diff here.
+func TestMove_NestedBodyByteExactRoundTrip(t *testing.T) {
+	t.Parallel()
+
+	content := "resource \"aws_instance\" \"web\" {\n" +
+		"  ami           = \"ami-1\"\n" +
+		"  instance_type = \"t3.micro\"\n" +
+		"  lifecycle {\n" +
+		"    create_before_destroy = true\n" +
+		"  }\n" +
+		"  tags = {\n" +
+		"    Name = \"web\"\n" +
+		"  }\n" +
+		"}\n"
+	f, err := Build([]byte(content), "x.tf", DefaultTopLevelPolicy())
+	require.NoError(t, err)
+
+	res := f.Body.FindBlock("resource")
+	require.NotNil(t, res)
+
+	lifecycle := res.Body.FindBlock("lifecycle")
+	require.NotNil(t, lifecycle)
+	require.True(t, res.Body.Move(lifecycle, len(res.Body.Items)-1))
+
+	want := "resource \"aws_instance\" \"web\" {\n" +
+		"  ami           = \"ami-1\"\n" +
+		"  instance_type = \"t3.micro\"\n" +
+		"  tags = {\n" +
+		"    Name = \"web\"\n" +
+		"  }\n" +
+		"  lifecycle {\n" +
+		"    create_before_destroy = true\n" +
+		"  }\n" +
+		"}\n"
+	assert.Equal(t, want, string(f.Bytes()),
+		"nested Move output must preserve indentation byte-for-byte")
+}
+
+// TestMove_ThreeLevelNestedBodyByteExactRoundTrip pins that a mutation
+// three levels deep (module → resource_block → lifecycle) regenerates
+// every ancestor block via its captured headerRaw + footerRaw, with the
+// nested body items' indentation intact at every level. The previous
+// architecture (markDirty + a single block.raw field) emitted flush-left
+// HCL through the writeRegenerated path; this test fails loudly if that
+// regression returns.
+func TestMove_ThreeLevelNestedBodyByteExactRoundTrip(t *testing.T) {
+	t.Parallel()
+
+	content := "module \"outer\" {\n" +
+		"  source = \"./m\"\n" +
+		"  resource_block {\n" +
+		"    ami = \"ami-1\"\n" +
+		"    lifecycle {\n" +
+		"      create_before_destroy = true\n" +
+		"      prevent_destroy       = false\n" +
+		"    }\n" +
+		"  }\n" +
+		"}\n"
+	f, err := Build([]byte(content), "x.tf", DefaultTopLevelPolicy())
+	require.NoError(t, err)
+
+	outer := f.Body.FindBlock("module")
+	require.NotNil(t, outer)
+	inner := outer.Body.FindBlock("resource_block")
+	require.NotNil(t, inner)
+	lifecycle := inner.Body.FindBlock("lifecycle")
+	require.NotNil(t, lifecycle)
+
+	prevent := lifecycle.Body.FindAttribute("prevent_destroy")
+	require.NotNil(t, prevent)
+	require.True(t, lifecycle.Body.Move(prevent, 0))
+
+	want := "module \"outer\" {\n" +
+		"  source = \"./m\"\n" +
+		"  resource_block {\n" +
+		"    ami = \"ami-1\"\n" +
+		"    lifecycle {\n" +
+		"      prevent_destroy       = false\n" +
+		"      create_before_destroy = true\n" +
+		"    }\n" +
+		"  }\n" +
+		"}\n"
+	assert.Equal(t, want, string(f.Bytes()),
+		"three-level-deep Move must preserve indentation at every level")
+}
+
+// TestMove_NestedStandaloneCommentIndentationPreserved pins that a
+// StandaloneComment inside a nested block body keeps its leading
+// indentation across a sibling Move. The fix mechanism for the
+// floating-section-header bug in `style.terraform-block-first` depends
+// on this: the comment stays in place while the block moves around it.
+// Before the headerRaw/footerRaw split, the comment's indent lived in
+// the ancestor's Block.raw and disappeared when raw was invalidated.
+func TestMove_NestedStandaloneCommentIndentationPreserved(t *testing.T) {
+	t.Parallel()
+
+	content := "resource \"aws_instance\" \"web\" {\n" +
+		"  ami = \"ami-1\"\n" +
+		"\n" +
+		"  # standalone\n" +
+		"\n" +
+		"  instance_type = \"t3.micro\"\n" +
+		"}\n"
+	f, err := Build([]byte(content), "x.tf", DefaultTopLevelPolicy())
+	require.NoError(t, err)
+
+	res := f.Body.FindBlock("resource")
+	require.NotNil(t, res)
+
+	// Move the first attribute to the end of the body. The standalone
+	// comment between the two attributes stays put; its indentation must
+	// be preserved by its captured raw bytes.
+	ami := res.Body.FindAttribute("ami")
+	require.NotNil(t, ami)
+	require.True(t, res.Body.Move(ami, len(res.Body.Items)-1))
+
+	got := string(f.Bytes())
+	assert.Contains(t, got, "  # standalone\n",
+		"standalone comment must retain its leading indentation after a sibling Move")
 }

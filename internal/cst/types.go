@@ -49,17 +49,10 @@ func (f *File) LineSep() []byte { return f.lineSep }
 // standalone comments. Item order is preserved exactly as in the source.
 // OpenByte and CloseByte are byte offsets into File.Source for the surrounding
 // `{` and `}`; both are -1 for the file-root body.
-//
-// parentBlock is the Block whose body this is, or nil for the file-root body.
-// Build sets it up so Body mutations (Move, Insert, Remove) can invalidate
-// the containing Block's raw bytes — otherwise Serialize would write the
-// stale block raw verbatim and the mutation would be invisible. The pointer
-// is walked iteratively in markDirty.
 type Body struct {
-	Items       []BodyItem
-	OpenByte    int
-	CloseByte   int
-	parentBlock *Block
+	Items     []BodyItem
+	OpenByte  int
+	CloseByte int
 }
 
 // CommentStyle identifies the syntax used for a Comment.
@@ -114,11 +107,26 @@ func (*Attribute) bodyItem() {}
 // Block is a block-type body item — resource, module, locals, etc. — with
 // optional labels and a nested Body.
 //
-// parentBody is the Body that contains this block, set by Build (and by
-// Insert when a caller-constructed block is added to a body). markDirty
-// uses it to walk up the tree and invalidate raw bytes on every ancestor
-// block — without this chain, a mutation deep in a nested body would not
-// reach the file root.
+// For multi-line blocks (the common shape `type "label" {\n  body\n}\n`),
+// headerRaw and footerRaw hold the verbatim source bytes around the body:
+// headerRaw spans line-start of the leading content (or of the block-type
+// identifier when there are no leading comments) through the opening brace,
+// any inline opening-brace comment, and its line terminator; footerRaw spans
+// line-start of the closing brace through the closing brace, any inline
+// closing-brace comment, and its line terminator. Build populates both;
+// writeRegenerated emits headerRaw + Body.writeTo + footerRaw so any
+// nested-Body mutation is visible at the file root by construction.
+//
+// For inline blocks where opening and closing braces share a line
+// (`type {body}`), wholeRaw holds the entire block's source bytes verbatim
+// and writeRegenerated emits it as a single unit, skipping Body.writeTo
+// and footerRaw. Body items are still parsed for Find* lookups; mutations
+// on an inline block's Body do not propagate to the serialized output
+// because the wholeRaw fast path takes precedence. No structural rule
+// today targets inline blocks.
+//
+// Caller-constructed Blocks leave all three raw fields nil; writeRegenerated
+// falls back to a canonical regenerated header / footer.
 type Block struct {
 	LeadingComments     []Comment
 	Type                string
@@ -127,13 +135,18 @@ type Block struct {
 	OpeningBraceComment *Comment
 	Body                *Body
 	ClosingBraceComment *Comment
-	raw                 []byte
-	parentBody          *Body
+	wholeRaw            []byte
+	headerRaw           []byte
+	footerRaw           []byte
 }
 
-// RawBytes returns the original source bytes for this block, or nil when the
-// block has been mutated since Build.
-func (b *Block) RawBytes() []byte { return b.raw }
+// RawBytes always returns nil for *Block. Blocks are written via the
+// regeneration path (headerRaw + Body.writeTo + footerRaw), so any mutation
+// on a nested Body is visible at the file root by construction — no
+// dirty-marking walk required, because there is no fast-path block.raw
+// emission that could shadow it. Body items each keep their own raw fast
+// path; only the surrounding block header/footer come from raw bytes here.
+func (*Block) RawBytes() []byte { return nil }
 
 func (*Block) bodyItem() {}
 

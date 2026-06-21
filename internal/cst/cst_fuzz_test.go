@@ -121,14 +121,13 @@ func sortedKeys(m map[string]bool) []string {
 //     expected set.
 //
 // Scope: only top-level Body mutations are exercised. Nested-body
-// mutations are gated by the known indentation gap in writeRegenerated
-// (flush-left output when an ancestor Block.raw is invalidated) — unit
-// tests in ops_test.go cover the nested cases. The fuzz also requires
-// the input to end with `\n` so every CST item has a newline-terminated
-// raw — without that, a reshuffle could juxtapose a no-newline raw with
-// the following item and produce a deliberately broken concatenation,
-// which is a serialize-layer bug separate from the structural mutation
-// invariant we are testing here.
+// mutations are covered by unit tests in ops_test.go that pin byte-exact
+// round-trip identity through the writeRegenerated path. The fuzz also
+// requires the input to end with `\n` so every CST item has a
+// newline-terminated raw — without that, a reshuffle could juxtapose a
+// no-newline raw with the following item and produce a deliberately
+// broken concatenation, which is a serialize-layer bug separate from
+// the structural mutation invariant we are testing here.
 func FuzzCSTMutateRoundTrip(f *testing.F) {
 	seedFuzzCorpus(f)
 

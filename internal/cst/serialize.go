@@ -102,49 +102,67 @@ func (a *Attribute) writeRegenerated(buf *bytes.Buffer, lineSep []byte) {
 	buf.Write(lineSep)
 }
 
-// writeRegenerated emits a freshly-formatted block:
+// writeRegenerated emits a block by combining its captured header / footer
+// raw bytes (or a canonical regenerated header / footer for caller-built
+// blocks) with the body items written via Body.writeTo:
 //
-//	<LeadingComments...>
-//	type "label" ... {[ openingBraceComment]<lineSep>
-//	  <body items>
-//	}[ closingBraceComment]<lineSep>
+//	<headerRaw or regenerated header>
+//	<body items>
+//	<footerRaw or regenerated footer>
 //
-// Triggered when Block.raw is nil — either a Block constructed from scratch
-// by an Insert caller, or an existing Block whose ancestor chain was
-// invalidated by markDirty when a nested Body was mutated (see ops.go
-// markDirty). Body items emit their own line terminators (raw bytes already
-// include them, or regeneration appends lineSep), so no extra separator is
-// needed between `{` and the first body item beyond the opening lineSep
-// written here.
+// Block.RawBytes() returns nil unconditionally, so this is the only path
+// Serialize uses for blocks. Body items emit their own line terminators,
+// so no extra separator is needed between the header and the first body
+// item beyond what headerRaw or the regenerated lineSep already carries.
 //
-// Known limitation: when an ancestor Block.raw is nilled by markDirty, this
-// path emits structurally correct but flush-left HCL — indentation lives in
-// the nilled raw and has no separate storage yet. Splitting Block.raw into
-// headerRaw + footerRaw with explicit indentation capture is the planned
-// follow-up.
+// Inline blocks (opening and closing brace on the same source line) take
+// a fast path: their entire source bytes live in wholeRaw and are emitted
+// as a single unit, with Body.writeTo and the footer path skipped. Body
+// mutations are not reflected for inline blocks; the wholeRaw fast path
+// wins. No structural rule today targets inline blocks.
+//
+// When headerRaw is nil (a Block constructed from scratch by an Insert
+// caller, or by a test), the regenerated header has the canonical shape
+// `<leading comments...>\ntype "label" ... { <opening-brace comment>\n`
+// with no leading indentation — there is no signal to reconstruct
+// indentation from. Same shape applies to footerRaw == nil.
 func (b *Block) writeRegenerated(buf *bytes.Buffer, lineSep []byte) {
-	for _, c := range b.LeadingComments {
-		buf.Write(c.Raw)
+	if b.wholeRaw != nil {
+		buf.Write(b.wholeRaw)
+		return
+	}
+	switch {
+	case b.headerRaw != nil:
+		buf.Write(b.headerRaw)
+	default:
+		for _, c := range b.LeadingComments {
+			buf.Write(c.Raw)
+			buf.Write(lineSep)
+		}
+		buf.WriteString(b.Type)
+		for _, l := range b.Labels {
+			buf.WriteByte(' ')
+			buf.Write(l.Raw)
+		}
+		buf.WriteString(" {")
+		if b.OpeningBraceComment != nil {
+			buf.WriteByte(' ')
+			buf.Write(b.OpeningBraceComment.Raw)
+		}
 		buf.Write(lineSep)
 	}
-	buf.WriteString(b.Type)
-	for _, l := range b.Labels {
-		buf.WriteByte(' ')
-		buf.Write(l.Raw)
-	}
-	buf.WriteString(" {")
-	if b.OpeningBraceComment != nil {
-		buf.WriteByte(' ')
-		buf.Write(b.OpeningBraceComment.Raw)
-	}
-	buf.Write(lineSep)
 	if b.Body != nil {
 		b.Body.writeTo(buf, lineSep)
 	}
-	buf.WriteByte('}')
-	if b.ClosingBraceComment != nil {
-		buf.WriteByte(' ')
-		buf.Write(b.ClosingBraceComment.Raw)
+	switch {
+	case b.footerRaw != nil:
+		buf.Write(b.footerRaw)
+	default:
+		buf.WriteByte('}')
+		if b.ClosingBraceComment != nil {
+			buf.WriteByte(' ')
+			buf.Write(b.ClosingBraceComment.Raw)
+		}
+		buf.Write(lineSep)
 	}
-	buf.Write(lineSep)
 }

@@ -455,7 +455,7 @@ func (e *Engine) applyFixes(ctx *sdk.Context, file *hcl.File, findings []sdk.Fin
 		if !findings[i].Fixable {
 			continue
 		}
-		fixer := e.FindFixerByRuleName(findings[i].Rule)
+		fixer := e.Fixer(findings[i].Rule)
 		if fixer == nil {
 			continue
 		}
@@ -592,16 +592,16 @@ func (e *Engine) writeFixed(path string, content []byte, mode os.FileMode, appli
 	return applied, nil
 }
 
-// FindFixerByRuleName returns the rule registered under the given name as an
-// sdk.Fixer, or nil if no rule with that name is registered or it does not
-// implement Fixer. The lookup matches against Rule.Name(); for built-in rules
-// this is identical to the diagnostic Code reported in findings, but plugin
-// authors should be aware the two are conceptually distinct.
+// Fixer returns the rule registered under the given name as an sdk.Fixer, or
+// nil if no rule with that name is registered or it does not implement Fixer.
+// The lookup matches against Rule.Name(); for built-in rules this is identical
+// to the diagnostic Code reported in findings, but plugin authors should be
+// aware the two are conceptually distinct.
 //
 // Callers outside this package (notably the LSP server's code-action handler)
 // must snapshot the engine pointer under the appropriate read lock before
 // invoking this method, since concurrent reloads may swap the rule set.
-func (e *Engine) FindFixerByRuleName(name string) sdk.Fixer {
+func (e *Engine) Fixer(name string) sdk.Fixer {
 	for _, r := range e.rules {
 		if r.Name() != name {
 			continue
@@ -612,6 +612,38 @@ func (e *Engine) FindFixerByRuleName(name string) sdk.Fixer {
 		return nil
 	}
 	return nil
+}
+
+// RegisterFixerForTesting is test-only and not goroutine-safe. Tests using it
+// must not run in parallel with other code that reads the registry (LSP
+// CodeAction handlers, format/style runs). Use a single-threaded test or a
+// per-test Engine instance.
+//
+// The seam wraps the supplied Fixer in a shim that satisfies sdk.Rule under the
+// given name, then appends it to the engine's rule slice so Fixer finds it.
+// The shim's Check returns no findings, so the registered name does
+// not produce diagnostics on its own; callers exercising the Fix path must
+// seed the diagnostic through a real rule or drive it directly.
+func (e *Engine) RegisterFixerForTesting(name string, fixer sdk.Fixer) {
+	e.rules = append(e.rules, &fixerForTesting{name: name, fixer: fixer})
+}
+
+// fixerForTesting adapts an sdk.Fixer into an sdk.Rule that can be appended to
+// Engine.rules. Test-only — created exclusively by RegisterFixerForTesting.
+type fixerForTesting struct {
+	name  string
+	fixer sdk.Fixer
+}
+
+func (f *fixerForTesting) Name() string        { return f.name }
+func (f *fixerForTesting) Description() string { return "test-only fixer shim" }
+
+func (f *fixerForTesting) Check(_ *sdk.Context, _ *hcl.File) ([]sdk.Finding, error) {
+	return nil, nil
+}
+
+func (f *fixerForTesting) Fix(ctx *sdk.Context, file *hcl.File) (*sdk.FixResult, error) {
+	return f.fixer.Fix(ctx, file)
 }
 
 // getRuleConfig returns the configuration for a rule

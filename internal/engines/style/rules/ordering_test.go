@@ -2375,6 +2375,35 @@ terraform {
 		require.NoError(t, err)
 		assert.Nil(t, second, "Fix(Fix(content)) must equal Fix(content)")
 	})
+
+	t.Run("Fix surfaces read error for missing file", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		ctx := &sdk.Context{File: filepath.Join(tmpDir, "does-not-exist.tf")}
+		result, err := rule.Fix(ctx, nil)
+		require.Error(t, err)
+		assert.Nil(t, result)
+	})
+
+	t.Run("Fix returns no-op on parse error", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		tmpFile := filepath.Join(tmpDir, "broken.tf")
+		require.NoError(t, os.WriteFile(tmpFile, []byte("terraform {\n"), 0o644))
+		result, err := rule.Fix(&sdk.Context{File: tmpFile}, nil)
+		require.NoError(t, err)
+		assert.Nil(t, result)
+	})
+
+	t.Run("Fix returns no-op when no terraform block is present", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		tmpFile := filepath.Join(tmpDir, "no-terraform.tf")
+		require.NoError(t, os.WriteFile(tmpFile, []byte(`resource "aws_instance" "x" {
+  ami = "ami-123"
+}
+`), 0o644))
+		result, err := rule.Fix(&sdk.Context{File: tmpFile}, nil)
+		require.NoError(t, err)
+		assert.Nil(t, result)
+	})
 }
 
 // TestTerraformBlockFirst_FloatingSectionHeader_Survives pins the 2026-05-20

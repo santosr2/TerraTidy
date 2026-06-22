@@ -942,6 +942,119 @@ func TestEngine_InvalidHCL(t *testing.T) {
 	}
 }
 
+// TestStyleEngine_CSTPipeline_ForEachSourceTagsDependsOn pins the full
+// canonical ordering of a module body once every ordering rule has run
+// through the engine pipeline. The single-rule equivalent lived in
+// rules/ordering_test.go (TestForEachCountFirstRule "Fix preserves leading
+// comments on attributes") back when ForEachCountFirstRule.Fix reordered the
+// whole body via the shared hclwrite helper. After the CST migration each
+// rule's Fix is narrow (for_each-and-count moves stay in one rule, source/
+// version moves in another, tags/depends_on in their own), so the
+// cross-rule ordering invariant has to be asserted at the pipeline boundary
+// where all four rules participate.
+func TestStyleEngine_CSTPipeline_ForEachSourceTagsDependsOn(t *testing.T) {
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "main.tf")
+
+	input := `module "example" {
+  for_each = var.instances
+  depends_on = [module.other]
+  # This is an important comment about the instance
+  # It spans multiple lines
+  instance_type = "t3.micro"
+  source = "./module"
+  tags = { Name = "test" }
+}
+`
+	require.NoError(t, os.WriteFile(tmpFile, []byte(input), 0o644))
+
+	engine := New(&Config{Fix: true})
+	_, err := engine.Run(context.Background(), []string{tmpFile})
+	require.NoError(t, err)
+
+	fixed, err := os.ReadFile(tmpFile)
+	require.NoError(t, err)
+	out := string(fixed)
+
+	// Leading comments survive every Move.
+	assert.Contains(t, out, "# This is an important comment about the instance")
+	assert.Contains(t, out, "# It spans multiple lines")
+
+	// Canonical order after the pipeline runs:
+	//   for_each, source, instance_type, tags, depends_on
+	// for_each is moved (or already) at front; source follows the meta-arg;
+	// instance_type's two-line leading comment travels with it; tags ends
+	// near the tail before depends_on lands last (no lifecycle present).
+	want := []string{
+		"for_each",
+		"source",
+		"# This is an important comment about the instance",
+		"# It spans multiple lines",
+		"instance_type",
+		"tags",
+		"depends_on",
+	}
+	prev := 0
+	for i, needle := range want {
+		idx := strings.Index(out[prev:], needle)
+		require.NotEqual(t, -1, idx,
+			"expected substring %d (%q) to appear after %q in:\n%s",
+			i, needle, want[max(0, i-1)], out)
+		prev += idx + len(needle)
+	}
+
+	// Pipeline-level idempotency: a second engine pass on the fixed file
+	// must produce no further changes. Individual rules pin idempotency in
+	// their own test suites, but rule composition could in principle drift
+	// (e.g., rule A inserts spacing that rule B then reflags) — this
+	// catches that class of regression at the boundary where it would
+	// actually appear.
+	engine2 := New(&Config{Fix: true})
+	_, err = engine2.Run(context.Background(), []string{tmpFile})
+	require.NoError(t, err)
+	second, err := os.ReadFile(tmpFile)
+	require.NoError(t, err)
+	assert.Equal(t, fixed, second, "pipeline must be idempotent across passes")
+}
+
+// TestStyleEngine_CSTPipeline_Resource_ForEachTagsDependsOn is the resource-
+// block sibling of the module pipeline test. SourceVersionGroupedRule only
+// fires on module blocks, so this fixture exercises a different rule
+// combination (for-each-count-first + tags-at-end + depends-on-order) and
+// validates that SourceVersionGroupedRule's no-op path leaves resource
+// content untouched.
+func TestStyleEngine_CSTPipeline_Resource_ForEachTagsDependsOn(t *testing.T) {
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "main.tf")
+
+	input := `resource "aws_instance" "example" {
+  ami        = "ami-123"
+  for_each   = var.instances
+  tags       = { Name = "test" }
+  depends_on = [aws_iam_role.x]
+}
+`
+	require.NoError(t, os.WriteFile(tmpFile, []byte(input), 0o644))
+
+	engine := New(&Config{Fix: true})
+	_, err := engine.Run(context.Background(), []string{tmpFile})
+	require.NoError(t, err)
+
+	fixed, err := os.ReadFile(tmpFile)
+	require.NoError(t, err)
+	out := string(fixed)
+
+	want := []string{"for_each", "ami", "tags", "depends_on"}
+	prev := 0
+	for i, needle := range want {
+		idx := strings.Index(out[prev:], needle)
+		require.NotEqual(t, -1, idx,
+			"expected substring %d (%q) to appear after %q in:\n%s",
+			i, needle, want[max(0, i-1)], out)
+		prev += idx + len(needle)
+	}
+}
+
 func TestEngine_ApplyFixes_MultipleLocations(t *testing.T) {
 	// Test that the same rule at different locations both get fixed (BUG-9)
 	// Previously, applyFixes keyed by rule name only, so only the first fix was applied

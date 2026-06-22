@@ -2,7 +2,6 @@ package rules
 
 import (
 	"os"
-	"sort"
 	"strings"
 
 	"github.com/hashicorp/hcl/v2"
@@ -83,54 +82,56 @@ func (r *ForEachCountFirstRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.F
 	return findings, nil
 }
 
-// Fix moves for_each/count to be first attribute in each block.
-// Uses line-based reordering to preserve leading comments.
-func (r *ForEachCountFirstRule) Fix(ctx *sdk.Context, file *hcl.File) (*sdk.FixResult, error) {
+// Fix moves for_each/count to the first position in each resource/module/data
+// block body. The move is narrow: only the meta-argument relocates; other
+// attributes and nested blocks stay at their source positions. Sibling rules
+// (source-version-grouped, tags-at-end, depends-on-order) handle the other
+// canonical-ordering pieces in the engine pipeline.
+//
+// `for_each` wins over `count` when both are somehow present (Terraform itself
+// rejects the combination at validate-time, so the precedence is academic;
+// matched here to the historical Check policy that flags `for_each` first).
+func (r *ForEachCountFirstRule) Fix(ctx *sdk.Context, _ *hcl.File) (*sdk.FixResult, error) {
 	originalContent, err := os.ReadFile(ctx.File)
 	if err != nil {
 		return nil, err
 	}
 
-	hclFile, ok := file.Body.(*hclsyntax.Body)
-	if !ok {
-		return nil, nil
+	file, parseErr := cst.Build(originalContent, ctx.File, cst.DefaultTopLevelPolicy())
+	if parseErr != nil {
+		// No-op on parse error: do not mutate a partial tree, and do not
+		// surface the diagnostic as a Fix error (Check already produced it).
+		return nil, nil //nolint:nilerr // parse error already surfaced by Check; Fix preserves no-op contract on partial trees
 	}
 
-	content := originalContent
-
-	// Process each block that has for_each or count
-	for _, block := range hclFile.Blocks {
+	for _, item := range file.Body.Items {
+		block, ok := item.(*cst.Block)
+		if !ok {
+			continue
+		}
 		if block.Type != "resource" && block.Type != "module" && block.Type != "data" {
 			continue
 		}
-
-		// Check if block has for_each or count
-		hasForEach := FindAttribute(block.Body.Attributes, "for_each") != nil
-		hasCount := FindAttribute(block.Body.Attributes, "count") != nil
-		if !hasForEach && !hasCount {
-			continue
-		}
-
-		orderedNames := GetOrderedAttrNames(block.Body)
-		firstAttrs := []string{"for_each", "count"}
-		if block.Type == "module" {
-			firstAttrs = []string{"for_each", "count", "source", "version"}
-		}
-		lastAttrs := []string{"tags", "labels", "tags_all", "depends_on"}
-
-		// Use line-based reordering to preserve leading comments
-		content = ReorderBlockAttrsPreservingComments(
-			content,
-			block.Body,
-			block.Range().Start.Line,
-			block.Range().End.Line,
-			orderedNames,
-			firstAttrs,
-			lastAttrs,
-		)
+		moveForEachOrCountToFront(block.Body)
 	}
 
-	return WholeFileEdit(originalContent, FormatAndCleanBlankLines(content)), nil
+	return WholeFileEdit(originalContent, file.Bytes()), nil
+}
+
+// moveForEachOrCountToFront relocates `for_each` (or `count` when `for_each`
+// is absent) to index 0 of body.Items. A no-op when body is nil, when neither
+// attribute exists, or when the attribute is already at index 0.
+func moveForEachOrCountToFront(body *cst.Body) {
+	if body == nil {
+		return
+	}
+	if forEach := body.FindAttribute("for_each"); forEach != nil {
+		body.Move(forEach, 0)
+		return
+	}
+	if count := body.FindAttribute("count"); count != nil {
+		body.Move(count, 0)
+	}
 }
 
 // LifecycleAtEndRule ensures lifecycle block is at the end of resource, data,
@@ -745,50 +746,66 @@ func (r *SourceVersionGroupedRule) checkVersionFollowsSource(
 	return nil
 }
 
-// Fix reorders source/version to be at the start of module blocks (after for_each/count).
-// Uses line-based reordering to preserve leading comments.
-func (r *SourceVersionGroupedRule) Fix(ctx *sdk.Context, file *hcl.File) (*sdk.FixResult, error) {
+// Fix relocates `source` to the start of each module block (after any
+// `for_each`/`count` meta-argument) and pulls `version` to immediately follow
+// `source`. The move is narrow: only those two attributes relocate; the rest
+// of the body stays at its source positions. Sibling rules
+// (for-each-count-first, tags-at-end, depends-on-order) handle the other
+// canonical-ordering pieces in the engine pipeline.
+func (r *SourceVersionGroupedRule) Fix(ctx *sdk.Context, _ *hcl.File) (*sdk.FixResult, error) {
 	originalContent, err := os.ReadFile(ctx.File)
 	if err != nil {
 		return nil, err
 	}
 
-	hclFile, ok := file.Body.(*hclsyntax.Body)
-	if !ok {
-		return nil, nil
+	file, parseErr := cst.Build(originalContent, ctx.File, cst.DefaultTopLevelPolicy())
+	if parseErr != nil {
+		return nil, nil //nolint:nilerr // parse error already surfaced by Check; Fix preserves no-op contract on partial trees
 	}
 
-	content := originalContent
-
-	// Process each module block that has source
-	for _, block := range hclFile.Blocks {
+	for _, item := range file.Body.Items {
+		block, ok := item.(*cst.Block)
+		if !ok {
+			continue
+		}
 		if block.Type != "module" {
 			continue
 		}
-
-		// Check if block has source
-		if FindAttribute(block.Body.Attributes, "source") == nil {
-			continue
-		}
-
-		orderedNames := GetOrderedAttrNames(block.Body)
-		// source and version should come after for_each/count but before everything else
-		firstAttrs := []string{"for_each", "count", "source", "version"}
-		lastAttrs := []string{"tags", "labels", "tags_all", "depends_on"}
-
-		// Use line-based reordering to preserve leading comments
-		content = ReorderBlockAttrsPreservingComments(
-			content,
-			block.Body,
-			block.Range().Start.Line,
-			block.Range().End.Line,
-			orderedNames,
-			firstAttrs,
-			lastAttrs,
-		)
+		groupSourceVersionInModule(block.Body)
 	}
 
-	return WholeFileEdit(originalContent, FormatAndCleanBlankLines(content)), nil
+	return WholeFileEdit(originalContent, file.Bytes()), nil
+}
+
+// groupSourceVersionInModule places `source` at the start of body (after any
+// `for_each` or `count` meta-argument) and, when present, pulls `version` to
+// immediately follow `source`. A no-op when body is nil or when `source` is
+// absent. `for_each` and `count` cannot coexist in valid Terraform; whichever
+// is present is used as the anchor.
+func groupSourceVersionInModule(body *cst.Body) {
+	if body == nil {
+		return
+	}
+	source := body.FindAttribute("source")
+	if source == nil {
+		return
+	}
+
+	var anchor cst.BodyItem
+	if forEach := body.FindAttribute("for_each"); forEach != nil {
+		anchor = forEach
+	} else if count := body.FindAttribute("count"); count != nil {
+		anchor = count
+	}
+	if anchor != nil {
+		body.MoveAfter(source, anchor)
+	} else {
+		body.Move(source, 0)
+	}
+
+	if version := body.FindAttribute("version"); version != nil {
+		body.MoveAfter(version, source)
+	}
 }
 
 // VariableOrderRule ensures variable blocks follow standard ordering.
@@ -922,52 +939,79 @@ func (r *VariableOrderRule) checkAttrPair(ctx *sdk.Context, block *hclsyntax.Blo
 	return nil
 }
 
-// Fix reorders variable attributes and nested blocks to match the canonical order:
-// description, type, default, sensitive, nullable, validation blocks, then everything else.
-// Heredoc bodies live within an attribute's line range and are carried along intact.
+// Fix reorders variable block bodies to the canonical sequence:
+//
+//  1. Known attributes in the order: description, type, default, sensitive, nullable.
+//  2. validation blocks (in their original relative order when multiple).
+//  3. Everything else — non-canonical attributes and unknown nested blocks — stays
+//     where it was in the body's item list, shifting only as a side-effect of
+//     the canonical items moving past it.
+//
+// Leading comments on each attribute/block travel with that item (they live
+// in the item's raw bytes). Heredoc bodies and inline trailing comments are
+// likewise carried intact.
+//
+// The Fix-time attribute order is fixed; the Check method honors
+// config-provided overrides for finding emission, but Fix always rewrites to
+// the canonical sequence (matching the historical hclwrite-helper behavior).
 func (r *VariableOrderRule) Fix(ctx *sdk.Context, _ *hcl.File) (*sdk.FixResult, error) {
 	originalContent, err := os.ReadFile(ctx.File)
 	if err != nil {
 		return nil, err
 	}
 
-	syntaxFile, diags := hclsyntax.ParseConfig(originalContent, ctx.File, hcl.InitialPos)
-	if diags.HasErrors() {
-		return nil, diags
-	}
-	hclFile, ok := syntaxFile.Body.(*hclsyntax.Body)
-	if !ok {
-		return nil, nil
+	file, parseErr := cst.Build(originalContent, ctx.File, cst.DefaultTopLevelPolicy())
+	if parseErr != nil {
+		return nil, nil //nolint:nilerr // parse error already surfaced by Check; Fix preserves no-op contract on partial trees
 	}
 
-	attrOrder := []string{"description", "type", "default", "sensitive", "nullable"}
-	nestedBlockOrder := []string{"validation"}
+	for _, item := range file.Body.Items {
+		block, ok := item.(*cst.Block)
+		if !ok || block.Type != "variable" {
+			continue
+		}
+		reorderVariableBody(block.Body)
+	}
 
-	// Process variable blocks bottom-up: rewriting block N only mutates lines at or below
-	// blockStartLine of N, so blocks above N keep accurate line ranges from the single parse.
-	var variables []*hclsyntax.Block
-	for _, block := range hclFile.Blocks {
-		if block.Type == "variable" {
-			variables = append(variables, block)
+	return WholeFileEdit(originalContent, file.Bytes()), nil
+}
+
+// variableAttrFixOrder is the canonical Fix-time attribute order for variable
+// blocks. Sibling: variableNestedBlockOrder.
+var variableAttrFixOrder = []string{"description", "type", "default", "sensitive", "nullable"}
+
+// variableNestedBlockOrder is the canonical Fix-time nested-block order for
+// variable blocks. Sibling: variableAttrFixOrder.
+var variableNestedBlockOrder = []string{"validation"}
+
+// reorderVariableBody walks variableAttrFixOrder then variableNestedBlockOrder
+// and threads each found item into a contiguous canonical prefix at the head
+// of body.Items via Move/MoveAfter. Items not in either list stay where they
+// were and end up after the canonical prefix (since the prefix moves past
+// them).
+func reorderVariableBody(body *cst.Body) {
+	if body == nil {
+		return
+	}
+	var anchor cst.BodyItem
+	place := func(item cst.BodyItem) {
+		if anchor == nil {
+			body.Move(item, 0)
+		} else {
+			body.MoveAfter(item, anchor)
+		}
+		anchor = item
+	}
+	for _, name := range variableAttrFixOrder {
+		if attr := body.FindAttribute(name); attr != nil {
+			place(attr)
 		}
 	}
-	sort.Slice(variables, func(i, j int) bool {
-		return variables[i].Range().Start.Line > variables[j].Range().Start.Line
-	})
-
-	content := originalContent
-	for _, block := range variables {
-		content = ReorderBlockBodyPreservingAll(
-			content,
-			block.Body,
-			block.Range().Start.Line,
-			block.Range().End.Line,
-			attrOrder,
-			nestedBlockOrder,
-		)
+	for _, blockType := range variableNestedBlockOrder {
+		for _, blk := range body.FindBlocksByType(blockType) {
+			place(blk)
+		}
 	}
-
-	return WholeFileEdit(originalContent, FormatAndCleanBlankLines(content)), nil
 }
 
 // OutputOrderRule ensures output blocks follow standard ordering.
@@ -1077,56 +1121,71 @@ func (r *OutputOrderRule) checkOutputAttrPair(ctx *sdk.Context, block *hclsyntax
 	return nil
 }
 
-// Fix reorders output attributes and preserves nested precondition blocks (TF 1.2+).
+// Fix reorders output block bodies to the canonical sequence:
 //
-// Layout buckets, in order:
-//  1. Known attrs (description, value, sensitive, depends_on) in that order.
-//  2. precondition blocks (in source order if multiple).
-//  3. Any remaining attributes in source order.
-//  4. Any remaining nested blocks in source order.
+//  1. Known attributes in the order: description, value, sensitive, depends_on.
+//  2. precondition blocks (in their original relative order when multiple).
+//  3. Everything else stays where it was, shifting only as a side-effect of
+//     the canonical items moving past it.
+//
+// As in VariableOrderRule, the Fix-time order is fixed regardless of any
+// config override that the Check method honors for emission.
 func (r *OutputOrderRule) Fix(ctx *sdk.Context, _ *hcl.File) (*sdk.FixResult, error) {
 	originalContent, err := os.ReadFile(ctx.File)
 	if err != nil {
 		return nil, err
 	}
 
-	syntaxFile, diags := hclsyntax.ParseConfig(originalContent, ctx.File, hcl.InitialPos)
-	if diags.HasErrors() {
-		return nil, diags
-	}
-	hclFile, ok := syntaxFile.Body.(*hclsyntax.Body)
-	if !ok {
-		return nil, nil
+	file, parseErr := cst.Build(originalContent, ctx.File, cst.DefaultTopLevelPolicy())
+	if parseErr != nil {
+		return nil, nil //nolint:nilerr // parse error already surfaced by Check; Fix preserves no-op contract on partial trees
 	}
 
-	attrOrder := []string{"description", "value", "sensitive", "depends_on"}
-	nestedBlockOrder := []string{"precondition"}
+	for _, item := range file.Body.Items {
+		block, ok := item.(*cst.Block)
+		if !ok || block.Type != "output" {
+			continue
+		}
+		reorderOutputBody(block.Body)
+	}
 
-	// Process output blocks bottom-up: rewriting block N only mutates lines at or below
-	// blockStartLine of N, so blocks above N keep accurate line ranges from the single parse.
-	var outputs []*hclsyntax.Block
-	for _, block := range hclFile.Blocks {
-		if block.Type == "output" {
-			outputs = append(outputs, block)
+	return WholeFileEdit(originalContent, file.Bytes()), nil
+}
+
+// outputAttrFixOrder is the canonical Fix-time attribute order for output
+// blocks. Sibling: outputNestedBlockOrder.
+var outputAttrFixOrder = []string{"description", "value", "sensitive", "depends_on"}
+
+// outputNestedBlockOrder is the canonical Fix-time nested-block order for
+// output blocks. Sibling: outputAttrFixOrder.
+var outputNestedBlockOrder = []string{"precondition"}
+
+// reorderOutputBody threads outputAttrFixOrder and outputNestedBlockOrder
+// into a contiguous canonical prefix at the head of body.Items via
+// Move/MoveAfter, leaving non-canonical items where they were.
+func reorderOutputBody(body *cst.Body) {
+	if body == nil {
+		return
+	}
+	var anchor cst.BodyItem
+	place := func(item cst.BodyItem) {
+		if anchor == nil {
+			body.Move(item, 0)
+		} else {
+			body.MoveAfter(item, anchor)
+		}
+		anchor = item
+	}
+	for _, name := range outputAttrFixOrder {
+		if attr := body.FindAttribute(name); attr != nil {
+			place(attr)
 		}
 	}
-	sort.Slice(outputs, func(i, j int) bool {
-		return outputs[i].Range().Start.Line > outputs[j].Range().Start.Line
-	})
-
-	content := originalContent
-	for _, block := range outputs {
-		content = ReorderBlockBodyPreservingAll(
-			content,
-			block.Body,
-			block.Range().Start.Line,
-			block.Range().End.Line,
-			attrOrder,
-			nestedBlockOrder,
-		)
+	for _, blockType := range outputNestedBlockOrder {
+		for _, blk := range body.FindBlocksByType(blockType) {
+			place(blk)
+		}
 	}
-
-	return WholeFileEdit(originalContent, FormatAndCleanBlankLines(content)), nil
 }
 
 // TerraformBlockFirstRule ensures terraform block is first in the file.

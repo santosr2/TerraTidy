@@ -438,111 +438,6 @@ func findTagsCSTAttribute(body *cst.Body) *cst.Attribute {
 	return nil
 }
 
-// moveAttrBeforeLifecycle relocates the given attribute (with its leading comment)
-// inside `block` to immediately before any lifecycle nested block, or to the end of
-// the block body when no lifecycle is present. All other body lines remain at their
-// source positions. The move is a no-op when the attribute is already adjacent to
-// the insertion point. Returns content unchanged when attr is nil.
-//
-// Used directly by `style.depends-on-order`.
-func moveAttrBeforeLifecycle(content []byte, block *hclsyntax.Block, attr *hclsyntax.Attribute) []byte {
-	if attr == nil {
-		return content
-	}
-	attrStart := attr.Range().Start.Line
-	attrEnd := attr.Range().End.Line
-
-	var insertBefore int
-	if lifecycle := FindNestedBlock(block.Body.Blocks, "lifecycle"); lifecycle != nil {
-		insertBefore = lifecycle.Range().Start.Line
-	} else {
-		insertBefore = block.Range().End.Line
-	}
-
-	lines := SplitLines(content)
-
-	// No-op when attr is already effectively adjacent to the insertion point: nothing
-	// but blank lines sits between attrEnd+1 and insertBefore-1. A strict `attrEnd+1
-	// == insertBefore` check would miss the common case of one blank line separating
-	// the attribute from `lifecycle`, causing Fix to mutate files that Check considers
-	// clean (the splice runs, FormatAndCleanBlankLines normalises, idempotence holds
-	// but a spurious diff is produced on the first pass).
-	alreadyAdjacent := true
-	for line := attrEnd + 1; line < insertBefore; line++ {
-		if line-1 < 0 || line-1 >= len(lines) {
-			continue
-		}
-		if strings.TrimSpace(lines[line-1]) != "" {
-			alreadyAdjacent = false
-			break
-		}
-	}
-	if alreadyAdjacent {
-		return content
-	}
-
-	// Compute prior boundary for the leading-comment scan: the largest body-item end-line
-	// less than attrStart, falling back to the block's opening line.
-	priorEnd := block.Range().Start.Line
-	for _, a := range block.Body.Attributes {
-		if a.Range().End.Line < attrStart && a.Range().End.Line > priorEnd {
-			priorEnd = a.Range().End.Line
-		}
-	}
-	for _, b := range block.Body.Blocks {
-		if b.Range().End.Line < attrStart && b.Range().End.Line > priorEnd {
-			priorEnd = b.Range().End.Line
-		}
-	}
-
-	// Capture the leading-comment line numbers (not just strings) so we can both emit
-	// the moved region and skip those exact lines from their original position.
-	var commentLineNums []int
-	for lineNum := attrStart - 1; lineNum >= priorEnd+1; lineNum-- {
-		if lineNum-1 < 0 || lineNum-1 >= len(lines) {
-			continue
-		}
-		trimmed := strings.TrimSpace(lines[lineNum-1])
-		if trimmed == "" {
-			continue
-		}
-		if strings.HasPrefix(trimmed, "#") || strings.HasPrefix(trimmed, "//") {
-			commentLineNums = append([]int{lineNum}, commentLineNums...)
-			continue
-		}
-		break
-	}
-
-	moved := make([]string, 0, len(commentLineNums)+(attrEnd-attrStart+1))
-	for _, n := range commentLineNums {
-		moved = append(moved, lines[n-1])
-	}
-	for line := attrStart; line <= attrEnd && line-1 < len(lines); line++ {
-		moved = append(moved, lines[line-1])
-	}
-
-	skipped := make(map[int]bool, len(commentLineNums)+(attrEnd-attrStart+1))
-	for _, n := range commentLineNums {
-		skipped[n] = true
-	}
-	for line := attrStart; line <= attrEnd; line++ {
-		skipped[line] = true
-	}
-
-	result := make([]string, 0, len(lines)+len(moved))
-	for i, line := range lines {
-		lineNum := i + 1
-		if lineNum == insertBefore {
-			result = append(result, moved...)
-		}
-		if !skipped[lineNum] {
-			result = append(result, line)
-		}
-	}
-
-	return []byte(strings.Join(result, "\n") + "\n")
-}
-
 // DependsOnOrderRule ensures depends_on is at the end of blocks.
 type DependsOnOrderRule struct{}
 
@@ -644,50 +539,112 @@ func countItemsAfterDependsOn(body *hclsyntax.Body, dependsOnLine int) int {
 	return count
 }
 
-// Fix moves depends_on to land just before any lifecycle block, or at the end of
-// the block body when no lifecycle is present. Other attributes and nested blocks
-// (e.g. `ordered_placement_strategy` in `aws_ecs_service`) stay at their source
-// positions; only the depends_on region (including its leading comment) moves.
+// Fix moves depends_on to land just before any lifecycle block, or to the
+// last position in the block body when no lifecycle is present. Other
+// attributes and nested blocks (e.g. `ordered_placement_strategy` in
+// `aws_ecs_service`) stay at their source positions; only the depends_on
+// region moves. Leading comments on depends_on travel with it (carried in
+// the attribute's raw bytes).
+//
+// Already-canonical layouts return a nil FixResult. Canonical means
+// depends_on is followed only by blank lines, standalone comments, and/or
+// tags-family attributes, ending in either a lifecycle block or end-of-body.
+// See isDependsOnCanonicallyPlaced.
 func (r *DependsOnOrderRule) Fix(ctx *sdk.Context, _ *hcl.File) (*sdk.FixResult, error) {
-	if ctx == nil {
-		return nil, nil
-	}
 	originalContent, err := os.ReadFile(ctx.File)
 	if err != nil {
 		return nil, err
 	}
 
-	syntaxFile, diags := hclsyntax.ParseConfig(originalContent, ctx.File, hcl.InitialPos)
-	if diags.HasErrors() {
-		return nil, diags
-	}
-	hclFile, ok := syntaxFile.Body.(*hclsyntax.Body)
-	if !ok {
-		return nil, nil
+	file, parseErr := cst.Build(originalContent, ctx.File, cst.DefaultTopLevelPolicy())
+	if parseErr != nil {
+		// No-op on parse error: do not mutate a partial tree, and do not
+		// surface the diagnostic as a Fix error (Check already produced it).
+		return nil, nil //nolint:nilerr // parse error already surfaced by Check; Fix preserves no-op contract on partial trees
 	}
 
-	var targets []*hclsyntax.Block
-	for _, block := range hclFile.Blocks {
+	for _, item := range file.Body.Items {
+		block, ok := item.(*cst.Block)
+		if !ok {
+			continue
+		}
 		if !IsDependsOnRelevantBlock(block.Type) {
 			continue
 		}
-		if FindAttribute(block.Body.Attributes, "depends_on") == nil {
-			continue
+		moveDependsOnToEnd(block.Body)
+	}
+
+	return WholeFileEdit(originalContent, file.Bytes()), nil
+}
+
+// moveDependsOnToEnd relocates depends_on in body to immediately before any
+// lifecycle nested block, or to the last position in the body when no
+// lifecycle is present. A no-op when no depends_on attribute exists, when
+// depends_on is already canonically placed (see isDependsOnCanonicallyPlaced),
+// or when body is nil.
+func moveDependsOnToEnd(body *cst.Body) {
+	if body == nil {
+		return
+	}
+	dependsOn := body.FindAttribute("depends_on")
+	if dependsOn == nil {
+		return
+	}
+	if isDependsOnCanonicallyPlaced(body, dependsOn) {
+		return
+	}
+	if lifecycle := body.FindBlock("lifecycle"); lifecycle != nil {
+		body.MoveBefore(dependsOn, lifecycle)
+		return
+	}
+	body.Move(dependsOn, len(body.Items)-1)
+}
+
+// isDependsOnCanonicallyPlaced returns true when depends_on already sits in
+// a position the Check rule considers non-violating. Mirrors the policy
+// encoded in countItemsAfterDependsOn (line-based check), adapted to CST
+// item-list shape: depends_on may be followed only by blank lines, standalone
+// comments, and/or tags-family attributes (tags, tags_all, labels), ending in
+// either a lifecycle block or end-of-body. Anything else — a non-tags attribute,
+// a non-lifecycle nested block — after depends_on flags a Check finding, so
+// Fix must rewrite.
+//
+// Without this guard, MoveBefore would shuffle an intervening BlankLine
+// between depends_on and lifecycle to the wrong side of depends_on, producing
+// a non-trivial diff on input that Check considers already clean — and
+// breaking the documented Fix/Check semantic-gap contract pinned by
+// `Fix is a no-op (no diff) when depends_on is already adjacent to lifecycle
+// with a blank gap` in ordering_test.go.
+func isDependsOnCanonicallyPlaced(body *cst.Body, dependsOn *cst.Attribute) bool {
+	idx := -1
+	for i, item := range body.Items {
+		if attr, ok := item.(*cst.Attribute); ok && attr == dependsOn {
+			idx = i
+			break
 		}
-		targets = append(targets, block)
 	}
-	// Bottom-up so each rewrite cannot shift the line ranges of blocks above it.
-	sort.Slice(targets, func(i, j int) bool {
-		return targets[i].Range().Start.Line > targets[j].Range().Start.Line
-	})
-
-	content := originalContent
-	for _, block := range targets {
-		dependsOn := FindAttribute(block.Body.Attributes, "depends_on")
-		content = moveAttrBeforeLifecycle(content, block, dependsOn)
+	if idx < 0 {
+		return true
 	}
-
-	return WholeFileEdit(originalContent, FormatAndCleanBlankLines(content)), nil
+	for i := idx + 1; i < len(body.Items); i++ {
+		switch v := body.Items[i].(type) {
+		case *cst.BlankLine, *cst.StandaloneComment:
+			continue
+		case *cst.Block:
+			return v.Type == "lifecycle"
+		case *cst.Attribute:
+			if v.Name == "tags" || v.Name == "tags_all" || v.Name == "labels" {
+				continue
+			}
+			return false
+		default:
+			// Fail-safe: a future BodyItem variant defaults to non-canonical so
+			// Fix rewrites rather than silently treating unknown items as
+			// passthrough.
+			return false
+		}
+	}
+	return true
 }
 
 // SourceVersionGroupedRule ensures source and version are grouped together in module blocks.

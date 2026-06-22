@@ -533,6 +533,65 @@ func TestLifecycleAtEnd_AlreadyAtEnd_FixIsNoOp(t *testing.T) {
 	assert.Nil(t, result, "Fix should return nil when lifecycle is already at end")
 }
 
+// TestLifecycleAtEnd_HostBlockWithoutLifecycle_FixIsNoOp covers the branch
+// where the walker visits a lifecycle-host block (resource/data/module/check)
+// that doesn't contain a lifecycle nested block. moveLifecycleToEnd must
+// early-return on the lifecycle == nil path and Fix must surface a nil
+// FixResult (no bytes changed) via WholeFileEdit's nil-on-no-change contract.
+func TestLifecycleAtEnd_HostBlockWithoutLifecycle_FixIsNoOp(t *testing.T) {
+	t.Parallel()
+
+	rule := &LifecycleAtEndRule{}
+	content := `resource "aws_instance" "example" {
+  ami           = "ami-123"
+  instance_type = "t2.micro"
+}
+`
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "test.tf")
+	require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0o644))
+
+	file, diags := hclsyntax.ParseConfig([]byte(content), tmpFile, hcl.InitialPos)
+	require.False(t, diags.HasErrors())
+
+	ctx := &sdk.Context{File: tmpFile}
+	result, err := rule.Fix(ctx, &hcl.File{Body: file.Body})
+	require.NoError(t, err)
+	assert.Nil(t, result, "Fix should return nil when no host block contains lifecycle")
+}
+
+// TestLifecycleAtEnd_ParseError_FixIsNoOp covers the cst.Build parse-error
+// branch. On a partial tree, Fix must return (nil, nil) — Check already
+// surfaces the diagnostic and Fix preserves its no-op contract.
+func TestLifecycleAtEnd_ParseError_FixIsNoOp(t *testing.T) {
+	t.Parallel()
+
+	rule := &LifecycleAtEndRule{}
+	// Unterminated block: cst.Build returns a parse error.
+	content := "resource \"aws_instance\" \"x\" {\n  ami = \"ami-123\"\n"
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "broken.tf")
+	require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0o644))
+
+	ctx := &sdk.Context{File: tmpFile}
+	result, err := rule.Fix(ctx, nil)
+	require.NoError(t, err, "Fix must swallow parse errors; Check surfaces them")
+	assert.Nil(t, result)
+}
+
+// TestLifecycleAtEnd_ReadError_FixSurfacesError covers the os.ReadFile error
+// branch — Fix must propagate I/O errors to the caller rather than returning
+// a partial result.
+func TestLifecycleAtEnd_ReadError_FixSurfacesError(t *testing.T) {
+	t.Parallel()
+
+	rule := &LifecycleAtEndRule{}
+	ctx := &sdk.Context{File: filepath.Join(t.TempDir(), "does-not-exist.tf")}
+	result, err := rule.Fix(ctx, nil)
+	require.Error(t, err)
+	assert.Nil(t, result)
+}
+
 func TestTagsAtEndRule(t *testing.T) {
 	rule := &TagsAtEndRule{}
 

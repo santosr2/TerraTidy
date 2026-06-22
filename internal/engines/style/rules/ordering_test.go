@@ -308,12 +308,6 @@ func TestLifecycleAtEndRule(t *testing.T) {
 		})
 	}
 
-	t.Run("Fix returns nil for nil inputs", func(t *testing.T) {
-		result, err := rule.Fix(nil, nil)
-		assert.NoError(t, err)
-		assert.Nil(t, result)
-	})
-
 	t.Run("Fix moves lifecycle to end", func(t *testing.T) {
 		content := `resource "aws_instance" "example" {
   lifecycle {
@@ -458,6 +452,144 @@ data "aws_ami" "example" {
 		secondLifecycleIdx := strings.Index(resultStr[firstLifecycleIdx+len("lifecycle"):], "lifecycle") + firstLifecycleIdx + len("lifecycle")
 		assert.Greater(t, secondLifecycleIdx, mostRecentIdx, "data lifecycle should be after most_recent")
 	})
+}
+
+// TestLifecycleAtEnd_WithLeadingComment_TravelsWithBlock pins the carriage
+// invariant that motivated the CST migration: a leading comment above a
+// lifecycle block must travel with the block when Move relocates it to the
+// end. The mechanism (Block.headerRaw encodes leading-comment bytes; Move
+// preserves item raw) is shared with TagsAtEndRule and TerraformBlockFirstRule
+// — each has a sibling test pinning the same invariant.
+func TestLifecycleAtEnd_WithLeadingComment_TravelsWithBlock(t *testing.T) {
+	t.Parallel()
+
+	rule := &LifecycleAtEndRule{}
+	content := `resource "aws_instance" "example" {
+  # Prevent accidental destruction
+  lifecycle {
+    prevent_destroy = true
+  }
+  ami           = "ami-123"
+  instance_type = "t2.micro"
+}
+`
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "test.tf")
+	require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0o644))
+
+	file, diags := hclsyntax.ParseConfig([]byte(content), tmpFile, hcl.InitialPos)
+	require.False(t, diags.HasErrors())
+
+	ctx := &sdk.Context{File: tmpFile}
+	result, err := rule.Fix(ctx, &hcl.File{Body: file.Body})
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.Len(t, result.Edits, 1)
+
+	out := string(result.Edits[0].Replacement)
+
+	// Ordering: ami < instance_type < comment < lifecycle.
+	amiIdx := indexOf(out, "ami")
+	instanceTypeIdx := indexOf(out, "instance_type")
+	commentIdx := indexOf(out, "# Prevent accidental destruction")
+	lifecycleIdx := indexOf(out, "lifecycle")
+
+	assert.Greater(t, instanceTypeIdx, amiIdx, "attributes preserve source order")
+	assert.Greater(t, commentIdx, instanceTypeIdx, "leading comment moves with the block")
+	assert.Greater(t, lifecycleIdx, commentIdx, "lifecycle remains immediately after its leading comment")
+
+	// Comment must NOT also appear in its original position (no duplication).
+	assert.Equal(t, 1, strings.Count(out, "# Prevent accidental destruction"),
+		"comment should appear exactly once after the move")
+}
+
+// TestLifecycleAtEnd_AlreadyAtEnd_FixIsNoOp pins the WholeFileEdit nil-on-
+// no-change contract for the canonical input — sibling to the idempotence
+// tests on TagsAtEndRule (lines 720, 748) and TerraformBlockFirstRule (line
+// 2350). Guards against a future caller assuming Fix always returns a non-nil
+// FixResult on success.
+func TestLifecycleAtEnd_AlreadyAtEnd_FixIsNoOp(t *testing.T) {
+	t.Parallel()
+
+	rule := &LifecycleAtEndRule{}
+	content := `resource "aws_instance" "example" {
+  ami           = "ami-123"
+  instance_type = "t2.micro"
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+`
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "test.tf")
+	require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0o644))
+
+	file, diags := hclsyntax.ParseConfig([]byte(content), tmpFile, hcl.InitialPos)
+	require.False(t, diags.HasErrors())
+
+	ctx := &sdk.Context{File: tmpFile}
+	result, err := rule.Fix(ctx, &hcl.File{Body: file.Body})
+	require.NoError(t, err)
+	assert.Nil(t, result, "Fix should return nil when lifecycle is already at end")
+}
+
+// TestLifecycleAtEnd_HostBlockWithoutLifecycle_FixIsNoOp covers the branch
+// where the walker visits a lifecycle-host block (resource/data/module/check)
+// that doesn't contain a lifecycle nested block. moveLifecycleToEnd must
+// early-return on the lifecycle == nil path and Fix must surface a nil
+// FixResult (no bytes changed) via WholeFileEdit's nil-on-no-change contract.
+func TestLifecycleAtEnd_HostBlockWithoutLifecycle_FixIsNoOp(t *testing.T) {
+	t.Parallel()
+
+	rule := &LifecycleAtEndRule{}
+	content := `resource "aws_instance" "example" {
+  ami           = "ami-123"
+  instance_type = "t2.micro"
+}
+`
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "test.tf")
+	require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0o644))
+
+	file, diags := hclsyntax.ParseConfig([]byte(content), tmpFile, hcl.InitialPos)
+	require.False(t, diags.HasErrors())
+
+	ctx := &sdk.Context{File: tmpFile}
+	result, err := rule.Fix(ctx, &hcl.File{Body: file.Body})
+	require.NoError(t, err)
+	assert.Nil(t, result, "Fix should return nil when no host block contains lifecycle")
+}
+
+// TestLifecycleAtEnd_ParseError_FixIsNoOp covers the cst.Build parse-error
+// branch. On a partial tree, Fix must return (nil, nil) — Check already
+// surfaces the diagnostic and Fix preserves its no-op contract.
+func TestLifecycleAtEnd_ParseError_FixIsNoOp(t *testing.T) {
+	t.Parallel()
+
+	rule := &LifecycleAtEndRule{}
+	// Unterminated block: cst.Build returns a parse error.
+	content := "resource \"aws_instance\" \"x\" {\n  ami = \"ami-123\"\n"
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "broken.tf")
+	require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0o644))
+
+	ctx := &sdk.Context{File: tmpFile}
+	result, err := rule.Fix(ctx, nil)
+	require.NoError(t, err, "Fix must swallow parse errors; Check surfaces them")
+	assert.Nil(t, result)
+}
+
+// TestLifecycleAtEnd_ReadError_FixSurfacesError covers the os.ReadFile error
+// branch — Fix must propagate I/O errors to the caller rather than returning
+// a partial result.
+func TestLifecycleAtEnd_ReadError_FixSurfacesError(t *testing.T) {
+	t.Parallel()
+
+	rule := &LifecycleAtEndRule{}
+	ctx := &sdk.Context{File: filepath.Join(t.TempDir(), "does-not-exist.tf")}
+	result, err := rule.Fix(ctx, nil)
+	require.Error(t, err)
+	assert.Nil(t, result)
 }
 
 func TestTagsAtEndRule(t *testing.T) {

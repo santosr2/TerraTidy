@@ -1288,23 +1288,30 @@ func (r *TerraformBlockFirstRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk
 	return findings, nil
 }
 
-// Fix moves the terraform block to the first position via line-range reorder.
-// Attribute order and comments inside every untouched block are byte-for-byte preserved.
-// Shares ReorderTopLevelBlocksByLineRange with ProviderBlockOrderRule.Fix intentionally —
-// both rules consume the same canonical priority order.
+// Fix moves the terraform block to the first position in the file body. The
+// move is item-aware: StandaloneComment items between resource blocks (the
+// `### SNS Notifications`-style section headers) stay where they are in the
+// items slice, so they survive intact with their flanking blank lines rather
+// than being swept along with the moved block. Block bodies are untouched —
+// only the top-level item order changes.
 func (r *TerraformBlockFirstRule) Fix(ctx *sdk.Context, _ *hcl.File) (*sdk.FixResult, error) {
-	if ctx == nil {
+	originalContent, err := os.ReadFile(ctx.File)
+	if err != nil {
+		return nil, err
+	}
+
+	file, parseErr := cst.Build(originalContent, ctx.File, cst.DefaultTopLevelPolicy())
+	if parseErr != nil {
+		return nil, nil //nolint:nilerr // parse error already surfaced by Check; Fix preserves no-op contract on partial trees
+	}
+
+	terraformBlock := file.Body.FindBlock("terraform")
+	if terraformBlock == nil {
 		return nil, nil
 	}
-	content, err := os.ReadFile(ctx.File)
-	if err != nil {
-		return nil, err
-	}
-	newContent, err := ReorderTopLevelBlocksByLineRange(content)
-	if err != nil {
-		return nil, err
-	}
-	return WholeFileEdit(content, newContent), nil
+	file.Body.Move(terraformBlock, 0)
+
+	return WholeFileEdit(originalContent, file.Bytes()), nil
 }
 
 // ProviderBlockOrderRule ensures provider blocks come after terraform block.
@@ -1375,8 +1382,9 @@ func (r *ProviderBlockOrderRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.
 }
 
 // Fix reorders provider blocks to the canonical position via line-range reorder.
-// Both rules share the same line-based helper because they consume the same canonical
-// priority order (terraform, provider, variable, locals, data, resource, module, output).
+// The canonical priority order is (terraform, provider, variable, locals, data,
+// resource, module, output); the helper materializes that order across all
+// top-level blocks in the file, not just the provider blocks this rule flags.
 func (r *ProviderBlockOrderRule) Fix(ctx *sdk.Context, _ *hcl.File) (*sdk.FixResult, error) {
 	if ctx == nil {
 		return nil, nil

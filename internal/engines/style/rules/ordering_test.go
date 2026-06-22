@@ -2276,12 +2276,6 @@ terraform {
 		})
 	}
 
-	t.Run("Fix returns nil when ctx is nil", func(t *testing.T) {
-		result, err := rule.Fix(nil, nil)
-		assert.NoError(t, err)
-		assert.Nil(t, result)
-	})
-
 	t.Run("Fix moves terraform block to first position", func(t *testing.T) {
 		input := `resource "aws_instance" "x" {
   ami = "ami-123"
@@ -2381,6 +2375,129 @@ terraform {
 		require.NoError(t, err)
 		assert.Nil(t, second, "Fix(Fix(content)) must equal Fix(content)")
 	})
+
+	t.Run("Fix surfaces read error for missing file", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		ctx := &sdk.Context{File: filepath.Join(tmpDir, "does-not-exist.tf")}
+		result, err := rule.Fix(ctx, nil)
+		require.Error(t, err)
+		assert.Nil(t, result)
+	})
+
+	t.Run("Fix returns no-op on parse error", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		tmpFile := filepath.Join(tmpDir, "broken.tf")
+		require.NoError(t, os.WriteFile(tmpFile, []byte("terraform {\n"), 0o644))
+		result, err := rule.Fix(&sdk.Context{File: tmpFile}, nil)
+		require.NoError(t, err)
+		assert.Nil(t, result)
+	})
+
+	t.Run("Fix returns no-op when no terraform block is present", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		tmpFile := filepath.Join(tmpDir, "no-terraform.tf")
+		require.NoError(t, os.WriteFile(tmpFile, []byte(`resource "aws_instance" "x" {
+  ami = "ami-123"
+}
+`), 0o644))
+		result, err := rule.Fix(&sdk.Context{File: tmpFile}, nil)
+		require.NoError(t, err)
+		assert.Nil(t, result)
+	})
+}
+
+// TestTerraformBlockFirst_FloatingSectionHeader_Survives pins the 2026-05-20
+// floating-section-header bug fix. The fixture mirrors a workera-iac
+// terraform/modules/backup/main.tf shape: a standalone `### SNS Notifications`
+// header comment sits between two resource blocks, separated by blank lines
+// on both sides, and a misplaced terraform block trails them. Pre-CST, the
+// line-based reorder helper folded the standalone comment into the
+// surrounding move and lost it from the output. The CST Move targets only
+// the terraform block; StandaloneComment items keep their content and stay
+// flanked by their blank lines.
+func TestTerraformBlockFirst_FloatingSectionHeader_Survives(t *testing.T) {
+	rule := &TerraformBlockFirstRule{}
+	content := `resource "aws_backup_vault" "primary" {
+  name = "primary"
+}
+
+### SNS Notifications
+
+resource "aws_sns_topic" "backup" {
+  name = "backup-events"
+}
+
+terraform {
+  required_version = ">= 1.0"
+}
+`
+	out := runRuleFix(t, rule, content)
+
+	// terraform block is now first.
+	assertOrderedSubstrings(t, out, []string{
+		"terraform {",
+		`resource "aws_backup_vault"`,
+		"### SNS Notifications",
+		`resource "aws_sns_topic"`,
+	})
+
+	// The standalone section header is still present, verbatim.
+	assert.Contains(t, out, "### SNS Notifications")
+
+	// The standalone comment is still flanked by blank lines on both sides
+	// — the byte-exact sandwich that defines it as standalone (vs a leading
+	// comment attached to the next block). Pre-CST, the line-based reorder
+	// could collapse one or both blank lines as a side-effect of the move,
+	// dropping the comment into the next block's leading-comment slot or
+	// losing it outright. The CST keeps StandaloneComment a distinct item
+	// with its own raw bytes — including the surrounding blank lines.
+	assert.Contains(t, out, "\n\n### SNS Notifications\n\n")
+
+	// Resource bodies are untouched: byte-for-byte preservation invariant.
+	assert.Contains(t, out, `name = "primary"`)
+	assert.Contains(t, out, `name = "backup-events"`)
+
+	// Idempotence: a second pass on the already-corrected output is a no-op
+	// (Fix returns nil), so the standalone comment must not be perturbed by a
+	// re-run after the first fix lands.
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "test.tf")
+	require.NoError(t, os.WriteFile(tmpFile, []byte(out), 0o644))
+	second, err := rule.Fix(&sdk.Context{File: tmpFile}, nil)
+	require.NoError(t, err)
+	assert.Nil(t, second, "Fix(Fix(content)) must equal Fix(content)")
+}
+
+// TestTerraformBlockFirst_LeadingCommentOnTerraform_TravelsWithBlock verifies
+// the symmetric carriage invariant for the terraform block itself: a leading
+// comment immediately above `terraform {` with no blank line between them
+// (the binding rule under DefaultTopLevelPolicy: StrictAdjacency=true treats
+// "no blank above" as always-attach in classifyGap) is carried along when the
+// block moves to position 0. The existing "Fix preserves standalone comments
+// above blocks" subtest covers leading comments on resource/module blocks via
+// the same mechanism; this one pins the same contract for the rule's actual
+// subject — the terraform block itself.
+func TestTerraformBlockFirst_LeadingCommentOnTerraform_TravelsWithBlock(t *testing.T) {
+	rule := &TerraformBlockFirstRule{}
+	content := `resource "aws_instance" "x" {
+  ami = "ami-123"
+}
+# Configure Terraform settings
+terraform {
+  required_version = ">= 1.0"
+}
+`
+	out := runRuleFix(t, rule, content)
+
+	assertOrderedSubstrings(t, out, []string{
+		"# Configure Terraform settings",
+		"terraform {",
+		`resource "aws_instance"`,
+	})
+
+	// The leading comment must immediately precede the terraform header with
+	// no intervening blank line — exactly as authored.
+	assert.Contains(t, out, "# Configure Terraform settings\nterraform {")
 }
 
 func TestProviderBlockOrderRule(t *testing.T) {

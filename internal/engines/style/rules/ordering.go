@@ -7,7 +7,6 @@ import (
 
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/hclsyntax"
-	"github.com/hashicorp/hcl/v2/hclwrite"
 	"github.com/santosr2/TerraTidy/internal/cst"
 	"github.com/santosr2/TerraTidy/pkg/sdk"
 )
@@ -214,116 +213,50 @@ func (r *LifecycleAtEndRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Find
 	return findings, nil
 }
 
-// fixLifecyclePositionContent moves the lifecycle block to the end of the
-// matching host block (resource, data, module, or check). Works entirely in
-// memory - takes content as input.
-func (r *LifecycleAtEndRule) fixLifecyclePositionContent(content []byte, filePath, blockType string, blockLabels []string) ([]byte, error) {
-	writeFile, diags := hclwrite.ParseConfig(content, filePath, hcl.InitialPos)
-	if diags.HasErrors() {
-		return nil, diags
-	}
-
-	// Find the host block
-	for _, block := range writeFile.Body().Blocks() {
-		if block.Type() != blockType {
-			continue
-		}
-		if !MatchBlockLabels(block.Labels(), blockLabels) {
-			continue
-		}
-
-		// Find and remove lifecycle block
-		var lifecycleBlock *hclwrite.Block
-		for _, nested := range block.Body().Blocks() {
-			if nested.Type() == "lifecycle" {
-				lifecycleBlock = nested
-				break
-			}
-		}
-
-		if lifecycleBlock == nil {
-			continue
-		}
-
-		// Get lifecycle block tokens (preserving content)
-		lifecycleTokens := lifecycleBlock.BuildTokens(nil)
-
-		// Remove lifecycle block
-		block.Body().RemoveBlock(lifecycleBlock)
-
-		// Re-add lifecycle block at the end
-		block.Body().AppendUnstructuredTokens(lifecycleTokens)
-
-		break
-	}
-
-	return FormatAndCleanBlankLines(writeFile.Bytes()), nil
-}
-
-// Fix moves lifecycle blocks to the end of resource, data, module, and check blocks.
-// Works entirely in memory - does NOT write to disk.
-func (r *LifecycleAtEndRule) Fix(ctx *sdk.Context, file *hcl.File) (*sdk.FixResult, error) {
-	if ctx == nil || file == nil {
-		return nil, nil
-	}
-
+// Fix moves the lifecycle nested block to the last position inside each
+// host block (resource/data/module/check) that contains one. Other body
+// items stay at their source positions; only the lifecycle region moves.
+// No-op when no host block contains a lifecycle or when lifecycle is
+// already in the canonical position.
+func (r *LifecycleAtEndRule) Fix(ctx *sdk.Context, _ *hcl.File) (*sdk.FixResult, error) {
 	originalContent, err := os.ReadFile(ctx.File)
 	if err != nil {
 		return nil, err
 	}
 
-	hclFile, ok := file.Body.(*hclsyntax.Body)
-	if !ok {
-		return nil, nil
+	file, parseErr := cst.Build(originalContent, ctx.File, cst.DefaultTopLevelPolicy())
+	if parseErr != nil {
+		// No-op on parse error: do not mutate a partial tree, and do not
+		// surface the diagnostic as a Fix error (Check already produced it).
+		return nil, nil //nolint:nilerr // parse error already surfaced by Check; Fix preserves no-op contract on partial trees
 	}
 
-	// Collect (block type, labels) pairs before modifying content
-	type blockRef struct {
-		blockType string
-		labels    []string
-	}
-	var blocksToFix []blockRef
-	for _, block := range hclFile.Blocks {
+	for _, item := range file.Body.Items {
+		block, ok := item.(*cst.Block)
+		if !ok {
+			continue
+		}
 		if !isLifecycleHostBlock(block.Type) {
 			continue
 		}
-
-		// Check if this block has a lifecycle that needs moving
-		var lifecycleBlock *hclsyntax.Block
-		var lastLine int
-
-		for _, nested := range block.Body.Blocks {
-			if nested.Range().End.Line > lastLine {
-				lastLine = nested.Range().End.Line
-			}
-			if nested.Type == "lifecycle" {
-				lifecycleBlock = nested
-			}
-		}
-
-		for _, attr := range block.Body.Attributes {
-			if attr.Range().End.Line > lastLine {
-				lastLine = attr.Range().End.Line
-			}
-		}
-
-		if lifecycleBlock != nil && lifecycleBlock.Range().End.Line < lastLine {
-			blocksToFix = append(blocksToFix, blockRef{blockType: block.Type, labels: block.Labels})
-		}
+		moveLifecycleToEnd(block.Body)
 	}
 
-	content := originalContent
+	return WholeFileEdit(originalContent, file.Bytes()), nil
+}
 
-	// Process each block (re-parse after each modification)
-	for _, ref := range blocksToFix {
-		content, err = r.fixLifecyclePositionContent(content, ctx.File, ref.blockType, ref.labels)
-		if err != nil {
-			return nil, err
-		}
-		// Do NOT write to disk - work entirely in memory
+// moveLifecycleToEnd relocates the lifecycle nested block in body to the
+// last position in body.Items. A no-op when body is nil, no lifecycle
+// block exists, or lifecycle is already at the last index.
+func moveLifecycleToEnd(body *cst.Body) {
+	if body == nil {
+		return
 	}
-
-	return WholeFileEdit(originalContent, content), nil
+	lifecycle := body.FindBlock("lifecycle")
+	if lifecycle == nil {
+		return
+	}
+	body.Move(lifecycle, len(body.Items)-1)
 }
 
 // TagsAtEndRule ensures tags/labels are at the end of resource blocks (before lifecycle).

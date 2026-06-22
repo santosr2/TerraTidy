@@ -1173,12 +1173,6 @@ func TestDependsOnOrderRule(t *testing.T) {
 		})
 	}
 
-	t.Run("Fix returns nil for nil inputs", func(t *testing.T) {
-		result, err := rule.Fix(nil, nil)
-		assert.NoError(t, err)
-		assert.Nil(t, result)
-	})
-
 	t.Run("Fix moves depends_on to end", func(t *testing.T) {
 		content := `resource "aws_instance" "example" {
   depends_on = [aws_vpc.main]
@@ -1554,6 +1548,143 @@ resource "aws_instance" "second" {
 		require.NoError(t, err)
 		assert.Nil(t, result, "Fix should be a no-op when depends_on is already correctly placed (even with blank-line gap) — nil FixResult under the new contract")
 	})
+}
+
+// TestDependsOn_CanonicalWithTagsBetween_FixIsNoOp pins the
+// isDependsOnCanonicallyPlaced helper's tags-family arm. Check accepts
+// `depends_on → tags → lifecycle` as canonical (countItemsAfterDependsOn
+// excludes the tags family); Fix must match that policy and return nil
+// instead of shuffling depends_on past tags. Without the canonical-placement
+// guard, MoveBefore(depends_on, lifecycle) would compute target = lifecycle-1
+// and reorder the items to `tags → depends_on → lifecycle`, producing a
+// spurious diff on Check-clean input.
+func TestDependsOn_CanonicalWithTagsBetween_FixIsNoOp(t *testing.T) {
+	t.Parallel()
+
+	rule := &DependsOnOrderRule{}
+	content := `resource "aws_instance" "x" {
+  ami        = "ami-123"
+  depends_on = [aws_vpc.main]
+  tags       = { Name = "x" }
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+`
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "test.tf")
+	require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0o644))
+
+	result, err := rule.Fix(&sdk.Context{File: tmpFile}, nil)
+	require.NoError(t, err)
+	assert.Nil(t, result, "Fix on canonical depends_on → tags → lifecycle layout must return nil")
+}
+
+// TestDependsOn_NoLifecycle_OnlyTagsAfter_FixIsNoOp pins the helper's
+// end-of-body arm: when no lifecycle exists and only a tags-family attribute
+// follows depends_on, the layout is canonical (mirrors Check, where
+// countItemsAfterDependsOn excludes tags-family). Without the guard,
+// Move(depends_on, len-1) would shuffle depends_on past tags, producing a
+// spurious diff.
+func TestDependsOn_NoLifecycle_OnlyTagsAfter_FixIsNoOp(t *testing.T) {
+	t.Parallel()
+
+	rule := &DependsOnOrderRule{}
+	content := `resource "aws_instance" "x" {
+  ami        = "ami-123"
+  depends_on = [aws_vpc.main]
+  tags       = { Name = "x" }
+}
+`
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "test.tf")
+	require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0o644))
+
+	result, err := rule.Fix(&sdk.Context{File: tmpFile}, nil)
+	require.NoError(t, err)
+	assert.Nil(t, result, "Fix on depends_on → tags (no lifecycle) layout must return nil")
+}
+
+// TestDependsOn_StandaloneCommentBetween_FixIsNoOp pins the helper's
+// StandaloneComment-skip arm. A bare comment line (not attached to any
+// attribute) between depends_on and lifecycle is treated by Check as a
+// non-violating intervening item (countItemsAfterDependsOn counts only
+// attrs and blocks). The CST encodes it as a *cst.StandaloneComment item
+// — distinct from BlankLine — so the helper needs an independent
+// passthrough arm.
+func TestDependsOn_StandaloneCommentBetween_FixIsNoOp(t *testing.T) {
+	t.Parallel()
+
+	rule := &DependsOnOrderRule{}
+	content := `resource "aws_instance" "x" {
+  ami        = "ami-123"
+  depends_on = [aws_vpc.main]
+  # marker between the depends_on attribute and the next block
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+`
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "test.tf")
+	require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0o644))
+
+	result, err := rule.Fix(&sdk.Context{File: tmpFile}, nil)
+	require.NoError(t, err)
+	assert.Nil(t, result, "Fix on depends_on → standalone comment → lifecycle layout must return nil")
+}
+
+// TestDependsOn_CanonicalWithTagsAllBetween_FixIsNoOp pins the `tags_all`
+// arm of isDependsOnCanonicallyPlaced's tags-family enumeration. A typo in
+// the literal string would silently break the no-op guarantee for inputs
+// that use the provider-managed `tags_all` attribute.
+func TestDependsOn_CanonicalWithTagsAllBetween_FixIsNoOp(t *testing.T) {
+	t.Parallel()
+
+	rule := &DependsOnOrderRule{}
+	content := `resource "aws_instance" "x" {
+  ami        = "ami-123"
+  depends_on = [aws_vpc.main]
+  tags_all   = { Name = "x" }
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+`
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "test.tf")
+	require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0o644))
+
+	result, err := rule.Fix(&sdk.Context{File: tmpFile}, nil)
+	require.NoError(t, err)
+	assert.Nil(t, result, "Fix on canonical depends_on → tags_all → lifecycle layout must return nil")
+}
+
+// TestDependsOn_CanonicalWithLabelsBetween_FixIsNoOp pins the `labels` arm
+// of isDependsOnCanonicallyPlaced's tags-family enumeration (GCP-style
+// labels treated the same as AWS-style tags). Together with the tags and
+// tags_all sibling tests, the three-member enumeration is fully covered
+// against silent string-literal typos.
+func TestDependsOn_CanonicalWithLabelsBetween_FixIsNoOp(t *testing.T) {
+	t.Parallel()
+
+	rule := &DependsOnOrderRule{}
+	content := `resource "google_compute_instance" "x" {
+  name       = "x"
+  depends_on = [google_network.main]
+  labels     = { env = "prod" }
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+`
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "test.tf")
+	require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0o644))
+
+	result, err := rule.Fix(&sdk.Context{File: tmpFile}, nil)
+	require.NoError(t, err)
+	assert.Nil(t, result, "Fix on canonical depends_on → labels → lifecycle layout must return nil")
 }
 
 func TestSourceVersionGroupedRule(t *testing.T) {

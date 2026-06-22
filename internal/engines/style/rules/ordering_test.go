@@ -115,13 +115,9 @@ func TestForEachCountFirstRule(t *testing.T) {
 		tmpFile := filepath.Join(tmpDir, "test.tf")
 		require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0o644))
 
-		file, diags := hclsyntax.ParseConfig([]byte(content), tmpFile, hcl.InitialPos)
-		require.False(t, diags.HasErrors())
-
-		hclFile := &hcl.File{Body: file.Body}
 		ctx := &sdk.Context{File: tmpFile}
 
-		result, err := rule.Fix(ctx, hclFile)
+		result, err := rule.Fix(ctx, nil)
 		require.NoError(t, err)
 		require.NotNil(t, result)
 		require.Len(t, result.Edits, 1)
@@ -132,50 +128,115 @@ func TestForEachCountFirstRule(t *testing.T) {
 		assert.Less(t, forEachIdx, amiIdx)
 	})
 
-	t.Run("Fix preserves leading comments on attributes", func(t *testing.T) {
-		content := `module "example" {
-  for_each = var.instances
-  depends_on = [module.other]
+	t.Run("Fix moves for_each to front and preserves leading comments on neighbors", func(t *testing.T) {
+		// The historical pipeline-spanning version of this assertion (full
+		// canonical ordering of source/tags/depends_on) lives as an engine-level
+		// integration test in internal/engines/style/style_test.go now that the
+		// rule's Fix is narrow: only for_each/count relocates here. This sibling
+		// asserts the leading-comment-carriage invariant on a Move that actually
+		// fires — for_each is the second attribute, with a leading comment on
+		// the third — so the Move puts for_each at index 0 while the comment
+		// stays attached to the attribute it belongs to.
+		content := `resource "aws_instance" "example" {
+  ami            = "ami-123"
+  for_each       = var.instances
   # This is an important comment about the instance
   # It spans multiple lines
-  instance_type = "t3.micro"
-  source = "./module"
-  tags = { Name = "test" }
+  instance_type  = "t3.micro"
 }
 `
 		tmpDir := t.TempDir()
 		tmpFile := filepath.Join(tmpDir, "test.tf")
 		require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0o644))
 
-		file, diags := hclsyntax.ParseConfig([]byte(content), tmpFile, hcl.InitialPos)
-		require.False(t, diags.HasErrors())
-
-		hclFile := &hcl.File{Body: file.Body}
 		ctx := &sdk.Context{File: tmpFile}
+		result, err := rule.Fix(ctx, nil)
+		require.NoError(t, err)
+		require.NotNil(t, result, "for_each not at index 0 must produce a FixResult")
+		require.Len(t, result.Edits, 1)
 
-		result, err := rule.Fix(ctx, hclFile)
+		resultStr := string(result.Edits[0].Replacement)
+		assert.Contains(t, resultStr, "# This is an important comment about the instance")
+		assert.Contains(t, resultStr, "# It spans multiple lines")
+
+		// for_each moved to first; ami follows; the two-line comment stays
+		// attached to instance_type.
+		forEachIdx := indexOf(resultStr, "for_each")
+		amiIdx := indexOf(resultStr, "ami")
+		commentIdx := indexOf(resultStr, "# This is an important comment")
+		instanceTypeIdx := indexOf(resultStr, "instance_type")
+		assert.Less(t, forEachIdx, amiIdx, "for_each should be before ami after Move")
+		assert.Less(t, amiIdx, commentIdx, "ami should be before the comment block")
+		assert.Less(t, commentIdx, instanceTypeIdx, "comment should stay attached above instance_type")
+	})
+
+	t.Run("Fix moves count to first when for_each is absent", func(t *testing.T) {
+		// Pins the count branch of moveForEachOrCountToFront. A typo in the
+		// attribute name on that branch would otherwise be invisible since
+		// every other Fix test uses for_each.
+		content := `resource "aws_instance" "example" {
+  ami   = "ami-123"
+  count = 2
+}
+`
+		tmpDir := t.TempDir()
+		tmpFile := filepath.Join(tmpDir, "test.tf")
+		require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0o644))
+
+		ctx := &sdk.Context{File: tmpFile}
+		result, err := rule.Fix(ctx, nil)
 		require.NoError(t, err)
 		require.NotNil(t, result)
 		require.Len(t, result.Edits, 1)
 
-		resultStr := string(result.Edits[0].Replacement)
-		// Comments should be preserved
-		assert.Contains(t, resultStr, "# This is an important comment about the instance")
-		assert.Contains(t, resultStr, "# It spans multiple lines")
-		// Comment should appear before instance_type
-		commentIdx := indexOf(resultStr, "# This is an important comment")
-		instanceTypeIdx := indexOf(resultStr, "instance_type")
-		assert.Less(t, commentIdx, instanceTypeIdx, "comment should appear before instance_type")
-		// Ordering should be correct: for_each, source, instance_type, tags, depends_on
-		forEachIdx := indexOf(resultStr, "for_each")
-		sourceIdx := indexOf(resultStr, "source")
-		tagsIdx := indexOf(resultStr, "tags")
-		dependsOnIdx := indexOf(resultStr, "depends_on")
-		assert.Less(t, forEachIdx, sourceIdx, "for_each should be before source")
-		assert.Less(t, sourceIdx, instanceTypeIdx, "source should be before instance_type")
-		assert.Less(t, instanceTypeIdx, tagsIdx, "instance_type should be before tags")
-		assert.Less(t, tagsIdx, dependsOnIdx, "tags should be before depends_on")
+		out := string(result.Edits[0].Replacement)
+		countIdx := indexOf(out, "count")
+		amiIdx := indexOf(out, "ami")
+		assert.Less(t, countIdx, amiIdx, "count should be at front when for_each is absent")
 	})
+
+	t.Run("Fix prefers for_each over count when both are present", func(t *testing.T) {
+		// for_each and count cannot coexist in valid Terraform, but Check's
+		// historical policy flags for_each first; Fix mirrors that precedence
+		// defensively so the rule has a single canonical winner.
+		content := `resource "aws_instance" "example" {
+  count    = 2
+  for_each = var.instances
+  ami      = "ami-123"
+}
+`
+		tmpDir := t.TempDir()
+		tmpFile := filepath.Join(tmpDir, "test.tf")
+		require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0o644))
+
+		ctx := &sdk.Context{File: tmpFile}
+		result, err := rule.Fix(ctx, nil)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		require.Len(t, result.Edits, 1)
+
+		out := string(result.Edits[0].Replacement)
+		forEachIdx := indexOf(out, "for_each")
+		countIdx := indexOf(out, "count")
+		assert.Less(t, forEachIdx, countIdx, "for_each should win over count when both are present")
+	})
+}
+
+// TestForEachCountFirst_ParseError_FixIsNoOp covers the cst.Build parse-error
+// branch. On a partial tree, Fix must return (nil, nil).
+func TestForEachCountFirst_ParseError_FixIsNoOp(t *testing.T) {
+	t.Parallel()
+
+	rule := &ForEachCountFirstRule{}
+	content := "resource \"aws_instance\" \"x\" {\n  ami = \"ami-123\"\n"
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "broken.tf")
+	require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0o644))
+
+	ctx := &sdk.Context{File: tmpFile}
+	result, err := rule.Fix(ctx, nil)
+	require.NoError(t, err, "Fix must swallow parse errors; Check surfaces them")
+	assert.Nil(t, result)
 }
 
 func TestLifecycleAtEndRule(t *testing.T) {
@@ -1747,6 +1808,19 @@ func TestSourceVersionGroupedRule(t *testing.T) {
 }`,
 			wantFindings: 0,
 		},
+		{
+			// `for_each` and `count` cannot coexist in valid Terraform, but
+			// the Check policy accepts either as a predecessor of source; pin
+			// the count-before-source path explicitly so a regression in
+			// `allowedBefore` would surface as a Check finding here.
+			name: "count before source is ok",
+			content: `module "example" {
+  count   = 2
+  source  = "./module"
+  version = "1.0.0"
+}`,
+			wantFindings: 0,
+		},
 	}
 
 	for _, tt := range tests {
@@ -1774,13 +1848,9 @@ func TestSourceVersionGroupedRule(t *testing.T) {
 		tmpFile := filepath.Join(tmpDir, "test.tf")
 		require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0o644))
 
-		file, diags := hclsyntax.ParseConfig([]byte(content), tmpFile, hcl.InitialPos)
-		require.False(t, diags.HasErrors())
-
-		hclFile := &hcl.File{Body: file.Body}
 		ctx := &sdk.Context{File: tmpFile}
 
-		result, err := rule.Fix(ctx, hclFile)
+		result, err := rule.Fix(ctx, nil)
 		require.NoError(t, err)
 		require.NotNil(t, result)
 		require.Len(t, result.Edits, 1)
@@ -1806,13 +1876,9 @@ func TestSourceVersionGroupedRule(t *testing.T) {
 		tmpFile := filepath.Join(tmpDir, "test.tf")
 		require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0o644))
 
-		file, diags := hclsyntax.ParseConfig([]byte(content), tmpFile, hcl.InitialPos)
-		require.False(t, diags.HasErrors())
-
-		hclFile := &hcl.File{Body: file.Body}
 		ctx := &sdk.Context{File: tmpFile}
 
-		result, err := rule.Fix(ctx, hclFile)
+		result, err := rule.Fix(ctx, nil)
 		require.NoError(t, err)
 		require.NotNil(t, result)
 		require.Len(t, result.Edits, 1)
@@ -1826,6 +1892,122 @@ func TestSourceVersionGroupedRule(t *testing.T) {
 		nameIdx := indexOf(resultStr, "name =")
 		assert.Less(t, sourceIdx, nameIdx, "source should be before name")
 	})
+
+	t.Run("Fix anchors source after for_each", func(t *testing.T) {
+		// Pins the MoveAfter(source, forEach) branch of
+		// groupSourceVersionInModule. Without this test the for_each anchor
+		// path is unexercised at the Fix level.
+		content := `module "example" {
+  for_each = var.items
+  name     = "test"
+  source   = "./module"
+  version  = "1.0.0"
+}
+`
+		tmpDir := t.TempDir()
+		tmpFile := filepath.Join(tmpDir, "test.tf")
+		require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0o644))
+
+		ctx := &sdk.Context{File: tmpFile}
+		result, err := rule.Fix(ctx, nil)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		require.Len(t, result.Edits, 1)
+
+		out := string(result.Edits[0].Replacement)
+		forEachIdx := indexOf(out, "for_each")
+		sourceIdx := indexOf(out, "source")
+		nameIdx := indexOf(out, "name")
+		versionIdx := indexOf(out, "version")
+		assert.Less(t, forEachIdx, sourceIdx, "for_each stays before source")
+		assert.Less(t, sourceIdx, nameIdx, "source moves after for_each but before name")
+		assert.Less(t, versionIdx, nameIdx, "version follows source, both before name")
+	})
+
+	t.Run("Fix anchors source after count", func(t *testing.T) {
+		// Same shape as the for_each test but exercising the
+		// else-if-count branch of groupSourceVersionInModule. Terraform-
+		// invalid but the rule is defensive.
+		content := `module "example" {
+  count   = 2
+  name    = "test"
+  source  = "./module"
+  version = "1.0.0"
+}
+`
+		tmpDir := t.TempDir()
+		tmpFile := filepath.Join(tmpDir, "test.tf")
+		require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0o644))
+
+		ctx := &sdk.Context{File: tmpFile}
+		result, err := rule.Fix(ctx, nil)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		require.Len(t, result.Edits, 1)
+
+		out := string(result.Edits[0].Replacement)
+		countIdx := indexOf(out, "count")
+		sourceIdx := indexOf(out, "source")
+		nameIdx := indexOf(out, "name")
+		assert.Less(t, countIdx, sourceIdx, "count stays before source")
+		assert.Less(t, sourceIdx, nameIdx, "source moves after count but before name")
+	})
+
+	t.Run("Fix is a no-op when source and version are already canonical", func(t *testing.T) {
+		// Pins the WholeFileEdit nil-on-no-change contract for canonical
+		// input. Sibling of the AlreadyAtEnd tests in TagsAtEndRule /
+		// LifecycleAtEndRule / DependsOnOrderRule.
+		content := `module "example" {
+  source  = "./module"
+  version = "1.0.0"
+  name    = "test"
+}
+`
+		tmpDir := t.TempDir()
+		tmpFile := filepath.Join(tmpDir, "test.tf")
+		require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0o644))
+
+		ctx := &sdk.Context{File: tmpFile}
+		result, err := rule.Fix(ctx, nil)
+		require.NoError(t, err)
+		assert.Nil(t, result, "already-canonical input must produce no edits")
+	})
+
+	t.Run("Fix is a no-op when source is absent", func(t *testing.T) {
+		// Pins the early return in groupSourceVersionInModule when no
+		// source is present. WholeFileEdit must return nil since file
+		// bytes do not change.
+		content := `module "example" {
+  version = "1.0.0"
+  name    = "test"
+}
+`
+		tmpDir := t.TempDir()
+		tmpFile := filepath.Join(tmpDir, "test.tf")
+		require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0o644))
+
+		ctx := &sdk.Context{File: tmpFile}
+		result, err := rule.Fix(ctx, nil)
+		require.NoError(t, err)
+		assert.Nil(t, result, "source-absent module must produce no edits")
+	})
+}
+
+// TestSourceVersionGrouped_ParseError_FixIsNoOp covers the cst.Build parse-
+// error branch. On a partial tree, Fix must return (nil, nil).
+func TestSourceVersionGrouped_ParseError_FixIsNoOp(t *testing.T) {
+	t.Parallel()
+
+	rule := &SourceVersionGroupedRule{}
+	content := "module \"example\" {\n  source = \"./module\"\n"
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "broken.tf")
+	require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0o644))
+
+	ctx := &sdk.Context{File: tmpFile}
+	result, err := rule.Fix(ctx, nil)
+	require.NoError(t, err)
+	assert.Nil(t, result)
 }
 
 func TestVariableOrderRule(t *testing.T) {
@@ -2403,6 +2585,44 @@ func TestOutputOrderRule(t *testing.T) {
 				`# forgotten trailing note`,
 			},
 		},
+		{
+			// Pins the WholeFileEdit nil-on-no-change contract for the
+			// trivially-canonical case where reorderOutputBody finds only
+			// `value` and Move(value, 0) is a no-op.
+			name: "value-only output left unchanged",
+			input: `output "example" {
+  value = "test"
+}
+`,
+			wantOrder: []string{`value = "test"`},
+			wantNoOp:  true,
+		},
+		{
+			// Sibling of VariableOrder's "multiple validation blocks keep
+			// relative order": multiple precondition blocks must keep their
+			// source order across the canonical reorder so error messages
+			// remain in their authored order.
+			name: "multiple precondition blocks keep relative order",
+			input: `output "example" {
+  precondition {
+    condition     = var.x != ""
+    error_message = "first"
+  }
+  value       = "test"
+  precondition {
+    condition     = var.y != ""
+    error_message = "second"
+  }
+  description = "Example output"
+}
+`,
+			wantOrder: []string{
+				`description = "Example output"`,
+				`value       = "test"`,
+				`error_message = "first"`,
+				`error_message = "second"`,
+			},
+		},
 	}
 
 	for _, tt := range outputFixTests {
@@ -2476,6 +2696,40 @@ output "second" {
 			`sensitive   = true`,
 		})
 	})
+}
+
+// TestOutputOrder_ParseError_FixIsNoOp covers the cst.Build parse-error
+// branch. On a partial tree, Fix must return (nil, nil).
+func TestOutputOrder_ParseError_FixIsNoOp(t *testing.T) {
+	t.Parallel()
+
+	rule := &OutputOrderRule{}
+	content := "output \"example\" {\n  value = \"test\"\n"
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "broken.tf")
+	require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0o644))
+
+	ctx := &sdk.Context{File: tmpFile}
+	result, err := rule.Fix(ctx, nil)
+	require.NoError(t, err)
+	assert.Nil(t, result)
+}
+
+// TestVariableOrder_ParseError_FixIsNoOp covers the cst.Build parse-error
+// branch. On a partial tree, Fix must return (nil, nil).
+func TestVariableOrder_ParseError_FixIsNoOp(t *testing.T) {
+	t.Parallel()
+
+	rule := &VariableOrderRule{}
+	content := "variable \"name\" {\n  type = string\n"
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "broken.tf")
+	require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0o644))
+
+	ctx := &sdk.Context{File: tmpFile}
+	result, err := rule.Fix(ctx, nil)
+	require.NoError(t, err)
+	assert.Nil(t, result)
 }
 
 func TestTerraformBlockFirstRule(t *testing.T) {

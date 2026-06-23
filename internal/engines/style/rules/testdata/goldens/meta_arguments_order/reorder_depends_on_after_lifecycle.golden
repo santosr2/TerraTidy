@@ -1,0 +1,10 @@
+resource "aws_instance" "web" {
+  for_each   = var.instances
+
+  ami = "ami-123"
+
+  lifecycle {
+    prevent_destroy = true
+  }
+  depends_on = [aws_vpc.main]
+}

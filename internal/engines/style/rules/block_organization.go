@@ -7,6 +7,7 @@ import (
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/hclsyntax"
 	"github.com/hashicorp/hcl/v2/hclwrite"
+	"github.com/santosr2/TerraTidy/internal/cst"
 	"github.com/santosr2/TerraTidy/pkg/sdk"
 )
 
@@ -107,63 +108,75 @@ func (r *MetaArgumentsOrderRule) checkBlock(ctx *sdk.Context, block *hclsyntax.B
 	return findings
 }
 
-// Fix reorders meta-arguments in all blocks.
-func (r *MetaArgumentsOrderRule) Fix(ctx *sdk.Context, file *hcl.File) (*sdk.FixResult, error) {
-	// Short-circuit when nothing needs reordering. Without this guard,
-	// ReorderBlockAttrs below removes and re-adds attributes via
-	// SetAttributeRaw, which triggers hclwrite to re-align them — producing
-	// a byte-different output even when the source order is already
-	// canonical. Calling Check first matches LifecycleAttributeOrderRule's
-	// no-op contract and keeps the engine from writing spurious edits.
-	findings, err := r.Check(ctx, file)
+// metaArgsFirstNames is the canonical leading-meta-argument order: for_each
+// or count (mutually exclusive in Terraform) followed by provider. They share
+// the top of the block body in this sequence.
+var metaArgsFirstNames = []string{"for_each", "count", "provider"}
+
+// metaArgsLastNames is the canonical trailing-meta-argument order. depends_on
+// is the only trailing meta-arg today; the slice shape leaves room for future
+// trailing meta-args without restructuring the Fix.
+var metaArgsLastNames = []string{"depends_on"}
+
+// Fix reorders meta-arguments in resource, data, and module blocks. Leading
+// meta-args (for_each/count, provider) move to the start of the body in
+// canonical order; depends_on moves to the last body slot. Sibling rules
+// (depends-on-order, lifecycle-at-end, tags-at-end) refine the trailing
+// position when nested blocks like lifecycle are present.
+//
+// Already-canonical input round-trips byte-identically: each Move on an
+// attribute at its target index is a successful no-op (cst.Body.Move
+// returns early when src == newIndex), so file.Bytes() equals the source
+// and WholeFileEdit collapses the result to nil.
+func (r *MetaArgumentsOrderRule) Fix(ctx *sdk.Context, _ *hcl.File) (*sdk.FixResult, error) {
+	originalContent, err := os.ReadFile(ctx.File)
 	if err != nil {
 		return nil, err
 	}
-	if len(findings) == 0 {
-		return nil, nil
+
+	cstFile, parseErr := cst.Build(originalContent, ctx.File, cst.DefaultTopLevelPolicy())
+	if parseErr != nil {
+		// No-op on parse error: do not mutate a partial tree, and do not
+		// surface the diagnostic as a Fix error (Check already produced it).
+		return nil, nil //nolint:nilerr // parse error already surfaced by Check; Fix preserves no-op contract on partial trees
 	}
 
-	content, err := os.ReadFile(ctx.File)
-	if err != nil {
-		return nil, err
-	}
-
-	syntaxFile, ok := file.Body.(*hclsyntax.Body)
-	if !ok {
-		return nil, nil
-	}
-
-	writeFile, diags := hclwrite.ParseConfig(content, ctx.File, hcl.InitialPos)
-	if diags.HasErrors() {
-		return nil, diags
-	}
-
-	syntaxBlocks := make(map[string]*hclsyntax.Body)
-	for _, block := range syntaxFile.Blocks {
-		if block.Type == "resource" || block.Type == "data" || block.Type == "module" {
-			key := BlockKey(block.Type, block.Labels)
-			syntaxBlocks[key] = block.Body
-		}
-	}
-
-	for _, block := range writeFile.Body().Blocks() {
-		if block.Type() != "resource" && block.Type() != "data" && block.Type() != "module" {
-			continue
-		}
-
-		key := BlockKey(block.Type(), block.Labels())
-		syntaxBody, ok := syntaxBlocks[key]
+	for _, item := range cstFile.Body.Items {
+		block, ok := item.(*cst.Block)
 		if !ok {
 			continue
 		}
-
-		orderedNames := GetOrderedAttrNames(syntaxBody)
-		firstAttrs := []string{"for_each", "count", "provider"}
-		lastAttrs := []string{"depends_on"}
-		ReorderBlockAttrs(block.Body(), orderedNames, firstAttrs, lastAttrs)
+		if block.Type != "resource" && block.Type != "data" && block.Type != "module" {
+			continue
+		}
+		reorderMetaArgs(block.Body)
 	}
 
-	return WholeFileEdit(content, FormatAndCleanBlankLines(writeFile.Bytes())), nil
+	return WholeFileEdit(originalContent, cstFile.Bytes()), nil
+}
+
+// reorderMetaArgs positions leading meta-args at the start of body and
+// trailing meta-args at the end, both in canonical order. Move on an item
+// already at its target index is a successful no-op, so blocks that don't
+// need rearrangement round-trip byte-identically.
+func reorderMetaArgs(body *cst.Body) {
+	if body == nil {
+		return
+	}
+
+	anchorIdx := 0
+	for _, name := range metaArgsFirstNames {
+		if attr := body.FindAttribute(name); attr != nil {
+			body.Move(attr, anchorIdx)
+			anchorIdx++
+		}
+	}
+
+	for _, name := range metaArgsLastNames {
+		if attr := body.FindAttribute(name); attr != nil {
+			body.Move(attr, len(body.Items)-1)
+		}
+	}
 }
 
 // LifecycleAttributeOrderRule ensures lifecycle block attributes are ordered correctly.

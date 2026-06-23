@@ -59,6 +59,61 @@ const metaArgsWithLifecycleInput = `resource "aws_instance" "web" {
 }
 `
 
+// lifecycleAttrsReorderInput is the canonical "ignore_changes placed before
+// create_before_destroy" fixture used by both TestLifecycleAttributeOrderRule's
+// "Fix reorders lifecycle attributes" subtest (semantic assertion) and
+// TestLifecycleAttributeOrderRule_FixGoldens (byte-exact snapshot). Shared so a
+// fixture edit forces a golden update in lock-step rather than silently
+// decoupling the two checks.
+const lifecycleAttrsReorderInput = `resource "aws_instance" "web" {
+  ami           = "ami-123"
+  instance_type = "t2.micro"
+
+  lifecycle {
+    ignore_changes        = [tags]
+    create_before_destroy = true
+  }
+}
+`
+
+// lifecycleAttrsAllReorderedInput pins the four-canonical-attr reorder shape:
+// all four meta-attributes (create_before_destroy, prevent_destroy,
+// ignore_changes, replace_triggered_by) authored in reverse order. The
+// expected output is canonical order at the top of the lifecycle body.
+const lifecycleAttrsAllReorderedInput = `resource "aws_instance" "web" {
+  ami = "ami-123"
+
+  lifecycle {
+    replace_triggered_by  = [aws_vpc.main]
+    ignore_changes        = [tags]
+    prevent_destroy       = false
+    create_before_destroy = true
+  }
+}
+`
+
+// lifecycleAttrsWithPreconditionInput pins the lifecycle/precondition
+// interaction: a precondition nested block keeps its relative source
+// position when the canonical attributes around it reshuffle. The Fix
+// only Moves the four canonical attributes; non-canonical body items
+// (nested precondition/postcondition blocks, unknown attributes, comments)
+// shift passively as side-effects of the attribute moves, never as
+// explicit targets. Sibling rules own ordering of nested validation blocks.
+const lifecycleAttrsWithPreconditionInput = `resource "aws_instance" "web" {
+  ami = "ami-123"
+
+  lifecycle {
+    ignore_changes        = [tags]
+    create_before_destroy = true
+
+    precondition {
+      condition     = var.ami != ""
+      error_message = "ami required"
+    }
+  }
+}
+`
+
 func TestMetaArgumentsOrderRule(t *testing.T) {
 	rule := &MetaArgumentsOrderRule{}
 
@@ -355,15 +410,7 @@ func TestLifecycleAttributeOrderRule(t *testing.T) {
 	t.Run("Fix reorders lifecycle attributes", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		tmpFile := filepath.Join(tmpDir, "test.tf")
-		content := `resource "aws_instance" "web" {
-  ami           = "ami-123"
-  instance_type = "t2.micro"
-
-  lifecycle {
-    ignore_changes        = [tags]
-    create_before_destroy = true
-  }
-}`
+		content := lifecycleAttrsReorderInput
 		err := os.WriteFile(tmpFile, []byte(content), 0o644)
 		require.NoError(t, err)
 
@@ -437,6 +484,25 @@ func TestLifecycleAttributeOrderRule(t *testing.T) {
 		require.NoError(t, err)
 		assert.Nil(t, result, "already-canonical input must produce no edits")
 	})
+}
+
+// TestLifecycleAttributeOrderRule_ParseError_FixIsNoOp covers the cst.Build
+// parse-error branch in LifecycleAttributeOrderRule.Fix: on a partial tree,
+// Fix must return (nil, nil) so the diagnostic stays on Check and Fix does
+// not mutate a tree it cannot trust.
+func TestLifecycleAttributeOrderRule_ParseError_FixIsNoOp(t *testing.T) {
+	t.Parallel()
+
+	rule := &LifecycleAttributeOrderRule{}
+	content := "resource \"aws_instance\" \"x\" {\n  lifecycle {\n    ignore_changes        = [tags]\n    create_before_destroy = true\n"
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "broken.tf")
+	require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0o644))
+
+	ctx := &sdk.Context{File: tmpFile}
+	result, err := rule.Fix(ctx, nil)
+	require.NoError(t, err, "Fix must swallow parse errors; Check surfaces them")
+	assert.Nil(t, result)
 }
 
 func TestNestedBlockOrderRule(t *testing.T) {

@@ -6,7 +6,6 @@ import (
 
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/hclsyntax"
-	"github.com/hashicorp/hcl/v2/hclwrite"
 	"github.com/santosr2/TerraTidy/internal/cst"
 	"github.com/santosr2/TerraTidy/pkg/sdk"
 )
@@ -202,6 +201,17 @@ var lifecycleAttrOrder = map[string]int{
 	"postcondition":         6,
 }
 
+// lifecycleAttrCanonicalOrder is the canonical lifecycle attribute order
+// driven into the Fix output. Precondition/postcondition are nested blocks
+// in Terraform, not attributes, so they are excluded from the reorder slice
+// — sibling rules (nested-block-order) own ordering for those.
+var lifecycleAttrCanonicalOrder = []string{
+	"create_before_destroy",
+	"prevent_destroy",
+	"ignore_changes",
+	"replace_triggered_by",
+}
+
 // Check examines lifecycle blocks for attribute ordering.
 func (r *LifecycleAttributeOrderRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Finding, error) {
 	var findings []sdk.Finding
@@ -282,61 +292,67 @@ func (r *LifecycleAttributeOrderRule) checkLifecycleBlock(ctx *sdk.Context, life
 	return findings
 }
 
-// Fix reorders lifecycle attributes in all blocks.
+// Fix reorders canonical lifecycle attributes (create_before_destroy,
+// prevent_destroy, ignore_changes, replace_triggered_by) to the start of
+// each lifecycle body in canonical order. Non-canonical body items
+// (unknown attributes, precondition/postcondition nested blocks, comments)
+// keep their relative source position; only the canonical attrs reshuffle.
+//
+// Already-canonical input round-trips byte-identically: each Move on an
+// attribute at its target index is a successful no-op (cst.Body.Move
+// returns early when src == newIndex), so file.Bytes() equals the source
+// and WholeFileEdit collapses the result to nil.
 func (r *LifecycleAttributeOrderRule) Fix(ctx *sdk.Context, _ *hcl.File) (*sdk.FixResult, error) {
-	content, err := os.ReadFile(ctx.File)
+	originalContent, err := os.ReadFile(ctx.File)
 	if err != nil {
 		return nil, err
 	}
 
-	writeFile, diags := hclwrite.ParseConfig(content, ctx.File, hcl.InitialPos)
-	if diags.HasErrors() {
-		return nil, diags
+	cstFile, parseErr := cst.Build(originalContent, ctx.File, cst.DefaultTopLevelPolicy())
+	if parseErr != nil {
+		// No-op on parse error: do not mutate a partial tree, and do not
+		// surface the diagnostic as a Fix error (Check already produced it).
+		return nil, nil //nolint:nilerr // parse error already surfaced by Check; Fix preserves no-op contract on partial trees
 	}
 
-	for _, block := range writeFile.Body().Blocks() {
-		if block.Type() != "resource" {
+	for _, item := range cstFile.Body.Items {
+		block, ok := item.(*cst.Block)
+		if !ok {
 			continue
 		}
-
-		for _, nested := range block.Body().Blocks() {
-			if nested.Type() != "lifecycle" {
+		if block.Type != "resource" {
+			continue
+		}
+		for _, inner := range block.Body.Items {
+			nested, ok := inner.(*cst.Block)
+			if !ok {
 				continue
 			}
-
-			attrOrder := []string{"create_before_destroy", "prevent_destroy", "ignore_changes", "replace_triggered_by"}
-
-			attrExprs := make(map[string]hclwrite.Tokens)
-			for name, attr := range nested.Body().Attributes() {
-				attrExprs[name] = getExprTokensWithTrailingComment(attr)
+			if nested.Type != "lifecycle" {
+				continue
 			}
-
-			for _, name := range attrOrder {
-				nested.Body().RemoveAttribute(name)
-			}
-
-			for _, name := range attrOrder {
-				if tokens, ok := attrExprs[name]; ok {
-					nested.Body().SetAttributeRaw(name, tokens)
-				}
-			}
-
-			for name, tokens := range attrExprs {
-				found := false
-				for _, orderedName := range attrOrder {
-					if name == orderedName {
-						found = true
-						break
-					}
-				}
-				if !found {
-					nested.Body().SetAttributeRaw(name, tokens)
-				}
-			}
+			reorderLifecycleAttrs(nested.Body)
 		}
 	}
 
-	return WholeFileEdit(content, FormatAndCleanBlankLines(writeFile.Bytes())), nil
+	return WholeFileEdit(originalContent, cstFile.Bytes()), nil
+}
+
+// reorderLifecycleAttrs positions canonical lifecycle attributes at the
+// start of body in canonical order. Move on an item already at its target
+// index is a successful no-op, so a lifecycle block that doesn't need
+// rearrangement round-trips byte-identically.
+func reorderLifecycleAttrs(body *cst.Body) {
+	if body == nil {
+		return
+	}
+	anchorIdx := 0
+	for _, name := range lifecycleAttrCanonicalOrder {
+		if attr := body.FindAttribute(name); attr != nil {
+			body.Move(attr, anchorIdx)
+			anchorIdx++
+		}
+	}
 }
 
 // NestedBlockOrderRule ensures nested blocks follow consistent ordering.

@@ -83,6 +83,81 @@ func TestMetaArgumentsOrderRule_FixGoldens(t *testing.T) {
 	}
 }
 
+// Byte-exact goldens for LifecycleAttributeOrderRule.Fix.
+//
+// The Fix walks the CST and relocates canonical lifecycle attributes
+// (create_before_destroy, prevent_destroy, ignore_changes,
+// replace_triggered_by) to the start of each lifecycle nested block body
+// in canonical order. Each item keeps its original source bytes, so column
+// alignment and intra-block blank lines round-trip verbatim — only the
+// slice order changes. Whitespace-only divergence in regenerated regions
+// is an expected outcome of swapping the structural algorithm and may
+// justify a golden update; a semantic divergence (different attribute
+// order, dropped comment, changed value) indicates a correctness
+// regression.
+//
+// Fixtures live alongside TestLifecycleAttributeOrderRule in
+// block_organization_test.go (lifecycleAttrsReorderInput,
+// lifecycleAttrsAllReorderedInput) so the semantic assertion and the
+// byte-exact snapshot share the same input — a fixture change cannot
+// silently desync the two.
+//
+// Capture / re-capture: UPDATE_GOLDEN=1 go test -run TestLifecycleAttributeOrderRule_FixGoldens ./internal/engines/style/rules/
+func TestLifecycleAttributeOrderRule_FixGoldens(t *testing.T) {
+	rule := &LifecycleAttributeOrderRule{}
+
+	fixtures := []struct {
+		name   string
+		golden string
+		input  string
+	}{
+		{
+			name:   "reorder ignore_changes after create_before_destroy",
+			golden: "lifecycle_attribute_order/reorder_ignore_changes_after_create_before_destroy",
+			input:  lifecycleAttrsReorderInput,
+		},
+		{
+			// Pins the canonical four-attribute order:
+			// create_before_destroy → prevent_destroy → ignore_changes →
+			// replace_triggered_by, with all four authored in reverse.
+			name:   "reorder all four canonical attrs",
+			golden: "lifecycle_attribute_order/reorder_all_four_canonical_attrs",
+			input:  lifecycleAttrsAllReorderedInput,
+		},
+		{
+			// Pins the lifecycle/precondition interaction: the
+			// precondition nested block keeps its relative source
+			// position when canonical attrs around it reshuffle.
+			// Sibling rules (nested-block-order) own ordering of
+			// nested validation blocks themselves.
+			name:   "lifecycle with precondition block",
+			golden: "lifecycle_attribute_order/lifecycle_with_precondition_block",
+			input:  lifecycleAttrsWithPreconditionInput,
+		},
+	}
+
+	for _, tc := range fixtures {
+		t.Run(tc.name, func(t *testing.T) {
+			tmpDir := t.TempDir()
+			tmpFile := filepath.Join(tmpDir, "test.tf")
+			require.NoError(t, os.WriteFile(tmpFile, []byte(tc.input), 0o644))
+
+			file, diags := hclsyntax.ParseConfig([]byte(tc.input), tmpFile, hcl.InitialPos)
+			require.False(t, diags.HasErrors(), "fixture failed to parse: %v", diags)
+
+			hclFile := &hcl.File{Body: file.Body}
+			ctx := &sdk.Context{File: tmpFile}
+
+			result, err := rule.Fix(ctx, hclFile)
+			require.NoError(t, err)
+			require.NotNil(t, result, "fixture must produce a fix; the no-op case belongs in the main test")
+			require.Len(t, result.Edits, 1)
+
+			assertRuleGolden(t, tc.golden, result.Edits[0].Replacement)
+		})
+	}
+}
+
 // assertRuleGolden compares actual bytes to testdata/goldens/<name>.golden.
 // Set UPDATE_GOLDEN=1 to write the golden instead of asserting.
 //

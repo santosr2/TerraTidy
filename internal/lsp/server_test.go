@@ -1580,15 +1580,15 @@ func TestServer_HandleCodeAction(t *testing.T) {
 // emits one CodeAction per diagnostic (rather than a single global fix), each
 // tagged with its originating rule code and tied back to its diagnostic.
 //
-// Rationale for what is — and isn't — asserted: the byte-range-textedits work
-// migrates Fixer to return []TextEdit, but the rule bodies in this PR still
-// return a single whole-file edit via WholeFileEdit (Phase 3 is wrap-only).
-// So both CodeActions in this test carry a whole-file LSP TextEdit covering
-// the entire document, and asserting "ranges don't overlap" would be a
-// guaranteed false negative until the CST refactor narrows the per-rule edits.
-// The behavior tested here — N diagnostics → N CodeActions, each tied to its
-// own rule + diagnostic — is the architectural change LSP-side; the narrowness
-// assertion belongs on the CST PR.
+// Rationale for what is — and isn't — asserted: Fixer.Fix returns
+// *sdk.FixResult (whose Edits field carries []TextEdit), but rule bodies
+// currently still emit a single whole-file edit via WholeFileEdit. So both
+// CodeActions in this test carry a whole-file LSP TextEdit covering the
+// entire document, and asserting "ranges don't overlap" would be a
+// guaranteed false negative until rules emit narrow per-rule edits. The
+// behavior tested here — N diagnostics → N CodeActions, each tied to its
+// own rule + diagnostic — is the architectural change LSP-side; the
+// narrowness assertion belongs on the later narrow-edits work.
 func TestServer_HandleCodeAction_PerFindingEdits(t *testing.T) {
 	tmpDir := t.TempDir()
 

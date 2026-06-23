@@ -3,10 +3,9 @@ package cst
 // Policy controls how comments separated from the next attribute or block by
 // blank lines are attached when Build constructs a Body.
 //
-// HCL gives no syntactic signal for "leading comment of X". Heuristics decide.
-// The legacy line-based helpers in internal/engines/style/rules/helpers.go
-// contain three separate heuristics for this question; the CST collapses them
-// into one toggle, applied per Body at Build time.
+// HCL gives no syntactic signal for "leading comment of X"; the answer is a
+// heuristic. The CST exposes that heuristic as a single toggle, applied per
+// Body at Build time.
 type Policy struct {
 	// StrictAdjacency, when true, requires zero blank lines between a comment
 	// and the next attribute or block for the comment to attach as a leading
@@ -14,8 +13,9 @@ type Policy struct {
 	// lines becomes a StandaloneComment that survives reorder in place.
 	//
 	// When false (passthrough), blank lines are tolerated and the comment
-	// still attaches as a leading comment. This matches the pre-CST
-	// block-body behavior of the legacy `collectLeadingComments` helper.
+	// still attaches as a leading comment — appropriate inside a block body,
+	// where blank-line-separated comments above an attribute overwhelmingly
+	// belong to the attribute that follows.
 	StrictAdjacency bool
 }
 

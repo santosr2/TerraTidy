@@ -1339,10 +1339,8 @@ func (r *ProviderBlockOrderRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.
 //
 // Under DefaultTopLevelPolicy (StrictAdjacency=true), comments with a blank
 // line above them are StandaloneComments and do NOT travel with the block
-// they were adjacent to in source — unlike the line-based predecessor's
-// collectAdjacentLeadingComments, which carried them. This is the same
-// mechanism that fixes the floating section-header bug in
-// style.terraform-block-first.
+// they were adjacent to in source. This is the same mechanism that fixes
+// the floating section-header bug in style.terraform-block-first.
 func (r *ProviderBlockOrderRule) Fix(ctx *sdk.Context, _ *hcl.File) (*sdk.FixResult, error) {
 	originalContent, err := os.ReadFile(ctx.File)
 	if err != nil {
@@ -1418,9 +1416,9 @@ func topLevelBlocksAreCanonical(body *cst.Body) bool {
 	return true
 }
 
-// topLevelCanonicalOrder is the canonical Fix-time order for top-level blocks,
-// matching the pre-CST topLevelBlockPriority map in helpers.go. Blocks of
-// unknown type retain their relative source order after the canonical prefix.
+// topLevelCanonicalOrder is the canonical Fix-time order for top-level blocks.
+// Blocks of unknown type retain their relative source order after the
+// canonical prefix.
 var topLevelCanonicalOrder = []string{
 	"terraform", "provider", "variable", "locals", "data", "resource", "module", "output",
 }

@@ -1330,23 +1330,99 @@ func (r *ProviderBlockOrderRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.
 	return findings, nil
 }
 
-// Fix reorders provider blocks to the canonical position via line-range reorder.
-// The canonical priority order is (terraform, provider, variable, locals, data,
-// resource, module, output); the helper materializes that order across all
-// top-level blocks in the file, not just the provider blocks this rule flags.
+// Fix reorders top-level blocks into the canonical priority order
+// (terraform, provider, variable, locals, data, resource, module, output)
+// via cst.Body.Move / MoveAfter. Blocks of unknown type stay in source
+// order after the canonical prefix. The canonical prefix anchors at the
+// first existing Block in body.Items, so file-header StandaloneComments
+// (separated from the first block by a blank line) stay in their slot.
+//
+// Under DefaultTopLevelPolicy (StrictAdjacency=true), comments with a blank
+// line above them are StandaloneComments and do NOT travel with the block
+// they were adjacent to in source — unlike the line-based predecessor's
+// collectAdjacentLeadingComments, which carried them. This is the same
+// mechanism that fixes the floating section-header bug in
+// style.terraform-block-first.
 func (r *ProviderBlockOrderRule) Fix(ctx *sdk.Context, _ *hcl.File) (*sdk.FixResult, error) {
-	if ctx == nil {
+	originalContent, err := os.ReadFile(ctx.File)
+	if err != nil {
+		return nil, err
+	}
+
+	file, parseErr := cst.Build(originalContent, ctx.File, cst.DefaultTopLevelPolicy())
+	if parseErr != nil {
+		return nil, nil //nolint:nilerr // parse error already surfaced by Check; Fix preserves no-op contract on partial trees
+	}
+
+	firstBlockIdx := -1
+	for i, item := range file.Body.Items {
+		if _, ok := item.(*cst.Block); ok {
+			firstBlockIdx = i
+			break
+		}
+	}
+	if firstBlockIdx < 0 {
 		return nil, nil
 	}
-	content, err := os.ReadFile(ctx.File)
-	if err != nil {
-		return nil, err
+
+	if topLevelBlocksAreCanonical(file.Body) {
+		return nil, nil
 	}
-	newContent, err := ReorderTopLevelBlocksByLineRange(content)
-	if err != nil {
-		return nil, err
+
+	var anchor cst.BodyItem
+	place := func(item cst.BodyItem) {
+		if anchor == nil {
+			file.Body.Move(item, firstBlockIdx)
+		} else {
+			file.Body.MoveAfter(item, anchor)
+		}
+		anchor = item
 	}
-	return WholeFileEdit(content, newContent), nil
+	for _, blockType := range topLevelCanonicalOrder {
+		for _, blk := range file.Body.FindBlocksByType(blockType) {
+			place(blk)
+		}
+	}
+
+	return WholeFileEdit(originalContent, file.Bytes()), nil
+}
+
+// topLevelBlocksAreCanonical reports whether the *cst.Block items in body
+// already appear in topLevelCanonicalOrder, with any unknown-type blocks
+// trailing the canonical prefix. BlankLine and StandaloneComment items are
+// ignored. When true, the Fix would only redistribute BlankLines (since
+// blocks are already canonically ordered) — return early to keep the input
+// byte-identical.
+func topLevelBlocksAreCanonical(body *cst.Body) bool {
+	priority := make(map[string]int, len(topLevelCanonicalOrder))
+	for i, t := range topLevelCanonicalOrder {
+		priority[t] = i + 1
+	}
+	prevPrio := 0
+	sawUnknown := false
+	for _, item := range body.Items {
+		blk, ok := item.(*cst.Block)
+		if !ok {
+			continue
+		}
+		p, known := priority[blk.Type]
+		if !known {
+			sawUnknown = true
+			continue
+		}
+		if sawUnknown || p < prevPrio {
+			return false
+		}
+		prevPrio = p
+	}
+	return true
+}
+
+// topLevelCanonicalOrder is the canonical Fix-time order for top-level blocks,
+// matching the pre-CST topLevelBlockPriority map in helpers.go. Blocks of
+// unknown type retain their relative source order after the canonical prefix.
+var topLevelCanonicalOrder = []string{
+	"terraform", "provider", "variable", "locals", "data", "resource", "module", "output",
 }
 
 // AttributeGroupSpacingRule ensures blank lines between attribute groups in blocks.

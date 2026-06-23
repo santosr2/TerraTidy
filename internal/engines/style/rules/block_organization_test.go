@@ -505,6 +505,21 @@ func TestLifecycleAttributeOrderRule_ParseError_FixIsNoOp(t *testing.T) {
 	assert.Nil(t, result)
 }
 
+// TestLifecycleAttributeOrderRule_FileReadError_FixReturnsError covers the
+// os.ReadFile error branch in LifecycleAttributeOrderRule.Fix: a missing
+// file (or any other read failure) must surface as a Fix error so the
+// runner records it instead of silently producing a nil edit.
+func TestLifecycleAttributeOrderRule_FileReadError_FixReturnsError(t *testing.T) {
+	t.Parallel()
+
+	rule := &LifecycleAttributeOrderRule{}
+	ctx := &sdk.Context{File: filepath.Join(t.TempDir(), "does-not-exist.tf")}
+
+	result, err := rule.Fix(ctx, nil)
+	require.Error(t, err, "Fix must surface ReadFile errors")
+	assert.Nil(t, result)
+}
+
 func TestNestedBlockOrderRule(t *testing.T) {
 	rule := &NestedBlockOrderRule{}
 

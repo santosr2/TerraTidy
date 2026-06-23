@@ -1,8 +1,8 @@
 package rules
 
 import (
+	"bytes"
 	"os"
-	"strings"
 
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/hclsyntax"
@@ -1615,156 +1615,108 @@ func (r *AttributeGroupSpacingRule) checkBlock(ctx *sdk.Context, block *hclsynta
 	return findings
 }
 
-// fixBlockContent adds blank lines between attribute groups in a block.
-// Works entirely in memory - takes content as input and returns modified content.
-func (r *AttributeGroupSpacingRule) fixBlockContent(content []byte, filePath, blockType string, blockLabels []string) ([]byte, error) {
-	lines := SplitLines(content)
-
-	// Parse to find the block and its attributes
-	syntaxFile, diags := hclsyntax.ParseConfig(content, filePath, hcl.InitialPos)
-	if diags.HasErrors() {
-		return nil, diags
-	}
-
-	syntaxBody, ok := syntaxFile.Body.(*hclsyntax.Body)
-	if !ok {
-		return content, nil
-	}
-
-	// Find the target block
-	var targetBlock *hclsyntax.Block
-	for _, block := range syntaxBody.Blocks {
-		if block.Type != blockType {
-			continue
-		}
-		if MatchBlockLabels(block.Labels, blockLabels) {
-			targetBlock = block
-			break
-		}
-	}
-
-	if targetBlock == nil {
-		return content, nil
-	}
-
-	// Get attributes sorted by line number
-	type attrInfo struct {
-		name    string
-		line    int
-		endLine int
-		group   attrGroup
-	}
-	var attrs []attrInfo
-
-	for name, attr := range targetBlock.Body.Attributes {
-		isMultiLine := isAttrMultiLine(attr)
-		attrs = append(attrs, attrInfo{
-			name:    name,
-			line:    attr.Range().Start.Line,
-			endLine: attr.Range().End.Line,
-			group:   getAttrGroup(name, blockType, isMultiLine),
-		})
-	}
-
-	// Sort by line number
-	for i := 0; i < len(attrs)-1; i++ {
-		for j := i + 1; j < len(attrs); j++ {
-			if attrs[j].line < attrs[i].line {
-				attrs[i], attrs[j] = attrs[j], attrs[i]
-			}
-		}
-	}
-
-	// Find lines where we need to insert blank lines (after the attribute, before next)
-	insertAfterLines := make(map[int]bool)
-
-	for i := 0; i < len(attrs)-1; i++ {
-		curr := attrs[i]
-		next := attrs[i+1]
-
-		// Determine if we need a blank line between these attributes:
-		// 1. Different groups always need blank lines
-		// 2. Consecutive block-valued attributes (groupMainBlock) need blank lines between them
-		needsBlankLine := curr.group != next.group ||
-			(curr.group == groupMainBlock && next.group == groupMainBlock)
-
-		if !needsBlankLine {
-			continue
-		}
-
-		// Check if there's already a blank line between them
-		hasBlankLine := false
-		for lineNum := curr.endLine + 1; lineNum < next.line; lineNum++ {
-			if lineNum-1 < len(lines) {
-				trimmed := TrimLeftWhitespace(lines[lineNum-1])
-				if len(trimmed) == 0 {
-					hasBlankLine = true
-					break
-				}
-			}
-		}
-
-		if !hasBlankLine {
-			// Insert blank line after the current attribute's end line
-			insertAfterLines[curr.endLine] = true
-		}
-	}
-
-	if len(insertAfterLines) == 0 {
-		return content, nil
-	}
-
-	// Build result with inserted blank lines
-	var result []string
-	for i, line := range lines {
-		lineNum := i + 1 // 1-indexed
-		result = append(result, line)
-
-		if insertAfterLines[lineNum] {
-			result = append(result, "")
-		}
-	}
-
-	return []byte(strings.Join(result, "\n") + "\n"), nil
-}
-
-// Fix adds blank lines between attribute groups.
-// Works entirely in memory - does NOT write to disk.
-func (r *AttributeGroupSpacingRule) Fix(ctx *sdk.Context, file *hcl.File) (*sdk.FixResult, error) {
+// Fix inserts a blank-line item before any attribute whose group differs from
+// the preceding attribute (or before any second block-valued attribute when
+// both neighbors are block-valued) via cst.Body.Insert. Insert-only: blank
+// lines are never removed, matching the pre-CST semantics. Other body items
+// stay at their source positions.
+//
+// Resource, module, data, variable, and output blocks are processed; other
+// top-level block types pass through untouched. Pre-CST FormatAndCleanBlankLines
+// wrapping is intentionally dropped — the CST mutation produces byte-exact
+// output for unmodified regions.
+func (r *AttributeGroupSpacingRule) Fix(ctx *sdk.Context, _ *hcl.File) (*sdk.FixResult, error) {
 	originalContent, err := os.ReadFile(ctx.File)
 	if err != nil {
 		return nil, err
 	}
 
-	hclFile, ok := file.Body.(*hclsyntax.Body)
-	if !ok {
-		return nil, nil
+	file, parseErr := cst.Build(originalContent, ctx.File, cst.DefaultTopLevelPolicy())
+	if parseErr != nil {
+		return nil, nil //nolint:nilerr // parse error already surfaced by Check; Fix preserves no-op contract on partial trees
 	}
 
-	// Collect block info before modifying content (line numbers will change)
-	type blockInfo struct {
-		blockType string
-		labels    []string
-	}
-	var blocks []blockInfo
-	for _, block := range hclFile.Blocks {
-		if block.Type != "resource" && block.Type != "module" && block.Type != "data" &&
-			block.Type != "variable" && block.Type != "output" {
+	for _, item := range file.Body.Items {
+		block, ok := item.(*cst.Block)
+		if !ok {
 			continue
 		}
-		blocks = append(blocks, blockInfo{blockType: block.Type, labels: block.Labels})
-	}
-
-	content := originalContent
-
-	// Process each block (re-parse after each modification)
-	for _, bi := range blocks {
-		content, err = r.fixBlockContent(content, ctx.File, bi.blockType, bi.labels)
-		if err != nil {
-			return nil, err
+		if !isAttrGroupSpacingHostBlock(block.Type) {
+			continue
 		}
-		// Do NOT write to disk - work entirely in memory
+		insertAttributeGroupSpacing(block.Body, block.Type)
 	}
 
-	return WholeFileEdit(originalContent, content), nil
+	return WholeFileEdit(originalContent, file.Bytes()), nil
+}
+
+// isAttrGroupSpacingHostBlock reports whether the rule polices block bodies of
+// blockType. Matches the Check predicate at the top-level Blocks iteration.
+func isAttrGroupSpacingHostBlock(blockType string) bool {
+	return blockType == "resource" || blockType == "module" || blockType == "data" ||
+		blockType == "variable" || blockType == "output"
+}
+
+// insertAttributeGroupSpacing walks body.Items in source order, classifies each
+// attribute via getAttrGroup, and inserts a *cst.BlankLine immediately before
+// any attribute whose group differs from the preceding attribute's group (or
+// before any second block-valued attribute when both neighbors are
+// groupMainBlock). A blank line is inserted only when none already exists
+// between the pair in body.Items.
+//
+// Iteration walks pairs from the last source-order attribute backward so each
+// Insert lands at a position strictly greater than every earlier-snapshot
+// attribute index — earlier-snapshot indices stay valid without recomputation,
+// and the snapshotted attribute pointers keep resolving to the same items they
+// did at the start of the function.
+func insertAttributeGroupSpacing(body *cst.Body, blockType string) {
+	if body == nil {
+		return
+	}
+	type attrEntry struct {
+		attr  *cst.Attribute
+		idx   int
+		group attrGroup
+	}
+	var attrs []attrEntry
+	for i, item := range body.Items {
+		a, ok := item.(*cst.Attribute)
+		if !ok {
+			continue
+		}
+		isMultiLine := bytes.IndexByte(a.ExpressionBytes, '\n') >= 0
+		attrs = append(attrs, attrEntry{
+			attr:  a,
+			idx:   i,
+			group: getAttrGroup(a.Name, blockType, isMultiLine),
+		})
+	}
+	if len(attrs) < 2 {
+		return
+	}
+	for i := len(attrs) - 1; i >= 1; i-- {
+		earlier, later := attrs[i-1], attrs[i]
+		needsBlankLine := earlier.group != later.group ||
+			(earlier.group == groupMainBlock && later.group == groupMainBlock)
+		if !needsBlankLine {
+			continue
+		}
+		if hasBlankLineBetween(body.Items, earlier.idx, later.idx) {
+			continue
+		}
+		body.Insert(&cst.BlankLine{Count: 1}, later.idx)
+	}
+}
+
+// hasBlankLineBetween reports whether any *cst.BlankLine appears in
+// items[earlierIdx+1:laterIdx]. Indices are guaranteed by construction to
+// satisfy laterIdx > earlierIdx and to land in [0, len(items)) — they come
+// from a forward scan of items, so no bounds check is needed.
+func hasBlankLineBetween(items []cst.BodyItem, earlierIdx, laterIdx int) bool {
+	for k := earlierIdx + 1; k < laterIdx; k++ {
+		if _, ok := items[k].(*cst.BlankLine); ok {
+			return true
+		}
+	}
+	return false
 }

@@ -3487,6 +3487,99 @@ func TestAttributeGroupSpacingRule_Fix(t *testing.T) {
 		resultStr := string(result.Edits[0].Replacement)
 		assert.Contains(t, resultStr, "instance_type = \"t2.micro\"\n\n  tags")
 	})
+
+	// Idempotency: an already-spaced block must produce a nil FixResult. This
+	// exercises hasBlankLineBetween's true-return path (the double-insertion
+	// guard) and the WholeFileEdit early-return.
+	t.Run("Fix is a no-op when blank lines already present", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		tmpFile := filepath.Join(tmpDir, "test.tf")
+
+		content := `resource "aws_instance" "example" {
+  for_each = var.instances
+
+  ami           = "ami-123"
+  instance_type = "t2.micro"
+
+  tags = {
+    Name = "test"
+  }
+}
+`
+		err := os.WriteFile(tmpFile, []byte(content), 0o644)
+		require.NoError(t, err)
+
+		file, diags := hclsyntax.ParseConfig([]byte(content), tmpFile, hcl.InitialPos)
+		require.False(t, diags.HasErrors())
+
+		hclFile := &hcl.File{Body: file.Body}
+		ctx := &sdk.Context{File: tmpFile}
+
+		result, err := rule.Fix(ctx, hclFile)
+		require.NoError(t, err)
+		assert.Nil(t, result, "Fix on already-canonical content must return nil (no edits)")
+	})
+
+	// Parse-error contract: a partial tree returns (nil, nil) — Check already
+	// surfaced the diagnostic, and Fix must not mutate a broken file.
+	t.Run("Fix returns nil result and nil error on parse error", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		tmpFile := filepath.Join(tmpDir, "broken.tf")
+
+		// Unterminated string in attribute value forces hclsyntax to error.
+		content := `resource "aws_instance" "broken" {
+  ami = "unterminated
+}
+`
+		err := os.WriteFile(tmpFile, []byte(content), 0o644)
+		require.NoError(t, err)
+
+		ctx := &sdk.Context{File: tmpFile}
+		result, err := rule.Fix(ctx, &hcl.File{Body: nil})
+		require.NoError(t, err)
+		assert.Nil(t, result, "Fix on parse error must return nil result")
+	})
+
+	// Multiple insertion points in one block — exercises the reverse-walk
+	// algorithm at insertAttributeGroupSpacing across three group boundaries.
+	// Each iteration's snapshot index must remain valid under prior inserts.
+	t.Run("inserts blank lines at every cross-group boundary in one pass", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		tmpFile := filepath.Join(tmpDir, "test.tf")
+
+		content := `resource "aws_instance" "example" {
+  for_each      = var.instances
+  ami           = "ami-123"
+  instance_type = "t2.micro"
+  depends_on    = [aws_iam_role.x]
+  tags = {
+    Name = "test"
+  }
+}
+`
+		err := os.WriteFile(tmpFile, []byte(content), 0o644)
+		require.NoError(t, err)
+
+		file, diags := hclsyntax.ParseConfig([]byte(content), tmpFile, hcl.InitialPos)
+		require.False(t, diags.HasErrors())
+
+		hclFile := &hcl.File{Body: file.Body}
+		ctx := &sdk.Context{File: tmpFile}
+
+		result, err := rule.Fix(ctx, hclFile)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		require.Len(t, result.Edits, 1)
+
+		resultStr := string(result.Edits[0].Replacement)
+		// Three group boundaries: meta→main, main→dependsOn, dependsOn→tags.
+		assert.Contains(t, resultStr, "for_each      = var.instances\n\n  ami",
+			"meta-arg / main-attr boundary missing blank line")
+		assert.Contains(t, resultStr, "instance_type = \"t2.micro\"\n\n  depends_on",
+			"main-attr / depends_on boundary missing blank line")
+		assert.Contains(t, resultStr, "depends_on    = [aws_iam_role.x]\n\n  tags",
+			"depends_on / tags boundary missing blank line")
+	})
 }
 
 // Helper function to find index of substring

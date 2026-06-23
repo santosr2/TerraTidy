@@ -1055,6 +1055,69 @@ func TestStyleEngine_CSTPipeline_Resource_ForEachTagsDependsOn(t *testing.T) {
 	}
 }
 
+// TestStyleEngine_CSTPipeline_ForEachCountFirst_TagsAtEnd_AttributeGroupSpacing
+// pins the engine-pipeline contract for the three rules that AttributeGroupSpacing
+// composes with most tightly. After the CST migration each rule's Fix is narrow,
+// so the canonical post-pipeline shape — for_each first, tags below the main
+// attribute group, lifecycle last, and a blank line separating each group —
+// is only observable when all three rules run through the engine.
+//
+// Idempotency on a second pass is asserted explicitly: a stable-post-fix file
+// must produce no further edits, guarding against rule composition that would
+// reflag a finding the previous pass just resolved.
+func TestStyleEngine_CSTPipeline_ForEachCountFirst_TagsAtEnd_AttributeGroupSpacing(t *testing.T) {
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "main.tf")
+
+	input := `resource "aws_instance" "example" {
+  ami           = "ami-123"
+  for_each      = var.instances
+  tags          = { Name = "test" }
+  instance_type = "t2.micro"
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+`
+	require.NoError(t, os.WriteFile(tmpFile, []byte(input), 0o644))
+
+	engine := New(&Config{Fix: true})
+	_, err := engine.Run(context.Background(), []string{tmpFile})
+	require.NoError(t, err)
+
+	fixed, err := os.ReadFile(tmpFile)
+	require.NoError(t, err)
+	out := string(fixed)
+
+	want := []string{"for_each", "ami", "instance_type", "tags", "lifecycle"}
+	prev := 0
+	for i, needle := range want {
+		idx := strings.Index(out[prev:], needle)
+		require.NotEqual(t, -1, idx,
+			"expected substring %d (%q) to appear after %q in:\n%s",
+			i, needle, want[max(0, i-1)], out)
+		prev += idx + len(needle)
+	}
+
+	// AttributeGroupSpacing must have inserted blank lines at each attribute
+	// group boundary: between the for_each meta-arg and the main attribute
+	// group, and between the main attribute group and tags. The rule only
+	// polices attribute-to-attribute pairs, so the tags-to-lifecycle gap is
+	// not its responsibility (the lifecycle nested block carries its own
+	// visual weight).
+	assert.Contains(t, out, "for_each      = var.instances\n\n",
+		"missing blank line between for_each (meta-arg group) and the main attribute group:\n%s", out)
+	assert.Contains(t, out, "instance_type = \"t2.micro\"\n\n  tags",
+		"missing blank line between the main attribute group and tags:\n%s", out)
+
+	engine2 := New(&Config{Fix: true})
+	_, err = engine2.Run(context.Background(), []string{tmpFile})
+	require.NoError(t, err)
+	second, err := os.ReadFile(tmpFile)
+	require.NoError(t, err)
+	assert.Equal(t, fixed, second, "pipeline must be idempotent across passes")
+}
+
 func TestEngine_ApplyFixes_MultipleLocations(t *testing.T) {
 	// Test that the same rule at different locations both get fixed (BUG-9)
 	// Previously, applyFixes keyed by rule name only, so only the first fix was applied

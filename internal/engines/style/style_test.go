@@ -1732,10 +1732,10 @@ func (r *stubNarrowEditRule) Fix(_ *sdk.Context, _ *hcl.File) (*sdk.FixResult, e
 // os.WriteFile call, both rule names returned in appliedRules, and the
 // resulting content matches the descending-Start splice of both edits.
 //
-// The single-write assertion is the load-bearing guarantee: before the Phase 4
-// byte-range refactor, N independent fixes required N passes (and N writes).
-// The new contract collapses them into one write per pass when ranges don't
-// conflict.
+// The single-write assertion is the load-bearing guarantee: before narrow
+// byte-range edits landed, N independent fixes required N passes (and N
+// writes). The new contract collapses them into one write per pass when
+// ranges don't conflict.
 //
 // Two sub-tests exercise the splice math: equal-length replacements (trivial
 // offset preservation) and asymmetric-length replacements (the right-edit
@@ -2220,11 +2220,10 @@ func TestApplyFixes_OutOfBoundsEdit_Errors(t *testing.T) {
 // fixture with the writeFn seam wired to a capturing closure, and pins
 // convergence + a bounded write count.
 //
-// With current Phase-3 wrap-only rules, every fix is a whole-file edit and
-// whole-file exclusivity at style.go:493 picks one rule per pass — so
-// writeCount == 3 today. Once the CST refactor at
-// .specs/style-engine-cst-refactor.md replaces whole-file edits with
-// narrow edits, the same fixture converges in one pass with one write;
+// While every Fixer here returns a single whole-file edit, the whole-file
+// exclusivity check in applyFixes picks one rule per pass — so writeCount
+// == 3 currently. Once rules return narrow byte-range edits instead of
+// whole-file edits, the same fixture converges in one pass with one write;
 // the upper bound and convergence assertions remain valid then, and the
 // test naturally observes writeCount == 1 without any code change.
 //
@@ -2294,7 +2293,8 @@ func TestEngine_MultiFinding_SinglePass(t *testing.T) {
 
 	// Three distinct fixable rules fire on the original fixture. Whole-file
 	// exclusivity caps applyFixes at one rule per pass, so writeCount is
-	// bounded above by 3 today. The post-CST world tightens this to 1.
+	// bounded above by 3 while rules emit whole-file edits. Narrow byte-range
+	// edits tighten this to 1.
 	const fixableRuleCount = 3
 	assert.LessOrEqual(t, writeCount, fixableRuleCount,
 		"writeCount must not exceed the count of distinct fixable rules with findings on the fixture")

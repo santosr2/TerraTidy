@@ -46,7 +46,7 @@ resource "aws_instance" "web" {
 		},
 		{
 			// Inline trailing `// comment` is no longer flagged: the rule's scope is full-line
-			// `//` comments only (per fmt-style-polish Phase 4 scope narrowing).
+			// `//` comments only.
 			name: "trailing // comment is not flagged",
 			content: `resource "aws_instance" "web" {
   ami = "ami-123" // inline comment

@@ -346,9 +346,8 @@ instance_type="t2.micro"
 // AND triggers the lifecycle-at-end + tags-at-end pair that historically
 // drove the phantom-fix. The second run must produce zero file changes —
 // even though the engine still emits Fixable findings for those rules (the
-// tags-at-end Fix being a no-op for tags-already-after-lifecycle is tracked
-// in .issues/tech_debt.md under the 2026-05-20 entry), the file content
-// must not move.
+// tags-at-end Fix is a known no-op when tags already sit after lifecycle),
+// the file content must not move.
 func TestFmt_NoPhantomFixOnSecondRun(t *testing.T) {
 	resetCheckGlobals(t) // also saves/restores `format`
 	// Pin text output explicitly. In structured output mode (format="json"
@@ -404,10 +403,10 @@ resource "aws_instance" "b" {
 			"two top-level resources are still missing a blank line in the fixture)")
 
 	// Second run: must produce zero file changes. Even if rules still emit
-	// findings whose Fix is a no-op (Phase 7 B1: tags-at-end "before
-	// lifecycle" fix is a no-op for tags-after-lifecycle cases), the engine's
-	// hash-based fixed-point detection MUST prevent the file from being
-	// rewritten with identical content.
+	// findings whose Fix is a no-op (the tags-at-end "before lifecycle" fix
+	// is a no-op for tags-after-lifecycle cases), the engine's hash-based
+	// fixed-point detection MUST prevent the file from being rewritten with
+	// identical content.
 	rootCmd.SetArgs([]string{"fmt", "--all", dir})
 	require.NoError(t, rootCmd.Execute(), "second fmt --all run failed")
 

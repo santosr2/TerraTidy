@@ -1,0 +1,7 @@
+resource "aws_instance" "web" {
+  for_each   = var.instances
+
+  ami           = "ami-123"
+  instance_type = "t2.micro"
+  depends_on = [aws_vpc.main]
+}

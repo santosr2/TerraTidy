@@ -12,6 +12,53 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// metaArgsReorderInput is the canonical "depends_on placed before for_each"
+// fixture used by both TestMetaArgumentsOrderRule's "Fix reorders
+// meta-arguments" subtest (semantic assertion) and
+// TestMetaArgumentsOrderRule_FixGoldens (byte-exact snapshot). Shared so a
+// fixture edit is forced to update the byte golden in lock-step rather than
+// silently decoupling the two checks.
+const metaArgsReorderInput = `resource "aws_instance" "web" {
+  depends_on = [aws_vpc.main]
+  for_each   = var.instances
+
+  ami           = "ami-123"
+  instance_type = "t2.micro"
+}
+`
+
+// metaArgsProviderBeforeCountInput pins the second "wrong order" pattern
+// asserted at Check level (provider placed before count). Used by
+// TestMetaArgumentsOrderRule_FixGoldens to capture a second column-alignment
+// shape independent from metaArgsReorderInput.
+const metaArgsProviderBeforeCountInput = `resource "aws_instance" "web" {
+  provider = aws.west
+  count    = 3
+
+  ami           = "ami-123"
+  instance_type = "t2.micro"
+}
+`
+
+// metaArgsWithLifecycleInput pins the "depends_on lands after the lifecycle
+// nested block" semantic. MetaArgumentsOrderRule moves depends_on to the
+// last body slot; with a lifecycle block at the end of body.Items, that
+// is index len-1, so depends_on lands AFTER lifecycle. Sibling rules
+// (depends-on-order) own further refinement of depends_on relative to
+// lifecycle if a deployment style requires it. Used by
+// TestMetaArgumentsOrderRule_FixGoldens.
+const metaArgsWithLifecycleInput = `resource "aws_instance" "web" {
+  depends_on = [aws_vpc.main]
+  for_each   = var.instances
+
+  ami = "ami-123"
+
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+`
+
 func TestMetaArgumentsOrderRule(t *testing.T) {
 	rule := &MetaArgumentsOrderRule{}
 
@@ -134,13 +181,7 @@ func TestMetaArgumentsOrderRule(t *testing.T) {
 	t.Run("Fix reorders meta-arguments", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		tmpFile := filepath.Join(tmpDir, "test.tf")
-		content := `resource "aws_instance" "web" {
-  depends_on = [aws_vpc.main]
-  for_each   = var.instances
-
-  ami           = "ami-123"
-  instance_type = "t2.micro"
-}`
+		content := metaArgsReorderInput
 		err := os.WriteFile(tmpFile, []byte(content), 0o644)
 		require.NoError(t, err)
 
@@ -204,6 +245,25 @@ func TestMetaArgumentsOrderRule(t *testing.T) {
 		require.NoError(t, err)
 		assert.Nil(t, result, "already-canonical input must produce no edits")
 	})
+}
+
+// TestMetaArgumentsOrderRule_ParseError_FixIsNoOp covers the cst.Build
+// parse-error branch in MetaArgumentsOrderRule.Fix: on a partial tree, Fix
+// must return (nil, nil) so the diagnostic stays on Check and Fix does not
+// mutate a tree it cannot trust.
+func TestMetaArgumentsOrderRule_ParseError_FixIsNoOp(t *testing.T) {
+	t.Parallel()
+
+	rule := &MetaArgumentsOrderRule{}
+	content := "resource \"aws_instance\" \"x\" {\n  depends_on = [aws_vpc.main]\n  for_each   = var.instances\n"
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "broken.tf")
+	require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0o644))
+
+	ctx := &sdk.Context{File: tmpFile}
+	result, err := rule.Fix(ctx, nil)
+	require.NoError(t, err, "Fix must swallow parse errors; Check surfaces them")
+	assert.Nil(t, result)
 }
 
 func TestLifecycleAttributeOrderRule(t *testing.T) {

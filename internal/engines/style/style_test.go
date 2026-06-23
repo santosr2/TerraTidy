@@ -746,19 +746,19 @@ func TestEngine_GetAllRules(t *testing.T) {
 	engine := New(nil)
 	rules := engine.GetAllRules()
 
-	// Verify we have all 33 rules registered
+	// Verify we have all 34 rules registered
 	// 1. BlankLineBetweenBlocksRule
 	// 2-5. BlockLabelCaseRule, VariableNamingRule, OutputNamingRule, LocalNamingRule
-	// 6-7. TerraformBlockFirstRule, ProviderBlockOrderRule
-	// 8-12. ForEachCountFirstRule, SourceVersionGroupedRule, TagsAtEndRule, DependsOnOrderRule, LifecycleAtEndRule
-	// 13-14. VariableOrderRule, OutputOrderRule
-	// 15. AttributeGroupSpacingRule
-	// 16-17. NoLeadingTrailingBlankLinesRule, NoEmptyBlocksRule
-	// 18-22. VariablesInFileRule, OutputsInFileRule, ProvidersInFileRule, ScopedFileOrganizationRule, TerraformFilesStructureRule
-	// 23-25. ResourceNameMatchesTypeRule, OutputPrefixRule, ModuleNameConventionRule
-	// 26-29. MetaArgumentsOrderRule, LifecycleAttributeOrderRule, NestedBlockOrderRule, OneLineAttributeSpacingRule
-	// 30-33. CommentSyntaxRule, NoTrailingWhitespaceRule, ConsistentQuotesRule, NoConsecutiveBlankLinesRule
-	assert.Len(t, rules, 33, "should have 33 rules registered")
+	// 6-8. TerraformBlockFirstRule, ProviderBlockOrderRule, TerragruntIncludeFirstRule
+	// 9-13. ForEachCountFirstRule, SourceVersionGroupedRule, TagsAtEndRule, DependsOnOrderRule, LifecycleAtEndRule
+	// 14-15. VariableOrderRule, OutputOrderRule
+	// 16. AttributeGroupSpacingRule
+	// 17-18. NoLeadingTrailingBlankLinesRule, NoEmptyBlocksRule
+	// 19-23. VariablesInFileRule, OutputsInFileRule, ProvidersInFileRule, ScopedFileOrganizationRule, TerraformFilesStructureRule
+	// 24-26. ResourceNameMatchesTypeRule, OutputPrefixRule, ModuleNameConventionRule
+	// 27-30. MetaArgumentsOrderRule, LifecycleAttributeOrderRule, NestedBlockOrderRule, OneLineAttributeSpacingRule
+	// 31-34. CommentSyntaxRule, NoTrailingWhitespaceRule, ConsistentQuotesRule, NoConsecutiveBlankLinesRule
+	assert.Len(t, rules, 34, "should have 34 rules registered")
 
 	// Verify each rule has required methods
 	for _, rule := range rules {
@@ -1243,8 +1243,8 @@ func TestNew_AcceptsPluginRules(t *testing.T) {
 		engine := New(nil)
 		rules := engine.GetAllRules()
 
-		// Should have 33 built-in rules
-		assert.Len(t, rules, 33)
+		// Should have 34 built-in rules
+		assert.Len(t, rules, 34)
 	})
 
 	t.Run("with single plugin rule", func(t *testing.T) {
@@ -1252,8 +1252,8 @@ func TestNew_AcceptsPluginRules(t *testing.T) {
 		engine := New(nil, pluginRule)
 		rules := engine.GetAllRules()
 
-		// Should have 33 built-in + 1 plugin = 34 rules
-		assert.Len(t, rules, 34)
+		// Should have 34 built-in + 1 plugin = 35 rules
+		assert.Len(t, rules, 35)
 
 		// Plugin rule should be present
 		found := false
@@ -1273,8 +1273,8 @@ func TestNew_AcceptsPluginRules(t *testing.T) {
 		engine := New(nil, plugin1, plugin2, plugin3)
 		rules := engine.GetAllRules()
 
-		// Should have 33 built-in + 3 plugin = 36 rules
-		assert.Len(t, rules, 36)
+		// Should have 34 built-in + 3 plugin = 37 rules
+		assert.Len(t, rules, 37)
 	})
 }
 

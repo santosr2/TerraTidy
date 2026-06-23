@@ -706,6 +706,7 @@ func (e *Engine) registerRules() {
 	// Block ordering
 	e.rules = append(e.rules, &rules.TerraformBlockFirstRule{})
 	e.rules = append(e.rules, &rules.ProviderBlockOrderRule{})
+	e.rules = append(e.rules, &rules.TerragruntIncludeFirstRule{})
 
 	// Attribute ordering within blocks (runs first to reorder attributes)
 	e.rules = append(e.rules, &rules.ForEachCountFirstRule{})

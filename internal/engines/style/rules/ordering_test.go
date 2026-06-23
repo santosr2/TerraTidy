@@ -3086,12 +3086,6 @@ provider "aws" {
 		})
 	}
 
-	t.Run("Fix returns nil when ctx is nil", func(t *testing.T) {
-		result, err := rule.Fix(nil, nil)
-		assert.NoError(t, err)
-		assert.Nil(t, result)
-	})
-
 	t.Run("Fix reorders terraform, resource, provider to terraform, provider, resource", func(t *testing.T) {
 		input := `terraform {
   required_version = ">= 1.0"
@@ -3114,6 +3108,12 @@ provider "aws" {
 	})
 
 	t.Run("Fix preserves all comments through reorder", func(t *testing.T) {
+		// Comments with a blank line above are StandaloneComments under
+		// DefaultTopLevelPolicy (StrictAdjacency=true) and stay in their slot
+		// as blocks reshuffle past them — the same mechanism that fixes the
+		// floating section-header bug in style.terraform-block-first. All four
+		// comments are still present in the output; only their position
+		// relative to blocks changes from the pre-CST line-based reorder.
 		//nolint:dupword // HCL content intentionally contains repeated block-type identifiers
 		input := `# File-level note at top.
 
@@ -3139,12 +3139,12 @@ terraform {
 		assert.Contains(t, out, "# About terraform")
 		assertOrderedSubstrings(t, out, []string{
 			"# File-level note at top.",
-			"# About terraform",
-			"terraform {",
-			"# About the provider",
-			`provider "aws"`,
 			"# About the resource",
+			"terraform {",
+			`provider "aws"`,
 			`resource "aws_instance"`,
+			"# About the provider",
+			"# About terraform",
 		})
 	})
 
@@ -3204,6 +3204,69 @@ resource "aws_instance" "x" {
 		require.NoError(t, err)
 		assert.Nil(t, second, "Fix(Fix(content)) must equal Fix(content)")
 	})
+
+	t.Run("Fix is a no-op when blocks are already in canonical order", func(t *testing.T) {
+		input := `terraform {
+  required_version = ">= 1.0"
+}
+
+provider "aws" {
+  region = "us-east-1"
+}
+
+resource "aws_instance" "x" {
+  ami = "ami-123"
+}
+`
+		tmpDir := t.TempDir()
+		tmpFile := filepath.Join(tmpDir, "test.tf")
+		require.NoError(t, os.WriteFile(tmpFile, []byte(input), 0o644))
+
+		result, err := rule.Fix(&sdk.Context{File: tmpFile}, nil)
+		require.NoError(t, err)
+		assert.Nil(t, result, "Fix on already-canonical input must return nil via WholeFileEdit no-change guard")
+	})
+
+	t.Run("Fix surfaces read error for missing file", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		ctx := &sdk.Context{File: filepath.Join(tmpDir, "does-not-exist.tf")}
+		result, err := rule.Fix(ctx, nil)
+		require.Error(t, err)
+		assert.Nil(t, result)
+	})
+}
+
+// TestProviderBlockOrder_NoBlocksInFile_FixIsNoOp pins the firstBlockIdx < 0
+// guard: a comment-only file with no *cst.Block items must return (nil, nil)
+// without mutation.
+func TestProviderBlockOrder_NoBlocksInFile_FixIsNoOp(t *testing.T) {
+	t.Parallel()
+
+	rule := &ProviderBlockOrderRule{}
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "comments-only.tf")
+	require.NoError(t, os.WriteFile(tmpFile, []byte("# just a comment\n"), 0o644))
+
+	result, err := rule.Fix(&sdk.Context{File: tmpFile}, nil)
+	require.NoError(t, err)
+	assert.Nil(t, result)
+}
+
+// TestProviderBlockOrder_ParseError_FixIsNoOp covers the cst.Build parse-error
+// branch. On a partial tree, Fix must return (nil, nil).
+func TestProviderBlockOrder_ParseError_FixIsNoOp(t *testing.T) {
+	t.Parallel()
+
+	rule := &ProviderBlockOrderRule{}
+	content := "provider \"aws\" {\n  region = \"us-east-1\"\n"
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "broken.tf")
+	require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0o644))
+
+	ctx := &sdk.Context{File: tmpFile}
+	result, err := rule.Fix(ctx, nil)
+	require.NoError(t, err)
+	assert.Nil(t, result)
 }
 
 // runRuleFix writes content to a tmp file, runs rule.Fix, and returns the output as a string.

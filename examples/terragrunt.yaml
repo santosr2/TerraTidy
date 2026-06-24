@@ -1,0 +1,32 @@
+# TerraTidy Terragrunt Configuration Example
+#
+# Highlights the style.terragrunt-include-first rule, which keeps
+# Terragrunt top-level blocks in canonical order:
+#   include  ->  dependency  ->  everything else (locals, inputs, ...).
+#
+# The rule activates on files whose top-level body contains include,
+# dependency, dependencies, remote_state, generate, or catalog blocks,
+# or on terragrunt.hcl by filename. Pure Terraform files produce no findings.
+#
+# Try it:
+#   terratidy style --config examples/terragrunt.yaml \
+#     examples/rule-test-files/terragrunt-include-order.hcl
+
+version: 1
+
+engines:
+  fmt:
+    enabled: false
+
+  style:
+    enabled: true
+    rules:
+      style.terragrunt-include-first:
+        enabled: true
+        severity: warning
+
+  lint:
+    enabled: false
+
+  policy:
+    enabled: false

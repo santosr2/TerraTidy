@@ -6,12 +6,14 @@ on:
     paths:
       - 'examples/**'
       - 'internal/plugins/**'
+      - 'internal/engines/style/**'
       - '.github/workflows/examples-test.yml'
   pull_request:
     branches: [main]
     paths:
       - 'examples/**'
       - 'internal/plugins/**'
+      - 'internal/engines/style/**'
       - '.github/workflows/examples-test.yml'
 
 permissions:
@@ -78,3 +80,8 @@ jobs:
         run: |
           ./bin/terratidy style --config examples/all-rules-test.yaml examples/rule-test-files/valid.tf 2>&1 | tee output.txt
           grep -q "No issues found" output.txt
+
+      - name: Test Terragrunt include-first example
+        run: |
+          ./bin/terratidy style --config examples/terragrunt.yaml examples/rule-test-files/terragrunt-include-order.hcl 2>&1 | tee output.txt
+          grep -q "terragrunt-include-first" output.txt

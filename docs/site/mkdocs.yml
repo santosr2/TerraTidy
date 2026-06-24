@@ -109,6 +109,7 @@ nav:
   - Development:
       - Architecture: development/architecture.md
       - SDK Reference: development/sdk.md
+      - CST: development/cst.md
       - Plugin System: development/plugins.md
       - Performance: development/performance.md
       - Contributing: development/contributing.md

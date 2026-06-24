@@ -458,6 +458,8 @@ output "instance_ip" {
 
 ## Block Order Rules
 
+Covers both Terraform and Terragrunt top-level block ordering.
+
 ### terraform-block-first
 
 Ensures `terraform` block is the first block in the file.
@@ -521,6 +523,76 @@ provider "aws" {
 
 resource "aws_instance" "web" {
   ami = "ami-12345"
+}
+```
+
+### terragrunt-include-first
+
+Ensures top-level `include` blocks come first in a Terragrunt file, then
+`dependency` blocks, then everything else. Mirrors the canonical layout of a
+`terragrunt.hcl`: parent wiring (`include`) precedes upstream wiring
+(`dependency`) precedes module configuration (`inputs`, `locals`,
+`remote_state`, etc.).
+
+| Property | Value |
+|----------|-------|
+| Rule ID | `style.terragrunt-include-first` |
+| Default Severity | Warning |
+| Fixable | Yes |
+| Default | Enabled |
+
+The rule scopes ordering to top-level **blocks** only. Top-level attributes
+like `inputs = { ... }` or `iam_role = "..."` carry no ordering semantics in
+Terragrunt's own conventions, so they are out of scope and never produce
+findings regardless of where they appear.
+
+Activation is heuristic: the fix runs only on files identified as Terragrunt
+configurations. Either the filename matches `terragrunt.hcl` exactly, or the
+top-level body contains at least one Terragrunt-specific block (one of
+`include`, `dependency`, `dependencies`, `remote_state`, `generate`, or
+`catalog`). A bare `terraform` block does not by itself trigger detection,
+since it is also legal in standard Terraform configs. Pure Terraform files
+are untouched even when the rule is enabled.
+
+Standalone section-header comments separated from a block by a blank line
+stay where they are when the block moves, so `### Inputs`-style headers
+survive the reorder.
+
+**Example:**
+
+```hcl
+# Bad - dependency before include, locals before either
+locals {
+  region = "us-east-1"
+}
+
+dependency "vpc" {
+  config_path = "../vpc"
+}
+
+include "root" {
+  path = find_in_parent_folders()
+}
+
+inputs = {
+  vpc_id = dependency.vpc.outputs.vpc_id
+}
+
+# Good - include first, then dependency, then everything else
+include "root" {
+  path = find_in_parent_folders()
+}
+
+dependency "vpc" {
+  config_path = "../vpc"
+}
+
+locals {
+  region = "us-east-1"
+}
+
+inputs = {
+  vpc_id = dependency.vpc.outputs.vpc_id
 }
 ```
 
@@ -1227,6 +1299,7 @@ engines:
 | `output-order` | Info | Yes | Output attribute ordering |
 | `terraform-block-first` | Warning | Yes | terraform block first in file |
 | `provider-block-order` | Warning | Yes | provider after terraform, before resources |
+| `terragrunt-include-first` | Warning | Yes | include first, then dependency, in Terragrunt files |
 
 ### Disabled by Default (Opt-in)
 

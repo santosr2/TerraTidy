@@ -44,6 +44,7 @@ terratidy/
 │   │   └── runner.go        # Engine interface, Runner struct
 │   ├── config/              # Configuration loading
 │   ├── output/              # Output formatting
+│   ├── cst/                 # Concrete Syntax Tree (structural fix substrate)
 │   ├── engines/             # Engine implementations
 │   │   ├── fmt/             # Format engine
 │   │   ├── style/           # Style engine
@@ -161,6 +162,16 @@ func (e *StyleEngine) Run(ctx context.Context, files []string) ([]Finding, error
     return findings, nil
 }
 ```
+
+Rule `Check` methods run against the hclsyntax AST. Rules that also implement
+`sdk.Fixer` for structural reorders (move a block, move an attribute, insert
+or remove an item) build a [CST](cst.md) via `cst.Build`, perform the mutation
+through `Body.Move` / `MoveBefore` / `MoveAfter` / `Insert` / `Remove`, and
+serialize back with `File.Bytes()`. The CST holds expression bytes verbatim,
+and gap items (BlankLine, StandaloneComment) carry their own raw bytes, so
+reshuffling top-level items round-trips byte-faithfully and floating
+section-header comments stay in place. See [CST](cst.md) for the node model,
+the Build policy, and a worked example.
 
 ### Lint Engine
 

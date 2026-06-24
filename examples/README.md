@@ -9,6 +9,7 @@ This directory contains example configurations and integrations for TerraTidy.
 - **[terratidy-minimal.yaml](terratidy-minimal.yaml)** - Minimal configuration with defaults
 - **[terratidy.yaml](terratidy.yaml)** - Complete configuration with all options
 - **[terratidy-lint.yaml](terratidy-lint.yaml)** - Lint-focused configuration with TFLint integration options
+- **[terragrunt.yaml](terragrunt.yaml)** - Terragrunt-focused configuration highlighting `style.terragrunt-include-first` (try it on `rule-test-files/terragrunt-include-order.hcl`)
 
 **Usage:**
 

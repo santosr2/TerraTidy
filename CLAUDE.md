@@ -11,6 +11,7 @@ internal/
   buildinfo/            # Build information and versioning
   cache/                # Caching layer
   config/               # YAML config with imports, profiles, glob patterns
+  cst/                  # Concrete syntax tree for structural Fix methods
   engines/              # format, style, lint, policy
   lsp/                  # Language Server Protocol implementation
   output/               # Text, JSON, SARIF, JUnit, Markdown, HTML, Table, GitHub Actions formatters

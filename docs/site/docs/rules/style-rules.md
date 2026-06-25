@@ -1220,6 +1220,7 @@ resource "aws_instance" "web" {
   # This comment describes the instance type
   instance_type = "t3.micro"
 }
+```
 
 ## Configuration
 

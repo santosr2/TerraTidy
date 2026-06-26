@@ -64,7 +64,7 @@ Ensures blocks are not empty without content.
 | Property | Value |
 |----------|-------|
 | Rule ID | `style.no-empty-blocks` |
-| Default Severity | Info |
+| Default Severity | Warning |
 | Fixable | No |
 | Default | Enabled |
 
@@ -280,7 +280,7 @@ and `module` blocks, after all other attributes and nested blocks.
 | Property | Value |
 |----------|-------|
 | Rule ID | `style.tags-at-end` |
-| Default Severity | Warning / Info (see below) |
+| Default Severity | Warning |
 | Fixable | Yes |
 | Default | Enabled |
 
@@ -292,10 +292,14 @@ typically goes last), and `lifecycle` (the trailing nested block the fix moves
 the older "more than two trailing attributes" threshold was relaxed so that
 layouts like `tags = {} ; ingress {} ; lifecycle {}` no longer pass silently.
 
-Severity is `warning` when `tags`/`labels` is placed **after** a `lifecycle`
-block (the more visually disruptive misplacement). When `tags` is in the wrong
-spot but ahead of any `lifecycle` block (or no `lifecycle` block is present),
-severity is `info`. Both paths share the same fix — moving `tags` to land just
+The rule emits two internal severity tiers — `warning` when `tags`/`labels` is
+placed **after** a `lifecycle` block (the more visually disruptive
+misplacement), and `info` when `tags` is in the wrong spot but ahead of any
+`lifecycle` block (or no `lifecycle` block is present). Under the default
+configuration the engine normalizes every finding to the rule's configured
+severity (`warning`), so both tiers surface as warnings unless the rule has
+no explicit `severity:` configured, in which case the per-finding tier is
+used directly. Both paths share the same fix — moving `tags` to land just
 before `lifecycle`, or at the end of the block if no `lifecycle` is present.
 
 When both `tags` and `tags_all` are present the rule operates on `tags`; `labels`
@@ -391,7 +395,7 @@ Ensures variable blocks follow standard attribute ordering.
 | Property | Value |
 |----------|-------|
 | Rule ID | `style.variable-order` |
-| Default Severity | Info |
+| Default Severity | Warning |
 | Fixable | Yes |
 | Default | Enabled |
 
@@ -429,7 +433,7 @@ Ensures output blocks follow standard attribute ordering.
 | Property | Value |
 |----------|-------|
 | Rule ID | `style.output-order` |
-| Default Severity | Info |
+| Default Severity | Warning |
 | Fixable | Yes |
 | Default | Enabled |
 
@@ -1044,7 +1048,7 @@ Ensures consistent use of double quotes (Terraform standard).
 | Property | Value |
 |----------|-------|
 | Rule ID | `style.consistent-quotes` |
-| Default Severity | Warning |
+| Default Severity | Info |
 | Fixable | No |
 | Default | **Disabled** |
 
@@ -1094,7 +1098,7 @@ Ensures blank lines separate logical groups of attributes within blocks.
 | Property | Value |
 |----------|-------|
 | Rule ID | `style.attribute-group-spacing` |
-| Default Severity | Info |
+| Default Severity | Warning |
 | Fixable | Yes |
 | Default | Enabled |
 
@@ -1133,7 +1137,7 @@ Ensures no leading or trailing blank lines inside blocks.
 | Property | Value |
 |----------|-------|
 | Rule ID | `style.no-leading-trailing-blank-lines` |
-| Default Severity | Info |
+| Default Severity | Warning |
 | Fixable | Yes |
 | Default | Enabled |
 
@@ -1284,9 +1288,9 @@ engines:
 | Rule | Severity | Fixable | Description |
 |------|----------|---------|-------------|
 | `blank-line-between-blocks` | Warning | Yes | Exactly one blank line between blocks |
-| `no-empty-blocks` | Info | No | Blocks should not be empty |
-| `no-leading-trailing-blank-lines` | Info | Yes | No leading/trailing blank lines in blocks |
-| `attribute-group-spacing` | Info | Yes | Blank lines between attribute groups |
+| `no-empty-blocks` | Warning | No | Blocks should not be empty |
+| `no-leading-trailing-blank-lines` | Warning | Yes | No leading/trailing blank lines in blocks |
+| `attribute-group-spacing` | Warning | Yes | Blank lines between attribute groups |
 | `block-label-case` | Warning | No | Block labels use snake_case |
 | `variable-naming` | Warning | No | Variable names use snake_case |
 | `output-naming` | Warning | No | Output names use snake_case |
@@ -1296,8 +1300,8 @@ engines:
 | `tags-at-end` | Warning | Yes | tags near end of block |
 | `depends-on-order` | Warning | Yes | depends_on at end of block |
 | `source-version-grouped` | Warning | Yes | source and version together |
-| `variable-order` | Info | Yes | Variable attribute ordering |
-| `output-order` | Info | Yes | Output attribute ordering |
+| `variable-order` | Warning | Yes | Variable attribute ordering |
+| `output-order` | Warning | Yes | Output attribute ordering |
 | `terraform-block-first` | Warning | Yes | terraform block first in file |
 | `provider-block-order` | Warning | Yes | provider after terraform, before resources |
 | `terragrunt-include-first` | Warning | Yes | include first, then dependency, in Terragrunt files |
@@ -1337,5 +1341,5 @@ engines:
 |------|----------|---------|-------------|
 | `comment-syntax` | Info | Yes | Use # instead of // for comments |
 | `no-trailing-whitespace` | Info | Yes | No trailing whitespace on lines |
-| `consistent-quotes` | Warning | No | Use double quotes (Terraform standard) |
+| `consistent-quotes` | Info | No | Use double quotes (Terraform standard) |
 | `no-consecutive-blank-lines` | Info | Yes | No more than one consecutive blank line |

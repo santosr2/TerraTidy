@@ -15,7 +15,7 @@ import (
 
 // WholeFileEdit wraps a whole-file rewrite as a single [sdk.TextEdit] that
 // covers the original content's byte range. Rules that rewrite the entire file
-// (the dominant pattern today) use this helper to migrate from the legacy
+// (the dominant pattern currently) use this helper to migrate from the legacy
 // []byte return to the byte-range [sdk.FixResult] contract without changing
 // their algorithm.
 //
@@ -36,7 +36,7 @@ import (
 // narrow edits, the whole-file edit is applied alone and the narrow edits are
 // discarded for that pass (they re-emit against the rewritten content on the
 // next pass). Rules using this helper therefore suppress co-applied narrow
-// edits in the same pass — this is intentional and matches today's
+// edits in the same pass — this is intentional and matches the current
 // one-fix-per-pass behavior.
 func WholeFileEdit(original, newContent []byte) *sdk.FixResult {
 	if bytes.Equal(original, newContent) {

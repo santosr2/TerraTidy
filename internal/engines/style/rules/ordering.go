@@ -140,8 +140,8 @@ type LifecycleAtEndRule struct{}
 
 // lifecycleHostBlockTypes lists the block types that may contain a `lifecycle`
 // nested block and that this rule polices. `check` is included for TF 1.5+
-// assertion blocks; while they rarely embed a lifecycle today, including the
-// type keeps the rule consistent and future-proof.
+// assertion blocks; while they rarely embed a lifecycle currently, including
+// the type keeps the rule consistent and future-proof.
 var lifecycleHostBlockTypes = map[string]struct{}{
 	"resource": {},
 	"data":     {},

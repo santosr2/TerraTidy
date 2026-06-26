@@ -123,7 +123,7 @@ func (*Attribute) bodyItem() {}
 // and footerRaw. Body items are still parsed for Find* lookups; mutations
 // on an inline block's Body do not propagate to the serialized output
 // because the wholeRaw fast path takes precedence. No structural rule
-// today targets inline blocks.
+// currently targets inline blocks.
 //
 // Caller-constructed Blocks leave all three raw fields nil; writeRegenerated
 // falls back to a canonical regenerated header / footer.

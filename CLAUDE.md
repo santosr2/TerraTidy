@@ -326,14 +326,15 @@ FILE="$1"
 | `release.yml` | tag `v*` | GoReleaser, Docker, Homebrew, cosign signing |
 | `quality.yml` | push/PR | PR title validation, pre-commit hooks |
 | `security.yml` | push/PR | govulncheck, gitleaks, license check, API compat |
-| `fuzz.yml` | push/PR + weekly | Fuzz tests (30s CI, 5m scheduled) |
+| `fuzz.yml` | labeled PRs (fuzz) + weekly | Fuzz tests (30s CI, 5m scheduled) |
 | `docs.yml` | push main | MkDocs build + GitHub Pages deploy |
 | `action-test.yml` | push/PR | GitHub Action self-test on 3 OSes |
-| `benchmark.yml` | push/PR (Go files) | Performance benchmarks with regression detection |
+| `vscode.yml` | push (paths or v* tag), PR (paths) | Lint, build, test VSCode extension on Ubuntu + macOS; publish on v* tags |
+| `benchmark.yml` | push on benchmarks/baseline.txt + labeled PRs (benchmark) | Performance benchmarks with regression detection |
 | `container-test.yml` | push/PR (Dockerfile, Go) | Docker build, version, check, healthcheck, non-root |
 | `examples-test.yml` | push/PR (examples/) | Test example rules (Go, YAML, Bash) |
 | `precommit-test.yml` | push/PR (.pre-commit-hooks.yaml, Go) | Pre-commit hook validation |
-| `scorecard.yml` | weekly | OpenSSF security scorecard |
+| `scorecard.yml` | weekly + push to main | OpenSSF security scorecard |
 
 PR requirements: conventional commit title, all tests pass on 3 OSes, coverage maintained.
 

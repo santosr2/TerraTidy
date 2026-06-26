@@ -119,7 +119,7 @@ func (a *Attribute) writeRegenerated(buf *bytes.Buffer, lineSep []byte) {
 // a fast path: their entire source bytes live in wholeRaw and are emitted
 // as a single unit, with Body.writeTo and the footer path skipped. Body
 // mutations are not reflected for inline blocks; the wholeRaw fast path
-// wins. No structural rule today targets inline blocks.
+// wins. No structural rule currently targets inline blocks.
 //
 // When headerRaw is nil (a Block constructed from scratch by an Insert
 // caller, or by a test), the regenerated header has the canonical shape

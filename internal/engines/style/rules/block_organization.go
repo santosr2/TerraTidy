@@ -113,8 +113,8 @@ func (r *MetaArgumentsOrderRule) checkBlock(ctx *sdk.Context, block *hclsyntax.B
 var metaArgsFirstNames = []string{"for_each", "count", "provider"}
 
 // metaArgsLastNames is the canonical trailing-meta-argument order. depends_on
-// is the only trailing meta-arg today; the slice shape leaves room for future
-// trailing meta-args without restructuring the Fix.
+// is currently the only trailing meta-arg; the slice shape leaves room for
+// future trailing meta-args without restructuring the Fix.
 var metaArgsLastNames = []string{"depends_on"}
 
 // Fix reorders meta-arguments in resource, data, and module blocks. Leading

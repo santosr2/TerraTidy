@@ -29,7 +29,7 @@ All commands use consistent exit codes for scripting and CI/CD:
 | `2`  | Configuration error (invalid config file, missing required config, plugin loading failure) |
 | `3`  | Internal error (engine failure, filesystem errors, unexpected issues) |
 
-The `--check` flag on `fmt` and `style` exits with code 1 if any issues are found.
+The `--check` flag on `fmt` and `style` exits with code 1 if any issues are found (findings at or above `severity_threshold`).
 The `check` command exits with code 1 when error-severity findings are present.
 
 **Scripting example:**
@@ -260,11 +260,11 @@ terratidy fmt [paths...] [flags]
 
 **Flags:**
 
-| Flag      | Description                                              |
-| --------- | -------------------------------------------------------- |
-| `--check` | Check formatting without modifying                       |
-| `--diff`  | Show diff of changes                                     |
-| `--all`   | Also apply style fixes (equivalent to fmt + style --fix) |
+| Flag      | Description |
+| --------- | ----------- |
+| `--check` | Check formatting without modifying |
+| `--diff`  | Show diff of changes |
+| `--all`   | Also run style engine alongside fmt (fixes in default mode, checks with `--check`) |
 
 **`--diff` behavior:**
 

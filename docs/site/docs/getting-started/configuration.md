@@ -33,11 +33,14 @@ Each engine can be enabled/disabled and configured:
 engines:
   fmt:
     enabled: true
+    check: false   # Report formatting issues without modifying files
+    diff: false    # Show diff of formatting changes
 
   style:
     enabled: true
-    fix: false  # Auto-fix mode
-    rules:      # Rule configuration goes under each engine
+    fix: false     # Auto-fix mode
+    diff: false    # Show diff of style fixes
+    rules:         # Rule configuration goes under each engine
       style.block-label-case:
         enabled: true
         severity: warning
@@ -45,12 +48,40 @@ engines:
   lint:
     enabled: true
     config_file: .tflint.hcl  # Path to TFLint config
+    args:                     # Extra arguments forwarded to the TFLint subprocess
+      - --force
 
   policy:
     enabled: true
     policy_dirs:
       - ./policies
+    policy_files:             # Individual policy files (in addition to policy_dirs)
+      - ./custom-policy.rego
+    data_files:               # JSON/YAML data files passed to policy evaluation
+      - ./policy-data.json
 ```
+
+### Engine Options Reference
+
+| Engine   | Option         | Type     | Default | Purpose |
+| -------- | -------------- | -------- | ------- | ------- |
+| `fmt`    | `enabled`      | bool     | `true`  | Enable the format engine |
+| `fmt`    | `check`        | bool     | `false` | Report formatting issues without rewriting files; mirrored by the `--check` CLI flag |
+| `fmt`    | `diff`         | bool     | `false` | Print a unified diff of the format changes that would be applied |
+| `style`  | `enabled`      | bool     | `true`  | Enable the style engine |
+| `style`  | `fix`          | bool     | `false` | Apply auto-fixes for rules that implement `sdk.Fixer` |
+| `style`  | `diff`         | bool     | `false` | Print a unified diff of the fixes that would be applied |
+| `lint`   | `enabled`      | bool     | `true`  | Enable the lint engine ([engine docs](../user-guide/engines/lint.md)) |
+| `lint`   | `use_tflint`   | bool     | `false` | Invoke TFLint as a subprocess in addition to the built-in rules |
+| `lint`   | `tflint_path`  | string   | `""`    | Custom TFLint binary path (defaults to `tflint` on `PATH`) |
+| `lint`   | `fallback_builtin` | bool | `false` | Fall back to built-in rules when TFLint is unavailable (recommended: `true`) |
+| `lint`   | `config_file`  | string   | `""`    | Path to a TFLint config file (`.tflint.hcl`) |
+| `lint`   | `plugins`      | []string | `[]`    | TFLint plugins to enable when `use_tflint: true` |
+| `lint`   | `args`         | []string | `[]`    | Extra arguments forwarded to the TFLint subprocess |
+| `policy` | `enabled`      | bool     | `false` | Enable the policy engine ([engine docs](../user-guide/engines/policy.md)) |
+| `policy` | `policy_dirs`  | []string | `[]`    | Directories containing Rego policy files |
+| `policy` | `policy_files` | []string | `[]`    | Individual Rego files to evaluate (in addition to `policy_dirs`) |
+| `policy` | `data_files`   | []string | `[]`    | JSON/YAML data files passed to policy evaluation |
 
 ## Configuration Precedence
 
@@ -195,6 +226,9 @@ plugins:
     - ~/.terratidy/plugins
     - ./plugins
   verify_integrity: true  # Verify plugin checksums (default: true)
+  tags:                   # Only load rules matching these tags (empty = load all)
+    - aws
+    - production
 ```
 
 ### Plugin Rule Configuration
@@ -215,6 +249,22 @@ plugins:
 ```
 
 Plugin rules not listed in `plugins.rules` use their defaults (enabled with their defined severity).
+
+### Plugin Tag Filtering
+
+Set `plugins.tags` to load only the plugin rules tagged with one or more of the
+listed values. An empty list (the default) loads every rule. Rules that do not
+expose tags are skipped while a filter is active.
+
+```yaml
+plugins:
+  enabled: true
+  directories:
+    - ./plugins
+  tags:
+    - aws        # Load rules tagged "aws"
+    - security   # ...or "security"
+```
 
 ### Plugin Integrity Verification
 
@@ -434,11 +484,13 @@ engines:
     enabled: true
     use_tflint: false           # Enable TFLint integration (default: false)
     tflint_path: ""             # Custom path to TFLint binary (optional)
-    fallback_builtin: true      # Use built-in rules if TFLint unavailable (default: true)
+    fallback_builtin: true      # Use built-in rules if TFLint unavailable (default: false; recommended on)
     config_file: .tflint.hcl    # Path to TFLint config (optional)
     plugins:                     # TFLint plugins to enable (optional)
       - aws
       - terraform
+    args:                        # Extra arguments forwarded to the TFLint subprocess
+      - --force
 ```
 
 Built-in rules work without TFLint. If TFLint is installed and configured, provider-specific

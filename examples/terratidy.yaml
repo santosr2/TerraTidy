@@ -140,6 +140,10 @@ plugins:
   directories:
     - .terratidy/plugins
     - ~/.terratidy/plugins
+  # verify_integrity: true   # Verify plugin SHA256 checksums (default: true)
+  # tags:                    # Only load rules matching these tags (empty = load all)
+  #   - aws
+  #   - production
   # Per-plugin rule configuration (enable/disable, severity override)
   rules:
     require-description:

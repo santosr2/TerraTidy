@@ -38,12 +38,22 @@ terratidy/
 │       ├── style.go         # Style command
 │       ├── lint.go          # Lint command
 │       ├── policy.go        # Policy command
+│       ├── fix.go           # Fix command
+│       ├── dev.go           # Dev (file watcher) command
+│       ├── init.go          # Init (scaffold .terratidy.yaml) command
+│       ├── init_rule.go     # Init rule (scaffold a rule)
+│       ├── version.go       # Version command
+│       ├── rules.go         # Rules (list/show) command
+│       ├── config.go        # Config (show/validate) command
+│       ├── plugins.go       # Plugins (list/check) command
+│       ├── helpers.go       # Shared CLI helpers
+│       ├── test_rule.go     # Test-rule command
 │       └── lsp.go           # LSP server command
 ├── internal/
-│   ├── runner/              # Engine runner, parallel execution
-│   │   └── runner.go        # Engine interface, Runner struct
+│   ├── annotations/         # Suppression annotation parsing and filtering
+│   ├── buildinfo/           # Build information and versioning
+│   ├── cache/               # Caching layer
 │   ├── config/              # Configuration loading
-│   ├── output/              # Output formatting
 │   ├── cst/                 # Concrete Syntax Tree (structural fix substrate)
 │   ├── engines/             # Engine implementations
 │   │   ├── fmt/             # Format engine
@@ -51,23 +61,30 @@ terratidy/
 │   │   ├── lint/            # Lint engine
 │   │   └── policy/          # Policy engine
 │   ├── lsp/                 # Language server
-│   └── plugins/             # Plugin system
+│   ├── output/              # Output formatting
+│   ├── plugins/             # Plugin system
+│   ├── runner/              # Engine runner, parallel execution
+│   │   └── runner.go        # Runner struct, engine orchestration
+│   └── vcs/                 # Git integration (--changed flag)
 ├── pkg/
 │   └── sdk/                 # Public SDK
-│       └── types.go         # Rule interface, Finding, Context types
+│       └── types.go         # Engine, Rule, Fixer interfaces; Finding, Context types
 └── docs/                    # Documentation
 ```
+
+The canonical layout lives in `CLAUDE.md` at the repo root; update both whenever
+packages move so the tree here stays in sync.
 
 ## Core Components
 
 ### Engine Interface
 
-All engines implement the `Engine` interface defined in `internal/runner/runner.go`:
+All engines implement the `Engine` interface defined in `pkg/sdk/types.go`:
 
 ```go
 type Engine interface {
     Name() string
-    Run(ctx context.Context, files []string) ([]sdk.Finding, error)
+    Run(ctx context.Context, files []string) ([]Finding, error)
 }
 ```
 
@@ -103,7 +120,8 @@ printing it as plain text.
 
 ### Runner
 
-The runner coordinates engine execution:
+The runner coordinates engine execution. `Run` returns a flat slice of findings
+and stops at the first engine error:
 
 ```go
 type Runner struct {
@@ -119,11 +137,34 @@ func (r *Runner) Run(ctx context.Context, files []string) ([]sdk.Finding, error)
 }
 ```
 
+`RunWithResults` returns per-engine results so callers can render output and
+exit codes per engine even when one fails:
+
+```go
+type EngineResult struct {
+    Engine   string
+    Findings []sdk.Finding
+    Error    error
+}
+
+func (r *Runner) RunWithResults(ctx context.Context, files []string) []EngineResult {
+    if r.parallel {
+        return r.runParallelWithResults(ctx, files)
+    }
+    return r.runSequentialWithResults(ctx, files)
+}
+```
+
+`Run` is for callers that only need a combined findings slice; `RunWithResults`
+is what `cmd/terratidy/check.go` actually invokes, because the CLI reports
+issue counts per engine.
+
 ## Engine Implementations
 
 ### Format Engine
 
-Uses the HCL formatter:
+Uses the HCL formatter. The snippets below are simplified pseudo-code for
+readability; the production code lives in `internal/engines/format/`:
 
 ```go
 func (e *FmtEngine) Run(ctx context.Context, files []string) ([]Finding, error) {
@@ -133,7 +174,7 @@ func (e *FmtEngine) Run(ctx context.Context, files []string) ([]Finding, error) 
 
         if !bytes.Equal(content, formatted) {
             findings = append(findings, Finding{
-                Rule:    "fmt",
+                Rule:    "fmt.needs-formatting",
                 Message: "File is not formatted",
                 File:    file,
                 Fixable: true,
@@ -146,16 +187,20 @@ func (e *FmtEngine) Run(ctx context.Context, files []string) ([]Finding, error) 
 
 ### Style Engine
 
-Implements custom style rules:
+Implements custom style rules. Simplified pseudo-code:
 
 ```go
 func (e *StyleEngine) Run(ctx context.Context, files []string) ([]Finding, error) {
     for _, file := range files {
-        ast, _ := hclparse.ParseHCLFile(file)
+        parsed, _ := hclparse.NewParser().ParseHCLFile(file)
 
         for _, rule := range e.rules {
             if e.config.IsRuleEnabled(rule.Name()) {
-                findings = append(findings, rule.Check(ast)...)
+                // sdk.Context embeds context.Context and adds per-file fields
+                // like File and AllFiles; the real engine builds one per file.
+                ruleCtx := &sdk.Context{Context: ctx, File: file}
+                ruleFindings, _ := rule.Check(ruleCtx, parsed)
+                findings = append(findings, ruleFindings...)
             }
         }
     }

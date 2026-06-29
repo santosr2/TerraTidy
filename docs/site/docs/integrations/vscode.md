@@ -118,15 +118,6 @@ Configure in VS Code settings (`Ctrl+,` / `Cmd+,`):
   // Configuration profile to use
   "terratidy.profile": "",
 
-  // Run checks on save (default: false)
-  "terratidy.runOnSave": false,
-
-  // Format on save (default: false)
-  "terratidy.formatOnSave": false,
-
-  // Auto-fix on save
-  "terratidy.fixOnSave": false,
-
   // Enable/disable engines
   "terratidy.engines.fmt": true,
   "terratidy.engines.style": true,
@@ -140,6 +131,19 @@ Configure in VS Code settings (`Ctrl+,` / `Cmd+,`):
   "terratidy.trace.server": "off"
 }
 ```
+
+### Severity Threshold
+
+`terratidy.severityThreshold` is forwarded to the language server only when
+you have written the key into your workspace, workspace folder, or user
+`settings.json`. If you have not set it there, the extension omits the value
+and the LSP server falls back to `severity_threshold:` in `.terratidy.yaml`
+(see [Configuration](../getting-started/configuration.md#severity_threshold)).
+
+To let VS Code control the threshold instead of `.terratidy.yaml`, add the
+key to one of those `settings.json` files. Even setting it to the value
+shown in the Settings UI counts as an explicit override and takes precedence
+over `.terratidy.yaml`.
 
 ## Workspace Settings
 
@@ -220,7 +224,6 @@ For large projects:
 
 ```json
 {
-  "terratidy.runOnSave": false,
   "terratidy.engines.lint": false
 }
 ```

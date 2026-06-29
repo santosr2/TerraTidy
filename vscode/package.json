@@ -81,21 +81,6 @@
 					"default": "",
 					"description": "Configuration profile to use."
 				},
-				"terratidy.runOnSave": {
-					"type": "boolean",
-					"default": false,
-					"description": "Run TerraTidy checks when saving a file."
-				},
-				"terratidy.formatOnSave": {
-					"type": "boolean",
-					"default": false,
-					"description": "Format Terraform files on save using TerraTidy."
-				},
-				"terratidy.fixOnSave": {
-					"type": "boolean",
-					"default": false,
-					"description": "Auto-fix issues on save."
-				},
 				"terratidy.engines.fmt": {
 					"type": "boolean",
 					"default": true,

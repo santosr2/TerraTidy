@@ -122,59 +122,6 @@ suite('Settings Behavior', () => {
     }
   });
 
-  // Test: formatOnSave setting is reflected in initialization options
-  // Note: Default value test is in configuration.test.ts
-  test('formatOnSave: update reflected in initialization options', async function () {
-    this.timeout(10000);
-    assert.ok(ext, 'Extension should be activated');
-
-    try {
-      // Enable formatOnSave
-      await updateConfig('formatOnSave', true);
-
-      // getInitializationOptions reads config synchronously - no wait needed
-      const options = getInitializationOptions();
-      assert.strictEqual(options.formatOnSave, true, 'formatOnSave should be true when enabled');
-    } finally {
-      await resetConfig('formatOnSave');
-    }
-  });
-
-  // Test: fixOnSave setting is reflected in initialization options
-  // Note: Default value test is in configuration.test.ts
-  test('fixOnSave: update reflected in initialization options', async function () {
-    this.timeout(10000);
-    assert.ok(ext, 'Extension should be activated');
-
-    try {
-      // Enable fixOnSave
-      await updateConfig('fixOnSave', true);
-
-      const options = getInitializationOptions();
-      assert.strictEqual(options.fixOnSave, true, 'fixOnSave should be true when enabled');
-    } finally {
-      await resetConfig('fixOnSave');
-    }
-  });
-
-  // Test: runOnSave setting is reflected in initialization options
-  // Note: Default value test is in configuration.test.ts
-  // Note: Actual "triggers diagnostics on save" behavior requires LSP server
-  test('runOnSave: update reflected in initialization options', async function () {
-    this.timeout(10000);
-    assert.ok(ext, 'Extension should be activated');
-
-    try {
-      // Enable runOnSave
-      await updateConfig('runOnSave', true);
-
-      const options = getInitializationOptions();
-      assert.strictEqual(options.runOnSave, true, 'runOnSave should be true when enabled');
-    } finally {
-      await resetConfig('runOnSave');
-    }
-  });
-
   // Test: profile setting is reflected in initialization options
   // Note: Default value test is in configuration.test.ts
   test('profile: update reflected in initialization options', async function () {
@@ -206,36 +153,6 @@ suite('Settings Behavior', () => {
       assert.strictEqual(options.severityThreshold, 'error', 'severityThreshold should be set to error');
     } finally {
       await resetConfig('severityThreshold');
-    }
-  });
-
-  // Test: multiple settings changes don't cause issues
-  test('multiple settings changes: handled gracefully', async function () {
-    this.timeout(20000);
-    assert.ok(ext, 'Extension should be activated');
-
-    try {
-      // Change multiple settings in rapid succession
-      await updateConfig('profile', 'test-profile');
-      await updateConfig('engines.lint', false);
-      await updateConfig('formatOnSave', true);
-      await updateConfig('fixOnSave', true);
-
-      // All changes should be reflected (synchronous read)
-      const options = getInitializationOptions();
-      assert.strictEqual(options.profile, 'test-profile', 'profile should be updated');
-      assert.strictEqual((options.engines as Record<string, boolean>).lint, false, 'lint should be disabled');
-      assert.strictEqual(options.formatOnSave, true, 'formatOnSave should be enabled');
-      assert.strictEqual(options.fixOnSave, true, 'fixOnSave should be enabled');
-
-      // Extension should still be active
-      assert.strictEqual(ext.isActive, true, 'Extension should remain active');
-    } finally {
-      // Reset all settings
-      await resetConfig('profile');
-      await resetConfig('engines.lint');
-      await resetConfig('formatOnSave');
-      await resetConfig('fixOnSave');
     }
   });
 

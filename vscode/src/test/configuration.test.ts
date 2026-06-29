@@ -7,9 +7,6 @@ suite('Configuration', () => {
 
     assert.ok(typeof options === 'object', 'Should return an object');
     assert.ok('engines' in options, 'Should have engines');
-    assert.ok('formatOnSave' in options, 'Should have formatOnSave');
-    assert.ok('runOnSave' in options, 'Should have runOnSave');
-    assert.ok('fixOnSave' in options, 'Should have fixOnSave');
   });
 
   test('engines have correct defaults', () => {
@@ -29,13 +26,6 @@ suite('Configuration', () => {
     assert.strictEqual(options.severityThreshold, undefined);
   });
 
-  test('save options default to false', () => {
-    const options = getInitializationOptions();
-    assert.strictEqual(options.formatOnSave, false);
-    assert.strictEqual(options.runOnSave, false);
-    assert.strictEqual(options.fixOnSave, false);
-  });
-
   /**
    * This test documents the mapping between VSCode settings and LSP InitializationOptions.
    * The mapping must match what the LSP server expects in internal/lsp/types.go.
@@ -48,9 +38,6 @@ suite('Configuration', () => {
    *   terratidy.engines.lint      -> engines.lint (boolean)
    *   terratidy.engines.policy    -> engines.policy (boolean)
    *   terratidy.severityThreshold -> severityThreshold (string, only if explicitly set)
-   *   terratidy.formatOnSave      -> formatOnSave (boolean)
-   *   terratidy.runOnSave         -> runOnSave (boolean)
-   *   terratidy.fixOnSave         -> fixOnSave (boolean)
    *
    * Settings NOT sent to LSP:
    *   terratidy.executablePath    -> used by extension to locate binary
@@ -60,15 +47,7 @@ suite('Configuration', () => {
     const options = getInitializationOptions();
 
     // These keys must match the JSON field names in internal/lsp/types.go InitializationOptions
-    const expectedKeys = [
-      'profile',
-      'configPath',
-      'engines',
-      'severityThreshold',
-      'formatOnSave',
-      'runOnSave',
-      'fixOnSave',
-    ];
+    const expectedKeys = ['profile', 'configPath', 'engines', 'severityThreshold'];
 
     for (const key of expectedKeys) {
       assert.ok(key in options, `Missing LSP option: ${key}`);

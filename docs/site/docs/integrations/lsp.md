@@ -195,10 +195,7 @@ The server reads these options from the client's `initializationOptions`:
       "lint": true,
       "policy": false
     },
-    "severityThreshold": "warning",
-    "formatOnSave": false,
-    "runOnSave": false,
-    "fixOnSave": false
+    "severityThreshold": "warning"
   }
 }
 ```

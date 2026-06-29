@@ -253,9 +253,6 @@ export function getInitializationOptions(): Record<string, unknown> {
     configPath: config.get<string>('configPath') || undefined,
     engines: engines,
     severityThreshold: severityThreshold,
-    formatOnSave: config.get<boolean>('formatOnSave', false),
-    runOnSave: config.get<boolean>('runOnSave', false),
-    fixOnSave: config.get<boolean>('fixOnSave', false),
   };
 }
 

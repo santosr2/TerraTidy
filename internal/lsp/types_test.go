@@ -25,19 +25,13 @@ func TestInitializationOptions_JSONParsing(t *testing.T) {
 					"lint": true,
 					"policy": false
 				},
-				"severityThreshold": "error",
-				"formatOnSave": true,
-				"runOnSave": false,
-				"fixOnSave": true
+				"severityThreshold": "error"
 			}`,
 			expected: InitializationOptions{
 				Profile:           "production",
 				ConfigPath:        "/path/to/config.yaml",
 				Engines:           EngineToggles{Fmt: true, Style: false, Lint: true, Policy: false},
 				SeverityThreshold: "error",
-				FormatOnSave:      true,
-				RunOnSave:         false,
-				FixOnSave:         true,
 			},
 		},
 		{

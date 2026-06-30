@@ -631,8 +631,6 @@ func TestServer_HandleInitialize_WithOptions(t *testing.T) {
 				Lint:   false,
 				Policy: true,
 			},
-			FormatOnSave: true,
-			RunOnSave:    true,
 		},
 	}
 	paramsJSON, _ := json.Marshal(params)
@@ -654,7 +652,6 @@ func TestServer_HandleInitialize_WithOptions(t *testing.T) {
 	assert.True(t, server.initOptions.Engines.Fmt)
 	assert.True(t, server.initOptions.Engines.Policy)
 	assert.False(t, server.initOptions.Engines.Lint)
-	assert.True(t, server.initOptions.FormatOnSave)
 
 	// Severity threshold should be applied to config
 	assert.Equal(t, "error", server.config.SeverityThreshold)
@@ -1040,9 +1037,6 @@ engines:
 //	terratidy.engines.lint      -> engines.lint
 //	terratidy.engines.policy    -> engines.policy
 //	terratidy.severityThreshold -> severityThreshold
-//	terratidy.formatOnSave      -> formatOnSave
-//	terratidy.runOnSave         -> runOnSave
-//	terratidy.fixOnSave         -> fixOnSave
 //
 // Settings NOT sent to LSP:
 //
@@ -1059,10 +1053,7 @@ func TestVSCodeSettings_MapsToLSPOptions(t *testing.T) {
 			"lint": false,
 			"policy": true
 		},
-		"severityThreshold": "warning",
-		"formatOnSave": true,
-		"runOnSave": false,
-		"fixOnSave": true
+		"severityThreshold": "warning"
 	}`
 
 	var opts InitializationOptions
@@ -1077,9 +1068,6 @@ func TestVSCodeSettings_MapsToLSPOptions(t *testing.T) {
 	assert.False(t, opts.Engines.Lint)
 	assert.True(t, opts.Engines.Policy)
 	assert.Equal(t, "warning", opts.SeverityThreshold)
-	assert.True(t, opts.FormatOnSave)
-	assert.False(t, opts.RunOnSave)
-	assert.True(t, opts.FixOnSave)
 }
 
 // TestServer_ConfigChangesOnRestart verifies that when the LSP server is
@@ -1158,10 +1146,7 @@ func TestVSCodeSettings_EmptyValues(t *testing.T) {
 			"style": true,
 			"lint": true,
 			"policy": false
-		},
-		"formatOnSave": false,
-		"runOnSave": false,
-		"fixOnSave": false
+		}
 	}`
 
 	var opts InitializationOptions

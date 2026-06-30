@@ -55,9 +55,6 @@ type InitializationOptions struct {
 	ConfigPath        string        `json:"configPath,omitempty"`
 	Engines           EngineToggles `json:"engines"`
 	SeverityThreshold string        `json:"severityThreshold,omitempty"`
-	FormatOnSave      bool          `json:"formatOnSave,omitempty"`
-	RunOnSave         bool          `json:"runOnSave,omitempty"`
-	FixOnSave         bool          `json:"fixOnSave,omitempty"`
 }
 
 // EngineToggles represents which engines are enabled

@@ -59,9 +59,6 @@ This extension contributes the following settings:
 | `terratidy.executablePath` | `""` | Path to the terratidy executable |
 | `terratidy.configPath` | `""` | Path to terratidy configuration file |
 | `terratidy.profile` | `""` | Configuration profile to use |
-| `terratidy.runOnSave` | `false` | Run TerraTidy checks when saving |
-| `terratidy.formatOnSave` | `false` | Format files on save |
-| `terratidy.fixOnSave` | `false` | Auto-fix issues on save |
 | `terratidy.engines.fmt` | `true` | Enable format engine |
 | `terratidy.engines.style` | `true` | Enable style engine |
 | `terratidy.engines.lint` | `true` | Enable lint engine |
@@ -182,8 +179,6 @@ For the best experience, add these settings to your `settings.json`:
 
 ```json
 {
-  "terratidy.runOnSave": true,
-  "terratidy.formatOnSave": true,
   "[terraform]": {
     "editor.defaultFormatter": "santosr2.vscode-terratidy",
     "editor.formatOnSave": true

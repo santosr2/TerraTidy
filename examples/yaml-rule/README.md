@@ -52,6 +52,16 @@ Each entry in `attribute_patterns` has:
 | `pattern` | Yes | Regex pattern the value must match |
 | `message` | No | Custom message when pattern fails |
 
+## Plugin Integrity
+
+The `.terratidy-plugins.sha256` manifest is committed and verified at load time. If you edit any of the YAML rule files in this directory, regenerate the manifest from the repo root:
+
+```bash
+cd examples/yaml-rule && sha256sum *.yaml > .terratidy-plugins.sha256
+```
+
+A stale manifest currently produces a `verification failed` warning and the rule loads anyway; future releases will treat the mismatch as a hard error.
+
 ## See Also
 
 - [Plugins Documentation](../../docs/site/docs/development/plugins.md) for complete reference

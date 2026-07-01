@@ -31,7 +31,10 @@ go build -buildmode=plugin -o require-tags.so
 ```bash
 mkdir -p ~/.terratidy/plugins
 cp require-tags.so ~/.terratidy/plugins/
+cd ~/.terratidy/plugins && shasum -a 256 require-tags.so > .terratidy-plugins.sha256
 ```
+
+The manifest must record the bare filename (not a path), which is why the `shasum` step `cd`s into the install directory first. See "Plugin Integrity" below.
 
 ## Configuration
 
@@ -43,3 +46,22 @@ plugins:
   directories:
     - ~/.terratidy/plugins
 ```
+
+## Plugin Integrity
+
+Unlike the bash example, the `.terratidy-plugins.sha256` manifest is **not** committed for Go plugins:
+every `go build -buildmode=plugin` produces a different binary hash (Go bakes build metadata into the artifact),
+so a committed manifest goes stale on the first local build and the loader rejects the plugin with a
+checksum-mismatch error (Go plugin verification is a hard fail, not warn-only).
+
+You must generate the manifest locally after every build, in the directory that holds the `.so`
+(the loader keys on the basename, so the manifest's filename column has to be `require-tags.so`, not a path).
+For the example test configs (which point at `examples/go-rule/` directly):
+
+```bash
+cd examples/go-rule
+go build -buildmode=plugin -o require-tags.so
+shasum -a 256 require-tags.so > .terratidy-plugins.sha256
+```
+
+CI runs the same steps in [.github/workflows/examples-test.yml](../../.github/workflows/examples-test.yml).

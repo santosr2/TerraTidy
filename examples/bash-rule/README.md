@@ -33,3 +33,13 @@ The script receives a file path as `$1`, scans for 12-digit numbers that look li
 
 - `bash`, `grep`, `jq`
 - Script must be executable (`chmod +x`)
+
+## Plugin Integrity
+
+The `.terratidy-plugins.sha256` manifest is committed and verified at load time. If you edit `no-hardcoded-account-id.sh`, regenerate the manifest from the repo root:
+
+```bash
+cd examples/bash-rule && sha256sum no-hardcoded-account-id.sh > .terratidy-plugins.sha256
+```
+
+A stale manifest currently produces a `verification failed` warning and the rule loads anyway; future releases will treat the mismatch as a hard error.

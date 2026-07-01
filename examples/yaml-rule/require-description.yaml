@@ -7,5 +7,7 @@ tags:
   - documentation
   - best-practice
 patterns:
+  block_types:
+    - resource
   required_attributes:
     - description

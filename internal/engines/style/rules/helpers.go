@@ -331,6 +331,8 @@ func GetNamingConventionFromConfig(config map[string]any) (NamingCase, string) {
 	convention := SnakeCase
 	if caseStr, ok := options["case"].(string); ok {
 		switch caseStr {
+		case "snake_case":
+			convention = SnakeCase
 		case "camelCase":
 			convention = CamelCase
 		case "kebab-case":

@@ -60,3 +60,23 @@ updates:
       - ci
     cooldown:
       default-days: 7
+
+  # Hash-pinned CI/docs tooling lockfiles (uv pip compile output).
+  # .github/requirements: pre-commit + pyyaml for precommit-test.yml.
+  # docs/site: mkdocs stack for the docs build.
+  - package-ecosystem: pip
+    directories:
+      - /.github/requirements
+      - /docs/site
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "ci"
+      include: "scope"
+    labels:
+      - dependencies
+      - python
+    cooldown:
+      default-days: 7

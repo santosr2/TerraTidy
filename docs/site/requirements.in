@@ -1,0 +1,9 @@
+# Direct documentation dependencies for the MkDocs site.
+# requirements.txt is the hash-pinned lockfile generated from this file; do not hand-edit it.
+# Regenerate with:
+#   uv pip compile --universal --generate-hashes -o docs/site/requirements.txt docs/site/requirements.in
+# To pick up new upstream releases, add --upgrade to the command above.
+mkdocs==1.6.1
+mkdocs-material==9.7.6
+mkdocs-minify-plugin==0.8.0
+pymdown-extensions==10.21.2

@@ -107,7 +107,8 @@ func runFileWatcher() error {
 	fmt.Println("Watching for changes... (Ctrl+C to stop)")
 	fmt.Println()
 
-	return runWatchLoop(watcher)
+	runWatchLoop(watcher)
+	return nil
 }
 
 func setupWatchDirs(watcher *fsnotify.Watcher) error {
@@ -138,7 +139,7 @@ func setupWatchDirs(watcher *fsnotify.Watcher) error {
 	return nil
 }
 
-func runWatchLoop(watcher *fsnotify.Watcher) error {
+func runWatchLoop(watcher *fsnotify.Watcher) {
 	var debounceTimer *time.Timer
 	debounceDelay := 500 * time.Millisecond
 
@@ -146,13 +147,13 @@ func runWatchLoop(watcher *fsnotify.Watcher) error {
 		select {
 		case event, ok := <-watcher.Events:
 			if !ok {
-				return nil
+				return
 			}
 			debounceTimer = handleWatchEvent(event, debounceTimer, debounceDelay)
 
 		case err, ok := <-watcher.Errors:
 			if !ok {
-				return nil
+				return
 			}
 			fmt.Printf("Watcher error: %v\n", err)
 		}

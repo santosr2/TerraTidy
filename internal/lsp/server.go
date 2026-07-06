@@ -448,7 +448,7 @@ func (s *Server) republishAllDiagnostics() {
 
 // initSessionTempDir creates a private temp directory for this server session.
 // It also cleans up stale session directories older than sessionTempMaxAge.
-func (s *Server) initSessionTempDir() error {
+func (s *Server) initSessionTempDir() {
 	baseDir := getSessionTempBaseDir()
 
 	// Clean up old session directories
@@ -462,12 +462,11 @@ func (s *Server) initSessionTempDir() error {
 		// Fall back to system temp dir
 		s.logWarn("failed to create session temp dir %s, using system temp: %v", sessionDir, err)
 		s.sessionTempDir = os.TempDir()
-		return nil
+		return
 	}
 
 	s.sessionTempDir = sessionDir
 	s.logDebug("using session temp directory: %s", sessionDir)
-	return nil
 }
 
 // getSessionTempBaseDir returns the base directory for LSP session temp files.
@@ -732,11 +731,9 @@ func (s *Server) handleInitialize(msg RequestMessage) error {
 
 	s.config = cfg
 
-	// Initialize session temp directory for document analysis
-	if err := s.initSessionTempDir(); err != nil {
-		s.logWarn("failed to initialize session temp dir: %v", err)
-		// Not fatal - will fall back to system temp
-	}
+	// Initialize session temp directory for document analysis.
+	// Falls back to the system temp dir internally if creation fails.
+	s.initSessionTempDir()
 
 	// Load plugin rules if plugins are enabled
 	if cfg.Plugins.Enabled {

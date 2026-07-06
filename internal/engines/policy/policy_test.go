@@ -169,11 +169,10 @@ output "instance_id" {
 	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "variables.tf"), []byte(varsContent), 0o644))
 
 	engine := New(nil)
-	data, err := engine.parseModuleToJSON([]string{
+	data := engine.parseModuleToJSON([]string{
 		filepath.Join(tmpDir, "main.tf"),
 		filepath.Join(tmpDir, "variables.tf"),
 	})
-	require.NoError(t, err)
 
 	// Verify resources
 	resources := data["resources"].([]any)

@@ -2836,8 +2836,7 @@ func TestServer_InitSessionTempDir(t *testing.T) {
 	out := &bytes.Buffer{}
 	server := NewServer(strings.NewReader(""), out)
 
-	err := server.initSessionTempDir()
-	require.NoError(t, err)
+	server.initSessionTempDir()
 
 	// Should have created a session temp directory
 	assert.NotEmpty(t, server.sessionTempDir)
@@ -2847,7 +2846,7 @@ func TestServer_InitSessionTempDir(t *testing.T) {
 	assert.Contains(t, server.sessionTempDir, "terratidy")
 
 	// Clean up
-	err = server.Close()
+	err := server.Close()
 	require.NoError(t, err)
 
 	// Directory should be removed after Close
@@ -2865,8 +2864,7 @@ func TestServer_SessionTempDir_UsedForDocs(t *testing.T) {
 	server.workspaceRoot = tmpDir
 
 	// Initialize session temp dir
-	err := server.initSessionTempDir()
-	require.NoError(t, err)
+	server.initSessionTempDir()
 
 	// Add a document
 	uri := pathToFileURI(testFile)

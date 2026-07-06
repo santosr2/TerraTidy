@@ -3,24 +3,8 @@ name: Security
 on:
   push:
     branches: [main]
-    paths:
-      - '**/*.go'
-      - 'go.mod'
-      - 'go.sum'
-      - 'vscode/package.json'
-      - 'vscode/bun.lock'
-      - '.github/workflows/**'
-      - 'action.yml'
   pull_request:
     branches: [main]
-    paths:
-      - '**/*.go'
-      - 'go.mod'
-      - 'go.sum'
-      - 'vscode/package.json'
-      - 'vscode/bun.lock'
-      - '.github/workflows/**'
-      - 'action.yml'
 
 permissions:
   contents: read

@@ -4,7 +4,7 @@ TerraTidy's CI/CD pipeline includes automated security scanning at multiple stag
 
 ## CI Security Scanning
 
-The security workflow (`.github/workflows/security.yml`) runs on every push to main and on pull requests that change Go source files.
+The security workflow (`.github/workflows/security.yml`) runs on every push to main and every pull request targeting main, covering all changes rather than only Go source edits.
 
 ### govulncheck
 

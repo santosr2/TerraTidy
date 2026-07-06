@@ -1,0 +1,6 @@
+# Source constraints for .github/workflows/precommit-test.yml (hooks-yaml validation job).
+# pyyaml.txt is the hash-pinned lockfile generated from this file; do not hand-edit it.
+# Regenerate with:
+#   uv pip compile --universal --generate-hashes -o .github/requirements/pyyaml.txt .github/requirements/pyyaml.in
+# To pick up new upstream releases, add --upgrade to the command above.
+pyyaml

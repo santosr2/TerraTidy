@@ -1,0 +1,6 @@
+# Source constraints for .github/workflows/precommit-test.yml.
+# precommit.txt is the hash-pinned lockfile generated from this file; do not hand-edit it.
+# Regenerate with:
+#   uv pip compile --universal --generate-hashes -o .github/requirements/precommit.txt .github/requirements/precommit.in
+# To pick up new upstream releases, add --upgrade to the command above.
+pre-commit>=3.2.0

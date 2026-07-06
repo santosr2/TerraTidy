@@ -8,6 +8,7 @@ on:
       - '**/*.go'
       - 'go.mod'
       - 'go.sum'
+      - '.github/requirements/**'
       - '.github/workflows/precommit-test.yml'
   pull_request:
     branches: [main]
@@ -16,6 +17,7 @@ on:
       - '**/*.go'
       - 'go.mod'
       - 'go.sum'
+      - '.github/requirements/**'
       - '.github/workflows/precommit-test.yml'
 
 permissions:
@@ -55,7 +57,7 @@ jobs:
 
       - name: Install pre-commit
         run: |
-          pip install 'pre-commit>=3.2.0'
+          pip install --require-hashes -r .github/requirements/precommit.txt
           pre-commit --version
 
       - name: Build TerraTidy
@@ -225,7 +227,7 @@ jobs:
           python-version: '3.12'
 
       - name: Install pre-commit
-        run: pip install 'pre-commit>=3.2.0'
+        run: pip install --require-hashes -r .github/requirements/precommit.txt
 
       - name: Build TerraTidy
         run: |
@@ -307,7 +309,7 @@ jobs:
           python-version: '3.12'
 
       - name: Install dependencies
-        run: pip install pyyaml
+        run: pip install --require-hashes -r .github/requirements/pyyaml.txt
 
       - name: Validate .pre-commit-hooks.yaml structure
         run: |

@@ -141,22 +141,10 @@ func (e *Engine) Run(ctx context.Context, files []string) ([]sdk.Finding, error)
 
 		// Parse and convert all files in the module to JSON representation
 		// Also collect suppression annotations per file
-		moduleData, fileSuppressions, err := e.parseModuleToJSONWithSuppressions(dirFileList)
-		if err != nil {
-			allFindings = append(allFindings, sdk.Finding{
-				Rule:     "policy.parse-error",
-				Message:  fmt.Sprintf("Failed to parse module: %v", err),
-				File:     dir,
-				Severity: sdk.SeverityError,
-			})
-			continue
-		}
+		moduleData, fileSuppressions := e.parseModuleToJSONWithSuppressions(dirFileList)
 
 		// Evaluate policies against the module data
-		findings, err := e.evaluatePolicies(ctx, policies, moduleData, dir, dataStore)
-		if err != nil {
-			return nil, fmt.Errorf("evaluating policies for %s: %w", dir, err)
-		}
+		findings := e.evaluatePolicies(ctx, policies, moduleData, dir, dataStore)
 
 		// Filter findings based on per-file suppression annotations
 		findings = e.filterSuppressedFindings(findings, fileSuppressions)
@@ -246,18 +234,18 @@ func (e *Engine) loadDataFiles() (storage.Store, error) {
 }
 
 // parseModuleToJSON parses Terraform files and converts to JSON representation for OPA
-func (e *Engine) parseModuleToJSON(files []string) (map[string]any, error) {
+func (e *Engine) parseModuleToJSON(files []string) map[string]any {
 	moduleData := newModuleData()
 
 	for _, file := range files {
 		e.parseFileIntoModule(file, moduleData)
 	}
 
-	return moduleData, nil
+	return moduleData
 }
 
 // parseModuleToJSONWithSuppressions parses files and also collects suppression annotations
-func (e *Engine) parseModuleToJSONWithSuppressions(files []string) (map[string]any, map[string][]annotations.Suppression, error) {
+func (e *Engine) parseModuleToJSONWithSuppressions(files []string) (map[string]any, map[string][]annotations.Suppression) {
 	moduleData := newModuleData()
 	fileSuppressions := make(map[string][]annotations.Suppression)
 
@@ -274,7 +262,7 @@ func (e *Engine) parseModuleToJSONWithSuppressions(files []string) (map[string]a
 		e.parseFileIntoModule(file, moduleData)
 	}
 
-	return moduleData, fileSuppressions, nil
+	return moduleData, fileSuppressions
 }
 
 // filterSuppressedFindings filters findings based on per-file suppression annotations
@@ -436,7 +424,7 @@ func (e *Engine) evaluatePolicies(
 	moduleData map[string]any,
 	dir string,
 	dataStore storage.Store,
-) ([]sdk.Finding, error) {
+) []sdk.Finding {
 	var findings []sdk.Finding
 
 	evalCtx := &policyEvalContext{
@@ -452,7 +440,7 @@ func (e *Engine) evaluatePolicies(
 		findings = append(findings, policyFindings...)
 	}
 
-	return findings, nil
+	return findings
 }
 
 // evaluatePolicyWithPrepare compiles the policy once and evaluates both deny and warn rules.
@@ -569,10 +557,7 @@ func parseSeverity(severity string) sdk.Severity {
 
 // GetInput returns the module data as JSON for debugging
 func (e *Engine) GetInput(files []string) ([]byte, error) {
-	data, err := e.parseModuleToJSON(files)
-	if err != nil {
-		return nil, err
-	}
+	data := e.parseModuleToJSON(files)
 	return json.MarshalIndent(data, "", "  ")
 }
 

@@ -499,9 +499,6 @@ func BenchmarkPolicyEngine_ParseModuleToJSONInternal(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, err := engine.parseModuleToJSON([]string{tmpFile})
-		if err != nil {
-			b.Fatalf("parseModuleToJSON() error = %v", err)
-		}
+		_ = engine.parseModuleToJSON([]string{tmpFile})
 	}
 }

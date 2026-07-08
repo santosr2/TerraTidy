@@ -114,7 +114,7 @@ const (
 
 ### Prerequisites
 
-- Go 1.26.3 or later
+- Go 1.26.4 or later
 - TerraTidy SDK (`pkg/sdk`)
 - TerraTidy plugin types (`internal/plugins`)
 

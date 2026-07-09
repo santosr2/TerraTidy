@@ -256,6 +256,11 @@ Set `plugins.tags` to load only the plugin rules tagged with one or more of the
 listed values. An empty list (the default) loads every rule. Rules that do not
 expose tags are skipped while a filter is active.
 
+When set in more than one config (e.g. a base config and an imported file),
+`plugins.tags` accumulates: the merged list is the union of every `tags`
+entry across the base config and its imports, matching `plugins.directories`
+above. A tag anywhere in that combined list is enough to include a rule.
+
 ```yaml
 plugins:
   enabled: true
@@ -306,6 +311,12 @@ engines:
 Imported files can themselves contain `imports`, which are loaded recursively.
 Circular imports (e.g., `a.yaml` imports `b.yaml` which imports `a.yaml`) are
 detected and produce a clear error.
+
+List-type keys accumulate across the base config and its imports rather than
+the last one winning: `exclude`, `plugins.directories`, and `plugins.tags` are
+all concatenated. Scalar keys (e.g. `severity_threshold`, `plugins.enabled`)
+and maps (`plugins.rules`, `profiles`) follow override semantics instead — a
+later import replaces the earlier value.
 
 ## Full Example
 

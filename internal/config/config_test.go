@@ -1795,6 +1795,43 @@ func TestConfig_merge_PluginDirectoriesAppended(t *testing.T) {
 	assert.Equal(t, []string{"./base-plugins", "./extra-plugins"}, base.Plugins.Directories)
 }
 
+func TestConfig_merge_PluginTagsAppended(t *testing.T) {
+	// Tags from an imported config must reach the merged result; they were
+	// silently dropped before, so a tag filter set in an import had no effect.
+	t.Run("base and import tags combine", func(t *testing.T) {
+		base := &Config{
+			Plugins: PluginsConfig{
+				Enabled: true,
+				Tags:    []string{"aws"},
+			},
+		}
+		other := &Config{
+			Plugins: PluginsConfig{
+				Tags: []string{"gcp"},
+			},
+		}
+
+		base.merge(other)
+
+		assert.Equal(t, []string{"aws", "gcp"}, base.Plugins.Tags)
+	})
+
+	t.Run("import tags flow into empty base", func(t *testing.T) {
+		base := &Config{
+			Plugins: PluginsConfig{Enabled: true},
+		}
+		other := &Config{
+			Plugins: PluginsConfig{
+				Tags: []string{"aws"},
+			},
+		}
+
+		base.merge(other)
+
+		assert.Equal(t, []string{"aws"}, base.Plugins.Tags)
+	})
+}
+
 func TestLoadPartialConfig_ReadError(t *testing.T) {
 	_, err := loadPartialConfig("/nonexistent/path/does-not-exist.yaml")
 	require.Error(t, err)

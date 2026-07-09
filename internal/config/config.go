@@ -642,6 +642,13 @@ func (c *Config) merge(other *Config) {
 			c.Plugins.Rules[k] = v
 		}
 	}
+	// Tags accumulate (union) across imports rather than replacing, so an import
+	// only ever loosens the filter, never narrows it (tags are any-match at load
+	// time). Accumulate-don't-replace mirrors Directories; the widening effect is
+	// specific to Tags being a filter rather than a search-path list.
+	if len(other.Plugins.Tags) > 0 {
+		c.Plugins.Tags = append(c.Plugins.Tags, other.Plugins.Tags...)
+	}
 }
 
 // SetDefaults fills in default values for unset fields.

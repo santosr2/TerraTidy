@@ -27,7 +27,7 @@ import (
 // indicates a correctness regression.
 //
 // Fixtures live alongside TestMetaArgumentsOrderRule in
-// block_organization_test.go (metaArgsReorderInput,
+// block_attribute_order_test.go (metaArgsReorderInput,
 // metaArgsProviderBeforeCountInput) so the semantic assertion and the
 // byte-exact snapshot share the same input — a fixture change cannot
 // silently desync the two.
@@ -97,7 +97,7 @@ func TestMetaArgumentsOrderRule_FixGoldens(t *testing.T) {
 // regression.
 //
 // Fixtures live alongside TestLifecycleAttributeOrderRule in
-// block_organization_test.go (lifecycleAttrsReorderInput,
+// block_attribute_order_test.go (lifecycleAttrsReorderInput,
 // lifecycleAttrsAllReorderedInput) so the semantic assertion and the
 // byte-exact snapshot share the same input — a fixture change cannot
 // silently desync the two.

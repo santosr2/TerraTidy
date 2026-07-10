@@ -14,7 +14,7 @@ func (m *Manager) loadAndRegisterBashRule(path, name string, checksums map[strin
 	if m.verifyIntegrity && checksums != nil {
 		if err := m.verifyPluginChecksum(path, checksums); err != nil {
 			// In warn-only mode (first release), log warning but continue
-			// TODO: In future release, return error here to enforce verification
+			// TODO(#228): enforce verification once warn-only deprecation period closes
 			m.logger.Printf("[WARN] bash rule verification failed for %s: %v (loading anyway - warn-only mode)", filepath.Base(path), err)
 		}
 	}

@@ -36,7 +36,7 @@ func (r *NoLeadingTrailingBlankLinesRule) Check(ctx *sdk.Context, file *hcl.File
 	if err != nil {
 		return nil, err
 	}
-	lines := SplitLines(content)
+	lines := splitLines(content)
 
 	// Check each block for leading/trailing blank lines
 	for _, block := range hclFile.Blocks {
@@ -64,7 +64,7 @@ func (r *NoLeadingTrailingBlankLinesRule) checkBlock(ctx *sdk.Context, block *hc
 			continue
 		}
 		line := lines[lineNum-1]
-		trimmed := TrimLeftWhitespace(line)
+		trimmed := trimLeftWhitespace(line)
 
 		if len(trimmed) == 0 {
 			findings = append(findings, sdk.Finding{
@@ -91,7 +91,7 @@ func (r *NoLeadingTrailingBlankLinesRule) checkBlock(ctx *sdk.Context, block *hc
 			continue
 		}
 		line := lines[lineNum-1]
-		trimmed := TrimLeftWhitespace(line)
+		trimmed := trimLeftWhitespace(line)
 
 		if len(trimmed) == 0 {
 			findings = append(findings, sdk.Finding{
@@ -127,7 +127,7 @@ func (r *NoLeadingTrailingBlankLinesRule) Fix(ctx *sdk.Context, _ *hcl.File) (*s
 	if err != nil {
 		return nil, err
 	}
-	return WholeFileEdit(content, FormatAndCleanBlankLines(content)), nil
+	return WholeFileEdit(content, formatAndCleanBlankLines(content)), nil
 }
 
 // BlankLineBetweenBlocksRule ensures blank lines between top-level blocks.
@@ -194,7 +194,7 @@ func (r *BlankLineBetweenBlocksRule) Check(ctx *sdk.Context, file *hcl.File) ([]
 	if err != nil {
 		return nil, err
 	}
-	lines := SplitLines(content)
+	lines := splitLines(content)
 
 	blocks := hclFile.Blocks
 	for i := 0; i < len(blocks)-1; i++ {
@@ -205,10 +205,10 @@ func (r *BlankLineBetweenBlocksRule) Check(ctx *sdk.Context, file *hcl.File) ([]
 		startLine := nextBlock.Range().Start.Line
 
 		// Count actual blank lines (excluding comments) between blocks
-		blankLines := CountBlankLinesBetween(lines, endLine, startLine)
+		blankLines := countBlankLinesBetween(lines, endLine, startLine)
 
 		// Check if there's a comment between blocks
-		hasComment := HasCommentBetween(lines, endLine, startLine)
+		hasComment := hasCommentBetween(lines, endLine, startLine)
 
 		// Adjust max allowed blank lines when there's a comment
 		effectiveMax := maxLines
@@ -252,7 +252,7 @@ func (r *BlankLineBetweenBlocksRule) fixContent(content []byte, filePath string)
 	}
 
 	// Get original lines
-	lines := SplitLines(content)
+	lines := splitLines(content)
 
 	// Build a map of line numbers that need adjustments
 	type lineAdjustment struct {
@@ -270,7 +270,7 @@ func (r *BlankLineBetweenBlocksRule) fixContent(content []byte, filePath string)
 		startLine := nextBlock.Range().Start.Line
 
 		// Count actual blank lines between blocks
-		blankLines := CountBlankLinesBetween(lines, endLine, startLine)
+		blankLines := countBlankLinesBetween(lines, endLine, startLine)
 
 		if blankLines < 1 {
 			adjustments = append(adjustments, lineAdjustment{
@@ -307,7 +307,7 @@ func (r *BlankLineBetweenBlocksRule) fixContent(content []byte, filePath string)
 					skipIdx := lineNum
 					for skipIdx < len(lines) {
 						nextLine := lines[skipIdx]
-						trimmed := TrimLeftWhitespace(nextLine)
+						trimmed := trimLeftWhitespace(nextLine)
 						if len(trimmed) > 0 {
 							break
 						}

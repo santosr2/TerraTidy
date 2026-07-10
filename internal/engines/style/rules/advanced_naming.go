@@ -268,7 +268,7 @@ func (r *ModuleNameConventionRule) Check(ctx *sdk.Context, file *hcl.File) ([]sd
 	}
 
 	// Get naming convention from config
-	convention, customPattern := GetNamingConventionFromConfig(ctx.Options)
+	convention, customPattern := getNamingConventionFromConfig(ctx.Options)
 
 	for _, block := range hclFile.Blocks {
 		if block.Type != "module" {
@@ -282,7 +282,7 @@ func (r *ModuleNameConventionRule) Check(ctx *sdk.Context, file *hcl.File) ([]sd
 		moduleName := block.Labels[0]
 
 		// Validate naming convention
-		isValid, caseName := ValidateNaming(moduleName, convention, customPattern)
+		isValid, caseName := validateNaming(moduleName, convention, customPattern)
 		if !isValid {
 			findings = append(findings, sdk.Finding{
 				Rule:     r.Name(),

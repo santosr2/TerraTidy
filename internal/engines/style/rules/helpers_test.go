@@ -47,7 +47,7 @@ func TestGetOrderedAttrNames(t *testing.T) {
 
 			body := file.Body.(*hclsyntax.Body)
 			if len(body.Blocks) > 0 {
-				result := GetOrderedAttrNames(body.Blocks[0].Body)
+				result := getOrderedAttrNames(body.Blocks[0].Body)
 				assert.Equal(t, tt.expected, result)
 			}
 		})
@@ -128,7 +128,7 @@ resource "test" "b" {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := FormatAndCleanBlankLines([]byte(tt.input))
+			result := formatAndCleanBlankLines([]byte(tt.input))
 			assert.Equal(t, tt.expected, string(result))
 		})
 	}
@@ -164,7 +164,7 @@ func TestSplitLines(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := SplitLines([]byte(tt.input))
+			result := splitLines([]byte(tt.input))
 			assert.Equal(t, tt.expected, result)
 		})
 	}
@@ -186,7 +186,7 @@ func TestTrimLeftWhitespace(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := TrimLeftWhitespace(tt.input)
+			result := trimLeftWhitespace(tt.input)
 			assert.Equal(t, tt.expected, result)
 		})
 	}
@@ -225,7 +225,7 @@ func TestCountBlankLinesBetween(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := CountBlankLinesBetween(tt.lines, tt.endLine, tt.startLine)
+			result := countBlankLinesBetween(tt.lines, tt.endLine, tt.startLine)
 			assert.Equal(t, tt.expected, result)
 		})
 	}
@@ -334,7 +334,7 @@ func TestHasCommentBetween(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := HasCommentBetween(tt.lines, tt.endLine, tt.startLine)
+			result := hasCommentBetween(tt.lines, tt.endLine, tt.startLine)
 			assert.Equal(t, tt.expected, result)
 		})
 	}
@@ -354,7 +354,7 @@ func TestBlockKey(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := BlockKey(tt.blockType, tt.labels)
+			result := blockKey(tt.blockType, tt.labels)
 			assert.Equal(t, tt.expected, result)
 		})
 	}
@@ -372,12 +372,12 @@ func TestFindAttribute(t *testing.T) {
 	attrs := body.Blocks[0].Body.Attributes
 
 	t.Run("finds existing attribute", func(t *testing.T) {
-		attr := FindAttribute(attrs, "ami")
+		attr := findAttribute(attrs, "ami")
 		assert.NotNil(t, attr)
 	})
 
 	t.Run("returns nil for missing attribute", func(t *testing.T) {
-		attr := FindAttribute(attrs, "nonexistent")
+		attr := findAttribute(attrs, "nonexistent")
 		assert.Nil(t, attr)
 	})
 }
@@ -397,12 +397,12 @@ func TestFindNestedBlock(t *testing.T) {
 	blocks := body.Blocks[0].Body.Blocks
 
 	t.Run("finds existing nested block", func(t *testing.T) {
-		block := FindNestedBlock(blocks, "lifecycle")
+		block := findNestedBlock(blocks, "lifecycle")
 		assert.NotNil(t, block)
 	})
 
 	t.Run("returns nil for missing block", func(t *testing.T) {
-		block := FindNestedBlock(blocks, "provisioner")
+		block := findNestedBlock(blocks, "provisioner")
 		assert.Nil(t, block)
 	})
 }
@@ -425,7 +425,7 @@ func TestIsSnakeCase(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := IsSnakeCase(tt.input)
+			result := isSnakeCase(tt.input)
 			assert.Equal(t, tt.expected, result)
 		})
 	}
@@ -449,7 +449,7 @@ func TestIsCamelCase(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := IsCamelCase(tt.input)
+			result := isCamelCase(tt.input)
 			assert.Equal(t, tt.expected, result)
 		})
 	}
@@ -473,7 +473,7 @@ func TestIsKebabCase(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := IsKebabCase(tt.input)
+			result := isKebabCase(tt.input)
 			assert.Equal(t, tt.expected, result)
 		})
 	}
@@ -497,7 +497,7 @@ func TestIsPascalCase(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := IsPascalCase(tt.input)
+			result := isPascalCase(tt.input)
 			assert.Equal(t, tt.expected, result)
 		})
 	}
@@ -519,7 +519,7 @@ func TestMatchesCustomPattern(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := MatchesCustomPattern(tt.input, tt.pattern)
+			result := matchesCustomPattern(tt.input, tt.pattern)
 			assert.Equal(t, tt.expected, result)
 		})
 	}
@@ -529,28 +529,28 @@ func TestValidateNaming(t *testing.T) {
 	tests := []struct {
 		name          string
 		input         string
-		convention    NamingCase
+		convention    namingCase
 		customPattern string
 		expectValid   bool
 		expectCase    string
 	}{
-		{"snake_case valid", "my_var", SnakeCase, "", true, "snake_case"},
-		{"snake_case invalid", "myVar", SnakeCase, "", false, "snake_case"},
-		{"camelCase valid", "myVar", CamelCase, "", true, "camelCase"},
-		{"camelCase invalid", "my_var", CamelCase, "", false, "camelCase"},
-		{"kebab-case valid", "my-var", KebabCase, "", true, "kebab-case"},
-		{"kebab-case invalid", "my_var", KebabCase, "", false, "kebab-case"},
-		{"PascalCase valid", "MyVar", PascalCase, "", true, "PascalCase"},
-		{"PascalCase invalid", "myVar", PascalCase, "", false, "PascalCase"},
-		{"custom pattern valid", "prefix_name", CustomCase, "^prefix_", true, "custom pattern"},
-		{"custom pattern invalid", "name", CustomCase, "^prefix_", false, "custom pattern"},
-		{"custom empty pattern", "anything", CustomCase, "", true, "custom"},
+		{"snake_case valid", "my_var", snakeCase, "", true, "snake_case"},
+		{"snake_case invalid", "myVar", snakeCase, "", false, "snake_case"},
+		{"camelCase valid", "myVar", camelCase, "", true, "camelCase"},
+		{"camelCase invalid", "my_var", camelCase, "", false, "camelCase"},
+		{"kebab-case valid", "my-var", kebabCase, "", true, "kebab-case"},
+		{"kebab-case invalid", "my_var", kebabCase, "", false, "kebab-case"},
+		{"PascalCase valid", "MyVar", pascalCase, "", true, "PascalCase"},
+		{"PascalCase invalid", "myVar", pascalCase, "", false, "PascalCase"},
+		{"custom pattern valid", "prefix_name", customCase, "^prefix_", true, "custom pattern"},
+		{"custom pattern invalid", "name", customCase, "^prefix_", false, "custom pattern"},
+		{"custom empty pattern", "anything", customCase, "", true, "custom"},
 		{"default to snake_case", "my_var", "", "", true, "snake_case"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			valid, caseName := ValidateNaming(tt.input, tt.convention, tt.customPattern)
+			valid, caseName := validateNaming(tt.input, tt.convention, tt.customPattern)
 			assert.Equal(t, tt.expectValid, valid)
 			assert.Equal(t, tt.expectCase, caseName)
 		})
@@ -561,19 +561,19 @@ func TestGetNamingConventionFromConfig(t *testing.T) {
 	tests := []struct {
 		name             string
 		config           map[string]any
-		expectConvention NamingCase
+		expectConvention namingCase
 		expectPattern    string
 	}{
 		{
 			name:             "nil config returns snake_case",
 			config:           nil,
-			expectConvention: SnakeCase,
+			expectConvention: snakeCase,
 			expectPattern:    "",
 		},
 		{
 			name:             "empty config returns snake_case",
 			config:           map[string]any{},
-			expectConvention: SnakeCase,
+			expectConvention: snakeCase,
 			expectPattern:    "",
 		},
 		{
@@ -583,7 +583,7 @@ func TestGetNamingConventionFromConfig(t *testing.T) {
 					"case": "snake_case",
 				},
 			},
-			expectConvention: SnakeCase,
+			expectConvention: snakeCase,
 			expectPattern:    "",
 		},
 		{
@@ -593,7 +593,7 @@ func TestGetNamingConventionFromConfig(t *testing.T) {
 					"case": "camelCase",
 				},
 			},
-			expectConvention: CamelCase,
+			expectConvention: camelCase,
 			expectPattern:    "",
 		},
 		{
@@ -603,7 +603,7 @@ func TestGetNamingConventionFromConfig(t *testing.T) {
 					"case": "kebab-case",
 				},
 			},
-			expectConvention: KebabCase,
+			expectConvention: kebabCase,
 			expectPattern:    "",
 		},
 		{
@@ -613,7 +613,7 @@ func TestGetNamingConventionFromConfig(t *testing.T) {
 					"case": "PascalCase",
 				},
 			},
-			expectConvention: PascalCase,
+			expectConvention: pascalCase,
 			expectPattern:    "",
 		},
 		{
@@ -624,7 +624,7 @@ func TestGetNamingConventionFromConfig(t *testing.T) {
 					"pattern": "^prefix_",
 				},
 			},
-			expectConvention: CustomCase,
+			expectConvention: customCase,
 			expectPattern:    "^prefix_",
 		},
 		{
@@ -634,14 +634,14 @@ func TestGetNamingConventionFromConfig(t *testing.T) {
 					"case": "UNKNOWN",
 				},
 			},
-			expectConvention: SnakeCase,
+			expectConvention: snakeCase,
 			expectPattern:    "",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			convention, pattern := GetNamingConventionFromConfig(tt.config)
+			convention, pattern := getNamingConventionFromConfig(tt.config)
 			assert.Equal(t, tt.expectConvention, convention)
 			assert.Equal(t, tt.expectPattern, pattern)
 		})
@@ -724,7 +724,7 @@ func TestGetAttributeOrderFromConfig(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := GetAttributeOrderFromConfig(tt.config, defaultOrder)
+			result := getAttributeOrderFromConfig(tt.config, defaultOrder)
 			assert.Equal(t, tt.expectedOrder, result)
 		})
 	}
@@ -745,7 +745,7 @@ func TestMatchBlockLabels(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := MatchBlockLabels(tt.labels, tt.expected)
+			result := matchBlockLabels(tt.labels, tt.expected)
 			assert.Equal(t, tt.match, result)
 		})
 	}
@@ -765,17 +765,17 @@ resource "aws_instance" "other" {
 	body := file.Body.(*hclsyntax.Body)
 
 	t.Run("finds matching block", func(t *testing.T) {
-		result := FindSyntaxBody(body, "resource", []string{"aws_instance", "example"})
+		result := findSyntaxBody(body, "resource", []string{"aws_instance", "example"})
 		assert.NotNil(t, result)
 	})
 
 	t.Run("returns nil for non-matching block", func(t *testing.T) {
-		result := FindSyntaxBody(body, "resource", []string{"aws_instance", "nonexistent"})
+		result := findSyntaxBody(body, "resource", []string{"aws_instance", "nonexistent"})
 		assert.Nil(t, result)
 	})
 
 	t.Run("returns nil for wrong block type", func(t *testing.T) {
-		result := FindSyntaxBody(body, "data", []string{"aws_instance", "example"})
+		result := findSyntaxBody(body, "data", []string{"aws_instance", "example"})
 		assert.Nil(t, result)
 	})
 }
@@ -792,12 +792,12 @@ resource "aws_instance" "other" {
 	require.False(t, diags.HasErrors())
 
 	t.Run("finds matching block", func(t *testing.T) {
-		result := FindWriteBlock(file, "resource", []string{"aws_instance", "example"})
+		result := findWriteBlock(file, "resource", []string{"aws_instance", "example"})
 		assert.NotNil(t, result)
 	})
 
 	t.Run("returns nil for non-matching block", func(t *testing.T) {
-		result := FindWriteBlock(file, "resource", []string{"aws_instance", "nonexistent"})
+		result := findWriteBlock(file, "resource", []string{"aws_instance", "nonexistent"})
 		assert.Nil(t, result)
 	})
 }
@@ -808,14 +808,14 @@ func TestParseBothFormats(t *testing.T) {
 }`
 
 	t.Run("parses valid HCL", func(t *testing.T) {
-		syntaxBody, writeFile, err := ParseBothFormats([]byte(content), "test.tf")
+		syntaxBody, writeFile, err := parseBothFormats([]byte(content), "test.tf")
 		assert.NoError(t, err)
 		assert.NotNil(t, syntaxBody)
 		assert.NotNil(t, writeFile)
 	})
 
 	t.Run("returns error for invalid HCL", func(t *testing.T) {
-		_, _, err := ParseBothFormats([]byte("invalid { content"), "test.tf")
+		_, _, err := parseBothFormats([]byte("invalid { content"), "test.tf")
 		assert.Error(t, err)
 	})
 }

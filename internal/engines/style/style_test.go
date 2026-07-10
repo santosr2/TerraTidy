@@ -14,7 +14,6 @@ import (
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/hclparse"
 	"github.com/santosr2/TerraTidy/internal/config"
-	"github.com/santosr2/TerraTidy/internal/engines/style/rules"
 	"github.com/santosr2/TerraTidy/pkg/sdk"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -839,29 +838,6 @@ func TestEngine_MultipleFiles(t *testing.T) {
 
 	// Both files processed without error; findings may be empty for valid HCL
 	_ = findings
-}
-
-func TestIsDependsOnRelevantBlock(t *testing.T) {
-	tests := []struct {
-		blockType string
-		want      bool
-	}{
-		{"resource", true},
-		{"module", true},
-		{"data", true},
-		{"variable", false},
-		{"output", false},
-		{"terraform", false},
-		{"locals", false},
-		{"provider", false},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.blockType, func(t *testing.T) {
-			got := rules.IsDependsOnRelevantBlock(tt.blockType)
-			assert.Equal(t, tt.want, got)
-		})
-	}
 }
 
 func TestEngine_Name(t *testing.T) {

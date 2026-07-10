@@ -148,7 +148,7 @@ func findFixtures(dir string) ([]string, error) {
 		if err != nil {
 			return err
 		}
-		if !info.IsDir() && isHCLFile(path) {
+		if !info.IsDir() && sdk.IsHCLFile(path) {
 			fixtures = append(fixtures, path)
 		}
 		return nil

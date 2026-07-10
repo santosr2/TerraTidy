@@ -389,7 +389,7 @@ func (c *fileCollector) scanDirectory(dir string) error {
 }
 
 func (c *fileCollector) addFileIfHCL(path string) {
-	if !isHCLFile(path) {
+	if !sdk.IsHCLFile(path) {
 		return
 	}
 	absPath := toAbsPath(path)
@@ -416,11 +416,6 @@ func shouldSkipDir(name string) bool {
 	}
 	// Skip common non-terraform directories (see package-level skipDirs)
 	return skipDirs[name]
-}
-
-// isHCLFile checks if a file has a Terraform/HCL extension.
-func isHCLFile(path string) bool {
-	return sdk.IsHCLFile(path)
 }
 
 // formatFileCount returns a human-readable file count string.

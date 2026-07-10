@@ -1218,14 +1218,14 @@ func TestGlobWithTimeout(t *testing.T) {
 
 	t.Run("returns matches for valid pattern", func(t *testing.T) {
 		pattern := filepath.Join(tmpDir, "*.yaml")
-		matches, err := globWithTimeout(pattern, 5*time.Second)
+		matches, err := globWithTimeout(pattern)
 		require.NoError(t, err)
 		assert.Len(t, matches, 5)
 	})
 
 	t.Run("returns empty for non-matching pattern", func(t *testing.T) {
 		pattern := filepath.Join(tmpDir, "*.json")
-		matches, err := globWithTimeout(pattern, 5*time.Second)
+		matches, err := globWithTimeout(pattern)
 		require.NoError(t, err)
 		assert.Empty(t, matches)
 	})
@@ -1233,7 +1233,7 @@ func TestGlobWithTimeout(t *testing.T) {
 	t.Run("returns error for invalid pattern", func(t *testing.T) {
 		// '[' without closing ']' is invalid
 		pattern := filepath.Join(tmpDir, "[invalid")
-		_, err := globWithTimeout(pattern, 5*time.Second)
+		_, err := globWithTimeout(pattern)
 		assert.Error(t, err)
 	})
 }
@@ -1272,16 +1272,16 @@ imports:
 }
 
 func TestLoad_ImportGlobTimeout(t *testing.T) {
-	// Test that globWithTimeout returns error on timeout
-	// We can't easily simulate a slow glob, but we can verify the timeout mechanism
-	t.Run("timeout error message format", func(t *testing.T) {
-		// Using a very short timeout with a valid pattern to verify the mechanism
-		// In practice, most globs complete quickly, so this tests the code path
+	// Exercise the globWithTimeout code path (guarded by the package-level globTimeout).
+	// We can't easily simulate a slow glob, so this covers the success branch of the select.
+	t.Run("completes within timeout", func(t *testing.T) {
+		// A valid pattern resolves well before globTimeout, hitting the result branch.
+		// In practice, most globs complete quickly, so this exercises that path.
 		tmpDir := t.TempDir()
 		pattern := filepath.Join(tmpDir, "*.yaml")
 
 		// Normal case: should complete quickly
-		matches, err := globWithTimeout(pattern, 5*time.Second)
+		matches, err := globWithTimeout(pattern)
 		require.NoError(t, err)
 		assert.Empty(t, matches) // No files in empty temp dir
 	})

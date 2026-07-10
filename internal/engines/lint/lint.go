@@ -139,7 +139,7 @@ func (e *Engine) Run(ctx context.Context, files []string) ([]sdk.Finding, error)
 	}
 
 	// Group files by directory for module-level analysis
-	dirFiles := e.groupFilesByDirectory(files)
+	dirFiles := sdk.GroupFilesByDirectory(files)
 
 	for dir, dirFileList := range dirFiles {
 		select {
@@ -301,11 +301,6 @@ func (e *Engine) registerRules() {
 // GetAllRules returns all registered rules
 func (e *Engine) GetAllRules() []sdk.Rule {
 	return e.rules
-}
-
-// groupFilesByDirectory delegates to sdk.GroupFilesByDirectory.
-func (e *Engine) groupFilesByDirectory(files []string) map[string][]string {
-	return sdk.GroupFilesByDirectory(files)
 }
 
 // ============================================================================
@@ -1287,7 +1282,7 @@ func (e *Engine) RunWithTFLint(ctx context.Context, files []string) ([]sdk.Findi
 	var allFindings []sdk.Finding
 
 	// Group files by directory
-	dirFiles := e.groupFilesByDirectory(files)
+	dirFiles := sdk.GroupFilesByDirectory(files)
 
 	for dir := range dirFiles {
 		select {

@@ -130,7 +130,7 @@ func (e *Engine) Run(ctx context.Context, files []string) ([]sdk.Finding, error)
 	}
 
 	// Group files by directory for module-level analysis
-	dirFiles := e.groupFilesByDirectory(files)
+	dirFiles := sdk.GroupFilesByDirectory(files)
 
 	for dir, dirFileList := range dirFiles {
 		select {
@@ -542,12 +542,6 @@ func (e *Engine) violationToFinding(violation any, dir string) sdk.Finding {
 	}
 
 	return finding
-}
-
-// groupFilesByDirectory groups files by their parent directory
-// groupFilesByDirectory delegates to sdk.GroupFilesByDirectory.
-func (e *Engine) groupFilesByDirectory(files []string) map[string][]string {
-	return sdk.GroupFilesByDirectory(files)
 }
 
 // parseSeverity converts string severity to sdk.Severity (defaults to error).

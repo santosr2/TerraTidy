@@ -482,7 +482,7 @@ func expandEnvVars(content string) string {
 }
 
 // globWithTimeout executes filepath.Glob with a timeout to prevent hangs on complex patterns.
-func globWithTimeout(pattern string, timeout time.Duration) ([]string, error) {
+func globWithTimeout(pattern string) ([]string, error) {
 	type result struct {
 		matches []string
 		err     error
@@ -497,8 +497,8 @@ func globWithTimeout(pattern string, timeout time.Duration) ([]string, error) {
 	select {
 	case res := <-ch:
 		return res.matches, res.err
-	case <-time.After(timeout):
-		return nil, fmt.Errorf("glob pattern %q timed out after %v", pattern, timeout)
+	case <-time.After(globTimeout):
+		return nil, fmt.Errorf("glob pattern %q timed out after %v", pattern, globTimeout)
 	}
 }
 
@@ -519,7 +519,7 @@ func (c *Config) loadImports(baseDir string, visited map[string]bool) error {
 		}
 
 		// Expand glob pattern with timeout
-		matches, err := globWithTimeout(pattern, globTimeout)
+		matches, err := globWithTimeout(pattern)
 		if err != nil {
 			return fmt.Errorf("expanding import pattern %s: %w", pattern, err)
 		}

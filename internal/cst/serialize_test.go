@@ -11,6 +11,7 @@ import (
 
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/hclsyntax"
+	"github.com/santosr2/TerraTidy/pkg/sdk"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -208,7 +209,7 @@ func TestCSTRoundTrip_AllInTreeFixtures(t *testing.T) {
 				}
 				return nil
 			}
-			if !isHCLFile(path) {
+			if !sdk.IsHCLFile(path) {
 				return nil
 			}
 			rel, err := filepath.Rel(root, path)
@@ -224,7 +225,7 @@ func TestCSTRoundTrip_AllInTreeFixtures(t *testing.T) {
 		})
 		require.NoError(t, err)
 		require.Positive(t, checked,
-			"walkdir matched zero `.tf`/`.hcl` files — fixture discovery is broken")
+			"walkdir matched zero Terraform/HCL files — fixture discovery is broken")
 	})
 
 	t.Run("allowlist_staleness", func(t *testing.T) {
@@ -241,7 +242,7 @@ func TestCSTRoundTrip_AllInTreeFixtures(t *testing.T) {
 					if walkErr != nil {
 						return walkErr
 					}
-					if d.IsDir() || !isHCLFile(path) {
+					if d.IsDir() || !sdk.IsHCLFile(path) {
 						return nil
 					}
 					rel, _ := filepath.Rel(root, path)
@@ -621,12 +622,6 @@ func repoRoot(t *testing.T) string {
 	dir, err := findRepoRoot()
 	require.NoError(t, err)
 	return dir
-}
-
-// isHCLFile reports whether path ends in `.tf` or `.hcl`.
-func isHCLFile(path string) bool {
-	ext := strings.ToLower(filepath.Ext(path))
-	return ext == ".tf" || ext == ".hcl"
 }
 
 // shouldSkipDir prunes directory trees the walkdir doesn't need to descend

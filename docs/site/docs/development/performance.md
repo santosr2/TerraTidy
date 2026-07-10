@@ -239,7 +239,7 @@ These hot paths should minimize allocations:
 | --------- | ------ |
 | `IsSuppressed` check | 0 allocs |
 | `RuleMatches` | 0 allocs |
-| `IsHCLFile` (lowercase) | 0 allocs |
+| `IsHCLFile` | 0 allocs |
 | `SeverityLevel` | 0 allocs |
 | `ParseSeverity` (valid) | 0-1 allocs |
 

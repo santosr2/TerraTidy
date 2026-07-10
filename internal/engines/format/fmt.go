@@ -62,7 +62,7 @@ func (e *Engine) Run(ctx context.Context, files []string) ([]sdk.Finding, error)
 		}
 
 		// Skip non-HCL files
-		if !isHCLFile(file) {
+		if !sdk.IsHCLFile(file) {
 			continue
 		}
 
@@ -152,11 +152,6 @@ func (e *Engine) formatFile(path string) (*sdk.Finding, error) {
 		Severity: sdk.SeverityInfo,
 		IsDiff:   diffText != "",
 	}, nil
-}
-
-// isHCLFile checks if a file has a Terraform/HCL extension.
-func isHCLFile(path string) bool {
-	return sdk.IsHCLFile(path)
 }
 
 // Format formats the given content and returns the formatted result

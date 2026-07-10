@@ -262,6 +262,30 @@ if finding.Severity.Level() >= sdk.SeverityWarning.Level() {
 }
 ```
 
+## File Utilities
+
+Helpers for working with Terraform/HCL file paths. Part of the stable public API, so plugin
+authors can rely on them directly instead of reimplementing extension checks or directory grouping.
+
+```go
+// IsHCLFile reports whether path has a Terraform/HCL extension (.tf, .hcl, .tfvars).
+// The extension check is case-insensitive.
+func IsHCLFile(path string) bool
+
+// GroupFilesByDirectory groups file paths by their parent directory (filepath.Dir).
+// Bare filenames with no directory component group under ".".
+func GroupFilesByDirectory(files []string) map[string][]string
+```
+
+```go
+if sdk.IsHCLFile("main.tf") {  // true
+    // process the file
+}
+
+byDir := sdk.GroupFilesByDirectory([]string{"a/main.tf", "a/vars.tf", "b/main.tf"})
+// map[a:[a/main.tf a/vars.tf] b:[b/main.tf]]
+```
+
 ## Usage Example
 
 ```go

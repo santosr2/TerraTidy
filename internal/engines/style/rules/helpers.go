@@ -63,20 +63,20 @@ var (
 	pascalCaseRegex = regexp.MustCompile(`^[A-Z][a-zA-Z0-9]*$`)
 )
 
-// NamingCase represents supported naming conventions.
-type NamingCase string
+// namingCase represents supported naming conventions.
+type namingCase string
 
 // Supported naming convention constants.
 const (
-	SnakeCase  NamingCase = "snake_case"
-	CamelCase  NamingCase = "camelCase"
-	KebabCase  NamingCase = "kebab-case"
-	PascalCase NamingCase = "PascalCase"
-	CustomCase NamingCase = "custom"
+	snakeCase  namingCase = "snake_case"
+	camelCase  namingCase = "camelCase"
+	kebabCase  namingCase = "kebab-case"
+	pascalCase namingCase = "PascalCase"
+	customCase namingCase = "custom"
 )
 
-// GetOrderedAttrNames returns attribute names from hclsyntax sorted by line number.
-func GetOrderedAttrNames(syntaxBody *hclsyntax.Body) []string {
+// getOrderedAttrNames returns attribute names from hclsyntax sorted by line number.
+func getOrderedAttrNames(syntaxBody *hclsyntax.Body) []string {
 	type attrPos struct {
 		name string
 		line int
@@ -101,14 +101,14 @@ func GetOrderedAttrNames(syntaxBody *hclsyntax.Body) []string {
 	return result
 }
 
-// FormatAndCleanBlankLines applies hclwrite.Format and removes leading/trailing blank lines inside blocks.
+// formatAndCleanBlankLines applies hclwrite.Format and removes leading/trailing blank lines inside blocks.
 // It preserves internal blank lines for readability.
-func FormatAndCleanBlankLines(content []byte) []byte {
+func formatAndCleanBlankLines(content []byte) []byte {
 	// First apply hclwrite.Format
 	formatted := hclwrite.Format(content)
 
 	// Only remove leading/trailing blank lines inside blocks, preserve internal ones
-	lines := SplitLines(formatted)
+	lines := splitLines(formatted)
 	var result []byte
 
 	// First pass: identify block boundaries
@@ -169,8 +169,8 @@ func FormatAndCleanBlankLines(content []byte) []byte {
 	return result
 }
 
-// SplitLines splits content into lines.
-func SplitLines(content []byte) []string {
+// splitLines splits content into lines.
+func splitLines(content []byte) []string {
 	var lines []string
 	start := 0
 	for i, b := range content {
@@ -185,8 +185,8 @@ func SplitLines(content []byte) []string {
 	return lines
 }
 
-// TrimLeftWhitespace trims leading whitespace from a string.
-func TrimLeftWhitespace(s string) string {
+// trimLeftWhitespace trims leading whitespace from a string.
+func trimLeftWhitespace(s string) string {
 	for i, r := range s {
 		if r != ' ' && r != '\t' {
 			return s[i:]
@@ -195,9 +195,9 @@ func TrimLeftWhitespace(s string) string {
 	return ""
 }
 
-// CountBlankLinesBetween counts actual blank lines (not comments) between two line numbers.
+// countBlankLinesBetween counts actual blank lines (not comments) between two line numbers.
 // Line numbers are 1-indexed (HCL convention).
-func CountBlankLinesBetween(lines []string, endLine, startLine int) int {
+func countBlankLinesBetween(lines []string, endLine, startLine int) int {
 	blankCount := 0
 
 	// Lines between endLine and startLine (exclusive of both)
@@ -206,7 +206,7 @@ func CountBlankLinesBetween(lines []string, endLine, startLine int) int {
 			continue
 		}
 		line := lines[lineNum-1] // Convert to 0-indexed
-		trimmed := TrimLeftWhitespace(line)
+		trimmed := trimLeftWhitespace(line)
 
 		// Count as blank if empty or whitespace-only
 		// Don't count comment lines as blank lines
@@ -218,9 +218,9 @@ func CountBlankLinesBetween(lines []string, endLine, startLine int) int {
 	return blankCount
 }
 
-// HasCommentBetween checks if there's a comment line between two line numbers.
+// hasCommentBetween checks if there's a comment line between two line numbers.
 // Line numbers are 1-indexed (HCL convention).
-func HasCommentBetween(lines []string, endLine, startLine int) bool {
+func hasCommentBetween(lines []string, endLine, startLine int) bool {
 	for lineNum := endLine + 1; lineNum < startLine; lineNum++ {
 		if lineNum-1 >= len(lines) {
 			continue
@@ -236,8 +236,8 @@ func HasCommentBetween(lines []string, endLine, startLine int) bool {
 	return false
 }
 
-// BlockKey creates a unique key for a block based on type and labels.
-func BlockKey(blockType string, labels []string) string {
+// blockKey creates a unique key for a block based on type and labels.
+func blockKey(blockType string, labels []string) string {
 	key := blockType
 	for _, l := range labels {
 		key += "." + l
@@ -245,16 +245,16 @@ func BlockKey(blockType string, labels []string) string {
 	return key
 }
 
-// FindAttribute finds an attribute by name in the attributes map.
-func FindAttribute(attrs hclsyntax.Attributes, name string) *hclsyntax.Attribute {
+// findAttribute finds an attribute by name in the attributes map.
+func findAttribute(attrs hclsyntax.Attributes, name string) *hclsyntax.Attribute {
 	if attr, ok := attrs[name]; ok {
 		return attr
 	}
 	return nil
 }
 
-// FindNestedBlock finds a nested block by type in the blocks slice.
-func FindNestedBlock(blocks hclsyntax.Blocks, blockType string) *hclsyntax.Block {
+// findNestedBlock finds a nested block by type in the blocks slice.
+func findNestedBlock(blocks hclsyntax.Blocks, blockType string) *hclsyntax.Block {
 	for _, b := range blocks {
 		if b.Type == blockType {
 			return b
@@ -263,28 +263,28 @@ func FindNestedBlock(blocks hclsyntax.Blocks, blockType string) *hclsyntax.Block
 	return nil
 }
 
-// IsSnakeCase checks if a string is valid snake_case.
-func IsSnakeCase(s string) bool {
+// isSnakeCase checks if a string is valid snake_case.
+func isSnakeCase(s string) bool {
 	return snakeCaseRegex.MatchString(s)
 }
 
-// IsCamelCase checks if a string is valid camelCase.
-func IsCamelCase(s string) bool {
+// isCamelCase checks if a string is valid camelCase.
+func isCamelCase(s string) bool {
 	return camelCaseRegex.MatchString(s)
 }
 
-// IsKebabCase checks if a string is valid kebab-case.
-func IsKebabCase(s string) bool {
+// isKebabCase checks if a string is valid kebab-case.
+func isKebabCase(s string) bool {
 	return kebabCaseRegex.MatchString(s)
 }
 
-// IsPascalCase checks if a string is valid PascalCase.
-func IsPascalCase(s string) bool {
+// isPascalCase checks if a string is valid PascalCase.
+func isPascalCase(s string) bool {
 	return pascalCaseRegex.MatchString(s)
 }
 
-// MatchesCustomPattern checks if a string matches a custom regex pattern.
-func MatchesCustomPattern(s, pattern string) bool {
+// matchesCustomPattern checks if a string matches a custom regex pattern.
+func matchesCustomPattern(s, pattern string) bool {
 	if pattern == "" {
 		return true
 	}
@@ -295,54 +295,54 @@ func MatchesCustomPattern(s, pattern string) bool {
 	return re.MatchString(s)
 }
 
-// ValidateNaming checks if a name matches the specified naming convention.
+// validateNaming checks if a name matches the specified naming convention.
 // Returns (isValid, caseName) where caseName is the human-readable convention name.
-func ValidateNaming(name string, convention NamingCase, customPattern string) (bool, string) {
+func validateNaming(name string, convention namingCase, customPattern string) (bool, string) {
 	switch convention {
-	case CamelCase:
-		return IsCamelCase(name), "camelCase"
-	case KebabCase:
-		return IsKebabCase(name), "kebab-case"
-	case PascalCase:
-		return IsPascalCase(name), "PascalCase"
-	case CustomCase:
+	case camelCase:
+		return isCamelCase(name), "camelCase"
+	case kebabCase:
+		return isKebabCase(name), "kebab-case"
+	case pascalCase:
+		return isPascalCase(name), "PascalCase"
+	case customCase:
 		if customPattern == "" {
 			return true, "custom"
 		}
-		return MatchesCustomPattern(name, customPattern), "custom pattern"
+		return matchesCustomPattern(name, customPattern), "custom pattern"
 	default:
 		// Default to snake_case
-		return IsSnakeCase(name), "snake_case"
+		return isSnakeCase(name), "snake_case"
 	}
 }
 
-// GetNamingConventionFromConfig extracts naming convention settings from rule config.
+// getNamingConventionFromConfig extracts naming convention settings from rule config.
 // Returns (convention, customPattern).
-func GetNamingConventionFromConfig(config map[string]any) (NamingCase, string) {
+func getNamingConventionFromConfig(config map[string]any) (namingCase, string) {
 	if config == nil {
-		return SnakeCase, ""
+		return snakeCase, ""
 	}
 
 	options, ok := config["options"].(map[string]any)
 	if !ok {
-		return SnakeCase, ""
+		return snakeCase, ""
 	}
 
-	convention := SnakeCase
+	convention := snakeCase
 	if caseStr, ok := options["case"].(string); ok {
 		switch caseStr {
 		case "snake_case":
-			convention = SnakeCase
+			convention = snakeCase
 		case "camelCase":
-			convention = CamelCase
+			convention = camelCase
 		case "kebab-case":
-			convention = KebabCase
+			convention = kebabCase
 		case "PascalCase":
-			convention = PascalCase
+			convention = pascalCase
 		case "custom":
-			convention = CustomCase
+			convention = customCase
 		default:
-			convention = SnakeCase
+			convention = snakeCase
 		}
 	}
 
@@ -354,9 +354,9 @@ func GetNamingConventionFromConfig(config map[string]any) (NamingCase, string) {
 	return convention, customPattern
 }
 
-// GetAttributeOrderFromConfig extracts attribute ordering configuration from rule config.
+// getAttributeOrderFromConfig extracts attribute ordering configuration from rule config.
 // Returns a map of attribute name to position, and the default order if not configured.
-func GetAttributeOrderFromConfig(config map[string]any, defaultOrder map[string]int) map[string]int {
+func getAttributeOrderFromConfig(config map[string]any, defaultOrder map[string]int) map[string]int {
 	if config == nil {
 		return defaultOrder
 	}
@@ -386,8 +386,8 @@ func GetAttributeOrderFromConfig(config map[string]any, defaultOrder map[string]
 	return customOrder
 }
 
-// MatchBlockLabels checks if block labels match expected labels.
-func MatchBlockLabels(labels, expectedLabels []string) bool {
+// matchBlockLabels checks if block labels match expected labels.
+func matchBlockLabels(labels, expectedLabels []string) bool {
 	if len(labels) != len(expectedLabels) {
 		return false
 	}
@@ -399,34 +399,34 @@ func MatchBlockLabels(labels, expectedLabels []string) bool {
 	return true
 }
 
-// FindSyntaxBody finds the syntax body for a block matching the given type and labels.
-func FindSyntaxBody(syntaxFile *hclsyntax.Body, blockType string, blockLabels []string) *hclsyntax.Body {
+// findSyntaxBody finds the syntax body for a block matching the given type and labels.
+func findSyntaxBody(syntaxFile *hclsyntax.Body, blockType string, blockLabels []string) *hclsyntax.Body {
 	for _, block := range syntaxFile.Blocks {
 		if block.Type != blockType {
 			continue
 		}
-		if MatchBlockLabels(block.Labels, blockLabels) {
+		if matchBlockLabels(block.Labels, blockLabels) {
 			return block.Body
 		}
 	}
 	return nil
 }
 
-// FindWriteBlock finds a block in hclwrite file matching the given type and labels.
-func FindWriteBlock(writeFile *hclwrite.File, blockType string, blockLabels []string) *hclwrite.Block {
+// findWriteBlock finds a block in hclwrite file matching the given type and labels.
+func findWriteBlock(writeFile *hclwrite.File, blockType string, blockLabels []string) *hclwrite.Block {
 	for _, block := range writeFile.Body().Blocks() {
 		if block.Type() != blockType {
 			continue
 		}
-		if MatchBlockLabels(block.Labels(), blockLabels) {
+		if matchBlockLabels(block.Labels(), blockLabels) {
 			return block
 		}
 	}
 	return nil
 }
 
-// ParseBothFormats parses content with both hclsyntax (for positions) and hclwrite (for modifications).
-func ParseBothFormats(content []byte, filePath string) (*hclsyntax.Body, *hclwrite.File, error) {
+// parseBothFormats parses content with both hclsyntax (for positions) and hclwrite (for modifications).
+func parseBothFormats(content []byte, filePath string) (*hclsyntax.Body, *hclwrite.File, error) {
 	// Parse with hclsyntax to get attribute ordering
 	syntaxFile, diags := hclsyntax.ParseConfig(content, filePath, hcl.InitialPos)
 	if diags.HasErrors() {

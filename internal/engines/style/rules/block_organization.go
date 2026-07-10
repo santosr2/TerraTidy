@@ -470,7 +470,7 @@ func (r *OneLineAttributeSpacingRule) Check(ctx *sdk.Context, file *hcl.File) ([
 	if err != nil {
 		return nil, err
 	}
-	lines := SplitLines(content)
+	lines := splitLines(content)
 
 	for _, block := range hclFile.Blocks {
 		if block.Type != "resource" && block.Type != "module" && block.Type != "data" {

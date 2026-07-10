@@ -525,7 +525,7 @@ resource "aws_instance" "api" {
 		require.Len(t, result.Edits, 1)
 
 		// Count blank lines between resources
-		lines := SplitLines(result.Edits[0].Replacement)
+		lines := splitLines(result.Edits[0].Replacement)
 		consecutiveBlank := 0
 		maxConsecutive := 0
 		for _, line := range lines {

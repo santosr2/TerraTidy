@@ -1588,7 +1588,7 @@ resource "aws_instance" "second" {
 	t.Run("Fix is a no-op (no diff) when depends_on is already adjacent to lifecycle with a blank gap", func(t *testing.T) {
 		// Closes the Fix/Check semantic gap the reviewer flagged: previously Fix would
 		// run the splice on this layout (because attrEnd+1 != insertBefore), produce a
-		// visually-equivalent output, then FormatAndCleanBlankLines would collapse the
+		// visually-equivalent output, then formatAndCleanBlankLines would collapse the
 		// blank — so the first pass produced a non-trivial diff. The tightened no-op
 		// guard now correctly recognizes this as already-canonical.
 		content := `resource "aws_instance" "x" {
@@ -3306,7 +3306,7 @@ func TestIsDependsOnRelevantBlock(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.blockType, func(t *testing.T) {
-			result := IsDependsOnRelevantBlock(tt.blockType)
+			result := isDependsOnRelevantBlock(tt.blockType)
 			assert.Equal(t, tt.expected, result)
 		})
 	}

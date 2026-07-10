@@ -145,7 +145,7 @@ func buildBody(
 
 // collectStructural returns the body's attrs and blocks merged into one
 // slice and sorted by source-order start byte. body.Attributes is an
-// unordered map; this is the same trick GetOrderedAttrNames uses in
+// unordered map; this is the same trick getOrderedAttrNames uses in
 // internal/engines/style/rules/helpers.go.
 func collectStructural(b *hclsyntax.Body) []structuralItem {
 	items := make([]structuralItem, 0, len(b.Attributes)+len(b.Blocks))

@@ -302,7 +302,7 @@ func (r *TagsAtEndRule) checkTagsBlock(ctx *sdk.Context, block *hclsyntax.Block)
 		return findings
 	}
 
-	lifecycleBlock := FindNestedBlock(body.Blocks, "lifecycle")
+	lifecycleBlock := findNestedBlock(body.Blocks, "lifecycle")
 	tagsLine := tagsAttr.Range().Start.Line
 
 	// Single-finding policy: the "before lifecycle" and "near the end" conditions both
@@ -462,7 +462,7 @@ func (r *DependsOnOrderRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Find
 	}
 
 	for _, block := range hclFile.Blocks {
-		if !IsDependsOnRelevantBlock(block.Type) {
+		if !isDependsOnRelevantBlock(block.Type) {
 			continue
 		}
 		blockFindings := r.checkDependsOnBlock(ctx, block)
@@ -472,8 +472,8 @@ func (r *DependsOnOrderRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Find
 	return findings, nil
 }
 
-// IsDependsOnRelevantBlock checks if a block type supports depends_on attribute.
-func IsDependsOnRelevantBlock(blockType string) bool {
+// isDependsOnRelevantBlock checks if a block type supports depends_on attribute.
+func isDependsOnRelevantBlock(blockType string) bool {
 	return blockType == "resource" || blockType == "module" || blockType == "data"
 }
 
@@ -481,12 +481,12 @@ func (r *DependsOnOrderRule) checkDependsOnBlock(ctx *sdk.Context, block *hclsyn
 	var findings []sdk.Finding
 	body := block.Body
 
-	dependsOnAttr := FindAttribute(body.Attributes, "depends_on")
+	dependsOnAttr := findAttribute(body.Attributes, "depends_on")
 	if dependsOnAttr == nil {
 		return findings
 	}
 
-	lifecycleBlock := FindNestedBlock(body.Blocks, "lifecycle")
+	lifecycleBlock := findNestedBlock(body.Blocks, "lifecycle")
 	dependsOnLine := dependsOnAttr.Range().Start.Line
 
 	// Single-finding policy: the "before lifecycle" and "near the end" conditions both
@@ -569,7 +569,7 @@ func (r *DependsOnOrderRule) Fix(ctx *sdk.Context, _ *hcl.File) (*sdk.FixResult,
 		if !ok {
 			continue
 		}
-		if !IsDependsOnRelevantBlock(block.Type) {
+		if !isDependsOnRelevantBlock(block.Type) {
 			continue
 		}
 		moveDependsOnToEnd(block.Body)
@@ -685,8 +685,8 @@ func (r *SourceVersionGroupedRule) checkModuleBlock(ctx *sdk.Context, block *hcl
 	var findings []sdk.Finding
 	body := block.Body
 
-	sourceAttr := FindAttribute(body.Attributes, "source")
-	versionAttr := FindAttribute(body.Attributes, "version")
+	sourceAttr := findAttribute(body.Attributes, "source")
+	versionAttr := findAttribute(body.Attributes, "version")
 
 	if sourceAttr != nil {
 		if finding := r.checkSourcePosition(ctx, body.Attributes, sourceAttr); finding != nil {
@@ -847,7 +847,7 @@ func (r *VariableOrderRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Findi
 	}
 
 	// Get attribute order from config (defaults to varAttrOrder)
-	attrOrder := GetAttributeOrderFromConfig(ctx.Options, varAttrOrder)
+	attrOrder := getAttributeOrderFromConfig(ctx.Options, varAttrOrder)
 
 	for _, block := range hclFile.Blocks {
 		if block.Type != "variable" {
@@ -1045,7 +1045,7 @@ func (r *OutputOrderRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Finding
 	}
 
 	// Get attribute order from config (defaults to outputAttrOrder)
-	attrOrder := GetAttributeOrderFromConfig(ctx.Options, outputAttrOrder)
+	attrOrder := getAttributeOrderFromConfig(ctx.Options, outputAttrOrder)
 
 	for _, block := range hclFile.Blocks {
 		if block.Type != "output" {
@@ -1515,7 +1515,7 @@ func (r *AttributeGroupSpacingRule) Check(ctx *sdk.Context, file *hcl.File) ([]s
 	if err != nil {
 		return nil, err
 	}
-	lines := SplitLines(content)
+	lines := splitLines(content)
 
 	for _, block := range hclFile.Blocks {
 		// Check resource, module, data, variable, and output blocks
@@ -1579,7 +1579,7 @@ func (r *AttributeGroupSpacingRule) checkBlock(ctx *sdk.Context, block *hclsynta
 		hasBlankLine := false
 		for lineNum := curr.line + 1; lineNum < next.line; lineNum++ {
 			if lineNum-1 < len(lines) {
-				trimmed := TrimLeftWhitespace(lines[lineNum-1])
+				trimmed := trimLeftWhitespace(lines[lineNum-1])
 				if len(trimmed) == 0 {
 					hasBlankLine = true
 					break
@@ -1620,7 +1620,7 @@ func (r *AttributeGroupSpacingRule) checkBlock(ctx *sdk.Context, block *hclsynta
 // stay at their source positions.
 //
 // Resource, module, data, variable, and output blocks are processed; other
-// top-level block types pass through untouched. Pre-CST FormatAndCleanBlankLines
+// top-level block types pass through untouched. Pre-CST formatAndCleanBlankLines
 // wrapping is intentionally dropped — the CST mutation produces byte-exact
 // output for unmodified regions.
 func (r *AttributeGroupSpacingRule) Fix(ctx *sdk.Context, _ *hcl.File) (*sdk.FixResult, error) {

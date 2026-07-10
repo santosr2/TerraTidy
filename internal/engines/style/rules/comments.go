@@ -31,7 +31,7 @@ func (r *CommentSyntaxRule) Check(ctx *sdk.Context, _ *hcl.File) ([]sdk.Finding,
 		return nil, err
 	}
 
-	lines := SplitLines(content)
+	lines := splitLines(content)
 
 	for i, line := range lines {
 		lineNum := i + 1
@@ -68,7 +68,7 @@ func (r *CommentSyntaxRule) hasDoubleSlashComment(line string) bool {
 }
 
 func (r *CommentSyntaxRule) fixContent(content []byte) []byte {
-	lines := SplitLines(content)
+	lines := splitLines(content)
 	var result []string
 
 	for _, line := range lines {
@@ -128,7 +128,7 @@ func (r *NoTrailingWhitespaceRule) Check(ctx *sdk.Context, _ *hcl.File) ([]sdk.F
 		return nil, err
 	}
 
-	lines := SplitLines(content)
+	lines := splitLines(content)
 
 	for i, line := range lines {
 		lineNum := i + 1
@@ -154,7 +154,7 @@ func (r *NoTrailingWhitespaceRule) Check(ctx *sdk.Context, _ *hcl.File) ([]sdk.F
 }
 
 func (r *NoTrailingWhitespaceRule) fixContent(content []byte) []byte {
-	lines := SplitLines(content)
+	lines := splitLines(content)
 	var result []string
 
 	for _, line := range lines {
@@ -197,7 +197,7 @@ func (r *ConsistentQuotesRule) Check(ctx *sdk.Context, _ *hcl.File) ([]sdk.Findi
 		return nil, err
 	}
 
-	lines := SplitLines(content)
+	lines := splitLines(content)
 
 	for i, line := range lines {
 		lineNum := i + 1
@@ -275,7 +275,7 @@ func (r *NoConsecutiveBlankLinesRule) Check(ctx *sdk.Context, _ *hcl.File) ([]sd
 		return nil, err
 	}
 
-	lines := SplitLines(content)
+	lines := splitLines(content)
 
 	consecutiveBlank := 0
 
@@ -309,7 +309,7 @@ func (r *NoConsecutiveBlankLinesRule) Check(ctx *sdk.Context, _ *hcl.File) ([]sd
 }
 
 func (r *NoConsecutiveBlankLinesRule) fixContent(content []byte) []byte {
-	lines := SplitLines(content)
+	lines := splitLines(content)
 	var result []string
 	lastWasBlank := false
 

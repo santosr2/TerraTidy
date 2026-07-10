@@ -162,27 +162,6 @@ instance_type =   "t2.micro"
 	}
 }
 
-func TestIsHCLFile(t *testing.T) {
-	tests := []struct {
-		name string
-		path string
-		want bool
-	}{
-		{"terraform file", "main.tf", true},
-		{"terragrunt file", "terragrunt.hcl", true},
-		{"uppercase tf", "main.TF", true},
-		{"go file", "main.go", false},
-		{"json file", "config.json", false},
-		{"no extension", "README", false},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.want, isHCLFile(tt.path))
-		})
-	}
-}
-
 func TestConfigFromEngine(t *testing.T) {
 	t.Run("empty config", func(t *testing.T) {
 		engineCfg := config.FmtEngineConfig{}

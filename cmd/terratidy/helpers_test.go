@@ -18,31 +18,6 @@ import (
 	"github.com/santosr2/TerraTidy/pkg/sdk"
 )
 
-func TestIsHCLFile(t *testing.T) {
-	tests := []struct {
-		path     string
-		expected bool
-	}{
-		{"main.tf", true},
-		{"MAIN.TF", true},
-		{"variables.tf", true},
-		{"config.hcl", true},
-		{"terraform.tfvars", true},
-		{"main.go", false},
-		{"README.md", false},
-		{"config.json", false},
-		{"module/main.tf", true},
-		{"path/to/file.hcl", true},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.path, func(t *testing.T) {
-			result := isHCLFile(tt.path)
-			assert.Equal(t, tt.expected, result)
-		})
-	}
-}
-
 func TestShouldSkipDir(t *testing.T) {
 	tests := []struct {
 		name     string

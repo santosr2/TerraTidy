@@ -17,7 +17,7 @@ import (
 func TestFindHCLFiles_SymlinkedFilesIncluded(t *testing.T) {
 	// Note: filepath.Walk visits symlink entries (but does not follow symlinked directories).
 	// This test validates that symlinked .tf files are included in the results, which works
-	// because filepath.Walk passes symlink entries to the callback and isHCLFile checks
+	// because filepath.Walk passes symlink entries to the callback and sdk.IsHCLFile checks
 	// the path string (not the symlink target type).
 
 	tmpDir := t.TempDir()

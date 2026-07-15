@@ -3245,7 +3245,10 @@ func TestServer_Debounce_RapidChanges(t *testing.T) {
 	out := &safeBuffer{}
 	server := NewServer(strings.NewReader(""), out)
 	server.initialized = true
-	server.debounceDelay = 50 * time.Millisecond // Short delay for test
+	// Generous delay so the "timer still pending" check below is race-safe: the
+	// five sends finish in microseconds, far inside this window, so no scheduler
+	// stall short of the full delay can let the timer fire early and flake it.
+	server.debounceDelay = 200 * time.Millisecond
 
 	// Add document
 	uri := "file:///test.tf"
@@ -3276,20 +3279,24 @@ func TestServer_Debounce_RapidChanges(t *testing.T) {
 	server.debounceMu.Unlock()
 	assert.True(t, hasPending, "should have pending debounce timer")
 
-	// Wait for debounce to fire
-	time.Sleep(100 * time.Millisecond)
+	// Wait for the single coalesced fire instead of guessing a sleep duration.
+	require.Eventually(t, func() bool {
+		return strings.Count(out.String(), "textDocument/publishDiagnostics") == 1
+	}, 2*time.Second, 5*time.Millisecond, "coalesced debounce should fire once")
 
-	// Verify timer was cleaned up
+	// The map entry is deleted before the diagnostic is published, so once the
+	// fire is observed the timer is already cleaned up.
 	server.debounceMu.Lock()
 	_, stillPending := server.debounceTimers[uri]
 	server.debounceMu.Unlock()
 	assert.False(t, stillPending, "debounce timer should be cleaned up after firing")
 
-	// Verify only one publishDiagnostics notification was sent
-	// (count occurrences of "publishDiagnostics" in output)
-	output := out.String()
-	count := strings.Count(output, "textDocument/publishDiagnostics")
-	assert.Equal(t, 1, count, "rapid changes should trigger single diagnostics")
+	// Regression guard: with coalescing intact only one timer is ever live, so
+	// a second publish appearing here would mean the rapid changes failed to
+	// coalesce.
+	require.Never(t, func() bool {
+		return strings.Count(out.String(), "textDocument/publishDiagnostics") > 1
+	}, 100*time.Millisecond, 10*time.Millisecond, "rapid changes should trigger single diagnostics")
 }
 
 func TestServer_Debounce_SlowChanges(t *testing.T) {
@@ -3320,8 +3327,14 @@ func TestServer_Debounce_SlowChanges(t *testing.T) {
 	require.NoError(t, json.Unmarshal([]byte(msg1JSON), &msg1))
 	require.NoError(t, server.handleDidChange(msg1))
 
-	// Wait for first debounce to fire
-	time.Sleep(50 * time.Millisecond)
+	// Wait for the first debounce to actually fire before sending the second
+	// change, so the two changes are guaranteed to debounce separately
+	// regardless of scheduler jitter. A fixed sleep here flakes under CPU
+	// contention and the race detector, where the 30ms timer can drift past a
+	// 50ms window.
+	require.Eventually(t, func() bool {
+		return strings.Count(out.String(), "textDocument/publishDiagnostics") == 1
+	}, 2*time.Second, 5*time.Millisecond, "first debounce should fire")
 
 	// Second change (after first debounce completed)
 	msg2JSON := fmt.Sprintf(`{
@@ -3336,13 +3349,17 @@ func TestServer_Debounce_SlowChanges(t *testing.T) {
 	require.NoError(t, json.Unmarshal([]byte(msg2JSON), &msg2))
 	require.NoError(t, server.handleDidChange(msg2))
 
-	// Wait for second debounce to fire
-	time.Sleep(50 * time.Millisecond)
+	// Wait for the second debounce to fire.
+	require.Eventually(t, func() bool {
+		return strings.Count(out.String(), "textDocument/publishDiagnostics") == 2
+	}, 2*time.Second, 5*time.Millisecond, "second debounce should fire")
 
-	// Verify two publishDiagnostics notifications were sent
-	output := out.String()
-	count := strings.Count(output, "textDocument/publishDiagnostics")
-	assert.Equal(t, 2, count, "slow changes should trigger separate diagnostics")
+	// Regression guard: it should settle at exactly two. A third publish here
+	// would mean the second change spilled an extra fire (symmetric with the
+	// no-coalescing guard in RapidChanges).
+	require.Never(t, func() bool {
+		return strings.Count(out.String(), "textDocument/publishDiagnostics") > 2
+	}, 100*time.Millisecond, 10*time.Millisecond, "slow changes should trigger exactly two diagnostics")
 }
 
 func TestServer_Debounce_CancelOnClose(t *testing.T) {

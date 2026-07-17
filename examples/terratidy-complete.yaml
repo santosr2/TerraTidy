@@ -1,0 +1,117 @@
+# TerraTidy configuration with every feature turned on.
+#
+# This enables all four engines and every rule, including the ones that ship
+# disabled-by-default (opt-in) and the optional TFLint integration. Paths are
+# relative to the directory you run TerraTidy from. A couple of features need
+# external resources (a tflint binary, a policies directory); those are noted
+# inline.
+
+version: 1
+
+# --- Global settings ---------------------------------------------------------
+# info is the most permissive threshold: it surfaces info + warning + error.
+# Many opt-in rules emit at info severity, so anything stricter would hide them.
+severity_threshold: info
+fail_fast: false      # false = report all findings; true would stop at the first error
+parallel: true
+recursive: true
+
+# Caching is on by default; these are the effective defaults, shown explicitly.
+cache:
+  disabled: false
+  max_age: 5m
+  max_size: 1000
+
+output:
+  absolute_paths: true  # full paths in findings (default is relative)
+
+# --- Engines -----------------------------------------------------------------
+engines:
+  # Format engine (hclwrite). Plain "enabled" rewrites files in place.
+  fmt:
+    enabled: true
+    check: false  # leave false to actually format; set true for dry-run (mutually exclusive with formatting)
+    diff: true    # print the changes being made
+
+  # Style engine. fix auto-applies fixable rules; diff shows what changed.
+  style:
+    enabled: true
+    fix: true
+    diff: true
+    # Every rule that is disabled-by-default, explicitly enabled. Rules not
+    # listed here are already on by default.
+    rules:
+      # File organization
+      style.variables-in-file: { enabled: true, severity: warning }
+      style.outputs-in-file: { enabled: true, severity: warning }
+      style.providers-in-file: { enabled: true, severity: warning }
+      style.scoped-file-organization: { enabled: true, severity: warning }
+      style.terraform-files-structure: { enabled: true, severity: warning }
+      # Advanced naming (can be noisy)
+      style.resource-name-matches-type: { enabled: true, severity: warning }
+      style.output-prefix: { enabled: true, severity: warning }
+      style.module-name-convention: { enabled: true, severity: warning }
+      # Comments and formatting
+      style.comment-syntax: { enabled: true, severity: warning }
+      style.no-trailing-whitespace: { enabled: true, severity: warning }
+      style.consistent-quotes: { enabled: true, severity: warning }
+      style.no-consecutive-blank-lines: { enabled: true, severity: warning }
+      # Block organization (informational)
+      style.meta-arguments-order: { enabled: true, severity: warning }
+      style.lifecycle-attribute-order: { enabled: true, severity: warning }
+      style.nested-block-order: { enabled: true, severity: warning }
+      style.one-line-attribute-spacing: { enabled: true, severity: warning }
+      # Naming case is snake_case by default; override per rule if desired, e.g.:
+      # style.variable-naming:
+      #   enabled: true
+      #   config:
+      #     options:
+      #       case: snake_case   # snake_case | camelCase | kebab-case | PascalCase
+
+  # Lint engine. TFLint integration is on (assumes the tflint binary is present),
+  # and all built-in AST rules are listed explicitly.
+  lint:
+    enabled: true
+    use_tflint: true          # assumes the `tflint` binary is on PATH
+    fallback_builtin: true    # fall back to built-in rules if TFLint is missing
+    config_file: .tflint.hcl  # only read when use_tflint is true
+    # tflint_path: tflint     # uncomment to point at a custom TFLint binary
+    plugins:                  # TFLint plugins to load
+      - aws
+      - google
+      - azurerm
+    # args:                   # extra flags passed through to TFLint
+    #   - --force
+    # Built-in AST rules (all enabled by default; listed here for completeness).
+    rules:
+      lint.terraform-deprecated-syntax: { enabled: true, severity: warning }
+      lint.terraform-documented-outputs: { enabled: true, severity: warning }
+      lint.terraform-documented-variables: { enabled: true, severity: warning }
+      lint.terraform-hardcoded-secrets: { enabled: true, severity: error }
+      lint.terraform-module-pinned-source: { enabled: true, severity: warning }
+      lint.terraform-naming-convention: { enabled: true, severity: warning }
+      lint.terraform-required-providers: { enabled: true, severity: warning }
+      lint.terraform-required-version: { enabled: true, severity: warning }
+      lint.terraform-resource-count: { enabled: true, severity: warning }
+      lint.terraform-typed-variables: { enabled: true, severity: warning }
+      lint.terraform-unused-declarations: { enabled: true, severity: warning }
+
+  # Policy engine (OPA/Rego). Opt-in and inert until you point it at policies.
+  policy:
+    enabled: true
+    policy_dirs:
+      - ./policies            # put your .rego files here (directory must exist)
+    # policy_files:           # or list individual policy files
+    #   - ./custom-policy.rego
+    # data_files:             # optional data documents for policies
+    #   - ./policy-data.json
+
+# --- Plugins -----------------------------------------------------------------
+# Custom Go (.so), YAML, and Bash rules loaded from these directories.
+plugins:
+  enabled: true
+  verify_integrity: true      # verify plugin SHA256 checksums (keep on)
+  directories:
+    - .terratidy/plugins
+    - ~/.terratidy/plugins
+  tags: []                    # empty = load all plugins; non-empty filters by tag

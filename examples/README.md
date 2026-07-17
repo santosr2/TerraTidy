@@ -7,9 +7,14 @@ This directory contains example configurations and integrations for TerraTidy.
 ### Basic Configuration
 
 - **[terratidy-minimal.yaml](terratidy-minimal.yaml)** - Minimal configuration with defaults
-- **[terratidy.yaml](terratidy.yaml)** - Complete configuration with all options
+- **[terratidy.yaml](terratidy.yaml)** - Reference configuration documenting every option (most shown commented)
+- **[terratidy-complete.yaml](terratidy-complete.yaml)** - Every feature actively enabled: all four engines, every opt-in rule, TFLint integration, and plugins
 - **[terratidy-lint.yaml](terratidy-lint.yaml)** - Lint-focused configuration with TFLint integration options
 - **[terragrunt.yaml](terragrunt.yaml)** - Terragrunt-focused configuration highlighting `style.terragrunt-include-first` (try it on `rule-test-files/terragrunt-include-order.hcl`)
+
+> **Maintainers:** `terratidy-complete.yaml` is the exhaustive "everything on" reference.
+> When a new engine, rule, or config option is added, update this file so it always
+> reflects every available feature enabled.
 
 **Usage:**
 

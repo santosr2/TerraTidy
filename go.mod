@@ -10,7 +10,7 @@ require (
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.2
 	github.com/spf13/cobra v1.10.2
 	github.com/stretchr/testify v1.11.1
-	github.com/zclconf/go-cty v1.18.1
+	github.com/zclconf/go-cty v1.19.0
 	golang.org/x/text v0.39.0
 	gopkg.in/yaml.v3 v3.0.1
 )
@@ -19,6 +19,7 @@ require (
 	github.com/agext/levenshtein v1.2.1 // indirect
 	github.com/agnivade/levenshtein v1.2.1 // indirect
 	github.com/apparentlymart/go-textseg/v15 v15.0.0 // indirect
+	github.com/apparentlymart/go-textseg/v17 v17.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.4.1 // indirect

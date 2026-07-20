@@ -152,7 +152,7 @@
 		"@vscode/vsce": "^3.7.1",
 		"esbuild": "^0.28.1",
 		"mocha": "^11.7.5",
-		"typescript": "^6.0.2"
+		"typescript": "^7.0.2"
 	},
 	"overrides": {
 		"diff": "^8.0.3",

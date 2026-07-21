@@ -138,17 +138,18 @@ brews:
     install: |
       bin.install "terratidy"
 
-# Docker images for stable releases (includes stable version aliases)
+# Per-architecture images. GoReleaser builds one image per entry, each pushing a
+# tag-suffixed image (:<tag>-amd64, :<tag>-arm64). The docker_manifests below merge
+# them into the real multi-arch tags. buildx + QEMU are set up in release.yml.
 dockers:
-  - id: docker-stable
-    skip_push: "{{ if .Prerelease }}true{{ else }}false{{ end }}"
+  - id: docker-amd64
+    goarch: amd64
+    use: buildx
     image_templates:
-      - "ghcr.io/santosr2/terratidy:{{ .Tag }}"
-      - "ghcr.io/santosr2/terratidy:v{{ .Major }}"
-      - "ghcr.io/santosr2/terratidy:v{{ .Major }}.{{ .Minor }}"
-      - "ghcr.io/santosr2/terratidy:latest"
+      - "ghcr.io/santosr2/terratidy:{{ .Tag }}-amd64"
     dockerfile: Dockerfile
     build_flag_templates:
+      - "--platform=linux/amd64"
       - "--label=org.opencontainers.image.created={{.Date}}"
       - "--label=org.opencontainers.image.title={{.ProjectName}}"
       - "--label=org.opencontainers.image.description=Single-binary Terraform/Terragrunt quality platform"
@@ -160,14 +161,14 @@ dockers:
       - "--label=org.opencontainers.image.licenses=MIT"
       - "--label=org.opencontainers.image.vendor=santosr2"
 
-  # Docker images for pre-releases (tag-specific only)
-  # Note: :latest always points to the most recent stable release
-  - id: docker-prerelease
-    skip_push: "{{ if .Prerelease }}false{{ else }}true{{ end }}"
+  - id: docker-arm64
+    goarch: arm64
+    use: buildx
     image_templates:
-      - "ghcr.io/santosr2/terratidy:{{ .Tag }}"
+      - "ghcr.io/santosr2/terratidy:{{ .Tag }}-arm64"
     dockerfile: Dockerfile
     build_flag_templates:
+      - "--platform=linux/arm64"
       - "--label=org.opencontainers.image.created={{.Date}}"
       - "--label=org.opencontainers.image.title={{.ProjectName}}"
       - "--label=org.opencontainers.image.description=Single-binary Terraform/Terragrunt quality platform"
@@ -178,3 +179,30 @@ dockers:
       - "--label=org.opencontainers.image.documentation=https://santosr2.github.io/TerraTidy/"
       - "--label=org.opencontainers.image.licenses=MIT"
       - "--label=org.opencontainers.image.vendor=santosr2"
+
+# Multi-arch manifests merging the per-arch images above.
+# The tag-specific manifest ships for every release; the floating aliases
+# (vMAJOR, vMAJOR.MINOR, latest) are stable-only, gated on .Prerelease.
+docker_manifests:
+  - name_template: "ghcr.io/santosr2/terratidy:{{ .Tag }}"
+    image_templates:
+      - "ghcr.io/santosr2/terratidy:{{ .Tag }}-amd64"
+      - "ghcr.io/santosr2/terratidy:{{ .Tag }}-arm64"
+
+  - name_template: "ghcr.io/santosr2/terratidy:v{{ .Major }}"
+    skip_push: "{{ if .Prerelease }}true{{ else }}false{{ end }}"
+    image_templates:
+      - "ghcr.io/santosr2/terratidy:{{ .Tag }}-amd64"
+      - "ghcr.io/santosr2/terratidy:{{ .Tag }}-arm64"
+
+  - name_template: "ghcr.io/santosr2/terratidy:v{{ .Major }}.{{ .Minor }}"
+    skip_push: "{{ if .Prerelease }}true{{ else }}false{{ end }}"
+    image_templates:
+      - "ghcr.io/santosr2/terratidy:{{ .Tag }}-amd64"
+      - "ghcr.io/santosr2/terratidy:{{ .Tag }}-arm64"
+
+  - name_template: "ghcr.io/santosr2/terratidy:latest"
+    skip_push: "{{ if .Prerelease }}true{{ else }}false{{ end }}"
+    image_templates:
+      - "ghcr.io/santosr2/terratidy:{{ .Tag }}-amd64"
+      - "ghcr.io/santosr2/terratidy:{{ .Tag }}-arm64"

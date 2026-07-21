@@ -57,7 +57,7 @@ engines:
       - ./policies
     policy_files:             # Individual policy files (in addition to policy_dirs)
       - ./custom-policy.rego
-    data_files:               # JSON/YAML data files passed to policy evaluation
+    data_files:               # JSON data files passed to policy evaluation
       - ./policy-data.json
 ```
 
@@ -81,7 +81,7 @@ engines:
 | `policy` | `enabled`      | bool     | `false` | Enable the policy engine ([engine docs](../user-guide/engines/policy.md)) |
 | `policy` | `policy_dirs`  | []string | `[]`    | Directories containing Rego policy files |
 | `policy` | `policy_files` | []string | `[]`    | Individual Rego files to evaluate (in addition to `policy_dirs`) |
-| `policy` | `data_files`   | []string | `[]`    | JSON/YAML data files passed to policy evaluation |
+| `policy` | `data_files`   | []string | `[]`    | JSON data files passed to policy evaluation |
 
 ## Configuration Precedence
 

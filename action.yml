@@ -23,7 +23,7 @@ inputs:
     required: false
     default: "text"
   parallel:
-    description: "Run engines in parallel for faster execution"
+    description: "Run engines in parallel for faster execution (defaults to false here for deterministic CI ordering, unlike the CLI which is parallel by default)"
     required: false
     default: "false"
   working-directory:

@@ -95,7 +95,7 @@ is set (triggers a JSON pre-run). For other configurations, output values are ba
 exit code:
 
 - `findings-count`: the exit code (0 = clean, 1 = findings exist, 2 = config error, 3 = internal error)
-- `errors-count`: same as `findings-count` when non-zero (exit 1 means findings of any severity, not error-level specifically)
+- `errors-count`: same as `findings-count` when non-zero (exit 1 means at least one error-level finding exists; warning-only runs exit 0)
 - `warnings-count`: 0 (not tracked in fallback mode)
 
 Exit codes 2 and 3 indicate errors, not finding counts.

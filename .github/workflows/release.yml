@@ -307,6 +307,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
+          # GoReleaser pushes the freshly generated formula to main after the tag
+          # was cut, so check out main (not the tag) to smoke-test the real formula.
+          ref: main
           persist-credentials: false
 
       - name: Test Homebrew formula

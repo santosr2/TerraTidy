@@ -99,20 +99,31 @@ Configuration values can use environment variables with three syntaxes:
 | ------------------- | --------------------------------------------- |
 | `${VAR}`            | Substitutes the value; empty string if unset  |
 | `${VAR:-default}`   | Uses `default` if `VAR` is unset              |
-| `${VAR:?error}`     | Fails with error message if `VAR` is unset    |
+| `${VAR:?error}`     | Fails with `error` as the message if `VAR` is unset |
+
+Substitution applies to values anywhere in the file, so use the real
+configuration keys for the section you are configuring:
 
 ```yaml
+version: 1
+
+severity_threshold: ${TERRATIDY_SEVERITY:-warning}
+
 engines:
   policy:
-    # Simple variable
-    api_key: ${API_KEY}
-
-    # With default value
-    region: ${AWS_REGION:-us-east-1}
-
-    # Required variable
-    account_id: ${AWS_ACCOUNT_ID:?must be set}
+    enabled: true
+    policy_dirs:
+      # Simple variable
+      - ${POLICY_DIR}
+      # With default value
+      - ${EXTRA_POLICY_DIR:-./policies}
+    data_files:
+      # Required: loading fails if POLICY_DATA is unset
+      - ${POLICY_DATA:?POLICY_DATA must point at your policy data file}
 ```
+
+Every unset required variable is reported at once, so a misconfigured
+environment surfaces all missing values in a single run.
 
 Select a profile via CLI flag:
 

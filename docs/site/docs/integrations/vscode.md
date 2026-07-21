@@ -238,37 +238,42 @@ version to comply with VS Code Marketplace requirements.
 ### Version Scheme
 
 VS Code Marketplace only supports numeric versions (X.Y.Z) without semver
-pre-release suffixes like `-alpha.4`. The extension is published alongside
-each TerraTidy CLI release but uses a separate version number:
+pre-release suffixes like `-alpha.4`:
 
 | Component | Rule |
 |-----------|------|
 | major.minor | Matches TerraTidy CLI major.minor |
-| patch | Incremented manually via `mise run vscode:bump:patch` before each publish |
-| Pre-release | Indicated via `--pre-release` flag, not version string |
+| patch | Incremented via `mise run vscode:bump:patch` before each publish |
+
+**Only stable TerraTidy releases are published to the Marketplace.** Pre-release
+tags (`-alpha`, `-beta`, `-rc`) build a `.vsix` that is attached to the matching
+GitHub release instead. Because a pre-release never consumes a Marketplace
+version number, the CLI and extension versions stay aligned.
 
 ### Version Mapping
 
-| TerraTidy CLI | VS Code Extension | Marketplace Status |
-|---------------|-------------------|-------------------|
-| 0.2.0-alpha.4 | 0.2.0 | Pre-release |
-| 0.2.0-alpha.5 | 0.2.1 | Pre-release |
-| 0.2.0 | 0.2.2 | Stable |
-| 0.3.0-alpha.1 | 0.3.0 | Pre-release |
+| TerraTidy CLI | VS Code Extension | Distribution |
+|---------------|-------------------|--------------|
+| 0.2.0-alpha.4 | 0.2.0 | Marketplace (published during the alpha cycle) |
+| 0.2.0 | 0.2.1 | Marketplace (stable) |
+| 0.3.0 | 0.3.0 | Marketplace (stable) |
+| 0.4.0-alpha.1 | 0.4.0 | GitHub release `.vsix` only |
+| 0.4.0 | 0.4.0 | Marketplace (stable) |
 
-### Installing Pre-release Versions
+Extension `0.2.1` is offset by one patch because `0.2.0` was already published
+to the Marketplace during the alpha cycle. From `0.3.0` onward the CLI and
+extension versions realign.
 
-To install pre-release versions from the Marketplace:
+### Installing Pre-release Builds
 
-1. Open the TerraTidy extension page in VS Code
-2. Click the dropdown arrow next to "Install"
-3. Select "Install Pre-Release Version"
-
-Or via command line:
+Pre-release builds are not on the Marketplace. Download the `.vsix` from the
+[GitHub release](https://github.com/santosr2/TerraTidy/releases) and install it:
 
 ```bash
-code --install-extension santosr2.vscode-terratidy --pre-release
+code --install-extension terratidy.vsix
 ```
+
+Or in VS Code: **Extensions** view → **⋯** menu → **Install from VSIX...**
 
 ## Limitations
 

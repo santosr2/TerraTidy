@@ -305,3 +305,53 @@ jobs:
         run: |
           brew install --build-from-source Formula/terratidy.rb
           terratidy version
+
+  # Every tag attaches the .vsix to the GitHub release. Only stable tags publish to
+  # the VS Code Marketplace; pre-release testers install the .vsix manually.
+  # Depends on goreleaser so the GitHub release is guaranteed to exist before upload.
+  vscode-publish:
+    needs: goreleaser
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: release
+    permissions:
+      contents: write  # Required to upload the .vsix to the GitHub release
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: "1.2.x"
+          no-cache: true  # Disable cache for security-sensitive publish job
+
+      - name: Install dependencies
+        working-directory: vscode
+        run: bun install --frozen-lockfile
+
+      # vsce package bundles via esbuild, which strips types without checking them.
+      # Type-check explicitly: a Marketplace version cannot be unpublished.
+      - name: Type check
+        working-directory: vscode
+        run: bun run compile
+
+      - name: Package extension
+        working-directory: vscode
+        run: bunx @vscode/vsce package --out terratidy.vsix
+
+      - name: Attach VSIX to GitHub release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: gh release upload "$TAG" vscode/terratidy.vsix --repo "$GITHUB_REPOSITORY" --clobber
+
+      - name: Publish to VS Code Marketplace
+        if: "!contains(github.ref, '-')"
+        working-directory: vscode
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+        run: bunx @vscode/vsce publish --packagePath ./terratidy.vsix

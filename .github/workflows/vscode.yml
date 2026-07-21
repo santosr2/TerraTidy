@@ -1,5 +1,7 @@
 name: VSCode Extension
 
+# CI only. Marketplace publishing and .vsix release uploads live in release.yml,
+# which already runs on v* tags and can order itself after the GitHub release exists.
 on:
   push:
     branches: [main]
@@ -7,8 +9,6 @@ on:
       - "vscode/**"
       - "internal/lsp/**"
       - ".github/workflows/vscode.yml"
-    tags:
-      - "v*"
   pull_request:
     branches: [main]
     paths:
@@ -122,63 +122,3 @@ jobs:
           name: terratidy-vsix-${{ matrix.os }}
           path: vscode/*.vsix
           retention-days: 7
-
-  # Publish to VS Code Marketplace on release tags
-  publish:
-    if: startsWith(github.ref, 'refs/tags/v')
-    needs: build-and-test
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    environment: release
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-        with:
-          persist-credentials: false
-
-      - name: Set up Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
-        with:
-          bun-version: "1.2.x"
-          no-cache: true  # Disable cache for security-sensitive publish job
-
-      - name: Install dependencies
-        working-directory: vscode
-        run: bun install --frozen-lockfile
-
-      - name: Check if pre-release
-        id: prerelease
-        run: |
-          TAG="${GITHUB_REF#refs/tags/}"
-          if [[ "$TAG" == *-alpha* ]] || [[ "$TAG" == *-beta* ]] || [[ "$TAG" == *-rc* ]]; then
-            echo "is_prerelease=true" >> "$GITHUB_OUTPUT"
-            echo "Detected pre-release tag: $TAG"
-          else
-            echo "is_prerelease=false" >> "$GITHUB_OUTPUT"
-            echo "Detected stable tag: $TAG"
-          fi
-
-      - name: Package extension (pre-release)
-        if: steps.prerelease.outputs.is_prerelease == 'true'
-        working-directory: vscode
-        run: bunx @vscode/vsce package --pre-release
-
-      - name: Package extension (stable)
-        if: steps.prerelease.outputs.is_prerelease == 'false'
-        working-directory: vscode
-        run: bunx @vscode/vsce package
-
-      - name: Publish to VS Code Marketplace (pre-release)
-        if: steps.prerelease.outputs.is_prerelease == 'true'
-        working-directory: vscode
-        env:
-          VSCE_PAT: ${{ secrets.VSCE_PAT }}
-        run: bunx @vscode/vsce publish --pre-release --packagePath ./*.vsix
-
-      - name: Publish to VS Code Marketplace (stable)
-        if: steps.prerelease.outputs.is_prerelease == 'false'
-        working-directory: vscode
-        env:
-          VSCE_PAT: ${{ secrets.VSCE_PAT }}
-        run: bunx @vscode/vsce publish --packagePath ./*.vsix

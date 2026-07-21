@@ -147,6 +147,12 @@ filename = ".github/ISSUE_TEMPLATE/bug_report.yml"
 search = "v{current_version}"
 replace = "v{new_version}"
 
+# Discussion Q&A template version placeholder
+[[tool.bumpversion.files]]
+filename = ".github/DISCUSSION_TEMPLATE/q-a.yml"
+search = "placeholder: \"{current_version}\""
+replace = "placeholder: \"{new_version}\""
+
 # Examples - Go rule plugin module dependency
 [[tool.bumpversion.files]]
 filename = "examples/go-rule/go.mod"

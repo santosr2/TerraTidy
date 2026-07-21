@@ -18,7 +18,7 @@ This page provides the comprehensive development reference.
 
 ```bash
 git clone https://github.com/santosr2/TerraTidy.git
-cd terratidy
+cd TerraTidy
 ```
 
 ### Install Dependencies

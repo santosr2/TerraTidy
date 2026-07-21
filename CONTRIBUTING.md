@@ -73,10 +73,15 @@ Examples:
 ### New Rules
 
 ```bash
+# Go rule (compiled; validated with go test, not test-rule)
 mise run build
 ./bin/terratidy init-rule --name my-rule --type go
-# Edit generated files
-./bin/terratidy test-rule my-rule
+# Implement Check() in rules/my-rule/rule.go and add cases to rule_test.go
+go test ./rules/my-rule/
+
+# Rego policy (test-rule runs the policy against fixtures)
+./bin/terratidy init-rule --name require-encryption --type rego
+./bin/terratidy test-rule ./policies/require-encryption.rego
 ```
 
 ### New Engines

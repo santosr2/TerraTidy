@@ -61,12 +61,13 @@ version: 1  # Required
 
 ### Go Version
 
-TerraTidy requires Go 1.26.4 or later for building from source and compiling Go plugins.
-Go plugins (`.so` files) must be compiled with the same Go version as TerraTidy.
+TerraTidy requires Go 1.25 or later to build from source; official releases are built
+with Go 1.26.4. Go plugins (`.so` files) must be compiled with the same Go version as
+the TerraTidy binary you run them against.
 
 ### OPA Version
 
-The policy engine uses OPA v1.15.0 with Rego v1 syntax. Policies must use
+The policy engine uses OPA v1.x with Rego v1 syntax. Policies must use
 `import rego.v1` and the `contains`/`if` keywords.
 
 ## Breaking Changes

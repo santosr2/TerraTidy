@@ -85,7 +85,28 @@ This creates a `.terratidy.yaml` configuration file with recommended settings.
 terratidy check
 ```
 
-Example output (sequential mode, the default):
+Example output (parallel mode, the default):
+
+```text
+Checking 3 files...
+
+Running checks in parallel mode...
+  fmt: 1 issue(s)
+  style: 2 issue(s)
+  lint: 1 issue(s)
+
+✗ modules/networking/main.tf:0:0: File needs formatting (fmt.needs-formatting)
+⚠ modules/networking/main.tf:12:1: Missing blank line between blocks (style.blank-line-between-blocks)
+⚠ modules/networking/variables.tf:5:1: Missing blank line between blocks (style.blank-line-between-blocks)
+⚠ modules/networking/main.tf:8:1: resource name 'public-subnet' should use snake_case (lint.terraform-naming-convention)
+---
+Summary: 4 total issue(s)
+
+  Errors:   1
+  Warnings: 3
+```
+
+With `--no-parallel`, checks run sequentially and the output is expanded per engine:
 
 ```text
 Checking 3 files...
@@ -101,27 +122,6 @@ Checking 3 files...
 
 4. Running policy checks...
    Found 0 issue(s)
-
-✗ modules/networking/main.tf:0:0: File needs formatting (fmt.needs-formatting)
-⚠ modules/networking/main.tf:12:1: Missing blank line between blocks (style.blank-line-between-blocks)
-⚠ modules/networking/variables.tf:5:1: Missing blank line between blocks (style.blank-line-between-blocks)
-⚠ modules/networking/main.tf:8:1: resource name 'public-subnet' should use snake_case (lint.terraform-naming-convention)
----
-Summary: 4 total issue(s)
-
-  Errors:   1
-  Warnings: 3
-```
-
-With `--parallel`, the output is more compact:
-
-```text
-Checking 3 files...
-
-Running checks in parallel mode...
-  fmt: 1 issue(s)
-  style: 2 issue(s)
-  lint: 1 issue(s)
 
 ✗ modules/networking/main.tf:0:0: File needs formatting (fmt.needs-formatting)
 ⚠ modules/networking/main.tf:12:1: Missing blank line between blocks (style.blank-line-between-blocks)
@@ -183,7 +183,8 @@ These flags are specific to `terratidy check`:
 
 | Flag                 | Description                  |
 | -------------------- | ---------------------------- |
-| `--parallel`         | Run engines in parallel      |
+| `--parallel`         | Force parallel engine execution (already the default) |
+| `--no-parallel`      | Force sequential engine execution |
 | `--skip-fmt`         | Skip formatting checks       |
 | `--skip-style`       | Skip style checks            |
 | `--skip-lint`        | Skip linting checks          |

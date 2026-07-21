@@ -71,7 +71,7 @@ The policy engine uses OPA v1.15.0 with Rego v1 syntax. Policies must use
 
 ## Breaking Changes
 
-### v0.2.0-alpha.5: Distinct Exit Codes
+### v0.2.0: Distinct Exit Codes
 
 Exit codes now distinguish between different error types:
 
@@ -99,7 +99,7 @@ esac
 
 Most scripts that just check for non-zero will still work correctly.
 
-### v0.2.0-alpha.5: CLI Flag Shorthand Reassignments
+### v0.2.0: CLI Flag Shorthand Reassignments
 
 Short flags have been reassigned to more commonly used global flags:
 
@@ -121,7 +121,7 @@ terratidy check --parallel   # Use long form
 terratidy init --force       # Use long form
 ```
 
-### v0.2.0-alpha.5: Version Command JSON Output
+### v0.2.0: Version Command JSON Output
 
 The `version --json` flag has been replaced with `version --format json`:
 
@@ -139,7 +139,7 @@ JSON field names changed to snake_case for consistency:
 |--------|-------|
 | `goVersion` | `go_version` |
 
-### v0.2.0-alpha.5: SDK `Finding.Fix` Replaced with `Fixable` Flag
+### v0.2.0: SDK `Finding.Fix` Replaced with `Fixable` Flag
 
 Applies to authors of Go SDK plugins (`pkg/sdk`). The `Finding.Fix *FixResult`
 field and the `FixResult` struct have been removed. `Check()` no longer
@@ -154,10 +154,11 @@ running in fix or diff mode.
 
 **Migration for SDK plugin authors:**
 
-> **Note:** This signature is accurate as of v0.2.0-alpha.5. It was superseded
-> by the byte-range edits change documented below — see the next upgrade
-> section. The migration story shown here remains historically faithful; do
-> not copy this signature for new code.
+> **Note:** This intermediate signature was a development step that never
+> shipped in a release. It was superseded before v0.2.0 by the byte-range edits
+> change documented below — see the next upgrade section. It is recorded here
+> only to explain how the API arrived at its current shape; do not copy this
+> signature for new code.
 
 ```go
 // Before: Check() returned a Finding with precomputed fix content.
@@ -213,7 +214,7 @@ for _, f := range findings {
 }
 ```
 
-### v0.2.0-alpha.5: SDK `Fixer.Fix` Returns `*FixResult` Instead of `[]byte`
+### v0.2.0: SDK `Fixer.Fix` Returns `*FixResult` Instead of `[]byte`
 
 Applies to authors of Go SDK plugins (`pkg/sdk`). The `Fixer.Fix` method now
 returns a `*FixResult` carrying one or more byte-range `TextEdit`s, replacing
@@ -231,9 +232,9 @@ Go and their plugin stubs remain non-fixing.
 | Engine rewrites the whole file each pass | Engine splices byte ranges in descending `Start` order |
 
 !!! note "`FixResult` name reuse"
-    The `FixResult` type name was previously used in the SDK (pre-v0.2.0-alpha.5)
+    The `FixResult` type name was previously used in the SDK (pre-v0.2.0)
     for an unrelated type (`{Content []byte; Diff string}`) that has since been
-    removed — see [v0.2.0-alpha.5: SDK `Finding.Fix` Replaced with `Fixable` Flag](#v020-alpha5-sdk-findingfix-replaced-with-fixable-flag).
+    removed — see [v0.2.0: SDK `Finding.Fix` Replaced with `Fixable` Flag](#v020-sdk-findingfix-replaced-with-fixable-flag).
     The new `FixResult` introduced here has a different shape (`{Edits []TextEdit}`)
     and is unrelated to the old type. A reader walking the upgrade history
     chronologically sees the removal first, then the reintroduction.

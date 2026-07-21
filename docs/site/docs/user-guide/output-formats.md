@@ -16,6 +16,9 @@ TerraTidy supports multiple output formats for different use cases.
 | `markdown`     | `--format markdown`     | Markdown summary               | PR comments, summaries    |
 | `github`       | `--format github`       | GitHub Actions workflow cmds   | GitHub Actions inline     |
 
+Three formats accept a short alias: `gha` for `github`, `junit-xml` for `junit`, and `md`
+for `markdown`. They produce identical output to their canonical names.
+
 ## Usage
 
 ```bash
@@ -43,15 +46,31 @@ terratidy check --format html > report.html
 
 ## Text Format
 
-The default format for terminal output:
+The default format for terminal output. Each finding is printed as
+`<icon> <file>:<line>:<column>: <message> (<rule>)`, preceded by a short run
+summary and followed by a severity breakdown:
 
 ```text
-main.tf:15:3: error [style.block-label-case] Resource name should use snake_case
-main.tf:23:1: warning [style.tags-at-end] Place tags attribute at end of resource
-variables.tf:8:1: info [lint.terraform-documented-variables] Variable should have a description
+Checking 2 files...
 
-Found 3 issues (1 error, 1 warning, 1 info)
+Running checks in parallel mode...
+  fmt: 0 issue(s)
+  lint: 2 issue(s)
+  style: 1 issue(s)
+
+⚠ main.tf:1:1: resource name 'MyServer' should use snake_case (lint.terraform-naming-convention)
+⚠ main.tf:4:1: Missing blank line between instance_type and tags (different attribute groups) (style.attribute-group-spacing)
+⚠ variables.tf:1:1: Variable 'region' is missing a description (lint.terraform-documented-variables)
+---
+Summary: 3 total issue(s)
+
+  Warnings: 3
 ```
+
+The icon encodes severity: `✗` for errors, `⚠` for warnings, `ℹ` for info. The
+`Errors:` / `Warnings:` / `Info:` breakdown lines are only printed for severities
+that actually occur. File-level findings with no position omit the `:line:column:`
+segment.
 
 ## Table Format
 
@@ -65,13 +84,13 @@ Output:
 
 ```text
 SEVERITY   LOCATION                                           MESSAGE
-────────────────────────────────────────────────────────────────────────────────────────────────────
-ERROR      main.tf:15:3                                       Resource name should use snake_case
-WARNING    main.tf:23:1                                       Place tags attribute at end of resource
-INFO       variables.tf:8:1                                   Variable should have a description
+----------------------------------------------------------------------------------------------------
+WARNING    main.tf:1:1                                        resource name 'MyServer' should use snake_case (lint.terraform-naming-convention)
+WARNING    main.tf:4:1                                        Missing blank line between instance_type and tags (different attribute groups) (style.attribute-group-spacing)
+WARNING    variables.tf:1:1                                   Variable 'region' is missing a description (lint.terraform-documented-variables)
 
-────────────────────────────────────────────────────────────────────────────────────────────────────
-Summary: 1 error(s) 1 warning(s) 1 info
+----------------------------------------------------------------------------------------------------
+Summary: 0 error(s), 3 warning(s), 0 info
 ```
 
 Colors:
@@ -88,58 +107,119 @@ terratidy check --format table --color=false
 
 ## JSON Format
 
-Machine-readable format for automation:
+Machine-readable format for automation. The document has two top-level keys,
+`findings` and `summary`. Each finding carries a nested `location` with `start`
+and `end` positions (not flat `line`/`column` fields):
 
 ```json
 {
-  "version": "0.2.0-alpha.4",
-  "timestamp": "2024-01-15T10:30:00Z",
-  "summary": {
-    "total": 3,
-    "errors": 1,
-    "warnings": 1,
-    "info": 1
-  },
   "findings": [
     {
-      "rule": "style.block-label-case",
-      "message": "Resource name should use snake_case",
+      "rule": "lint.terraform-naming-convention",
+      "message": "resource name 'MyServer' should use snake_case",
       "file": "main.tf",
-      "line": 15,
-      "column": 3,
-      "severity": "error",
+      "location": {
+        "start": { "line": 1, "column": 1 },
+        "end": { "line": 8, "column": 2 }
+      },
+      "severity": "warning",
+      "fixable": false
+    },
+    {
+      "rule": "style.attribute-group-spacing",
+      "message": "Missing blank line between instance_type and tags (different attribute groups)",
+      "file": "main.tf",
+      "location": {
+        "start": { "line": 4, "column": 1 },
+        "end": { "line": 4, "column": 1 }
+      },
+      "severity": "warning",
       "fixable": true
+    },
+    {
+      "rule": "lint.terraform-documented-variables",
+      "message": "Variable 'region' is missing a description",
+      "file": "variables.tf",
+      "location": {
+        "start": { "line": 1, "column": 1 },
+        "end": { "line": 3, "column": 2 }
+      },
+      "severity": "warning",
+      "fixable": false
     }
-  ]
+  ],
+  "summary": {
+    "total": 3,
+    "errors": 0,
+    "warnings": 3,
+    "info": 0
+  }
 }
 ```
 
+To read a finding's line number with `jq`, reach into the nested location:
+`jq '.findings[].location.start.line'`.
+
 ## JSON Compact Format
 
-Single-line JSON for log aggregation:
+Single-line JSON for log aggregation. Same schema as `json`, emitted on one line:
 
 ```bash
 terratidy check --format json-compact
 ```
 
+```json
+{"findings":[{"rule":"lint.terraform-naming-convention","message":"resource name 'MyServer' should use snake_case","file":"main.tf","location":{"start":{"line":1,"column":1},"end":{"line":8,"column":2}},"severity":"warning","fixable":false}],"summary":{"total":1,"errors":0,"warnings":1,"info":0}}
+```
+
 ## SARIF Format
 
-Static Analysis Results Interchange Format for GitHub integration:
+Static Analysis Results Interchange Format for GitHub integration. The
+`tool.driver.rules` array declares every rule that produced a result, and each
+entry in `results` references one by `ruleId`. Auto-fixable findings also carry a
+`fixes` array:
 
 ```json
 {
-  "$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json",
+  "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
   "version": "2.1.0",
   "runs": [
     {
       "tool": {
         "driver": {
           "name": "TerraTidy",
-          "version": "0.2.0-alpha.4",
-          "rules": [...]
+          "version": "0.2.0",
+          "informationUri": "https://github.com/santosr2/TerraTidy",
+          "rules": [
+            {
+              "id": "lint.terraform-naming-convention",
+              "shortDescription": { "text": "lint.terraform-naming-convention" },
+              "fullDescription": { "text": "" },
+              "properties": { "tags": ["terraform", "terragrunt", "quality"] }
+            }
+          ]
         }
       },
-      "results": [...]
+      "results": [
+        {
+          "ruleId": "lint.terraform-naming-convention",
+          "level": "warning",
+          "message": { "text": "resource name 'MyServer' should use snake_case" },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "main.tf", "uriBaseId": "%SRCROOT%" },
+                "region": {
+                  "startLine": 1,
+                  "startColumn": 1,
+                  "endLine": 8,
+                  "endColumn": 2
+                }
+              }
+            }
+          ]
+        }
+      ]
     }
   ]
 }
@@ -170,11 +250,14 @@ terratidy check --format github
 Output:
 
 ```text
-::error file=main.tf,line=15,col=3,title=style.block-label-case::Resource name should use snake_case
-::warning file=main.tf,line=23,col=1,title=style.tags-at-end::Place tags attribute at end of resource
+::warning file=main.tf,line=1,col=1,title=lint.terraform-required-version::Missing terraform required_version constraint
+::warning file=main.tf,line=1,col=1,endLine=8,endColumn=2,title=lint.terraform-naming-convention::resource name 'MyServer' should use snake_case
+::warning file=main.tf,line=4,col=1,title=style.attribute-group-spacing::Missing blank line between instance_type and tags (different attribute groups)
 ```
 
-These annotations appear directly in the GitHub PR "Files changed" view.
+Severity maps to the workflow command: errors emit `::error`, warnings `::warning`,
+and info `::notice`. Findings that span multiple lines add `endLine` and `endColumn`
+properties. These annotations appear directly in the GitHub PR "Files changed" view.
 
 ## JUnit XML Format
 
@@ -184,28 +267,26 @@ Standard test result format for CI/CD integration:
 terratidy check --format junit > results.xml
 ```
 
-Output:
+Output. Suites are grouped by **file** (one `<testsuite>` per file, named by its
+path), not by engine. Warnings become `<failure>` elements, errors become
+`<error>`, and info findings render as passing test cases with no child element.
+The failure body is a single XML-escaped string (`&#xA;` is a newline):
 
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuites name="TerraTidy" tests="3" failures="2" errors="0" time="0.5">
-  <testsuite name="style" tests="2" failures="1" errors="0" time="0.3">
-    <testcase name="style.block-label-case" classname="main.tf" time="0.1">
-      <failure message="Resource name should use snake_case" type="error">
-        File: main.tf
-        Line: 15
-        Column: 3
-      </failure>
+
+<testsuites name="TerraTidy" tests="3" errors="0" failures="3" time="0" timestamp="2026-07-21T21:21:14Z">
+  <testsuite name="main.tf" tests="2" errors="0" failures="2" skipped="0" time="0" timestamp="2026-07-21T21:21:14Z">
+    <testcase name="lint.terraform-naming-convention" classname="main.tf" time="0">
+      <failure message="resource name &#39;MyServer&#39; should use snake_case" type="warning">File: main.tf&#xA;Line: 1, Column: 1&#xA;&#xA;resource name &#39;MyServer&#39; should use snake_case</failure>
     </testcase>
-    <testcase name="style.variable-naming" classname="variables.tf" time="0.1"/>
+    <testcase name="style.attribute-group-spacing" classname="main.tf" time="0">
+      <failure message="Missing blank line between instance_type and tags (different attribute groups)" type="warning">File: main.tf&#xA;Line: 4, Column: 1&#xA;&#xA;Missing blank line between instance_type and tags (different attribute groups)</failure>
+    </testcase>
   </testsuite>
-  <testsuite name="lint" tests="1" failures="1" errors="0" time="0.2">
-    <testcase name="lint.terraform-documented-variables" classname="variables.tf" time="0.1">
-      <failure message="Variable should have a description" type="warning">
-        File: variables.tf
-        Line: 8
-        Column: 1
-      </failure>
+  <testsuite name="variables.tf" tests="1" errors="0" failures="1" skipped="0" time="0" timestamp="2026-07-21T21:21:14Z">
+    <testcase name="lint.terraform-documented-variables" classname="variables.tf" time="0">
+      <failure message="Variable &#39;region&#39; is missing a description" type="warning">File: variables.tf&#xA;Line: 1, Column: 1&#xA;&#xA;Variable &#39;region&#39; is missing a description</failure>
     </testcase>
   </testsuite>
 </testsuites>
@@ -249,30 +330,40 @@ Human-readable markdown summary, ideal for PR comments:
 terratidy check --format markdown > summary.md
 ```
 
-Output:
+Output. A `## Summary` count table is followed by a `## Findings` section grouped
+by file. Severity is shown with an emoji prefix (`:x:` error, `:warning:` warning,
+`:information_source:` info), and a generator footer closes the report:
 
 ```markdown
 # TerraTidy Report
 
-**Summary:** 3 issues found (1 error, 1 warning, 1 info)
+## Summary
 
-## Errors (1)
+| Severity | Count |
+|----------|-------|
+| Errors | 0 |
+| Warnings | 3 |
+| Info | 0 |
+| **Total** | **3** |
 
-| File | Line | Rule | Message |
-|------|------|------|---------|
-| main.tf | 15 | style.block-label-case | Resource name should use snake_case |
+## Findings
 
-## Warnings (1)
+### `main.tf`
 
-| File | Line | Rule | Message |
-|------|------|------|---------|
-| main.tf | 23 | style.tags-at-end | Place tags attribute at end of resource |
+| Severity | Line | Rule | Message |
+|----------|------|------|---------|
+| :warning: warning | 1 | `lint.terraform-naming-convention` | resource name 'MyServer' should use snake_case |
+| :warning: warning | 4 | `style.attribute-group-spacing` | Missing blank line between instance_type and tags (different attribute groups) |
 
-## Info (1)
+### `variables.tf`
 
-| File | Line | Rule | Message |
-|------|------|------|---------|
-| variables.tf | 8 | lint.terraform-documented-variables | Variable should have a description |
+| Severity | Line | Rule | Message |
+|----------|------|------|---------|
+| :warning: warning | 1 | `lint.terraform-documented-variables` | Variable 'region' is missing a description |
+
+
+---
+*Generated by TerraTidy 0.2.0*
 ```
 
 ### GitHub Actions Summary
@@ -353,11 +444,11 @@ By default, file paths in output are relative to the current working directory:
 ```bash
 # Default: relative paths
 terratidy check
-# Output: modules/vpc/main.tf:15:3: error [style.block-label-case] ...
+# Output: ⚠ modules/vpc/main.tf:1:1: resource name 'MyServer' should use snake_case (lint.terraform-naming-convention)
 
 # Use absolute paths
 terratidy check --absolute-paths
-# Output: /Users/dev/project/modules/vpc/main.tf:15:3: error [style.block-label-case] ...
+# Output: ⚠ /Users/dev/project/modules/vpc/main.tf:1:1: resource name 'MyServer' should use snake_case (lint.terraform-naming-convention)
 ```
 
 Relative paths are more readable in CI logs and editor integrations. Use `--absolute-paths`

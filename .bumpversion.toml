@@ -69,6 +69,12 @@ filename = "docs/site/docs/getting-started/installation.md"
 search = "terratidy:v{current_version}"
 replace = "terratidy:v{new_version}"
 
+# Documentation - go install pin
+[[tool.bumpversion.files]]
+filename = "docs/site/docs/getting-started/installation.md"
+search = "terratidy@v{current_version}"
+replace = "terratidy@v{new_version}"
+
 # Examples - download URL
 [[tool.bumpversion.files]]
 filename = "examples/README.md"

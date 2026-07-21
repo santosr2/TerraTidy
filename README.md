@@ -54,9 +54,7 @@ Download the latest release for your platform from [GitHub Releases](https://git
 ### Docker
 
 ```bash
-docker pull ghcr.io/santosr2/terratidy:latest
-
-# Pin to a specific version in CI
+# Pin to a specific version (recommended for reproducible builds)
 docker pull ghcr.io/santosr2/terratidy:v0.2.0-alpha.4
 
 docker run --rm -v $(pwd):/app ghcr.io/santosr2/terratidy check
@@ -65,13 +63,10 @@ docker run --rm -v $(pwd):/app ghcr.io/santosr2/terratidy check
 ### From Source
 
 ```bash
-# Use explicit version until v0.2.0 stable (see note below)
 go install github.com/santosr2/TerraTidy/cmd/terratidy@v0.2.0-alpha.4
 ```
 
-> **Note:** Avoid `@latest` until v0.2.0 is released. Due to a repository rename after v0.1.0,
-> `@latest` resolves to v0.1.0 which has a broken module path. See the
-> [deprecation notice](https://github.com/santosr2/TerraTidy/discussions/105) for details.
+> **Tip:** Pin to a specific version for reproducible installs.
 
 ## Quick Start
 
@@ -342,7 +337,7 @@ Full documentation is available at [docs/site/docs/](docs/site/docs/).
 
 ```bash
 git clone https://github.com/santosr2/TerraTidy
-cd terratidy
+cd TerraTidy
 mise install        # Install Go 1.26 and tools
 mise run setup      # Download and tidy Go modules
 mise run build      # Build binary

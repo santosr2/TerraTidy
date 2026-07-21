@@ -23,7 +23,7 @@ inputs:
     required: false
     default: "text"
   parallel:
-    description: "Run engines in parallel for faster execution"
+    description: "Run engines in parallel for faster execution (defaults to false here for deterministic CI ordering, unlike the CLI which is parallel by default)"
     required: false
     default: "false"
   working-directory:
@@ -99,7 +99,7 @@ runs:
     - name: Setup Go
       uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
       with:
-        go-version: "1.26.3"
+        go-version: "1.26.x"
         cache: false  # Prevents gtar conflicts on macOS when action is called multiple times
 
     - name: Install TerraTidy
@@ -108,8 +108,10 @@ runs:
         INPUT_VERSION: ${{ inputs.version }}
       run: | # zizmor: ignore[github-env]
         if [ "$INPUT_VERSION" = "latest" ]; then
-          # Check if we're in a terratidy checkout (for action testing)
-          if [ -f "go.mod" ] && grep -q "github.com/santosr2/TerraTidy" go.mod 2>/dev/null; then
+          # Check if we're in the terratidy checkout itself (for action testing).
+          # Match the module declaration, not a substring: any SDK consumer lists
+          # github.com/santosr2/TerraTidy as a require, and must not build from source.
+          if [ -f "go.mod" ] && head -n1 go.mod | grep -qx "module github.com/santosr2/TerraTidy" 2>/dev/null; then
             # Build from source for local testing
             # Get version info for ldflags (shallow clones don't have VCS info)
             VERSION=$(git describe --tags --always --dirty 2>/dev/null || echo "dev")
@@ -150,7 +152,7 @@ runs:
       run: $GITHUB_ACTION_PATH/tools/scripts/run-action.sh
 
     - name: Upload SARIF
-      if: inputs.format == 'sarif' && inputs.github-token != ''
+      if: always() && inputs.format == 'sarif' && inputs.github-token != ''
       uses: github/codeql-action/upload-sarif@99df26d4f13ea111d4ec1a7dddef6063f76b97e9 # v4.37.0
       with:
         sarif_file: ${{ steps.terratidy.outputs.sarif-file }}

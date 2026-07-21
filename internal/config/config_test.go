@@ -894,7 +894,8 @@ func TestExpandEnvVars(t *testing.T) {
 				defer func(key string) { _ = os.Unsetenv(key) }(k)
 			}
 
-			result := expandEnvVars(tt.input)
+			result, err := expandEnvVars(tt.input)
+			require.NoError(t, err)
 			assert.Equal(t, tt.expected, result)
 		})
 	}
@@ -1631,7 +1632,8 @@ func TestExpandEnvVars_SensitiveWarning(t *testing.T) {
 		_ = os.Setenv("MY_SECRET", "secret_value")
 		defer func() { _ = os.Unsetenv("MY_SECRET") }()
 
-		result := expandEnvVars("value: ${MY_SECRET}")
+		result, err := expandEnvVars("value: ${MY_SECRET}")
+		require.NoError(t, err)
 		assert.Equal(t, "value: secret_value", result)
 	})
 
@@ -1639,7 +1641,8 @@ func TestExpandEnvVars_SensitiveWarning(t *testing.T) {
 		_ = os.Setenv("API_TOKEN", "token123")
 		defer func() { _ = os.Unsetenv("API_TOKEN") }()
 
-		result := expandEnvVars("auth: ${API_TOKEN:-default}")
+		result, err := expandEnvVars("auth: ${API_TOKEN:-default}")
+		require.NoError(t, err)
 		assert.Equal(t, "auth: token123", result)
 	})
 
@@ -1647,7 +1650,8 @@ func TestExpandEnvVars_SensitiveWarning(t *testing.T) {
 		_ = os.Setenv("REGION", "us-west-2")
 		defer func() { _ = os.Unsetenv("REGION") }()
 
-		result := expandEnvVars("region: ${REGION}")
+		result, err := expandEnvVars("region: ${REGION}")
+		require.NoError(t, err)
 		assert.Equal(t, "region: us-west-2", result)
 	})
 }

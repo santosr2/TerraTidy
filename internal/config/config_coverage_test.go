@@ -12,27 +12,41 @@ import (
 func TestExpandEnvVars_RequiredSyntax(t *testing.T) {
 	t.Run("required var set", func(t *testing.T) {
 		t.Setenv("TEST_REQUIRED_VAR", "hello")
-		result := expandEnvVars("${TEST_REQUIRED_VAR:?must be set}")
+		result, err := expandEnvVars("${TEST_REQUIRED_VAR:?must be set}")
+		require.NoError(t, err)
 		assert.Equal(t, "hello", result)
 	})
 
-	t.Run("required var unset returns empty", func(t *testing.T) {
+	t.Run("required var unset is an error", func(t *testing.T) {
 		t.Setenv("TEST_MISSING_REQUIRED_VAR", "")
-		result := expandEnvVars("${TEST_MISSING_REQUIRED_VAR:?must be set}")
-		assert.Equal(t, "", result)
+		_, err := expandEnvVars("${TEST_MISSING_REQUIRED_VAR:?must be set}")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "TEST_MISSING_REQUIRED_VAR")
+		assert.Contains(t, err.Error(), "must be set")
+	})
+
+	t.Run("reports every missing required var", func(t *testing.T) {
+		t.Setenv("TEST_MISSING_A", "")
+		t.Setenv("TEST_MISSING_B", "")
+		_, err := expandEnvVars("a: ${TEST_MISSING_A:?need a}\nb: ${TEST_MISSING_B:?need b}")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "TEST_MISSING_A")
+		assert.Contains(t, err.Error(), "TEST_MISSING_B")
 	})
 }
 
 func TestExpandEnvVars_DefaultSyntax(t *testing.T) {
 	t.Run("var set ignores default", func(t *testing.T) {
 		t.Setenv("TEST_SET_VAR", "actual")
-		result := expandEnvVars("${TEST_SET_VAR:-fallback}")
+		result, err := expandEnvVars("${TEST_SET_VAR:-fallback}")
+		require.NoError(t, err)
 		assert.Equal(t, "actual", result)
 	})
 
 	t.Run("var unset uses default", func(t *testing.T) {
 		t.Setenv("TEST_UNSET_VAR", "")
-		result := expandEnvVars("${TEST_UNSET_VAR:-fallback}")
+		result, err := expandEnvVars("${TEST_UNSET_VAR:-fallback}")
+		require.NoError(t, err)
 		assert.Equal(t, "fallback", result)
 	})
 }

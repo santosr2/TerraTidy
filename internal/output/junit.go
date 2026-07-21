@@ -180,7 +180,7 @@ func (f *JUnitFormatter) buildTestSuite(file string, findings []sdk.Finding, tim
 	}
 
 	return JUnitTestSuite{
-		Name:      file,
+		Name:      displayFile,
 		Tests:     len(findings),
 		Errors:    errors,
 		Failures:  failures,

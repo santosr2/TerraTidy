@@ -116,7 +116,7 @@ const (
 
 - Go 1.26.4 or later
 - TerraTidy SDK (`pkg/sdk`)
-- TerraTidy plugin types (`internal/plugins`)
+- TerraTidy plugin types (`pkg/plugins`)
 
 ### Plugin Structure
 
@@ -168,7 +168,7 @@ import (
 
     "github.com/hashicorp/hcl/v2"
     "github.com/hashicorp/hcl/v2/hclsyntax"
-    "github.com/santosr2/TerraTidy/internal/plugins"
+    "github.com/santosr2/TerraTidy/pkg/plugins"
     "github.com/santosr2/TerraTidy/pkg/sdk"
 )
 

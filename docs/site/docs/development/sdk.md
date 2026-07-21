@@ -128,7 +128,7 @@ format exposes it as `"is_diff": true`.
 
 Plugin authors migrating from the pre-`Fixable` SDK (where `Finding.Fix` was a
 `*FixResult` pointer carrying precomputed bytes and a diff string) should see
-the [upgrade guide migration note](../getting-started/upgrade.md#v020-alpha5-sdk-findingfix-replaced-with-fixable-flag)
+the [upgrade guide migration note](../getting-started/upgrade.md#v020-sdk-findingfix-replaced-with-fixable-flag)
 for a before/after walk-through. The `FixResult` name has since been
 reintroduced for an unrelated purpose; see [FixResult](#fixresult) below.
 
@@ -209,11 +209,11 @@ Rules migrating from the old `[]byte`-returning `Fix` can build a whole-file
 Return `nil, nil` when `newContent` equals `original` to signal a no-op fix.
 
 !!! note "Name reuse"
-    The `FixResult` name was previously used (pre-v0.2.0-alpha.5) for a
+    The `FixResult` name was previously used (pre-v0.2.0) for a
     different type carrying precomputed bytes and a diff string. That type was
     removed alongside the `Finding.Fix` field. The current `FixResult` is
     unrelated to the old shape. See the
-    [upgrade guide](../getting-started/upgrade.md#v020-alpha5-sdk-fixerfix-returns-fixresult-instead-of-byte)
+    [upgrade guide](../getting-started/upgrade.md#v020-sdk-fixerfix-returns-fixresult-instead-of-byte)
     for the chronology.
 
 ## Location

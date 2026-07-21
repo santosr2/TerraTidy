@@ -410,7 +410,10 @@ func LoadWithFiles(path string) (*Config, []string, error) {
 	}
 
 	// Expand environment variables in the config
-	expandedData := expandEnvVars(string(data))
+	expandedData, err := expandEnvVars(string(data))
+	if err != nil {
+		return nil, nil, fmt.Errorf("loading %s: %w", path, err)
+	}
 
 	var cfg Config
 	if err := unmarshalStrict([]byte(expandedData), &cfg); err != nil {
@@ -443,11 +446,15 @@ func LoadWithFiles(path string) (*Config, []string, error) {
 	return &cfg, loadedFiles, nil
 }
 
-// expandEnvVars expands environment variables in the config content
-// Supports ${VAR} and ${VAR:-default} syntax
+// expandEnvVars expands environment variables in the config content.
+// Supports ${VAR}, ${VAR:-default} and ${VAR:?error message} syntax.
+// Returns an error listing every ${VAR:?...} variable that is unset, so a config
+// declaring a variable required fails loudly instead of silently becoming empty.
 // Logs a warning (to stderr) when expanding variables with sensitive-looking names.
-func expandEnvVars(content string) string {
-	return envVarPattern.ReplaceAllStringFunc(content, func(match string) string {
+func expandEnvVars(content string) (string, error) {
+	var missing []string
+
+	expanded := envVarPattern.ReplaceAllStringFunc(content, func(match string) string {
 		// Extract the variable expression (without ${ and })
 		expr := match[2 : len(match)-1]
 
@@ -466,12 +473,16 @@ func expandEnvVars(content string) string {
 		// Check for required syntax: VAR:?error message
 		if idx := strings.Index(expr, ":?"); idx != -1 {
 			varName := expr[:idx]
-			// Return the variable value or keep the placeholder (validation will catch it)
 			if val := os.Getenv(varName); val != "" {
 				warnIfSensitive(varName)
 				return val
 			}
-			// Return empty for now; validation can catch undefined required vars
+
+			msg := strings.TrimSpace(expr[idx+2:])
+			if msg == "" {
+				msg = "required environment variable is not set"
+			}
+			missing = append(missing, fmt.Sprintf("%s: %s", varName, msg))
 			return ""
 		}
 
@@ -479,6 +490,12 @@ func expandEnvVars(content string) string {
 		warnIfSensitive(expr)
 		return os.Getenv(expr)
 	})
+
+	if len(missing) > 0 {
+		return "", fmt.Errorf("required environment variables not set:\n  %s", strings.Join(missing, "\n  "))
+	}
+
+	return expanded, nil
 }
 
 // globWithTimeout executes filepath.Glob with a timeout to prevent hangs on complex patterns.
@@ -572,8 +589,11 @@ func loadPartialConfig(path string) (*Config, error) {
 		return nil, err
 	}
 
-	// Expand environment variables (BUG-6: was missing in imported configs)
-	expandedData := expandEnvVars(string(data))
+	// Expand environment variables (was missing in imported configs)
+	expandedData, err := expandEnvVars(string(data))
+	if err != nil {
+		return nil, fmt.Errorf("loading %s: %w", path, err)
+	}
 
 	var cfg Config
 	if err := unmarshalStrict([]byte(expandedData), &cfg); err != nil {

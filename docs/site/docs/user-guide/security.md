@@ -4,7 +4,7 @@ Security considerations when using TerraTidy.
 
 ## Policy Engine
 
-The policy engine uses OPA (Open Policy Agent) v1.15.0 to evaluate Rego policies against
+The policy engine uses OPA (Open Policy Agent) v1.x to evaluate Rego policies against
 your Terraform configuration. Policies run in-process with read-only access to the parsed
 HCL input.
 

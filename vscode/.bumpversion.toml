@@ -6,14 +6,16 @@
 #
 # Version scheme:
 # - major.minor always matches Go project (synchronized manually)
-# - patch increments with each VSCode publish
-# - Pre-release status tracked via --pre-release flag, not version string
+# - patch increments only when publishing to the Marketplace
+# - Only stable Go releases publish to the Marketplace. Pre-release tags attach
+#   the .vsix to the GitHub release instead, so they consume no version number.
 #
 # Examples:
-#   Go 0.2.0-alpha.4 → VSCode 0.2.0 (--pre-release)
-#   Go 0.2.0-alpha.5 → VSCode 0.2.1 (--pre-release)
-#   Go 0.2.0         → VSCode 0.2.2 (stable)
-#   Go 0.3.0-alpha.1 → VSCode 0.3.0 (--pre-release)
+#   Go 0.2.0-alpha.4 → VSCode 0.2.0 (Marketplace, published during alpha cycle)
+#   Go 0.2.0         → VSCode 0.2.1 (Marketplace; offset by one, 0.2.0 was taken)
+#   Go 0.3.0         → VSCode 0.3.0 (Marketplace; versions realign here)
+#   Go 0.4.0-alpha.1 → VSCode 0.4.0 (GitHub .vsix only)
+#   Go 0.4.0         → VSCode 0.4.0 (Marketplace)
 #
 # Usage:
 #   mise run vscode:bump:patch   # Increment patch for next publish
@@ -21,7 +23,7 @@
 #   mise run vscode:bump:major   # Reset patch when Go bumps major
 
 [tool.bumpversion]
-current_version = "0.2.0"
+current_version = "0.2.1"
 parse = "(?P<major>\\d+)\\.(?P<minor>\\d+)\\.(?P<patch>\\d+)"
 serialize = ["{major}.{minor}.{patch}"]
 commit = true

@@ -13,19 +13,43 @@ terratidy init
 This creates a default configuration:
 
 ```yaml
+# TerraTidy Configuration
+# Documentation: https://github.com/santosr2/TerraTidy
 version: 1
 
+# Global settings
+severity_threshold: warning
+fail_fast: false
+parallel: true
+
+# Engine configurations
 engines:
   fmt:
     enabled: true
+
   style:
     enabled: true
+
   lint:
     enabled: true
+
   policy:
     enabled: false
+    # policy_dirs:
+    #   - ./policies
 
-severity_threshold: warning
+# Per-engine rule configuration
+# engines:
+#   style:
+#     rules:
+#       style.blank-line-between-blocks:
+#         enabled: true
+#         severity: warning
+#   lint:
+#     rules:
+#       lint.terraform-required-version:
+#         enabled: true
+#         severity: error
 ```
 
 ## Run Checks

@@ -7,14 +7,12 @@ TerraTidy can be installed in several ways.
 If you have Go installed (1.25+):
 
 ```bash
-# Use explicit version until v0.2.0 stable
 go install github.com/santosr2/TerraTidy/cmd/terratidy@v0.2.0-alpha.4
 ```
 
-!!! warning "Avoid `@latest` until v0.2.0"
-    Due to a repository rename after v0.1.0, `go install ...@latest` resolves to v0.1.0
-    which has a broken module path. Use an explicit pre-release version until v0.2.0 stable
-    is released.
+!!! tip "Pin your version"
+    Pin to an explicit version tag for reproducible installs rather than tracking a
+    floating reference.
 
 ## Homebrew (macOS/Linux)
 
@@ -63,11 +61,11 @@ Move-Item -Path "terratidy.exe" -Destination "C:\Program Files\TerraTidy\"
 ## Docker
 
 ```bash
-# latest always points to the most recent stable release
-docker pull ghcr.io/santosr2/terratidy:latest
-
 # Pin to a specific version (recommended)
 docker pull ghcr.io/santosr2/terratidy:v0.2.0-alpha.4
+
+# Or track the most recent stable release
+docker pull ghcr.io/santosr2/terratidy:latest
 
 docker run --rm -v $(pwd):/app ghcr.io/santosr2/terratidy check
 ```

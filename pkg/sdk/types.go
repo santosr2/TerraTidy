@@ -151,7 +151,7 @@ type TextEdit struct {
 // on the next pass. This avoids ambiguous interactions between whole-file
 // rewriters and narrow edits.
 //
-// NOTE: FixResult name was previously used (pre-v0.2.0-alpha.5) for a different
+// NOTE: FixResult name was previously used (pre-v0.2.0) for a different
 // type carrying precomputed bytes and a diff. The new type is unrelated to the
 // old shape. See docs/site/docs/getting-started/upgrade.md for the chronology.
 type FixResult struct {

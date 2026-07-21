@@ -5,7 +5,7 @@ terraform = "1"
 terragrunt = "0"
 golangci-lint = "2"
 uv = "0"
-bun = "1"  # VS Code extension development
+bun = "1.2"  # VS Code extension development (pinned to match CI's bun-version 1.2.x)
 "cargo:git-cliff" = "2"  # Changelog generator
 "pipx:bump-my-version" = "1"
 "go:golang.org/x/perf/cmd/benchstat" = "latest"  # uses date-based versions, not semver
@@ -270,9 +270,19 @@ run = "uv tool run bump-my-version bump major"
 description = "Bump pre-release version (e.g., alpha.1 -> alpha.2)"
 run = "uv tool run bump-my-version bump pre_n"
 
-[tasks."bump:release"]
-description = "Bump to release version (remove pre-release suffix)"
+# Advances one step through pre_l values (alpha -> beta -> rc -> final). Only the
+# final step drops the suffix, so this does NOT jump straight to stable from alpha.
+# Use bump:stable for that.
+[tasks."bump:stage"]
+description = "Advance pre-release stage one step (alpha -> beta -> rc -> stable)"
 run = "uv tool run bump-my-version bump pre_l"
+
+[tasks."bump:stable"]
+description = "Drop the pre-release suffix entirely (e.g., 0.2.0-alpha.4 -> 0.2.0)"
+run = """
+current=$(uv tool run bump-my-version show current_version)
+uv tool run bump-my-version bump --new-version "${current%%-*}"
+"""
 
 [tasks."version:show"]
 description = "Show current version and possible bumps"

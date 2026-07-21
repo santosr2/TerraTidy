@@ -5,7 +5,7 @@
 | Version | Supported          |
 | ------- | ------------------ |
 | 0.2.x   | :white_check_mark: |
-| 0.1.x   | :warning: Deprecated at v0.2.0 release (broken module path) |
+| 0.1.x   | :x: Deprecated - upgrade to 0.2.x |
 
 ## Reporting a Vulnerability
 

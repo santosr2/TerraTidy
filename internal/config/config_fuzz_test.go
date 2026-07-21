@@ -27,7 +27,11 @@ profiles:
 	f.Add([]byte(``))
 
 	f.Fuzz(func(t *testing.T, data []byte) {
-		expanded := expandEnvVars(string(data))
+		expanded, expandErr := expandEnvVars(string(data))
+		if expandErr != nil {
+			// A config declaring an unset required var is a legitimate error, not a crash.
+			return
+		}
 
 		var cfg Config
 		if err := yaml.Unmarshal([]byte(expanded), &cfg); err != nil {

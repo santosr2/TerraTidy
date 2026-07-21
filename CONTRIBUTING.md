@@ -5,7 +5,7 @@ Thank you for your interest in contributing to TerraTidy!
 ## Getting Started
 
 1. Fork the repository
-2. Clone your fork: `git clone https://github.com/santosr2/TerraTidy`
+2. Clone your fork: `git clone https://github.com/<your-username>/TerraTidy && cd TerraTidy`
 3. Set up development environment:
 
    ```bash
@@ -43,13 +43,22 @@ regressions > 15%. See [Performance Guide](docs/site/docs/development/performanc
 
 ### Commit Messages
 
-Follow [Conventional Commits](https://www.conventionalcommits.org/):
+Follow [Conventional Commits](https://www.conventionalcommits.org/). CI validates
+the **pull request title** against this exact list, so an unlisted type fails the
+check:
+
+`feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`,
+`chore`, `revert`, plus two project-specific types:
+
+- `vscode: ...` - changes under `vscode/` (the VS Code extension)
+- `container: ...` - changes to the `Dockerfile` or container configuration
+
+Examples:
 
 - `feat: add new feature`
-- `fix: bug fix`
-- `docs: documentation changes`
-- `test: add tests`
-- `chore: maintenance`
+- `fix(config): reject unset required environment variables`
+- `vscode: bump extension version`
+- `container: pin alpine base digest`
 
 ### Pull Requests
 
@@ -64,10 +73,15 @@ Follow [Conventional Commits](https://www.conventionalcommits.org/):
 ### New Rules
 
 ```bash
+# Go rule (compiled; validated with go test, not test-rule)
 mise run build
 ./bin/terratidy init-rule --name my-rule --type go
-# Edit generated files
-./bin/terratidy test-rule my-rule
+# Implement Check() in rules/my-rule/rule.go and add cases to rule_test.go
+go test ./rules/my-rule/
+
+# Rego policy (test-rule runs the policy against fixtures)
+./bin/terratidy init-rule --name require-encryption --type rego
+./bin/terratidy test-rule ./policies/require-encryption.rego
 ```
 
 ### New Engines

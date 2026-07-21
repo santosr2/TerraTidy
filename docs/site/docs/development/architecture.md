@@ -56,7 +56,7 @@ terratidy/
 │   ├── config/              # Configuration loading
 │   ├── cst/                 # Concrete Syntax Tree (structural fix substrate)
 │   ├── engines/             # Engine implementations
-│   │   ├── fmt/             # Format engine
+│   │   ├── format/          # Format engine
 │   │   ├── style/           # Style engine
 │   │   ├── lint/            # Lint engine
 │   │   └── policy/          # Policy engine

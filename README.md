@@ -6,11 +6,11 @@
 
 <b>A comprehensive quality platform for Terraform and Terragrunt</b>
 
-[![Latest Release](https://img.shields.io/github/v/release/santosr2/terratidy?include_prereleases)](https://github.com/santosr2/TerraTidy/releases/latest)
+[![Latest Release](https://img.shields.io/github/v/release/santosr2/TerraTidy?include_prereleases)](https://github.com/santosr2/TerraTidy/releases/latest)
 [![Build Status](https://github.com/santosr2/TerraTidy/workflows/Test/badge.svg)](https://github.com/santosr2/TerraTidy/actions)
-[![codecov](https://codecov.io/gh/santosr2/terratidy/branch/main/graph/badge.svg)](https://codecov.io/gh/santosr2/terratidy)
+[![codecov](https://codecov.io/gh/santosr2/TerraTidy/branch/main/graph/badge.svg)](https://codecov.io/gh/santosr2/TerraTidy)
 [![Go Report Card](https://goreportcard.com/badge/github.com/santosr2/TerraTidy)](https://goreportcard.com/report/github.com/santosr2/TerraTidy)
-[![Go Version](https://img.shields.io/github/go-mod/go-version/santosr2/terratidy)](go.mod)
+[![Go Version](https://img.shields.io/github/go-mod/go-version/santosr2/TerraTidy)](go.mod)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit)](https://github.com/pre-commit/pre-commit)
 [![Conventional Commits](https://img.shields.io/badge/Conventional%20Commits-1.0.0-yellow.svg)](https://conventionalcommits.org)
@@ -54,9 +54,7 @@ Download the latest release for your platform from [GitHub Releases](https://git
 ### Docker
 
 ```bash
-docker pull ghcr.io/santosr2/terratidy:latest
-
-# Pin to a specific version in CI
+# Pin to a specific version (recommended for reproducible builds)
 docker pull ghcr.io/santosr2/terratidy:v0.2.0-alpha.4
 
 docker run --rm -v $(pwd):/app ghcr.io/santosr2/terratidy check
@@ -65,13 +63,10 @@ docker run --rm -v $(pwd):/app ghcr.io/santosr2/terratidy check
 ### From Source
 
 ```bash
-# Use explicit version until v0.2.0 stable (see note below)
 go install github.com/santosr2/TerraTidy/cmd/terratidy@v0.2.0-alpha.4
 ```
 
-> **Note:** Avoid `@latest` until v0.2.0 is released. Due to a repository rename after v0.1.0,
-> `@latest` resolves to v0.1.0 which has a broken module path. See the
-> [deprecation notice](https://github.com/santosr2/TerraTidy/discussions/105) for details.
+> **Tip:** Pin to a specific version for reproducible installs.
 
 ## Quick Start
 
@@ -90,7 +85,28 @@ This creates a `.terratidy.yaml` configuration file with recommended settings.
 terratidy check
 ```
 
-Example output (sequential mode, the default):
+Example output (parallel mode, the default):
+
+```text
+Checking 3 files...
+
+Running checks in parallel mode...
+  fmt: 1 issue(s)
+  style: 2 issue(s)
+  lint: 1 issue(s)
+
+✗ modules/networking/main.tf:0:0: File needs formatting (fmt.needs-formatting)
+⚠ modules/networking/main.tf:12:1: Missing blank line between blocks (style.blank-line-between-blocks)
+⚠ modules/networking/variables.tf:5:1: Missing blank line between blocks (style.blank-line-between-blocks)
+⚠ modules/networking/main.tf:8:1: resource name 'public-subnet' should use snake_case (lint.terraform-naming-convention)
+---
+Summary: 4 total issue(s)
+
+  Errors:   1
+  Warnings: 3
+```
+
+With `--no-parallel`, checks run sequentially and the output is expanded per engine:
 
 ```text
 Checking 3 files...
@@ -106,27 +122,6 @@ Checking 3 files...
 
 4. Running policy checks...
    Found 0 issue(s)
-
-✗ modules/networking/main.tf:0:0: File needs formatting (fmt.needs-formatting)
-⚠ modules/networking/main.tf:12:1: Missing blank line between blocks (style.blank-line-between-blocks)
-⚠ modules/networking/variables.tf:5:1: Missing blank line between blocks (style.blank-line-between-blocks)
-⚠ modules/networking/main.tf:8:1: resource name 'public-subnet' should use snake_case (lint.terraform-naming-convention)
----
-Summary: 4 total issue(s)
-
-  Errors:   1
-  Warnings: 3
-```
-
-With `--parallel`, the output is more compact:
-
-```text
-Checking 3 files...
-
-Running checks in parallel mode...
-  fmt: 1 issue(s)
-  style: 2 issue(s)
-  lint: 1 issue(s)
 
 ✗ modules/networking/main.tf:0:0: File needs formatting (fmt.needs-formatting)
 ⚠ modules/networking/main.tf:12:1: Missing blank line between blocks (style.blank-line-between-blocks)
@@ -188,7 +183,8 @@ These flags are specific to `terratidy check`:
 
 | Flag                 | Description                  |
 | -------------------- | ---------------------------- |
-| `--parallel`         | Run engines in parallel      |
+| `--parallel`         | Force parallel engine execution (already the default) |
+| `--no-parallel`      | Force sequential engine execution |
 | `--skip-fmt`         | Skip formatting checks       |
 | `--skip-style`       | Skip style checks            |
 | `--skip-lint`        | Skip linting checks          |
@@ -329,6 +325,7 @@ See the [Custom Rules Guide](docs/site/docs/rules/custom-rules.md) for details.
 ## Documentation
 
 - [Installation](docs/site/docs/getting-started/installation.md)
+- [Upgrading](docs/site/docs/getting-started/upgrade.md)
 - [Configuration](docs/site/docs/getting-started/configuration.md)
 - [Architecture](docs/site/docs/development/architecture.md)
 - [Linting](docs/site/docs/user-guide/engines/lint.md)
@@ -342,7 +339,7 @@ Full documentation is available at [docs/site/docs/](docs/site/docs/).
 
 ```bash
 git clone https://github.com/santosr2/TerraTidy
-cd terratidy
+cd TerraTidy
 mise install        # Install Go 1.26 and tools
 mise run setup      # Download and tidy Go modules
 mise run build      # Build binary

@@ -50,7 +50,7 @@ engines:
 ## Writing Policies
 
 Policies are written in Rego (v1 syntax) and evaluated against a JSON representation
-of your Terraform modules. TerraTidy uses **OPA v1.15.0** with Rego v1, which requires
+of your Terraform modules. TerraTidy uses **OPA v1.x** with Rego v1, which requires
 the `import rego.v1` statement and updated rule syntax.
 
 ### Basic Policy Structure

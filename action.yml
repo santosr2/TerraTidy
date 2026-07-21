@@ -108,8 +108,10 @@ runs:
         INPUT_VERSION: ${{ inputs.version }}
       run: | # zizmor: ignore[github-env]
         if [ "$INPUT_VERSION" = "latest" ]; then
-          # Check if we're in a terratidy checkout (for action testing)
-          if [ -f "go.mod" ] && grep -q "github.com/santosr2/TerraTidy" go.mod 2>/dev/null; then
+          # Check if we're in the terratidy checkout itself (for action testing).
+          # Match the module declaration, not a substring: any SDK consumer lists
+          # github.com/santosr2/TerraTidy as a require, and must not build from source.
+          if [ -f "go.mod" ] && head -n1 go.mod | grep -qx "module github.com/santosr2/TerraTidy" 2>/dev/null; then
             # Build from source for local testing
             # Get version info for ldflags (shallow clones don't have VCS info)
             VERSION=$(git describe --tags --always --dirty 2>/dev/null || echo "dev")

@@ -88,9 +88,12 @@ if [ "${INPUT_SKIP_POLICY:-false}" = "true" ]; then
   CMD+=(--skip-policy)
 fi
 
-# Parallel mode
+# Parallel mode. Pass an explicit flag either way: without --no-parallel, setting
+# parallel: false has no effect because the config default (parallel: true) wins.
 if [ "${INPUT_PARALLEL:-false}" = "true" ]; then
   CMD+=(--parallel)
+else
+  CMD+=(--no-parallel)
 fi
 
 # Exclude patterns (comma-separated)
@@ -189,6 +192,15 @@ fi
 set -e
 
 echo "$OUTPUT"
+
+# Tool-level failures (config error = 2, internal error = 3) are not findings the
+# user can opt out of via fail-on-error / fail-on-warning. Without this guard a
+# JSON run that exits 2/3 produces no parseable summary, so the counts below fall
+# back to 0 and the step reports a false success. Fail outright on any code >= 2.
+if [ "$EXIT_CODE" -ge 2 ]; then
+  echo "::error::TerraTidy exited with code $EXIT_CODE (configuration or internal error); see the log above."
+  exit "$EXIT_CODE"
+fi
 
 # Parse findings counts from JSON output.
 # Accurate counts are only available for json/json-compact formats, or when

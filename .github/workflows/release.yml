@@ -4,6 +4,15 @@ on:
   push:
     tags:
       - 'v*'
+  # Re-release an existing tag from its own commit without moving the tag
+  # (e.g. after a transient CI failure). The tag is never re-pointed, so the
+  # Go module proxy / sum.golang.org entry for that version stays consistent.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing tag to (re-)release from its own commit, e.g. v0.2.0'
+        required: true
+        type: string
 
 concurrency:
   group: release-${{ github.ref }}
@@ -27,6 +36,9 @@ jobs:
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           fetch-depth: 0
+          # On a tag push this is the tag; on manual dispatch it is the input tag.
+          # Either way GoReleaser builds from the tag's own commit, not from main.
+          ref: ${{ github.event.inputs.tag || github.ref }}
           persist-credentials: false
 
       - name: Set up Go
@@ -72,7 +84,9 @@ jobs:
         uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
         with:
           distribution: goreleaser
-          version: v2.15.0
+          # cosign v3.x (installed by cosign-installer) cannot verify goreleaser
+          # v2.15.0's sigstore bundle; v2.16.0's bundle verifies under cosign v3.
+          version: v2.16.0
           args: release --clean --release-notes RELEASE_NOTES.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -85,7 +99,7 @@ jobs:
           gh release upload "$TAG_NAME" dist/checksums.txt.bundle --clobber
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG_NAME: ${{ github.ref_name }}
+          TAG_NAME: ${{ github.event.inputs.tag || github.ref_name }}
 
       - name: Attest build provenance
         uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
@@ -108,7 +122,7 @@ jobs:
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
-          image-ref: 'ghcr.io/santosr2/terratidy:${{ github.ref_name }}'
+          image-ref: 'ghcr.io/santosr2/terratidy:${{ github.event.inputs.tag || github.ref_name }}'
           format: 'sarif'
           output: 'trivy-results.sarif'
           severity: 'CRITICAL,HIGH'
@@ -152,7 +166,7 @@ jobs:
 
           echo "Parsed: tag=$TAG_NAME major=$MAJOR minor=$MINOR prerelease=$PRERELEASE"
         env:
-          TAG_NAME: ${{ github.ref_name }}
+          TAG_NAME: ${{ github.event.inputs.tag || github.ref_name }}
 
   update-changelog:
     needs: goreleaser
@@ -191,7 +205,7 @@ jobs:
           git push origin main
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG_NAME: ${{ github.ref_name }}
+          TAG_NAME: ${{ github.event.inputs.tag || github.ref_name }}
 
   update-version-tags:
     needs: [parse-version, goreleaser]
@@ -290,7 +304,7 @@ jobs:
           chmod +x /tmp/terratidy-release/terratidy
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG_NAME: ${{ github.ref_name }}
+          TAG_NAME: ${{ github.event.inputs.tag || github.ref_name }}
 
       - name: Verify version
         run: /tmp/terratidy-release/terratidy version
@@ -300,7 +314,7 @@ jobs:
 
   test-homebrew:
     needs: goreleaser
-    if: "!contains(github.ref, '-')"
+    if: ${{ !contains(github.event.inputs.tag || github.ref_name, '-') }}
     runs-on: macos-latest
     timeout-minutes: 15
     steps:
@@ -332,6 +346,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
           persist-credentials: false
 
       - name: Set up Bun
@@ -357,11 +372,11 @@ jobs:
       - name: Attach VSIX to GitHub release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ github.ref_name }}
+          TAG: ${{ github.event.inputs.tag || github.ref_name }}
         run: gh release upload "$TAG" vscode/terratidy.vsix --repo "$GITHUB_REPOSITORY" --clobber
 
       - name: Publish to VS Code Marketplace
-        if: "!contains(github.ref, '-')"
+        if: ${{ !contains(github.event.inputs.tag || github.ref_name, '-') }}
         working-directory: vscode
         env:
           VSCE_PAT: ${{ secrets.VSCE_PAT }}

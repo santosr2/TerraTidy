@@ -10,7 +10,6 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
-
 """
 # template for the changelog body
 # Uses PR number if available (from commit.remote.pr_number), otherwise falls back to commit SHA
@@ -43,12 +42,17 @@ footer = """
     {% else -%}
         [Unreleased]: https://github.com/santosr2/TerraTidy/compare/{{ release.previous.version }}...HEAD
     {% endif -%}
-{% endfor %}
+{% endfor -%}
 """
 # remove the leading and trailing s]
 trim = true
 # postprocessors
-postprocessors = []
+postprocessors = [
+  # git-cliff joins release bodies with a single newline, gluing "## [x]" onto the
+  # previous section's last line. Postprocessors run per release body, so anchor to
+  # the body start (^) to prepend a blank line before every version header.
+  { pattern = '^## \[', replace = "\n## [" },
+]
 
 [git]
 # parse the commits based on https://www.conventionalcommits.org

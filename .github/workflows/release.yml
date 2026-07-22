@@ -3,7 +3,10 @@ name: Release
 on:
   push:
     tags:
-      - 'v*'
+      # Full X.Y.Z (and X.Y.Z-prerelease) tags only. The floating aliases v0 / v0.2
+      # pushed by update-version-tags have fewer than two dots, so they do NOT match
+      # here. Without this, every alias push would re-trigger Release and loop.
+      - 'v*.*.*'
   # Re-release an existing tag from its own commit without moving the tag
   # (e.g. after a transient CI failure). The tag is never re-pointed, so the
   # Go module proxy / sum.golang.org entry for that version stays consistent.
@@ -328,7 +331,13 @@ jobs:
 
       - name: Test Homebrew formula
         run: |
-          brew install --build-from-source Formula/terratidy.rb
+          # Modern Homebrew refuses `brew install <path/to/formula.rb>`; a formula
+          # must live in a tap. Stage the freshly generated formula in a throwaway
+          # local tap and build-install it from there.
+          TAP_DIR="$(brew --repository)/Library/Taps/terratidy/homebrew-localtest"
+          mkdir -p "$TAP_DIR/Formula"
+          cp Formula/terratidy.rb "$TAP_DIR/Formula/terratidy.rb"
+          brew install --build-from-source terratidy/localtest/terratidy
           terratidy version
 
   # Every tag attaches the .vsix to the GitHub release. Only stable tags publish to
@@ -347,7 +356,23 @@ jobs:
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           ref: ${{ github.event.inputs.tag || github.ref }}
+          # Full history + tags so git-cliff can render the finalized changelog below.
+          fetch-depth: 0
           persist-credentials: false
+
+      # The tag's tree freezes CHANGELOG.md at its pre-release state: the finalized
+      # entry for this version is only git-cliff'd onto main *after* the tag is cut,
+      # so a tag checkout would bundle a stale changelog (e.g. topping out at an
+      # -alpha entry). Regenerate it here so the packaged .vsix embeds the real
+      # released section. vscode/CHANGELOG.md is a symlink to this root file, so vsce
+      # bundles whatever we write here.
+      - name: Finalize changelog for this tag
+        uses: orhun/git-cliff-action@f50e11560dce63f7c33227798f90b924471a88b5 # v4.8.0
+        with:
+          config: cliff.toml
+          args: --verbose
+        env:
+          OUTPUT: CHANGELOG.md
 
       - name: Set up Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0

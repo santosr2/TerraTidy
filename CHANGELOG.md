@@ -10,6 +10,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### CI/CD
 
 - **release**: Re-release existing tags and bump goreleaser to v2.16.0 ([#250](https://github.com/santosr2/TerraTidy/pull/250)) by [@santosr2](https://github.com/santosr2)
+- **release**: Fix downstream release jobs and stop alias-tag loop ([bc3c760](https://github.com/santosr2/TerraTidy/commit/bc3c760064e09dd4b2adc5c62b388cd792e2a119)) by [@Rubens](https://github.com/Rubens)
+
+### Documentation
+
+- Update changelog for v0.2.0 ([ffe738c](https://github.com/santosr2/TerraTidy/commit/ffe738c57636dbf03d4ba8f3f915e368752e4e93)) by [@github-actions[bot]](https://github.com/github-actions[bot])
+
+### Other
+
+- Drop trailing blank line from CHANGELOG.md ([a32d5c2](https://github.com/santosr2/TerraTidy/commit/a32d5c270b3447d829c3c820efdf9eb5a7f926ab)) by [@Rubens](https://github.com/Rubens)
+
 ## [0.2.0] - 2026-07-22
 
 ### Added
@@ -249,6 +259,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **release**: Publish multi-arch amd64/arm64 docker images ([bc1606d](https://github.com/santosr2/TerraTidy/commit/bc1606d782ed1cdb7f6e0fd5c3773df62370f2a3)) by [@santosr2](https://github.com/santosr2)
 - **release**: Track discussion template version placeholder ([d918e91](https://github.com/santosr2/TerraTidy/commit/d918e91f0a381153382c4e64c4b162f83f0f9927)) by [@santosr2](https://github.com/santosr2)
 - **release**: Drop stale CHANGELOG.md from release archives ([4487b6c](https://github.com/santosr2/TerraTidy/commit/4487b6cd1fea500a317a63ab41cbb5a21d4e6856)) by [@santosr2](https://github.com/santosr2)
+
 ## [0.2.0-alpha.4] - 2026-04-04
 
 ### Added
@@ -346,6 +357,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Revert
 
 - Remove make_latest (GitHub limitation for prereleases) ([15c013c](https://github.com/santosr2/TerraTidy/commit/15c013c71269c3e074f83b14cfb80d0573a02a97)) by [@santosr2](https://github.com/santosr2)
+
 ## [0.2.0-alpha.3] - 2026-01-19
 
 ### Added
@@ -377,6 +389,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **cli**: Fix color flag and add changelog links ([b11560c](https://github.com/santosr2/TerraTidy/commit/b11560c1bab748e08cd634e98d31543257db4798)) by [@santosr2](https://github.com/santosr2)
 - **cli**: Apply global color flag to all commands ([3f50fbb](https://github.com/santosr2/TerraTidy/commit/3f50fbb473810f03efe5e35ba683f6fa31575b41)) by [@santosr2](https://github.com/santosr2)
 - **style**: Preserve inline comments when reordering HCL attributes ([#2](https://github.com/santosr2/TerraTidy/pull/2)) by [@santosr2](https://github.com/santosr2)
+
 ## [0.2.0-alpha.2] - 2026-01-12
 
 ### Added
@@ -411,6 +424,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Add bump-my-version to mise and update bumpversion config ([12e9a9f](https://github.com/santosr2/TerraTidy/commit/12e9a9fed782753fd610d1f4d8efb891ad221493)) by [@santosr2](https://github.com/santosr2)
 - Bump version to 0.2.0-alpha.2 ([a4b88fc](https://github.com/santosr2/TerraTidy/commit/a4b88fcc90c9d3565f8c399a58d40bc98d705316)) by [@santosr2](https://github.com/santosr2)
+
 ## [0.2.0-alpha] - 2026-01-08
 
 ### Added
@@ -445,6 +459,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Other
 
 - Update gitignore and mise configuration ([3d4cabc](https://github.com/santosr2/TerraTidy/commit/3d4cabc453cfb8fce22237da700c21d42bb2c923)) by [@santosr2](https://github.com/santosr2)
+
 ## [0.1.0] - 2025-12-22
 
 ### Added
@@ -497,4 +512,3 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [0.2.0-alpha.3]: https://github.com/santosr2/TerraTidy/compare/v0.2.0-alpha.2...v0.2.0-alpha.3
 [0.2.0-alpha.2]: https://github.com/santosr2/TerraTidy/compare/v0.2.0-alpha...v0.2.0-alpha.2
 [0.2.0-alpha]: https://github.com/santosr2/TerraTidy/compare/v0.1.0...v0.2.0-alpha
-

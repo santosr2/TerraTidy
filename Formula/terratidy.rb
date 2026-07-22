@@ -5,23 +5,23 @@
 class Terratidy < Formula
   desc "Terraform/Terragrunt quality platform"
   homepage "https://github.com/santosr2/TerraTidy"
-  version "0.2.0-alpha"
+  version "0.2.0"
   license "MIT"
 
   on_macos do
     if Hardware::CPU.intel?
-      url "https://github.com/santosr2/TerraTidy/releases/download/v0.2.0-alpha/terratidy-0.2.0-alpha-darwin-amd64.tar.gz"
-      sha256 "017eae9e4a6c6c0f92f3fe0555162a9c032b65a37064f0117ea9bf80901a345d"
+      url "https://github.com/santosr2/terratidy/releases/download/v0.2.0/terratidy-0.2.0-darwin-amd64.tar.gz"
+      sha256 "bdaf432e1d7ce639915142efff0721de21f3dc1f30a428b46770b10c0ba1b2a0"
 
-      def install
+      define_method(:install) do
         bin.install "terratidy"
       end
     end
     if Hardware::CPU.arm?
-      url "https://github.com/santosr2/TerraTidy/releases/download/v0.2.0-alpha/terratidy-0.2.0-alpha-darwin-arm64.tar.gz"
-      sha256 "d8a4ed0c9debdb67e270e973742964e1d7a55f61fc74adfd0db1d93968fa86a7"
+      url "https://github.com/santosr2/terratidy/releases/download/v0.2.0/terratidy-0.2.0-darwin-arm64.tar.gz"
+      sha256 "26c6fb1bf82438c0ba0637a91b4ba894b69d21002e8bc245bc3801d5674e5f79"
 
-      def install
+      define_method(:install) do
         bin.install "terratidy"
       end
     end
@@ -29,16 +29,16 @@ class Terratidy < Formula
 
   on_linux do
     if Hardware::CPU.intel? && Hardware::CPU.is_64_bit?
-      url "https://github.com/santosr2/TerraTidy/releases/download/v0.2.0-alpha/terratidy-0.2.0-alpha-linux-amd64.tar.gz"
-      sha256 "ef5541e0228a56426e241b05b5ba51b09aed8815f9fd9ca9b738f51c544dd970"
-      def install
+      url "https://github.com/santosr2/terratidy/releases/download/v0.2.0/terratidy-0.2.0-linux-amd64.tar.gz"
+      sha256 "848fad7d40b398eb750e1fc9fb60abfb36fb14160988c45e246c6ea71ac02c47"
+      define_method(:install) do
         bin.install "terratidy"
       end
     end
     if Hardware::CPU.arm? && Hardware::CPU.is_64_bit?
-      url "https://github.com/santosr2/TerraTidy/releases/download/v0.2.0-alpha/terratidy-0.2.0-alpha-linux-arm64.tar.gz"
-      sha256 "4488ee00d5a42a1951e3afda2b4184ab9b8a752385b5234d45582443db67b34f"
-      def install
+      url "https://github.com/santosr2/terratidy/releases/download/v0.2.0/terratidy-0.2.0-linux-arm64.tar.gz"
+      sha256 "41dc0e468ea67a209c2f459761987f9889765ee3e7cbc11b847adcb77c3bac80"
+      define_method(:install) do
         bin.install "terratidy"
       end
     end

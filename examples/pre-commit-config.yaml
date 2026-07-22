@@ -13,7 +13,7 @@
 repos:
   # TerraTidy hooks (check mode - non-modifying, safe for CI)
   - repo: https://github.com/santosr2/TerraTidy
-    rev: v0.2.0-alpha.4
+    rev: v0.2.0
     hooks:
       - id: terratidy-fmt-check
       - id: terratidy-style

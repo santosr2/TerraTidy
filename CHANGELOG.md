@@ -10,15 +10,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### CI/CD
 
 - **release**: Re-release existing tags and bump goreleaser to v2.16.0 ([#250](https://github.com/santosr2/TerraTidy/pull/250)) by [@santosr2](https://github.com/santosr2)
-- **release**: Fix downstream release jobs and stop alias-tag loop ([bc3c760](https://github.com/santosr2/TerraTidy/commit/bc3c760064e09dd4b2adc5c62b388cd792e2a119)) by [@Rubens](https://github.com/Rubens)
+- **release**: Fix downstream release jobs and stop alias-tag loop ([#251](https://github.com/santosr2/TerraTidy/pull/251)) by [@santosr2](https://github.com/santosr2)
 
 ### Documentation
 
 - Update changelog for v0.2.0 ([ffe738c](https://github.com/santosr2/TerraTidy/commit/ffe738c57636dbf03d4ba8f3f915e368752e4e93)) by [@github-actions[bot]](https://github.com/github-actions[bot])
-
-### Other
-
-- Drop trailing blank line from CHANGELOG.md ([a32d5c2](https://github.com/santosr2/TerraTidy/commit/a32d5c270b3447d829c3c820efdf9eb5a7f926ab)) by [@Rubens](https://github.com/Rubens)
 
 ## [0.2.0] - 2026-07-22
 

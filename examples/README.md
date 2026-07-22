@@ -242,7 +242,7 @@ Want to check files before commit?
 # .pre-commit-config.yaml
 repos:
   - repo: https://github.com/santosr2/TerraTidy
-    rev: v0.2.0-alpha.4
+    rev: v0.2.0
     hooks:
       - id: terratidy-check
 ```
@@ -389,7 +389,7 @@ terratidy check --no-recurse modules/  # Only top-level, not subdirectories
 ```yaml
 - name: Install TerraTidy
   run: |
-    curl -L https://github.com/santosr2/TerraTidy/releases/download/v0.2.0-alpha.4/terratidy-linux-amd64 -o terratidy
+    curl -L https://github.com/santosr2/TerraTidy/releases/download/v0.2.0/terratidy-linux-amd64 -o terratidy
     chmod +x terratidy
     sudo mv terratidy /usr/local/bin/
 ```

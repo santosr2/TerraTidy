@@ -3,7 +3,7 @@
 #
 # repos:
 #   - repo: https://github.com/santosr2/TerraTidy
-#     rev: v0.2.0-alpha.4  # Use the ref you want to point at
+#     rev: v0.2.0  # Use the ref you want to point at
 #     hooks:
 #       - id: terratidy-fmt
 #       - id: terratidy-style

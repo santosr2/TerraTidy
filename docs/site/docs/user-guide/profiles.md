@@ -61,7 +61,7 @@ profiles:
       style:
         enabled: true
         rules:
-          style.block-label-case:
+          style.resource-name-convention:
             severity: error
       lint:
         enabled: true
@@ -148,7 +148,7 @@ profiles:
         enabled: true
       style:
         rules:
-          style.block-label-case:
+          style.resource-name-convention:
             severity: error
 ```
 

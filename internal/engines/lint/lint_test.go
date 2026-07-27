@@ -240,61 +240,6 @@ func TestTerraformTypedVariablesRule(t *testing.T) {
 	}
 }
 
-func TestTerraformNamingConventionRule(t *testing.T) {
-	tests := []struct {
-		name        string
-		content     string
-		wantFinding bool
-	}{
-		{
-			name: "valid snake_case",
-			content: `resource "aws_instance" "my_instance" {
-  ami = "ami-12345"
-}
-`,
-			wantFinding: false,
-		},
-		{
-			name: "invalid camelCase",
-			content: `resource "aws_instance" "myInstance" {
-  ami = "ami-12345"
-}
-`,
-			wantFinding: true,
-		},
-		{
-			name: "invalid PascalCase",
-			content: `resource "aws_instance" "MyInstance" {
-  ami = "ami-12345"
-}
-`,
-			wantFinding: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			tmpDir := t.TempDir()
-			tmpFile := filepath.Join(tmpDir, "main.tf")
-			require.NoError(t, os.WriteFile(tmpFile, []byte(tt.content), 0o644))
-
-			engine := New(nil)
-			findings, err := engine.Run(context.Background(), []string{tmpFile})
-			require.NoError(t, err)
-
-			found := false
-			for _, f := range findings {
-				if f.Rule == "lint.terraform-naming-convention" {
-					found = true
-					break
-				}
-			}
-
-			assert.Equal(t, tt.wantFinding, found, "findings: %+v", findings)
-		})
-	}
-}
-
 func TestTerraformModulePinnedSourceRule(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -404,8 +349,8 @@ func TestEngine_GetAllRules(t *testing.T) {
 	engine := New(nil)
 	rules := engine.GetAllRules()
 
-	// Verify we have all 11 rules registered
-	assert.Len(t, rules, 11, "should have 11 rules registered")
+	// Verify we have all 10 rules registered
+	assert.Len(t, rules, 10, "should have 10 rules registered")
 
 	// Verify each rule has required methods
 	for _, rule := range rules {
@@ -1143,8 +1088,8 @@ func TestNew_AcceptsPluginRules(t *testing.T) {
 		engine := New(nil)
 
 		rules := engine.GetAllRules()
-		// Should have 11 built-in rules
-		assert.Equal(t, 11, len(rules))
+		// Should have 10 built-in rules
+		assert.Equal(t, 10, len(rules))
 	})
 
 	t.Run("with single plugin rule", func(t *testing.T) {
@@ -1152,8 +1097,8 @@ func TestNew_AcceptsPluginRules(t *testing.T) {
 		engine := New(nil, pluginRule)
 
 		rules := engine.GetAllRules()
-		// Should have 11 built-in + 1 plugin = 12 rules
-		assert.Equal(t, 12, len(rules))
+		// Should have 10 built-in + 1 plugin = 11 rules
+		assert.Equal(t, 11, len(rules))
 
 		// Plugin rule should be present
 		var found bool
@@ -1174,8 +1119,8 @@ func TestNew_AcceptsPluginRules(t *testing.T) {
 		engine := New(nil, plugin1, plugin2, plugin3)
 
 		rules := engine.GetAllRules()
-		// Should have 11 built-in + 3 plugin = 14 rules
-		assert.Equal(t, 14, len(rules))
+		// Should have 10 built-in + 3 plugin = 13 rules
+		assert.Equal(t, 13, len(rules))
 	})
 }
 
@@ -1403,27 +1348,27 @@ resource "aws_instance" "example" {
 	}
 }
 
-// TestLintModule_InlineSuppressionOnNamingFinding verifies that an inline suppression
-// annotation on the same line as a resource declaration suppresses the naming-convention
-// finding for that specific resource. This exercises the annotations.FilterFindings call
-// in lintModule (line 253 of lint.go) via the fallback (non-cache) parse path.
-func TestLintModule_InlineSuppressionOnNamingFinding(t *testing.T) {
+// TestLintModule_InlineSuppressionOnDocumentedVariablesFinding verifies that an inline
+// suppression annotation on the same line as a declaration suppresses that block's finding.
+// This exercises the annotations.FilterFindings call in lintModule via the fallback
+// (non-cache) parse path.
+func TestLintModule_InlineSuppressionOnDocumentedVariablesFinding(t *testing.T) {
 	dir := t.TempDir()
-	// camelCase resource name produces a lint.terraform-naming-convention finding.
+	// A variable with no description produces a lint.terraform-documented-variables finding.
 	// The inline annotation on the same line should suppress it.
-	content := `resource "aws_instance" "myBadName" {} # terratidy:ignore:lint.terraform-naming-convention
+	content := `variable "example" {} # terratidy:ignore:lint.terraform-documented-variables
 `
 	tmpFile := filepath.Join(dir, "main.tf")
 	require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0o644))
 
 	engine := New(&Config{
 		Rules: map[string]RuleConfig{
-			"lint.terraform-naming-convention": {Enabled: config.BoolPtr(true)},
+			"lint.terraform-documented-variables": {Enabled: config.BoolPtr(true)},
 		},
 	})
-	// Disable all other rules so only naming-convention runs.
+	// Disable all other rules so only documented-variables runs.
 	for _, r := range engine.GetAllRules() {
-		if r.Name() != "lint.terraform-naming-convention" {
+		if r.Name() != "lint.terraform-documented-variables" {
 			engine.config.Rules[r.Name()] = RuleConfig{Enabled: config.BoolPtr(false)}
 		}
 	}
@@ -1432,31 +1377,31 @@ func TestLintModule_InlineSuppressionOnNamingFinding(t *testing.T) {
 	require.NoError(t, err)
 
 	for _, f := range findings {
-		assert.NotEqual(t, "lint.terraform-naming-convention", f.Rule,
-			"inline suppression should suppress the naming-convention finding")
+		assert.NotEqual(t, "lint.terraform-documented-variables", f.Rule,
+			"inline suppression should suppress the documented-variables finding")
 	}
 }
 
-// TestLintModule_NextBlockSuppressionOnNamingFinding verifies that a next-block suppression
-// above a resource block suppresses the naming-convention finding for that block only,
-// leaving other violations unsuppressed.
-func TestLintModule_NextBlockSuppressionOnNamingFinding(t *testing.T) {
+// TestLintModule_NextBlockSuppressionOnDocumentedVariablesFinding verifies that a next-block
+// suppression above a block suppresses that block's finding only, leaving other violations
+// unsuppressed.
+func TestLintModule_NextBlockSuppressionOnDocumentedVariablesFinding(t *testing.T) {
 	dir := t.TempDir()
-	content := `# terratidy:ignore:lint.terraform-naming-convention
-resource "aws_instance" "myBadName" {}
+	content := `# terratidy:ignore:lint.terraform-documented-variables
+variable "first" {}
 
-resource "aws_instance" "anotherBadName" {}
+variable "second" {}
 `
 	tmpFile := filepath.Join(dir, "main.tf")
 	require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0o644))
 
 	engine := New(&Config{
 		Rules: map[string]RuleConfig{
-			"lint.terraform-naming-convention": {Enabled: config.BoolPtr(true)},
+			"lint.terraform-documented-variables": {Enabled: config.BoolPtr(true)},
 		},
 	})
 	for _, r := range engine.GetAllRules() {
-		if r.Name() != "lint.terraform-naming-convention" {
+		if r.Name() != "lint.terraform-documented-variables" {
 			engine.config.Rules[r.Name()] = RuleConfig{Enabled: config.BoolPtr(false)}
 		}
 	}
@@ -1464,14 +1409,14 @@ resource "aws_instance" "anotherBadName" {}
 	findings, err := engine.Run(context.Background(), []string{tmpFile})
 	require.NoError(t, err)
 
-	// Only the second resource (line 4) should produce a finding.
-	var namingFindings []sdk.Finding
+	// Only the second variable (line 4) should produce a finding.
+	var docFindings []sdk.Finding
 	for _, f := range findings {
-		if f.Rule == "lint.terraform-naming-convention" {
-			namingFindings = append(namingFindings, f)
+		if f.Rule == "lint.terraform-documented-variables" {
+			docFindings = append(docFindings, f)
 		}
 	}
-	require.Len(t, namingFindings, 1, "only the unsuppressed resource should produce a finding")
-	assert.Equal(t, 4, namingFindings[0].Location.StartLine,
-		"finding should be on the second resource (line 4)")
+	require.Len(t, docFindings, 1, "only the unsuppressed variable should produce a finding")
+	assert.Equal(t, 4, docFindings[0].Location.StartLine,
+		"finding should be on the second variable (line 4)")
 }

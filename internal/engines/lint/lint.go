@@ -291,7 +291,6 @@ func (e *Engine) registerRules() {
 		&TerraformTypedVariablesRule{},
 		&TerraformDocumentedOutputsRule{},
 		&TerraformModulePinnedSourceRule{},
-		&TerraformNamingConventionRule{},
 		&TerraformUnusedDeclarationsRule{},
 		&TerraformResourceCountRule{},
 		&TerraformHardcodedSecretsRule{},
@@ -730,60 +729,6 @@ func (r *TerraformModulePinnedSourceRule) Check(ctx *sdk.Context, file *hcl.File
 					Severity: sdk.SeverityWarning,
 				})
 			}
-		}
-	}
-
-	return findings, nil
-}
-
-// TerraformNamingConventionRule checks resource naming conventions.
-type TerraformNamingConventionRule struct{}
-
-// Name returns the rule identifier.
-func (r *TerraformNamingConventionRule) Name() string {
-	return "lint.terraform-naming-convention"
-}
-
-// Description returns a human-readable description of the rule.
-func (r *TerraformNamingConventionRule) Description() string {
-	return "Ensures resources follow naming conventions (snake_case)"
-}
-
-// snakeCasePattern matches valid snake_case identifiers.
-var snakeCasePattern = regexp.MustCompile(`^[a-z][a-z0-9_]*$`)
-
-// Check examines resource names for naming convention compliance.
-func (r *TerraformNamingConventionRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Finding, error) {
-	var findings []sdk.Finding
-
-	body, ok := file.Body.(*hclsyntax.Body)
-	if !ok {
-		return findings, nil
-	}
-
-	for _, block := range body.Blocks {
-		if block.Type != "resource" && block.Type != "data" && block.Type != "module" {
-			continue
-		}
-
-		// Get the name label (second for resource/data, first for module)
-		var name string
-		if block.Type == "module" && len(block.Labels) > 0 {
-			name = block.Labels[0]
-		} else if len(block.Labels) > 1 {
-			name = block.Labels[1]
-		} else {
-			continue
-		}
-
-		if !snakeCasePattern.MatchString(name) {
-			findings = append(findings, sdk.Finding{
-				Rule:     r.Name(),
-				Message:  fmt.Sprintf("%s name '%s' should use snake_case", block.Type, name),
-				File:     ctx.File,
-				Location: sdk.LocationFromRange(block.Range()),
-				Severity: sdk.SeverityWarning,
-			})
 		}
 	}
 

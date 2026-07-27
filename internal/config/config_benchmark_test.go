@@ -114,7 +114,7 @@ func BenchmarkLoadConfigWithImports(b *testing.B) {
       style.blank-lines:
         enabled: true
         severity: warning
-      style.block-label-case:
+      style.resource-name-convention:
         enabled: true
         severity: error
 `

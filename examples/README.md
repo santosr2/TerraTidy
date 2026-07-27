@@ -295,7 +295,7 @@ engines:
       style.blank-line-between-blocks:
         enabled: true
         severity: warning
-      style.block-label-case:
+      style.resource-name-convention:
         enabled: true
         severity: error
 ```

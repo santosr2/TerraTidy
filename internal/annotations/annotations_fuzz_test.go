@@ -17,8 +17,8 @@ func FuzzAnnotationParse(f *testing.F) {
 	f.Add([]byte(`# terratidy:ignore-file:policy.require-tags`))
 
 	// Valid next-block suppressions
-	f.Add([]byte("# terratidy:ignore:style.block-label-case\nresource \"aws_instance\" \"test\" {}"))
-	f.Add([]byte("// terratidy:ignore:style.block-label-case\nresource \"aws_instance\" \"test\" {}"))
+	f.Add([]byte("# terratidy:ignore:style.resource-name-convention\nresource \"aws_instance\" \"test\" {}"))
+	f.Add([]byte("// terratidy:ignore:style.resource-name-convention\nresource \"aws_instance\" \"test\" {}"))
 	f.Add([]byte("  # terratidy:ignore:style.rule\nresource \"x\" \"y\" {}"))
 
 	// Valid inline suppressions
@@ -124,7 +124,7 @@ terraform {
   required_version = ">= 1.0"
 }
 
-# terratidy:ignore:style.block-label-case
+# terratidy:ignore:style.resource-name-convention
 resource "aws_instance" "MyServer" {
   ami           = "ami-12345"
   instance_type = "t2.micro"
@@ -189,8 +189,8 @@ func FuzzAnnotationFilter(f *testing.F) {
 // FuzzRuleMatches tests the RuleMatches function with arbitrary rule strings.
 func FuzzRuleMatches(f *testing.F) {
 	// Valid rule patterns
-	f.Add("style.block-label-case", "style.block-label-case")
-	f.Add("style.block-label-case", "style.*")
+	f.Add("style.resource-name-convention", "style.resource-name-convention")
+	f.Add("style.resource-name-convention", "style.*")
 	f.Add("lint.deprecated", "lint.*")
 	f.Add("policy.require-tags", "policy.*")
 

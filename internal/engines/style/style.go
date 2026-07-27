@@ -663,7 +663,7 @@ func (e *Engine) getRuleConfig(ruleName string) RuleConfig {
 		// Advanced naming rules (can be noisy)
 		"style.resource-name-matches-type": true,
 		"style.output-prefix":              true,
-		"style.module-name-convention":     true,
+		"style.module-name-descriptive":    true,
 		// Comment and format rules
 		"style.comment-syntax":             true,
 		"style.no-trailing-whitespace":     true,
@@ -698,10 +698,11 @@ func (e *Engine) registerRules() {
 	e.rules = append(e.rules, &rules.BlankLineBetweenBlocksRule{})
 
 	// Naming conventions
-	e.rules = append(e.rules, &rules.BlockLabelCaseRule{})
-	e.rules = append(e.rules, &rules.VariableNamingRule{})
-	e.rules = append(e.rules, &rules.OutputNamingRule{})
-	e.rules = append(e.rules, &rules.LocalNamingRule{})
+	e.rules = append(e.rules, &rules.ResourceNameConventionRule{})
+	e.rules = append(e.rules, &rules.DataNameConventionRule{})
+	e.rules = append(e.rules, &rules.VariableNameConventionRule{})
+	e.rules = append(e.rules, &rules.OutputNameConventionRule{})
+	e.rules = append(e.rules, &rules.LocalNameConventionRule{})
 
 	// Block ordering
 	e.rules = append(e.rules, &rules.TerraformBlockFirstRule{})
@@ -733,10 +734,11 @@ func (e *Engine) registerRules() {
 	e.rules = append(e.rules, &rules.ScopedFileOrganizationRule{})
 	e.rules = append(e.rules, &rules.TerraformFilesStructureRule{})
 
-	// Advanced naming rules (disabled by default - enable via config)
+	// Advanced naming rules (module-name-convention on by default; the rest opt-in via config)
 	e.rules = append(e.rules, &rules.ResourceNameMatchesTypeRule{})
 	e.rules = append(e.rules, &rules.OutputPrefixRule{})
 	e.rules = append(e.rules, &rules.ModuleNameConventionRule{})
+	e.rules = append(e.rules, &rules.ModuleNameDescriptiveRule{})
 
 	// Block organization rules (disabled by default - enable via config)
 	e.rules = append(e.rules, &rules.MetaArgumentsOrderRule{})

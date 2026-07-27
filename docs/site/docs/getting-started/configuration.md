@@ -41,7 +41,7 @@ engines:
     fix: false     # Auto-fix mode
     diff: false    # Show diff of style fixes
     rules:         # Rule configuration goes under each engine
-      style.block-label-case:
+      style.resource-name-convention:
         enabled: true
         severity: warning
 
@@ -204,7 +204,7 @@ engines:
         enabled: false
 
       # Style rule with options (note the nested 'options' key)
-      style.variable-naming:
+      style.variable-name-convention:
         enabled: true
         config:
           options:
@@ -348,7 +348,7 @@ engines:
   style:
     enabled: true
     rules:
-      style.block-label-case:
+      style.resource-name-convention:
         enabled: true
         severity: warning
   lint:
@@ -497,7 +497,7 @@ Cache is invalidated when a file's modification time changes.
 
 ### Lint Engine
 
-The lint engine provides 11 built-in AST rules and can optionally invoke TFLint as an
+The lint engine provides 10 built-in AST rules and can optionally invoke TFLint as an
 external subprocess for provider-specific checks:
 
 ```yaml

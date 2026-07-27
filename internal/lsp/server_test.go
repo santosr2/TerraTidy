@@ -929,7 +929,7 @@ engines:
   style:
     enabled: true
     rules:
-      style.block-label-case:
+      style.resource-name-convention:
         enabled: false
         severity: info
       style.blank-lines-between-blocks:
@@ -963,10 +963,10 @@ engines:
 	require.NotNil(t, server.config)
 	assert.Len(t, server.config.Engines.Style.Rules, 2)
 
-	// Verify block-label-case is disabled
-	blockLabelRule := server.config.Engines.Style.Rules["style.block-label-case"]
-	assert.False(t, *blockLabelRule.Enabled)
-	assert.Equal(t, "info", blockLabelRule.Severity)
+	// Verify resource-name-convention is disabled
+	resourceRule := server.config.Engines.Style.Rules["style.resource-name-convention"]
+	assert.False(t, *resourceRule.Enabled)
+	assert.Equal(t, "info", resourceRule.Severity)
 
 	// Verify blank-lines-between-blocks is enabled with error severity
 	blankLinesRule := server.config.Engines.Style.Rules["style.blank-lines-between-blocks"]

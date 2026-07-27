@@ -28,19 +28,15 @@ func TestGetStyleRuleDescription(t *testing.T) {
 		want string
 	}{
 		{"style.blank-line-between-blocks", "Ensure blank lines between resource blocks"},
-		{"style.block-label-case", "Enforce snake_case naming for block labels"},
-		{"nonexistent.rule", ""},
+		{"style.resource-name-convention", "Enforce naming convention for resources"},
+		{"style.data-name-convention", "Enforce naming convention for data sources"},
+		{"nonexistent.rule", "No description available"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := getStyleRuleDescription(tt.name)
-			if tt.want == "" {
-				// Unknown rules return empty or a generic description
-				_ = got
-			} else {
-				assert.Equal(t, tt.want, got)
-			}
+			assert.Equal(t, tt.want, got)
 		})
 	}
 }

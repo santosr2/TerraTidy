@@ -17,7 +17,7 @@ All rules (built-in and custom) implement this interface:
 
 ```go
 type Rule interface {
-    // Name returns a unique identifier for the rule (e.g., "style.block-label-case").
+    // Name returns a unique identifier for the rule (e.g., "style.resource-name-convention").
     Name() string
 
     // Description returns a human-readable description of what the rule checks.

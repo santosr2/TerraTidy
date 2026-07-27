@@ -29,7 +29,7 @@ const (
 
 // Suppression represents a single suppression annotation.
 type Suppression struct {
-	Rule       string // Rule name to suppress (e.g., "style.block-label-case")
+	Rule       string // Rule name to suppress (e.g., "style.resource-name-convention")
 	Line       int    // Line number where the annotation appears (1-based)
 	TargetLine int    // Line number the suppression applies to (for NextBlock/Inline)
 	Type       Type   // Type of suppression

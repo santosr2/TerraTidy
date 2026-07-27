@@ -16,11 +16,11 @@ func TestParse_NextBlock(t *testing.T) {
 	}{
 		{
 			name: "simple next block suppression",
-			content: `# terratidy:ignore:style.block-label-case
+			content: `# terratidy:ignore:style.resource-name-convention
 resource "aws_instance" "MyServer" { }`,
 			expected: []Suppression{
 				{
-					Rule:       "style.block-label-case",
+					Rule:       "style.resource-name-convention",
 					Line:       1,
 					TargetLine: 2,
 					Type:       NextBlock,
@@ -29,12 +29,12 @@ resource "aws_instance" "MyServer" { }`,
 		},
 		{
 			name: "next block with blank lines",
-			content: `# terratidy:ignore:style.block-label-case
+			content: `# terratidy:ignore:style.resource-name-convention
 
 resource "aws_instance" "MyServer" { }`,
 			expected: []Suppression{
 				{
-					Rule:       "style.block-label-case",
+					Rule:       "style.resource-name-convention",
 					Line:       1,
 					TargetLine: 3,
 					Type:       NextBlock,
@@ -43,11 +43,11 @@ resource "aws_instance" "MyServer" { }`,
 		},
 		{
 			name: "double-slash comment style",
-			content: `// terratidy:ignore:style.block-label-case
+			content: `// terratidy:ignore:style.resource-name-convention
 resource "aws_instance" "MyServer" { }`,
 			expected: []Suppression{
 				{
-					Rule:       "style.block-label-case",
+					Rule:       "style.resource-name-convention",
 					Line:       1,
 					TargetLine: 2,
 					Type:       NextBlock,
@@ -56,11 +56,11 @@ resource "aws_instance" "MyServer" { }`,
 		},
 		{
 			name: "with leading whitespace",
-			content: `  # terratidy:ignore:style.block-label-case
+			content: `  # terratidy:ignore:style.resource-name-convention
 resource "aws_instance" "MyServer" { }`,
 			expected: []Suppression{
 				{
-					Rule:       "style.block-label-case",
+					Rule:       "style.resource-name-convention",
 					Line:       1,
 					TargetLine: 2,
 					Type:       NextBlock,
@@ -69,12 +69,12 @@ resource "aws_instance" "MyServer" { }`,
 		},
 		{
 			name: "skips comment-only lines",
-			content: `# terratidy:ignore:style.block-label-case
+			content: `# terratidy:ignore:style.resource-name-convention
 # This is another comment
 resource "aws_instance" "MyServer" { }`,
 			expected: []Suppression{
 				{
-					Rule:       "style.block-label-case",
+					Rule:       "style.resource-name-convention",
 					Line:       1,
 					TargetLine: 3,
 					Type:       NextBlock,
@@ -132,10 +132,10 @@ func TestParse_Inline(t *testing.T) {
 	}{
 		{
 			name:    "inline suppression with code before comment",
-			content: `resource "aws_instance" "MyServer" { } # terratidy:ignore:style.block-label-case`,
+			content: `resource "aws_instance" "MyServer" { } # terratidy:ignore:style.resource-name-convention`,
 			expected: []Suppression{
 				{
-					Rule:       "style.block-label-case",
+					Rule:       "style.resource-name-convention",
 					Line:       1,
 					TargetLine: 1,
 					Type:       Inline,
@@ -144,10 +144,10 @@ func TestParse_Inline(t *testing.T) {
 		},
 		{
 			name:    "inline suppression with double-slash",
-			content: `resource "aws_instance" "MyServer" { } // terratidy:ignore:style.block-label-case`,
+			content: `resource "aws_instance" "MyServer" { } // terratidy:ignore:style.resource-name-convention`,
 			expected: []Suppression{
 				{
-					Rule:       "style.block-label-case",
+					Rule:       "style.resource-name-convention",
 					Line:       1,
 					TargetLine: 1,
 					Type:       Inline,
@@ -191,11 +191,11 @@ func TestParse_FileLevel(t *testing.T) {
 	}{
 		{
 			name: "file level suppression at top",
-			content: `# terratidy:ignore-file:style.block-label-case
+			content: `# terratidy:ignore-file:style.resource-name-convention
 resource "aws_instance" "MyServer" { }`,
 			expected: []Suppression{
 				{
-					Rule: "style.block-label-case",
+					Rule: "style.resource-name-convention",
 					Line: 1,
 					Type: File,
 				},
@@ -204,11 +204,11 @@ resource "aws_instance" "MyServer" { }`,
 		{
 			name: "file level suppression anywhere in file",
 			content: `resource "aws_instance" "first" { }
-# terratidy:ignore-file:style.block-label-case
+# terratidy:ignore-file:style.resource-name-convention
 resource "aws_instance" "MyServer" { }`,
 			expected: []Suppression{
 				{
-					Rule: "style.block-label-case",
+					Rule: "style.resource-name-convention",
 					Line: 2,
 					Type: File,
 				},
@@ -255,27 +255,27 @@ resource "aws_instance" "example" { }`,
 }
 
 func TestParse_Multiple(t *testing.T) {
-	content := `# terratidy:ignore-file:style.variable-naming
-# terratidy:ignore:style.block-label-case
+	content := `# terratidy:ignore-file:style.variable-name-convention
+# terratidy:ignore:style.resource-name-convention
 resource "aws_instance" "MyServer" { }
 
-resource "aws_s3_bucket" "Test" { } # terratidy:ignore:style.block-label-case`
+resource "aws_s3_bucket" "Test" { } # terratidy:ignore:style.resource-name-convention`
 
 	suppressions := Parse([]byte(content))
 
 	require.Len(t, suppressions, 3)
 
 	// File-level suppression
-	assert.Equal(t, "style.variable-naming", suppressions[0].Rule)
+	assert.Equal(t, "style.variable-name-convention", suppressions[0].Rule)
 	assert.Equal(t, File, suppressions[0].Type)
 
 	// Next-block suppression
-	assert.Equal(t, "style.block-label-case", suppressions[1].Rule)
+	assert.Equal(t, "style.resource-name-convention", suppressions[1].Rule)
 	assert.Equal(t, NextBlock, suppressions[1].Type)
 	assert.Equal(t, 3, suppressions[1].TargetLine)
 
 	// Inline suppression
-	assert.Equal(t, "style.block-label-case", suppressions[2].Rule)
+	assert.Equal(t, "style.resource-name-convention", suppressions[2].Rule)
 	assert.Equal(t, Inline, suppressions[2].Type)
 	assert.Equal(t, 5, suppressions[2].TargetLine)
 }
@@ -300,21 +300,21 @@ func TestRuleMatches(t *testing.T) {
 		expected        bool
 	}{
 		// Exact matches
-		{"style.block-label-case", "style.block-label-case", true},
-		{"style.block-label-case", "style.variable-naming", false},
+		{"style.resource-name-convention", "style.resource-name-convention", true},
+		{"style.resource-name-convention", "style.variable-name-convention", false},
 		{"lint.some-rule", "style.some-rule", false},
 		{"policy.require-tags", "policy.require-tags", true},
 
 		// Wildcard matches
-		{"style.block-label-case", "style.*", true},
-		{"style.variable-naming", "style.*", true},
+		{"style.resource-name-convention", "style.*", true},
+		{"style.variable-name-convention", "style.*", true},
 		{"lint.some-rule", "style.*", false},
 		{"lint.some-rule", "lint.*", true},
 		{"policy.require-tags", "policy.*", true},
 		{"policy.cost-limit", "policy.*", true},
 
 		// Edge cases
-		{"style.block-label-case", "style", false},
+		{"style.resource-name-convention", "style", false},
 		{"style", "style.*", false}, // "style" doesn't have a dot after prefix
 	}
 
@@ -336,18 +336,18 @@ func TestIsSuppressed(t *testing.T) {
 		{
 			name: "file suppression matches",
 			finding: sdk.Finding{
-				Rule:     "style.block-label-case",
+				Rule:     "style.resource-name-convention",
 				Location: sdk.Location{StartLine: 10},
 			},
 			suppressions: []Suppression{
-				{Rule: "style.block-label-case", Type: File},
+				{Rule: "style.resource-name-convention", Type: File},
 			},
 			expected: true,
 		},
 		{
 			name: "file suppression with wildcard",
 			finding: sdk.Finding{
-				Rule:     "style.block-label-case",
+				Rule:     "style.resource-name-convention",
 				Location: sdk.Location{StartLine: 10},
 			},
 			suppressions: []Suppression{
@@ -358,50 +358,50 @@ func TestIsSuppressed(t *testing.T) {
 		{
 			name: "next-block suppression matches line",
 			finding: sdk.Finding{
-				Rule:     "style.block-label-case",
+				Rule:     "style.resource-name-convention",
 				Location: sdk.Location{StartLine: 5},
 			},
 			suppressions: []Suppression{
-				{Rule: "style.block-label-case", TargetLine: 5, Type: NextBlock},
+				{Rule: "style.resource-name-convention", TargetLine: 5, Type: NextBlock},
 			},
 			expected: true,
 		},
 		{
 			name: "next-block suppression wrong line",
 			finding: sdk.Finding{
-				Rule:     "style.block-label-case",
+				Rule:     "style.resource-name-convention",
 				Location: sdk.Location{StartLine: 10},
 			},
 			suppressions: []Suppression{
-				{Rule: "style.block-label-case", TargetLine: 5, Type: NextBlock},
+				{Rule: "style.resource-name-convention", TargetLine: 5, Type: NextBlock},
 			},
 			expected: false,
 		},
 		{
 			name: "inline suppression matches line",
 			finding: sdk.Finding{
-				Rule:     "style.block-label-case",
+				Rule:     "style.resource-name-convention",
 				Location: sdk.Location{StartLine: 3},
 			},
 			suppressions: []Suppression{
-				{Rule: "style.block-label-case", TargetLine: 3, Type: Inline},
+				{Rule: "style.resource-name-convention", TargetLine: 3, Type: Inline},
 			},
 			expected: true,
 		},
 		{
 			name: "no suppression matches",
 			finding: sdk.Finding{
-				Rule:     "style.block-label-case",
+				Rule:     "style.resource-name-convention",
 				Location: sdk.Location{StartLine: 5},
 			},
 			suppressions: []Suppression{
-				{Rule: "style.variable-naming", TargetLine: 5, Type: NextBlock},
+				{Rule: "style.variable-name-convention", TargetLine: 5, Type: NextBlock},
 			},
 			expected: false,
 		},
 		{
 			name:         "empty suppressions",
-			finding:      sdk.Finding{Rule: "style.block-label-case"},
+			finding:      sdk.Finding{Rule: "style.resource-name-convention"},
 			suppressions: nil,
 			expected:     false,
 		},
@@ -439,32 +439,32 @@ func TestIsSuppressed(t *testing.T) {
 
 func TestFilterFindings(t *testing.T) {
 	findings := []sdk.Finding{
-		{Rule: "style.block-label-case", Location: sdk.Location{StartLine: 2}},
-		{Rule: "style.variable-naming", Location: sdk.Location{StartLine: 5}},
-		{Rule: "style.block-label-case", Location: sdk.Location{StartLine: 10}},
+		{Rule: "style.resource-name-convention", Location: sdk.Location{StartLine: 2}},
+		{Rule: "style.variable-name-convention", Location: sdk.Location{StartLine: 5}},
+		{Rule: "style.resource-name-convention", Location: sdk.Location{StartLine: 10}},
 		{Rule: "lint.deprecated-resource", Location: sdk.Location{StartLine: 15}},
 		{Rule: "policy.require-tags", Location: sdk.Location{StartLine: 20}},
 	}
 
 	t.Run("file-level suppression removes all matching", func(t *testing.T) {
 		suppressions := []Suppression{
-			{Rule: "style.block-label-case", Type: File},
+			{Rule: "style.resource-name-convention", Type: File},
 		}
 		filtered := FilterFindings(findings, suppressions)
 		require.Len(t, filtered, 3)
-		assert.Equal(t, "style.variable-naming", filtered[0].Rule)
+		assert.Equal(t, "style.variable-name-convention", filtered[0].Rule)
 		assert.Equal(t, "lint.deprecated-resource", filtered[1].Rule)
 		assert.Equal(t, "policy.require-tags", filtered[2].Rule)
 	})
 
 	t.Run("line-specific suppression removes only that line", func(t *testing.T) {
 		suppressions := []Suppression{
-			{Rule: "style.block-label-case", TargetLine: 2, Type: NextBlock},
+			{Rule: "style.resource-name-convention", TargetLine: 2, Type: NextBlock},
 		}
 		filtered := FilterFindings(findings, suppressions)
 		require.Len(t, filtered, 4)
-		assert.Equal(t, "style.variable-naming", filtered[0].Rule)
-		assert.Equal(t, "style.block-label-case", filtered[1].Rule)
+		assert.Equal(t, "style.variable-name-convention", filtered[0].Rule)
+		assert.Equal(t, "style.resource-name-convention", filtered[1].Rule)
 		assert.Equal(t, 10, filtered[1].Location.StartLine)
 	})
 
@@ -507,21 +507,21 @@ func TestParse_NextBlock_AtEndOfFile(t *testing.T) {
 	}{
 		{
 			name:           "annotation at end with no following code",
-			content:        "# terratidy:ignore:style.block-label-case\n",
+			content:        "# terratidy:ignore:style.resource-name-convention\n",
 			wantLen:        1,
 			wantTargetLine: -1,
 			wantType:       NextBlock,
 		},
 		{
 			name:           "annotation at end followed only by blank lines",
-			content:        "# terratidy:ignore:style.block-label-case\n\n\n",
+			content:        "# terratidy:ignore:style.resource-name-convention\n\n\n",
 			wantLen:        1,
 			wantTargetLine: -1,
 			wantType:       NextBlock,
 		},
 		{
 			name:           "annotation at end followed only by comments",
-			content:        "# terratidy:ignore:style.block-label-case\n# just another comment\n",
+			content:        "# terratidy:ignore:style.resource-name-convention\n# just another comment\n",
 			wantLen:        1,
 			wantTargetLine: -1,
 			wantType:       NextBlock,

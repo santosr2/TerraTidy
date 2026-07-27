@@ -61,14 +61,14 @@ engines:
       style.no-empty-blocks:
         enabled: false
       # Rule with custom config options
-      style.variable-naming:
+      style.variable-name-convention:
         enabled: true
         severity: warning
         config:
           options:
             case: snake_case  # Options: snake_case, camelCase, kebab-case, PascalCase
 
-  # Lint engine - 11 built-in AST rules, optional TFLint integration (subprocess)
+  # Lint engine - 10 built-in AST rules, optional TFLint integration (subprocess)
   lint:
     enabled: true
     config_file: .tflint.hcl   # Path to TFLint config file (only used when use_tflint: true)

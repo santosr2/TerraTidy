@@ -185,11 +185,11 @@ Works with style, lint, and policy engines.
 
 ```hcl
 # Suppress a rule on the next block
-# terratidy:ignore:style.block-label-case
+# terratidy:ignore:style.resource-name-convention
 resource "aws_instance" "MyServer" { }
 
 # Suppress a rule inline (same line as code)
-resource "aws_s3_bucket" "Test" { } # terratidy:ignore:style.block-label-case
+resource "aws_s3_bucket" "Test" { } # terratidy:ignore:style.resource-name-convention
 
 # Suppress a rule for the entire file
 # terratidy:ignore-file:lint.terraform-required-version

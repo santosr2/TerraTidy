@@ -244,7 +244,7 @@ resource "aws_instance" "b" {
 	}
 }
 
-func TestBlockLabelCaseRule(t *testing.T) {
+func TestResourceNameConventionRule(t *testing.T) {
 	tests := []struct {
 		name        string
 		content     string
@@ -296,7 +296,7 @@ func TestBlockLabelCaseRule(t *testing.T) {
 
 			found := false
 			for _, f := range findings {
-				if f.Rule == "style.block-label-case" {
+				if f.Rule == "style.resource-name-convention" {
 					found = true
 					break
 				}
@@ -745,19 +745,19 @@ func TestEngine_GetAllRules(t *testing.T) {
 	engine := New(nil)
 	rules := engine.GetAllRules()
 
-	// Verify we have all 34 rules registered
+	// Verify we have all 36 rules registered
 	// 1. BlankLineBetweenBlocksRule
-	// 2-5. BlockLabelCaseRule, VariableNamingRule, OutputNamingRule, LocalNamingRule
-	// 6-8. TerraformBlockFirstRule, ProviderBlockOrderRule, TerragruntIncludeFirstRule
-	// 9-13. ForEachCountFirstRule, SourceVersionGroupedRule, TagsAtEndRule, DependsOnOrderRule, LifecycleAtEndRule
-	// 14-15. VariableOrderRule, OutputOrderRule
-	// 16. AttributeGroupSpacingRule
-	// 17-18. NoLeadingTrailingBlankLinesRule, NoEmptyBlocksRule
-	// 19-23. VariablesInFileRule, OutputsInFileRule, ProvidersInFileRule, ScopedFileOrganizationRule, TerraformFilesStructureRule
-	// 24-26. ResourceNameMatchesTypeRule, OutputPrefixRule, ModuleNameConventionRule
-	// 27-30. MetaArgumentsOrderRule, LifecycleAttributeOrderRule, NestedBlockOrderRule, OneLineAttributeSpacingRule
-	// 31-34. CommentSyntaxRule, NoTrailingWhitespaceRule, ConsistentQuotesRule, NoConsecutiveBlankLinesRule
-	assert.Len(t, rules, 34, "should have 34 rules registered")
+	// 2-6. ResourceNameConventionRule, DataNameConventionRule, VariableNameConventionRule, OutputNameConventionRule, LocalNameConventionRule
+	// 7-9. TerraformBlockFirstRule, ProviderBlockOrderRule, TerragruntIncludeFirstRule
+	// 10-14. ForEachCountFirstRule, SourceVersionGroupedRule, TagsAtEndRule, DependsOnOrderRule, LifecycleAtEndRule
+	// 15-16. VariableOrderRule, OutputOrderRule
+	// 17. AttributeGroupSpacingRule
+	// 18-19. NoLeadingTrailingBlankLinesRule, NoEmptyBlocksRule
+	// 20-24. VariablesInFileRule, OutputsInFileRule, ProvidersInFileRule, ScopedFileOrganizationRule, TerraformFilesStructureRule
+	// 25-28. ResourceNameMatchesTypeRule, OutputPrefixRule, ModuleNameConventionRule, ModuleNameDescriptiveRule
+	// 29-32. MetaArgumentsOrderRule, LifecycleAttributeOrderRule, NestedBlockOrderRule, OneLineAttributeSpacingRule
+	// 33-36. CommentSyntaxRule, NoTrailingWhitespaceRule, ConsistentQuotesRule, NoConsecutiveBlankLinesRule
+	assert.Len(t, rules, 36, "should have 36 rules registered")
 
 	// Verify each rule has required methods
 	for _, rule := range rules {
@@ -1169,7 +1169,7 @@ func TestConfigFromEngine(t *testing.T) {
 					Enabled:  config.BoolPtr(true),
 					Severity: "warning",
 				},
-				"block-label-case": {
+				"resource-name-convention": {
 					Enabled:  config.BoolPtr(false),
 					Severity: "error",
 					Config:   map[string]any{"case": "snake"},
@@ -1185,7 +1185,7 @@ func TestConfigFromEngine(t *testing.T) {
 		assert.Equal(t, "warning", blankLineRule.Severity)
 		assert.Nil(t, blankLineRule.Options)
 
-		caseRule := cfg.Rules["block-label-case"]
+		caseRule := cfg.Rules["resource-name-convention"]
 		assert.False(t, *caseRule.Enabled)
 		assert.Equal(t, "error", caseRule.Severity)
 		assert.Equal(t, "snake", caseRule.Options["case"])
@@ -1219,8 +1219,8 @@ func TestNew_AcceptsPluginRules(t *testing.T) {
 		engine := New(nil)
 		rules := engine.GetAllRules()
 
-		// Should have 34 built-in rules
-		assert.Len(t, rules, 34)
+		// Should have 36 built-in rules
+		assert.Len(t, rules, 36)
 	})
 
 	t.Run("with single plugin rule", func(t *testing.T) {
@@ -1228,8 +1228,8 @@ func TestNew_AcceptsPluginRules(t *testing.T) {
 		engine := New(nil, pluginRule)
 		rules := engine.GetAllRules()
 
-		// Should have 34 built-in + 1 plugin = 35 rules
-		assert.Len(t, rules, 35)
+		// Should have 36 built-in + 1 plugin = 37 rules
+		assert.Len(t, rules, 37)
 
 		// Plugin rule should be present
 		found := false
@@ -1249,8 +1249,8 @@ func TestNew_AcceptsPluginRules(t *testing.T) {
 		engine := New(nil, plugin1, plugin2, plugin3)
 		rules := engine.GetAllRules()
 
-		// Should have 34 built-in + 3 plugin = 37 rules
-		assert.Len(t, rules, 37)
+		// Should have 36 built-in + 3 plugin = 39 rules
+		assert.Len(t, rules, 39)
 	})
 }
 
@@ -1279,31 +1279,31 @@ func TestEngine_SuppressionAnnotations(t *testing.T) {
 	}{
 		{
 			name: "file-level suppression ignores all matching findings",
-			content: `# terratidy:ignore-file:style.block-label-case
+			content: `# terratidy:ignore-file:style.resource-name-convention
 resource "aws_instance" "MyServer" { }
 resource "aws_s3_bucket" "AnotherBad" { }
 `,
 			expectedCount:   0,
-			unexpectedRules: []string{"style.block-label-case"},
+			unexpectedRules: []string{"style.resource-name-convention"},
 		},
 		{
 			name: "next-block suppression ignores only next block",
-			content: `# terratidy:ignore:style.block-label-case
+			content: `# terratidy:ignore:style.resource-name-convention
 resource "aws_instance" "MyServer" { }
 
 resource "aws_s3_bucket" "AnotherBad" { }
 `,
 			expectedCount: 1, // One violation not suppressed
-			expectedRules: []string{"style.block-label-case"},
+			expectedRules: []string{"style.resource-name-convention"},
 		},
 		{
 			name: "inline suppression ignores same line",
-			content: `resource "aws_instance" "MyServer" { } # terratidy:ignore:style.block-label-case
+			content: `resource "aws_instance" "MyServer" { } # terratidy:ignore:style.resource-name-convention
 
 resource "aws_s3_bucket" "AnotherBad" { }
 `,
 			expectedCount: 1, // One violation not suppressed
-			expectedRules: []string{"style.block-label-case"},
+			expectedRules: []string{"style.resource-name-convention"},
 		},
 		{
 			name: "wildcard suppression matches all style rules",
@@ -1311,7 +1311,7 @@ resource "aws_s3_bucket" "AnotherBad" { }
 resource "aws_instance" "MyServer" { }
 `,
 			expectedCount:   0,
-			unexpectedRules: []string{"style.block-label-case"},
+			unexpectedRules: []string{"style.resource-name-convention"},
 		},
 		{
 			name: "no suppression returns all findings",
@@ -1319,7 +1319,7 @@ resource "aws_instance" "MyServer" { }
 resource "aws_s3_bucket" "AnotherBad" { }
 `,
 			expectedCount: 2, // Two violations
-			expectedRules: []string{"style.block-label-case"},
+			expectedRules: []string{"style.resource-name-convention"},
 		},
 		{
 			name: "suppression with non-existent rule is ignored",
@@ -1327,7 +1327,7 @@ resource "aws_s3_bucket" "AnotherBad" { }
 resource "aws_instance" "MyServer" { }
 `,
 			expectedCount: 1, // Violation still reported
-			expectedRules: []string{"style.block-label-case"},
+			expectedRules: []string{"style.resource-name-convention"},
 		},
 	}
 
@@ -1339,10 +1339,10 @@ resource "aws_instance" "MyServer" { }
 			err := os.WriteFile(tmpFile, []byte(tt.content), 0o644)
 			require.NoError(t, err)
 
-			// Create engine with block-label-case rule enabled
+			// Create engine with resource-name-convention rule enabled
 			engine := New(&Config{
 				Rules: map[string]RuleConfig{
-					"style.block-label-case": {Enabled: config.BoolPtr(true)},
+					"style.resource-name-convention": {Enabled: config.BoolPtr(true)},
 				},
 			})
 

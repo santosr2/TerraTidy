@@ -282,7 +282,8 @@ func getAllRules() []RuleInfo {
 func getStyleRuleDescription(name string) string {
 	descriptions := map[string]string{
 		"style.blank-line-between-blocks": "Ensure blank lines between resource blocks",
-		"style.block-label-case":          "Enforce snake_case naming for block labels",
+		"style.resource-name-convention":  "Enforce naming convention for resources",
+		"style.data-name-convention":      "Enforce naming convention for data sources",
 		"style.for-each-count-first":      "Place for_each/count as first attribute in blocks",
 		"style.lifecycle-at-end":          "Place lifecycle block at end of resource",
 		"style.tags-at-end":               "Place tags attribute at end of resource",

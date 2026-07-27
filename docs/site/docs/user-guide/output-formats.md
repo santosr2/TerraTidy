@@ -55,10 +55,10 @@ Checking 2 files...
 
 Running checks in parallel mode...
   fmt: 0 issue(s)
-  lint: 2 issue(s)
-  style: 1 issue(s)
+  lint: 1 issue(s)
+  style: 2 issue(s)
 
-⚠ main.tf:1:1: resource name 'MyServer' should use snake_case (lint.terraform-naming-convention)
+⚠ main.tf:1:1: Resource name should be snake_case: MyServer (style.resource-name-convention)
 ⚠ main.tf:4:1: Missing blank line between instance_type and tags (different attribute groups) (style.attribute-group-spacing)
 ⚠ variables.tf:1:1: Variable 'region' is missing a description (lint.terraform-documented-variables)
 ---
@@ -85,7 +85,7 @@ Output:
 ```text
 SEVERITY   LOCATION                                           MESSAGE
 ----------------------------------------------------------------------------------------------------
-WARNING    main.tf:1:1                                        resource name 'MyServer' should use snake_case (lint.terraform-naming-convention)
+WARNING    main.tf:1:1                                        Resource name should be snake_case: MyServer (style.resource-name-convention)
 WARNING    main.tf:4:1                                        Missing blank line between instance_type and tags (different attribute groups) (style.attribute-group-spacing)
 WARNING    variables.tf:1:1                                   Variable 'region' is missing a description (lint.terraform-documented-variables)
 
@@ -115,8 +115,8 @@ and `end` positions (not flat `line`/`column` fields):
 {
   "findings": [
     {
-      "rule": "lint.terraform-naming-convention",
-      "message": "resource name 'MyServer' should use snake_case",
+      "rule": "style.resource-name-convention",
+      "message": "Resource name should be snake_case: MyServer",
       "file": "main.tf",
       "location": {
         "start": { "line": 1, "column": 1 },
@@ -169,7 +169,7 @@ terratidy check --format json-compact
 ```
 
 ```json
-{"findings":[{"rule":"lint.terraform-naming-convention","message":"resource name 'MyServer' should use snake_case","file":"main.tf","location":{"start":{"line":1,"column":1},"end":{"line":8,"column":2}},"severity":"warning","fixable":false}],"summary":{"total":1,"errors":0,"warnings":1,"info":0}}
+{"findings":[{"rule":"style.resource-name-convention","message":"Resource name should be snake_case: MyServer","file":"main.tf","location":{"start":{"line":1,"column":1},"end":{"line":8,"column":2}},"severity":"warning","fixable":false}],"summary":{"total":1,"errors":0,"warnings":1,"info":0}}
 ```
 
 ## SARIF Format
@@ -192,8 +192,8 @@ entry in `results` references one by `ruleId`. Auto-fixable findings also carry 
           "informationUri": "https://github.com/santosr2/TerraTidy",
           "rules": [
             {
-              "id": "lint.terraform-naming-convention",
-              "shortDescription": { "text": "lint.terraform-naming-convention" },
+              "id": "style.resource-name-convention",
+              "shortDescription": { "text": "style.resource-name-convention" },
               "fullDescription": { "text": "" },
               "properties": { "tags": ["terraform", "terragrunt", "quality"] }
             }
@@ -202,9 +202,9 @@ entry in `results` references one by `ruleId`. Auto-fixable findings also carry 
       },
       "results": [
         {
-          "ruleId": "lint.terraform-naming-convention",
+          "ruleId": "style.resource-name-convention",
           "level": "warning",
-          "message": { "text": "resource name 'MyServer' should use snake_case" },
+          "message": { "text": "Resource name should be snake_case: MyServer" },
           "locations": [
             {
               "physicalLocation": {
@@ -251,7 +251,7 @@ Output:
 
 ```text
 ::warning file=main.tf,line=1,col=1,title=lint.terraform-required-version::Missing terraform required_version constraint
-::warning file=main.tf,line=1,col=1,endLine=8,endColumn=2,title=lint.terraform-naming-convention::resource name 'MyServer' should use snake_case
+::warning file=main.tf,line=1,col=1,endLine=8,endColumn=2,title=style.resource-name-convention::Resource name should be snake_case: MyServer
 ::warning file=main.tf,line=4,col=1,title=style.attribute-group-spacing::Missing blank line between instance_type and tags (different attribute groups)
 ```
 
@@ -277,8 +277,8 @@ The failure body is a single XML-escaped string (`&#xA;` is a newline):
 
 <testsuites name="TerraTidy" tests="3" errors="0" failures="3" time="0" timestamp="2026-07-21T21:21:14Z">
   <testsuite name="main.tf" tests="2" errors="0" failures="2" skipped="0" time="0" timestamp="2026-07-21T21:21:14Z">
-    <testcase name="lint.terraform-naming-convention" classname="main.tf" time="0">
-      <failure message="resource name &#39;MyServer&#39; should use snake_case" type="warning">File: main.tf&#xA;Line: 1, Column: 1&#xA;&#xA;resource name &#39;MyServer&#39; should use snake_case</failure>
+    <testcase name="style.resource-name-convention" classname="main.tf" time="0">
+      <failure message="Resource name should be snake_case: MyServer" type="warning">File: main.tf&#xA;Line: 1, Column: 1&#xA;&#xA;Resource name should be snake_case: MyServer</failure>
     </testcase>
     <testcase name="style.attribute-group-spacing" classname="main.tf" time="0">
       <failure message="Missing blank line between instance_type and tags (different attribute groups)" type="warning">File: main.tf&#xA;Line: 4, Column: 1&#xA;&#xA;Missing blank line between instance_type and tags (different attribute groups)</failure>
@@ -352,7 +352,7 @@ by file. Severity is shown with an emoji prefix (`:x:` error, `:warning:` warnin
 
 | Severity | Line | Rule | Message |
 |----------|------|------|---------|
-| :warning: warning | 1 | `lint.terraform-naming-convention` | resource name 'MyServer' should use snake_case |
+| :warning: warning | 1 | `style.resource-name-convention` | Resource name should be snake_case: MyServer |
 | :warning: warning | 4 | `style.attribute-group-spacing` | Missing blank line between instance_type and tags (different attribute groups) |
 
 ### `variables.tf`
@@ -444,11 +444,11 @@ By default, file paths in output are relative to the current working directory:
 ```bash
 # Default: relative paths
 terratidy check
-# Output: ⚠ modules/vpc/main.tf:1:1: resource name 'MyServer' should use snake_case (lint.terraform-naming-convention)
+# Output: ⚠ modules/vpc/main.tf:1:1: Resource name should be snake_case: MyServer (style.resource-name-convention)
 
 # Use absolute paths
 terratidy check --absolute-paths
-# Output: ⚠ /Users/dev/project/modules/vpc/main.tf:1:1: resource name 'MyServer' should use snake_case (lint.terraform-naming-convention)
+# Output: ⚠ /Users/dev/project/modules/vpc/main.tf:1:1: Resource name should be snake_case: MyServer (style.resource-name-convention)
 ```
 
 Relative paths are more readable in CI logs and editor integrations. Use `--absolute-paths`

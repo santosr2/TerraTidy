@@ -1272,9 +1272,9 @@ engines:
 	}
 }
 
-// TestVariableNamingConvention_RespectsConfig verifies that style.variable-naming
+// TestVariableNameConvention_RespectsConfig verifies that style.variable-name-convention
 // rule respects the naming convention option from config.
-func TestVariableNamingConvention_RespectsConfig(t *testing.T) {
+func TestVariableNameConvention_RespectsConfig(t *testing.T) {
 	// Save and restore global state
 	oldCfgFile := cfgFile
 	oldProfile := profile
@@ -1305,7 +1305,7 @@ engines:
   style:
     enabled: true
     rules:
-      style.variable-naming:
+      style.variable-name-convention:
         enabled: true
 `,
 			expectFinding: true,
@@ -1324,7 +1324,7 @@ engines:
   style:
     enabled: true
     rules:
-      style.variable-naming:
+      style.variable-name-convention:
         enabled: true
 `,
 			expectFinding: false,
@@ -1343,7 +1343,7 @@ engines:
   style:
     enabled: true
     rules:
-      style.variable-naming:
+      style.variable-name-convention:
         enabled: true
         config:
           options:
@@ -1365,7 +1365,7 @@ engines:
   style:
     enabled: true
     rules:
-      style.variable-naming:
+      style.variable-name-convention:
         enabled: true
         config:
           options:
@@ -1400,10 +1400,10 @@ engines:
 			findings, err := engine.Run(context.Background(), []string{tfFile})
 			require.NoError(t, err)
 
-			// Check for variable-naming finding
+			// Check for variable-name-convention finding
 			hasNamingFinding := false
 			for _, f := range findings {
-				if f.Rule == "style.variable-naming" {
+				if f.Rule == "style.variable-name-convention" {
 					hasNamingFinding = true
 					break
 				}

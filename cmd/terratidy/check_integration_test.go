@@ -676,7 +676,7 @@ func TestPluginRuleFiltering_SameNameAsBuiltIn(t *testing.T) {
 	dir := t.TempDir()
 
 	// Create a YAML rule with same name as built-in style rule
-	yamlRule := `name: style.block-label-case
+	yamlRule := `name: style.resource-name-convention
 description: Plugin rule with same name as built-in
 severity: error
 enabled: true
@@ -703,7 +703,7 @@ patterns:
 	pluginRules, err := loadPluginRules(cfg)
 	require.NoError(t, err)
 	require.Len(t, pluginRules, 1)
-	assert.Equal(t, "style.block-label-case", pluginRules[0].Name())
+	assert.Equal(t, "style.resource-name-convention", pluginRules[0].Name())
 
 	// Run style check - both built-in and plugin rule should run
 	ctx := context.Background()
@@ -713,7 +713,7 @@ patterns:
 	// Count findings from the rule name - should have findings from BOTH rules
 	var ruleFindings int
 	for _, f := range findings {
-		if f.Rule == "style.block-label-case" {
+		if f.Rule == "style.resource-name-convention" {
 			ruleFindings++
 		}
 	}

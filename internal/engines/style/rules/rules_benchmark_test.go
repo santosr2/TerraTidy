@@ -118,9 +118,9 @@ func parseHCL(b *testing.B, content string) *hcl.File {
 	return file
 }
 
-func BenchmarkBlockLabelCaseRule(b *testing.B) {
+func BenchmarkResourceNameConventionRule(b *testing.B) {
 	file := parseHCL(b, benchmarkHCL)
-	rule := &BlockLabelCaseRule{}
+	rule := &ResourceNameConventionRule{}
 	ctx := &sdk.Context{File: "benchmark.tf"}
 
 	b.ResetTimer()
@@ -211,7 +211,7 @@ func BenchmarkAllRules_SmallConfig(b *testing.B) {
 	ctx := &sdk.Context{File: "benchmark.tf"}
 
 	rules := []sdk.Rule{
-		&BlockLabelCaseRule{},
+		&ResourceNameConventionRule{},
 		&BlankLineBetweenBlocksRule{},
 		&MetaArgumentsOrderRule{},
 		&ForEachCountFirstRule{},
@@ -234,7 +234,7 @@ func BenchmarkAllRules_LargeConfig(b *testing.B) {
 	ctx := &sdk.Context{File: "benchmark.tf"}
 
 	rules := []sdk.Rule{
-		&BlockLabelCaseRule{},
+		&ResourceNameConventionRule{},
 		&BlankLineBetweenBlocksRule{},
 		&MetaArgumentsOrderRule{},
 		&ForEachCountFirstRule{},

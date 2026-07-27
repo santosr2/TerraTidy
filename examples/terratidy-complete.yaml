@@ -50,7 +50,7 @@ engines:
       # Advanced naming (can be noisy)
       style.resource-name-matches-type: { enabled: true, severity: warning }
       style.output-prefix: { enabled: true, severity: warning }
-      style.module-name-convention: { enabled: true, severity: warning }
+      style.module-name-descriptive: { enabled: true, severity: info }
       # Comments and formatting
       style.comment-syntax: { enabled: true, severity: warning }
       style.no-trailing-whitespace: { enabled: true, severity: warning }
@@ -62,7 +62,7 @@ engines:
       style.nested-block-order: { enabled: true, severity: warning }
       style.one-line-attribute-spacing: { enabled: true, severity: warning }
       # Naming case is snake_case by default; override per rule if desired, e.g.:
-      # style.variable-naming:
+      # style.variable-name-convention:
       #   enabled: true
       #   config:
       #     options:
@@ -89,7 +89,6 @@ engines:
       lint.terraform-documented-variables: { enabled: true, severity: warning }
       lint.terraform-hardcoded-secrets: { enabled: true, severity: error }
       lint.terraform-module-pinned-source: { enabled: true, severity: warning }
-      lint.terraform-naming-convention: { enabled: true, severity: warning }
       lint.terraform-required-providers: { enabled: true, severity: warning }
       lint.terraform-required-version: { enabled: true, severity: warning }
       lint.terraform-resource-count: { enabled: true, severity: warning }

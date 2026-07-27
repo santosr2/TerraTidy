@@ -14,7 +14,7 @@ func generateHCLWithAnnotations(resources, annotationsPerResource int) []byte {
 	var sb strings.Builder
 
 	// Add a file-level suppression
-	sb.WriteString("# terratidy:ignore-file:style.variable-naming\n\n")
+	sb.WriteString("# terratidy:ignore-file:style.variable-name-convention\n\n")
 
 	for i := range resources {
 		// Add next-block annotations
@@ -24,7 +24,7 @@ func generateHCLWithAnnotations(resources, annotationsPerResource int) []byte {
 
 		// Add a resource with inline annotation
 		if annotationsPerResource > 0 {
-			fmt.Fprintf(&sb, `resource "aws_instance" "server_%d" { # terratidy:ignore:style.block-label-case
+			fmt.Fprintf(&sb, `resource "aws_instance" "server_%d" { # terratidy:ignore:style.resource-name-convention
   ami           = "ami-12345678"
   instance_type = "t2.micro"
 }
@@ -145,7 +145,7 @@ func BenchmarkFilterFindings(b *testing.B) {
 
 func BenchmarkIsSuppressed(b *testing.B) {
 	finding := sdk.Finding{
-		Rule:     "style.block-label-case",
+		Rule:     "style.resource-name-convention",
 		Location: sdk.Location{StartLine: 5},
 	}
 
@@ -159,14 +159,14 @@ func BenchmarkIsSuppressed(b *testing.B) {
 				{Rule: "style.other-rule", TargetLine: 5, Type: NextBlock},
 				{Rule: "lint.some-rule", TargetLine: 5, Type: NextBlock},
 				{Rule: "policy.require-tags", TargetLine: 5, Type: NextBlock},
-				{Rule: "style.variable-naming", TargetLine: 10, Type: NextBlock},
-				{Rule: "style.block-label-case", TargetLine: 10, Type: NextBlock}, // Wrong line
+				{Rule: "style.variable-name-convention", TargetLine: 10, Type: NextBlock},
+				{Rule: "style.resource-name-convention", TargetLine: 10, Type: NextBlock}, // Wrong line
 			},
 		},
 		{
 			"Match_FileLevel",
 			[]Suppression{
-				{Rule: "style.block-label-case", Type: File},
+				{Rule: "style.resource-name-convention", Type: File},
 			},
 		},
 		{
@@ -178,7 +178,7 @@ func BenchmarkIsSuppressed(b *testing.B) {
 		{
 			"Match_LineSpecific",
 			[]Suppression{
-				{Rule: "style.block-label-case", TargetLine: 5, Type: NextBlock},
+				{Rule: "style.resource-name-convention", TargetLine: 5, Type: NextBlock},
 			},
 		},
 		{
@@ -206,9 +206,9 @@ func BenchmarkRuleMatches(b *testing.B) {
 		findingRule     string
 		suppressionRule string
 	}{
-		{"ExactMatch", "style.block-label-case", "style.block-label-case"},
-		{"NoMatch", "style.block-label-case", "style.variable-naming"},
-		{"WildcardMatch", "style.block-label-case", "style.*"},
+		{"ExactMatch", "style.resource-name-convention", "style.resource-name-convention"},
+		{"NoMatch", "style.resource-name-convention", "style.variable-name-convention"},
+		{"WildcardMatch", "style.resource-name-convention", "style.*"},
 		{"WildcardNoMatch", "lint.some-rule", "style.*"},
 		{"LongRuleName", "style.very-long-rule-name-for-testing", "style.very-long-rule-name-for-testing"},
 	}
@@ -247,7 +247,7 @@ func BenchmarkAnnotationParse_RealWorld(b *testing.B) {
 	content := []byte(`# terratidy:ignore-file:policy.require-tags
 # This is a typical Terraform file with various resources
 
-# terratidy:ignore:style.block-label-case
+# terratidy:ignore:style.resource-name-convention
 resource "aws_vpc" "Main" {
   cidr_block = "10.0.0.0/16"
 
@@ -256,9 +256,9 @@ resource "aws_vpc" "Main" {
   }
 }
 
-# terratidy:ignore:style.variable-naming
+# terratidy:ignore:style.variable-name-convention
 # terratidy:ignore:lint.deprecated-resource
-resource "aws_instance" "WebServer" { # terratidy:ignore:style.block-label-case
+resource "aws_instance" "WebServer" { # terratidy:ignore:style.resource-name-convention
   ami           = "ami-12345678"
   instance_type = "t2.micro"
   vpc_id        = aws_vpc.Main.id
@@ -274,7 +274,7 @@ variable "environment" {
   default     = "dev"
 }
 
-output "vpc_id" { # terratidy:ignore:style.output-naming
+output "vpc_id" { # terratidy:ignore:style.output-name-convention
   value       = aws_vpc.Main.id
   description = "The VPC ID"
 }

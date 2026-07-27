@@ -138,9 +138,9 @@ func TestDiagnostic_JSONRoundtrip(t *testing.T) {
 			End:   Position{Line: 10, Character: 20},
 		},
 		Severity: 2, // Warning
-		Code:     "style.block-label-case",
+		Code:     "style.resource-name-convention",
 		Source:   "terratidy",
-		Message:  "Block label should be lowercase",
+		Message:  "Resource name should be snake_case",
 	}
 
 	// Marshal to JSON
@@ -176,7 +176,7 @@ func TestTextEdit_JSONRoundtrip(t *testing.T) {
 
 func TestCodeAction_JSONRoundtrip(t *testing.T) {
 	action := CodeAction{
-		Title:       "Fix: style.block-label-case",
+		Title:       "Fix: style.resource-name-convention",
 		Kind:        "quickfix",
 		IsPreferred: true,
 		Edit: &WorkspaceEdit{

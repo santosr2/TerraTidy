@@ -414,12 +414,12 @@ goos: darwin
 goarch: arm64
 pkg: github.com/santosr2/TerraTidy/internal/engines/style/rules
 cpu: Apple M2 Pro
-BenchmarkBlockLabelCaseRule-12            	 2506804	       438.3 ns/op	       0 B/op	       0 allocs/op
-BenchmarkBlockLabelCaseRule-12            	 2575933	       484.3 ns/op	       0 B/op	       0 allocs/op
-BenchmarkBlockLabelCaseRule-12            	 2714032	       446.5 ns/op	       0 B/op	       0 allocs/op
-BenchmarkBlockLabelCaseRule-12            	 2673042	       464.0 ns/op	       0 B/op	       0 allocs/op
-BenchmarkBlockLabelCaseRule-12            	 2716096	       456.4 ns/op	       0 B/op	       0 allocs/op
-BenchmarkBlockLabelCaseRule-12            	 2184033	       481.8 ns/op	       0 B/op	       0 allocs/op
+BenchmarkResourceNameConventionRule-12    	 2506804	       438.3 ns/op	       0 B/op	       0 allocs/op
+BenchmarkResourceNameConventionRule-12    	 2575933	       484.3 ns/op	       0 B/op	       0 allocs/op
+BenchmarkResourceNameConventionRule-12    	 2714032	       446.5 ns/op	       0 B/op	       0 allocs/op
+BenchmarkResourceNameConventionRule-12    	 2673042	       464.0 ns/op	       0 B/op	       0 allocs/op
+BenchmarkResourceNameConventionRule-12    	 2716096	       456.4 ns/op	       0 B/op	       0 allocs/op
+BenchmarkResourceNameConventionRule-12    	 2184033	       481.8 ns/op	       0 B/op	       0 allocs/op
 BenchmarkBlankLineBetweenBlocksRule-12    	 1371261	      1495 ns/op	      64 B/op	       2 allocs/op
 BenchmarkBlankLineBetweenBlocksRule-12    	 1410901	       748.8 ns/op	      64 B/op	       2 allocs/op
 BenchmarkBlankLineBetweenBlocksRule-12    	 1796348	       629.1 ns/op	      64 B/op	       2 allocs/op

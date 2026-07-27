@@ -70,11 +70,13 @@ engines:
 
 | Rule | Description |
 |------|-------------|
-| `style.block-label-case` | Block labels should follow naming convention |
-| `style.variable-naming` | Variables should follow naming convention |
-| `style.output-naming` | Outputs should follow naming convention |
-| `style.local-naming` | Locals should follow naming convention |
-| `style.module-name-convention` | Module calls should follow naming convention |
+| `style.resource-name-convention` | Resource names should follow naming convention (independent `case` option) |
+| `style.data-name-convention` | Data source names should follow naming convention (independent `case` option) |
+| `style.variable-name-convention` | Variables should follow naming convention |
+| `style.output-name-convention` | Outputs should follow naming convention |
+| `style.local-name-convention` | Locals should follow naming convention |
+| `style.module-name-convention` | Module calls should follow the configured case convention (case-only; enabled by default) |
+| `style.module-name-descriptive` | Flags generic module names such as `this`, `main`, `module` (opt-in) |
 
 ### Attribute Ordering
 
@@ -173,16 +175,16 @@ Suppress specific rules using inline annotations:
 
 ```hcl
 # Suppress on the next block
-# terratidy:ignore:style.block-label-case
+# terratidy:ignore:style.resource-name-convention
 resource "aws_instance" "MyServer" {
   # ...
 }
 
 # Suppress inline (same line as code)
-resource "aws_s3_bucket" "Test" { } # terratidy:ignore:style.block-label-case
+resource "aws_s3_bucket" "Test" { } # terratidy:ignore:style.resource-name-convention
 
 # Suppress for the entire file
-# terratidy:ignore-file:style.variable-naming
+# terratidy:ignore-file:style.variable-name-convention
 
 # Suppress all style rules for the file
 # terratidy:ignore-file:style.*
@@ -194,6 +196,6 @@ Or disable globally in configuration:
 engines:
   style:
     rules:
-      style.block-label-case:
+      style.resource-name-convention:
         enabled: false
 ```

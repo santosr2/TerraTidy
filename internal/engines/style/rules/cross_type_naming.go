@@ -255,7 +255,7 @@ func (r *ModuleNameConventionRule) Name() string {
 
 // Description returns a human-readable description of the rule.
 func (r *ModuleNameConventionRule) Description() string {
-	return "Ensures module names follow naming conventions"
+	return "Ensures module names use the configured case convention"
 }
 
 // Check examines module blocks for naming conventions.
@@ -292,8 +292,44 @@ func (r *ModuleNameConventionRule) Check(ctx *sdk.Context, file *hcl.File) ([]sd
 				Severity: sdk.SeverityWarning,
 			})
 		}
+	}
 
-		// Check for generic names
+	return findings, nil
+}
+
+// ModuleNameDescriptiveRule flags generic module names that carry no meaning.
+// It lives next to ModuleNameConventionRule so both share the genericNames map.
+type ModuleNameDescriptiveRule struct{}
+
+// Name returns the rule identifier.
+func (r *ModuleNameDescriptiveRule) Name() string {
+	return "style.module-name-descriptive"
+}
+
+// Description returns a human-readable description of the rule.
+func (r *ModuleNameDescriptiveRule) Description() string {
+	return "Encourages descriptive module names by flagging generic ones (e.g. this, main, module)"
+}
+
+// Check examines module blocks for generic, non-descriptive names.
+func (r *ModuleNameDescriptiveRule) Check(ctx *sdk.Context, file *hcl.File) ([]sdk.Finding, error) {
+	var findings []sdk.Finding
+
+	hclFile, ok := file.Body.(*hclsyntax.Body)
+	if !ok {
+		return findings, nil
+	}
+
+	for _, block := range hclFile.Blocks {
+		if block.Type != "module" {
+			continue
+		}
+
+		if len(block.Labels) == 0 {
+			continue
+		}
+
+		moduleName := block.Labels[0]
 		if genericNames[strings.ToLower(moduleName)] {
 			findings = append(findings, sdk.Finding{
 				Rule:     r.Name(),

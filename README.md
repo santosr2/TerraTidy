@@ -24,7 +24,7 @@ TerraTidy is a single-binary quality platform for Terraform and Terragrunt that 
 
 - **Formatting** -- Format `.tf` and `.hcl` files using the HCL formatter
 - **Style Checking** -- Custom style rules for layout, ordering, and conventions
-- **Linting** -- 11 built-in AST rules plus optional TFLint integration for provider-specific checks
+- **Linting** -- 10 built-in AST rules plus optional TFLint integration for provider-specific checks
 - **Policy Enforcement** -- OPA policy checks for compliance
 
 ### Key Features
@@ -92,13 +92,13 @@ Checking 3 files...
 
 Running checks in parallel mode...
   fmt: 1 issue(s)
-  style: 2 issue(s)
-  lint: 1 issue(s)
+  style: 3 issue(s)
+  lint: 0 issue(s)
 
 ✗ modules/networking/main.tf:0:0: File needs formatting (fmt.needs-formatting)
 ⚠ modules/networking/main.tf:12:1: Missing blank line between blocks (style.blank-line-between-blocks)
 ⚠ modules/networking/variables.tf:5:1: Missing blank line between blocks (style.blank-line-between-blocks)
-⚠ modules/networking/main.tf:8:1: resource name 'public-subnet' should use snake_case (lint.terraform-naming-convention)
+⚠ modules/networking/main.tf:8:1: Resource name should be snake_case: public-subnet (style.resource-name-convention)
 ---
 Summary: 4 total issue(s)
 
@@ -115,10 +115,10 @@ Checking 3 files...
    Found 1 issue(s)
 
 2. Checking style...
-   Found 2 issue(s)
+   Found 3 issue(s)
 
 3. Running linter...
-   Found 1 issue(s)
+   Found 0 issue(s)
 
 4. Running policy checks...
    Found 0 issue(s)
@@ -126,7 +126,7 @@ Checking 3 files...
 ✗ modules/networking/main.tf:0:0: File needs formatting (fmt.needs-formatting)
 ⚠ modules/networking/main.tf:12:1: Missing blank line between blocks (style.blank-line-between-blocks)
 ⚠ modules/networking/variables.tf:5:1: Missing blank line between blocks (style.blank-line-between-blocks)
-⚠ modules/networking/main.tf:8:1: resource name 'public-subnet' should use snake_case (lint.terraform-naming-convention)
+⚠ modules/networking/main.tf:8:1: Resource name should be snake_case: public-subnet (style.resource-name-convention)
 ---
 Summary: 4 total issue(s)
 

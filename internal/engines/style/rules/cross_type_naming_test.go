@@ -331,28 +331,15 @@ func TestModuleNameConventionRule(t *testing.T) {
 			wantFindings: 1,
 		},
 		{
-			name: "generic name 'this'",
+			// Generic snake_case names are valid case, and the generic-name
+			// check now lives in the opt-in style.module-name-descriptive rule,
+			// so this rule reports nothing for them.
+			name: "generic snake_case name is not flagged (case-only rule)",
 			content: `module "this" {
   source = "./modules/vpc"
 }`,
 			config:       nil,
-			wantFindings: 1,
-		},
-		{
-			name: "generic name 'main'",
-			content: `module "main" {
-  source = "./modules/vpc"
-}`,
-			config:       nil,
-			wantFindings: 1,
-		},
-		{
-			name: "generic name 'module'",
-			content: `module "module" {
-  source = "./modules/vpc"
-}`,
-			config:       nil,
-			wantFindings: 1,
+			wantFindings: 0,
 		},
 		{
 			name: "camelCase valid with camelCase config",
@@ -390,6 +377,77 @@ func TestModuleNameConventionRule(t *testing.T) {
 			findings, err := rule.Check(ctx, hclFile)
 			require.NoError(t, err)
 			assert.Len(t, findings, tt.wantFindings)
+		})
+	}
+}
+
+func TestModuleNameDescriptiveRule(t *testing.T) {
+	rule := &ModuleNameDescriptiveRule{}
+
+	t.Run("Name", func(t *testing.T) {
+		assert.Equal(t, "style.module-name-descriptive", rule.Name())
+	})
+
+	t.Run("Description", func(t *testing.T) {
+		assert.NotEmpty(t, rule.Description())
+	})
+
+	tests := []struct {
+		name         string
+		content      string
+		wantFindings int
+	}{
+		{
+			name: "generic name 'this' is flagged",
+			content: `module "this" {
+  source = "./modules/vpc"
+}`,
+			wantFindings: 1,
+		},
+		{
+			name: "generic name 'main' is flagged",
+			content: `module "main" {
+  source = "./modules/vpc"
+}`,
+			wantFindings: 1,
+		},
+		{
+			name: "generic name 'module' is flagged",
+			content: `module "module" {
+  source = "./modules/vpc"
+}`,
+			wantFindings: 1,
+		},
+		{
+			name: "descriptive name is clean",
+			content: `module "my_vpc" {
+  source = "./modules/vpc"
+}`,
+			wantFindings: 0,
+		},
+		{
+			name: "resource block is ignored",
+			content: `resource "aws_instance" "this" {
+  ami = "ami-123"
+}`,
+			wantFindings: 0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			file, diags := hclsyntax.ParseConfig([]byte(tt.content), "test.tf", hcl.InitialPos)
+			require.False(t, diags.HasErrors())
+
+			hclFile := &hcl.File{Body: file.Body}
+			ctx := &sdk.Context{File: "test.tf"}
+
+			findings, err := rule.Check(ctx, hclFile)
+			require.NoError(t, err)
+			assert.Len(t, findings, tt.wantFindings)
+			if tt.wantFindings > 0 {
+				assert.Equal(t, sdk.SeverityInfo, findings[0].Severity)
+			}
 		})
 	}
 }

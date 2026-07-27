@@ -88,7 +88,7 @@ func LocationFromRange(r hcl.Range) Location {
 // produced it, the file and location where the issue was found, and an indicator
 // of whether the issue can be auto-fixed.
 type Finding struct {
-	// Rule is the identifier of the rule that produced this finding (e.g., "style.block-label-case").
+	// Rule is the identifier of the rule that produced this finding (e.g., "style.resource-name-convention").
 	Rule string `json:"rule"`
 	// Message is a human-readable description of the issue, shown to the user.
 	Message string `json:"message"`
@@ -184,7 +184,7 @@ type Context struct {
 // Rule defines the interface that all rules must implement. Built-in rules,
 // Go plugin rules, YAML rules, and Bash rules all satisfy this interface.
 type Rule interface {
-	// Name returns a unique identifier for the rule (e.g., "style.block-label-case").
+	// Name returns a unique identifier for the rule (e.g., "style.resource-name-convention").
 	Name() string
 	// Description returns a human-readable description of what the rule checks.
 	Description() string

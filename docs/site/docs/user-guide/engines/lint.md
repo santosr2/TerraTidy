@@ -6,7 +6,7 @@ and security issues in your Terraform code.
 ## Overview
 
 The `lint` engine provides static analysis through built-in AST-based rules and optional TFLint
-integration. Built-in rules cover core Terraform hygiene (versioning, naming, security), while
+integration. Built-in rules cover core Terraform hygiene (versioning, documentation, security), while
 TFLint integration adds provider-specific checks when TFLint is installed.
 
 ## Usage
@@ -62,8 +62,8 @@ engines:
 
 ### Built-in Rules
 
-TerraTidy includes 11 built-in Terraform lint rules covering versioning,
-documentation, naming, security, and more. A few examples:
+TerraTidy includes 10 built-in Terraform lint rules covering versioning,
+documentation, security, and more. A few examples:
 
 | Rule | Description |
 |------|-------------|

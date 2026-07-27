@@ -4,7 +4,7 @@ Complete reference for lint rules in TerraTidy. The lint engine provides built-i
 
 ## Built-in Rules
 
-TerraTidy includes 11 built-in lint rules that work without external dependencies.
+TerraTidy includes 10 built-in lint rules that work without external dependencies.
 
 ### terraform-required-version
 
@@ -208,29 +208,6 @@ module "vpc" {
 }
 ```
 
-### terraform-naming-convention
-
-Ensures resources, data sources, and modules follow naming conventions (snake_case).
-
-| Property         | Value                               |
-| ---------------- | ----------------------------------- |
-| Rule ID          | `lint.terraform-naming-convention`  |
-| Default Severity | Warning                             |
-| Fixable          | No                                  |
-| Default          | Enabled                             |
-
-**Example:**
-
-```hcl
-# Bad - camelCase
-resource "aws_instance" "webServer" { }
-data "aws_ami" "latestAmi" { }
-
-# Good - snake_case
-resource "aws_instance" "web_server" { }
-data "aws_ami" "latest_ami" { }
-```
-
 ### terraform-unused-declarations
 
 Detects declared but unused variables and locals.
@@ -403,8 +380,8 @@ resource "aws_instance" "WebServer" { }
 ### Inline (TerraTidy style)
 
 ```hcl
-# terratidy:ignore:lint.terraform-naming-convention
-resource "aws_instance" "WebServer" { }
+# terratidy:ignore:lint.terraform-documented-variables
+variable "instance_type" { }
 ```
 
 ### Configuration
@@ -413,7 +390,7 @@ resource "aws_instance" "WebServer" { }
 engines:
   lint:
     rules:
-      lint.terraform-naming-convention:
+      lint.terraform-documented-variables:
         enabled: false
 ```
 
@@ -428,7 +405,6 @@ engines:
 | `terraform-typed-variables`   | Info     | No      | Variables must have type constraints           |
 | `terraform-documented-outputs`| Info     | No      | Outputs must have descriptions                 |
 | `terraform-module-pinned-source` | Warning | No   | Module sources must be version-pinned          |
-| `terraform-naming-convention` | Warning  | No      | Resources must use snake_case names            |
 | `terraform-unused-declarations` | Warning | No    | Detects unused variables and locals            |
 | `terraform-resource-count`    | Info     | No      | Warns on too many resources per file           |
 | `terraform-hardcoded-secrets` | Error    | No      | Detects hardcoded secrets and credentials      |

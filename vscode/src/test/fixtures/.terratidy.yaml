@@ -7,7 +7,7 @@ engines:
     enabled: true
     # Rule configuration for testing
     rules:
-      style.block-label-case:
+      style.resource-name-convention:
         enabled: true
         severity: warning
   lint:

@@ -93,16 +93,25 @@ resource "aws_instance" "web" {
 
 ## Naming Rules
 
-### block-label-case
+### resource-name-convention
 
-Ensures block labels follow naming conventions (snake_case for resources/data).
+Ensures resource names follow naming conventions (snake_case by default). An empty
+resource name is reported as an error; a name that doesn't match the configured
+case convention is reported as a warning.
 
 | Property | Value |
 |----------|-------|
-| Rule ID | `style.block-label-case` |
+| Rule ID | `style.resource-name-convention` |
 | Default Severity | Warning |
 | Fixable | No |
 | Default | Enabled |
+
+**Configuration Options:**
+
+| Option    | Type   | Default      | Description                                              |
+|-----------|--------|--------------|----------------------------------------------------------|
+| `case`    | string | `snake_case` | Naming convention: `snake_case`, `camelCase`, `kebab-case`, `PascalCase`, `custom` |
+| `pattern` | string | ""           | Custom regex pattern (only used when case is `custom`)   |
 
 **Example:**
 
@@ -116,13 +125,58 @@ resource "aws_instance" "my_server" { }
 resource "aws_instance" "web_server" { }
 ```
 
-### variable-naming
+**Configuration Example:**
 
-Ensures variable names follow naming conventions.
+```yaml
+engines:
+  style:
+    rules:
+      style.resource-name-convention:
+        enabled: true
+        config:
+          options:
+            case: camelCase  # Allow camelCase instead of snake_case
+```
+
+### data-name-convention
+
+Ensures data source names follow naming conventions (snake_case by default).
+Configured independently from `style.resource-name-convention`, so resources and
+data sources can use different case conventions. An empty data source name is
+reported as an error; a name that doesn't match the configured case convention is
+reported as a warning.
 
 | Property | Value |
 |----------|-------|
-| Rule ID | `style.variable-naming` |
+| Rule ID | `style.data-name-convention` |
+| Default Severity | Warning |
+| Fixable | No |
+| Default | Enabled |
+
+**Configuration Options:**
+
+| Option    | Type   | Default      | Description                                              |
+|-----------|--------|--------------|----------------------------------------------------------|
+| `case`    | string | `snake_case` | Naming convention: `snake_case`, `camelCase`, `kebab-case`, `PascalCase`, `custom` |
+| `pattern` | string | ""           | Custom regex pattern (only used when case is `custom`)   |
+
+**Example:**
+
+```hcl
+# Bad - camelCase or PascalCase
+data "aws_ami" "LatestAmi" { }
+
+# Good - snake_case
+data "aws_ami" "latest_ami" { }
+```
+
+### variable-name-convention
+
+Variable names should use snake_case.
+
+| Property | Value |
+|----------|-------|
+| Rule ID | `style.variable-name-convention` |
 | Default Severity | Warning |
 | Fixable | No |
 | Default | Enabled |
@@ -152,20 +206,20 @@ variable "my_variable" { }
 engines:
   style:
     rules:
-      style.variable-naming:
+      style.variable-name-convention:
         enabled: true
         config:
           options:
             case: camelCase  # Allow camelCase instead of snake_case
 ```
 
-### output-naming
+### output-name-convention
 
-Ensures output names follow snake_case convention.
+Output names should use snake_case.
 
 | Property | Value |
 |----------|-------|
-| Rule ID | `style.output-naming` |
+| Rule ID | `style.output-name-convention` |
 | Default Severity | Warning |
 | Fixable | No |
 | Default | Enabled |
@@ -182,13 +236,13 @@ output "instance_ip" { }
 output "my_output" { }
 ```
 
-### local-naming
+### local-name-convention
 
-Ensures local value names follow snake_case convention.
+Local value names should use snake_case.
 
 | Property | Value |
 |----------|-------|
-| Rule ID | `style.local-naming` |
+| Rule ID | `style.local-name-convention` |
 | Default Severity | Warning |
 | Fixable | No |
 | Default | Enabled |
@@ -768,7 +822,7 @@ or singular form already exists in the directory.
 
 ## Advanced Naming Rules
 
-These rules enforce more specific naming conventions. They are **disabled by default** and can be enabled via configuration.
+These rules enforce more specific naming conventions. Most are **disabled by default**; check each rule's Default row (`module-name-convention` is enabled by default).
 
 ### resource-name-matches-type
 
@@ -826,11 +880,42 @@ output "out_instance_ip" { }
 
 ### module-name-convention
 
-Ensures module names follow conventions (no uppercase, no special characters except underscore/hyphen).
+Ensures module names use the configured case convention. This rule only checks
+case; it does not flag generic names like `this` or `main` (see
+`style.module-name-descriptive` below for that check).
 
 | Property | Value |
 |----------|-------|
 | Rule ID | `style.module-name-convention` |
+| Default Severity | Warning |
+| Fixable | No |
+| Default | Enabled |
+
+**Configuration Options:**
+
+| Option    | Type   | Default      | Description                                              |
+|-----------|--------|--------------|----------------------------------------------------------|
+| `case`    | string | `snake_case` | Naming convention: `snake_case`, `camelCase`, `kebab-case`, `PascalCase`, `custom` |
+| `pattern` | string | ""           | Custom regex pattern (only used when case is `custom`)   |
+
+**Example:**
+
+```hcl
+# Bad
+module "MyVPC" { }
+
+# Good
+module "my_vpc" { }
+```
+
+### module-name-descriptive
+
+Encourages descriptive module names by flagging generic ones (e.g. `this`,
+`main`, `module`).
+
+| Property | Value |
+|----------|-------|
+| Rule ID | `style.module-name-descriptive` |
 | Default Severity | Info |
 | Fixable | No |
 | Default | **Disabled** |
@@ -838,13 +923,23 @@ Ensures module names follow conventions (no uppercase, no special characters exc
 **Example:**
 
 ```hcl
-# Bad
-module "MyVPC" { }
-module "web@server" { }
+# Bad - generic name
+module "this" { }
+module "main" { }
 
-# Good
-module "my_vpc" { }
-module "web-server" { }
+# Good - descriptive name
+module "vpc" { }
+module "web_server_cluster" { }
+```
+
+**Configuration Example:**
+
+```yaml
+engines:
+  style:
+    rules:
+      style.module-name-descriptive:
+        enabled: true
 ```
 
 ## Block Organization Rules
@@ -1238,7 +1333,7 @@ engines:
       style.blank-line-between-blocks:
         enabled: true
         severity: warning
-      style.block-label-case:
+      style.resource-name-convention:
         enabled: true
         severity: warning
       style.for-each-count-first:
@@ -1261,7 +1356,7 @@ engines:
 ### Inline
 
 ```hcl
-# terratidy:ignore:style.block-label-case
+# terratidy:ignore:style.resource-name-convention
 resource "aws_instance" "MyServer" { }
 ```
 
@@ -1271,14 +1366,14 @@ resource "aws_instance" "MyServer" { }
 engines:
   style:
     rules:
-      style.block-label-case:
+      style.resource-name-convention:
         enabled: false
 ```
 
 ### File-level
 
 ```hcl
-# terratidy:ignore-file:style.block-label-case
+# terratidy:ignore-file:style.resource-name-convention
 ```
 
 ## Rule Summary
@@ -1291,10 +1386,12 @@ engines:
 | `no-empty-blocks` | Warning | No | Blocks should not be empty |
 | `no-leading-trailing-blank-lines` | Warning | Yes | No leading/trailing blank lines in blocks |
 | `attribute-group-spacing` | Warning | Yes | Blank lines between attribute groups |
-| `block-label-case` | Warning | No | Block labels use snake_case |
-| `variable-naming` | Warning | No | Variable names use snake_case |
-| `output-naming` | Warning | No | Output names use snake_case |
-| `local-naming` | Warning | No | Local value names use snake_case |
+| `resource-name-convention` | Warning | No | Resource names use snake_case |
+| `data-name-convention` | Warning | No | Data source names use snake_case |
+| `variable-name-convention` | Warning | No | Variable names use snake_case |
+| `output-name-convention` | Warning | No | Output names use snake_case |
+| `local-name-convention` | Warning | No | Local value names use snake_case |
+| `module-name-convention` | Warning | No | Module names follow the configured case convention |
 | `for-each-count-first` | Warning | Yes | for_each/count as first attribute |
 | `lifecycle-at-end` | Warning | Yes | lifecycle block at end |
 | `tags-at-end` | Warning | Yes | tags near end of block |
@@ -1324,7 +1421,7 @@ engines:
 |------|----------|---------|-------------|
 | `resource-name-matches-type` | Info | No | Resource names should be descriptive |
 | `output-prefix` | Info | No | Outputs follow prefix/suffix patterns |
-| `module-name-convention` | Info | No | Module names follow conventions |
+| `module-name-descriptive` | Info | No | Module names should be descriptive, not generic |
 
 #### Block Organization Rules
 

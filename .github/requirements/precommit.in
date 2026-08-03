@@ -3,4 +3,4 @@
 # Regenerate with:
 #   uv pip compile --universal --generate-hashes -o .github/requirements/precommit.txt .github/requirements/precommit.in
 # To pick up new upstream releases, add --upgrade to the command above.
-pre-commit>=3.2.0
+pre-commit>=4.6.1

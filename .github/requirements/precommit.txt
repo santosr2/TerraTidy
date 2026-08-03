@@ -28,10 +28,10 @@ platformdirs==4.10.0 \
     # via
     #   python-discovery
     #   virtualenv
-pre-commit==4.6.0 \
-    --hash=sha256:718d2208cef53fdc38206e40524a6d4d9576d103eb16f0fec11c875e7716e9d9 \
-    --hash=sha256:e2cf246f7299edcabcf15f9b0571fdce06058527f0a06535068a86d38089f29b
-    # via -r .github/requirements/precommit.in
+pre-commit==4.6.1 \
+    --hash=sha256:03e809865c7d178b9979d06c761fcbfe6808fdaded8581a745bb110e52050421 \
+    --hash=sha256:0e3b2942510d1fb34eec167a3ec57331bf8442122f1153a9fb8b58f5c49b2717
+    # via -r precommit.in
 python-discovery==1.4.3 \
     --hash=sha256:ad57d7045a862460d4a235986c33f13ed707d3aeb9153fa47eb7dfd0d4673289 \
     --hash=sha256:b6e1e4a7d9e3f6948c39746ffe8218225162d738ba39d05ab1d2f6c1cac4878c

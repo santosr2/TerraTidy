@@ -1,5 +1,5 @@
 [tool.bumpversion]
-current_version = "0.2.0"
+current_version = "0.3.0"
 parse = """(?x)
     (?P<major>0|[1-9]\\d*)\\.
     (?P<minor>0|[1-9]\\d*)\\.
@@ -146,6 +146,16 @@ replace = "version: 'v{new_version}'"
 filename = "docs/site/docs/getting-started/verification.md"
 search = "download v{current_version}"
 replace = "download v{new_version}"
+
+# Documentation - Verification guide signing identity. The cosign identity and the
+# gh attestation --source-ref both pin the tag the release workflow ran on, so they
+# have to track the version alongside the download commands above. The historical
+# v0.2.0 note in that file deliberately spells the version without a "refs/tags/"
+# prefix so it stays pinned to v0.2.0.
+[[tool.bumpversion.files]]
+filename = "docs/site/docs/getting-started/verification.md"
+search = "refs/tags/v{current_version}"
+replace = "refs/tags/v{new_version}"
 
 # Bug report template version placeholder
 [[tool.bumpversion.files]]

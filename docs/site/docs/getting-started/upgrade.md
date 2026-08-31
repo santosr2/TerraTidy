@@ -37,7 +37,7 @@ Update the `rev` in `.pre-commit-config.yaml`:
 ```yaml
 repos:
   - repo: https://github.com/santosr2/TerraTidy
-    rev: v0.2.0  # Update this
+    rev: v0.3.0  # Update this
     hooks:
       - id: terratidy-check
 ```
@@ -315,6 +315,62 @@ See the SDK reference for the full contract:
 [`TextEdit`](../development/sdk.md#textedit), and
 [`FixResult`](../development/sdk.md#fixresult) — including the apply ordering,
 overlap rules, and field semantics.
+
+### v0.3.0: Naming-Convention Rules Consolidated into the Style Engine
+
+Name-casing checks used to be spread across four loosely named style rules plus one
+lint rule. They now live in the style engine under a single `<block>-name-convention`
+naming scheme, one rule per block type.
+
+| Before | After |
+|--------|-------|
+| `style.block-label-case` | `style.resource-name-convention` and `style.data-name-convention` |
+| `style.variable-naming` | `style.variable-name-convention` |
+| `style.output-naming` | `style.output-name-convention` |
+| `style.local-naming` | `style.local-name-convention` |
+| `lint.terraform-naming-convention` | Removed — the style rules above cover it |
+
+`style.block-label-case` checked resources and data sources with one rule ID; those are
+now two rules, so a resource-only or data-only override is possible for the first time.
+`style.module-name-descriptive` is new: it flags generic module names like `this` or
+`main` at `info` severity, and is opt-in. The pre-existing `style.module-name-convention`,
+which checks module name casing, is unchanged.
+
+**Migration:** rename the rule keys under `engines.style.rules` in `.terratidy.yaml`, and
+update any `terratidy:ignore` annotations and SARIF rule-ID filters that reference the old
+IDs.
+
+```yaml
+# Before
+engines:
+  style:
+    rules:
+      style.block-label-case: { enabled: true, severity: error }
+      style.variable-naming:
+        enabled: true
+        config:
+          options:
+            case: snake_case
+  lint:
+    rules:
+      lint.terraform-naming-convention: { enabled: false }
+
+# After
+engines:
+  style:
+    rules:
+      style.resource-name-convention: { enabled: true, severity: error }
+      style.data-name-convention: { enabled: true, severity: error }
+      style.variable-name-convention:
+        enabled: true
+        config:
+          options:
+            case: snake_case
+```
+
+Unrecognized rule keys are ignored rather than rejected, so a config left on the old IDs
+will load without error and silently stop applying your overrides. Grep your configs for
+the old names rather than relying on `terratidy config validate` to catch them.
 
 ### Pre-release to Stable
 

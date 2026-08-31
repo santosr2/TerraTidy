@@ -63,7 +63,7 @@ body:
     attributes:
       label: TerraTidy Version
       description: Output of `terratidy version`
-      placeholder: "v0.2.0"
+      placeholder: "v0.3.0"
     validations:
       required: true
 

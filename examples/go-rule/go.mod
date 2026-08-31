@@ -4,7 +4,7 @@ go 1.25.0
 
 require (
 	github.com/hashicorp/hcl/v2 v2.24.0
-	github.com/santosr2/TerraTidy v0.2.0
+	github.com/santosr2/TerraTidy v0.3.0
 )
 
 require (

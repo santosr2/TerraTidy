@@ -53,6 +53,6 @@ body:
     attributes:
       label: TerraTidy Version
       description: Output of `terratidy version --short`
-      placeholder: "0.2.0"
+      placeholder: "0.3.0"
     validations:
       required: false

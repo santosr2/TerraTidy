@@ -254,20 +254,26 @@ run = "git-cliff --config cliff.toml -o CHANGELOG.md"
 description = "Preview changelog without writing to file"
 run = "git-cliff --config cliff.toml --unreleased"
 
+# pre_l resets to its first value on a major/minor/patch bump, so these three all
+# open a new pre-release cycle rather than landing on a stable version. Follow with
+# bump:stage or bump:stable to finish the cycle. To go straight to stable, run the
+# bump then bump:stable.
 [tasks."bump:patch"]
-description = "Bump patch version (e.g., 0.2.0 -> 0.2.1)"
+description = "Open a patch pre-release cycle (e.g., 0.2.0 -> 0.2.1-alpha)"
 run = "uv tool run bump-my-version bump patch"
 
 [tasks."bump:minor"]
-description = "Bump minor version (e.g., 0.2.0 -> 0.3.0)"
+description = "Open a minor pre-release cycle (e.g., 0.2.0 -> 0.3.0-alpha)"
 run = "uv tool run bump-my-version bump minor"
 
 [tasks."bump:major"]
-description = "Bump major version (e.g., 0.2.0 -> 1.0.0)"
+description = "Open a major pre-release cycle (e.g., 0.2.0 -> 1.0.0-alpha)"
 run = "uv tool run bump-my-version bump major"
 
+# Only meaningful inside a pre-release cycle: from a stable version this serializes
+# the optional "final" label and produces nonsense like 0.3.0-final.2.
 [tasks."bump:pre"]
-description = "Bump pre-release version (e.g., alpha.1 -> alpha.2)"
+description = "Bump pre-release number (e.g., alpha.1 -> alpha.2)"
 run = "uv tool run bump-my-version bump pre_n"
 
 # Advances one step through pre_l values (alpha -> beta -> rc -> final). Only the

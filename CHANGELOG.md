@@ -5,16 +5,59 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.3.0] - 2026-08-31
+
+### Breaking Changes
+
+- **style**: Consolidate naming-convention rules into the style engine ([#258](https://github.com/santosr2/TerraTidy/pull/258)) by [@santosr2](https://github.com/santosr2)
 
 ### CI/CD
 
 - **release**: Re-release existing tags and bump goreleaser to v2.16.0 ([#250](https://github.com/santosr2/TerraTidy/pull/250)) by [@santosr2](https://github.com/santosr2)
 - **release**: Fix downstream release jobs and stop alias-tag loop ([#251](https://github.com/santosr2/TerraTidy/pull/251)) by [@santosr2](https://github.com/santosr2)
 
+### Dependencies
+
+- **deps**: Bump actions/checkout from 7.0.0 to 7.0.1 ([#257](https://github.com/santosr2/TerraTidy/pull/257)) by [@dependabot[bot]](https://github.com/dependabot[bot])
+- **deps**: Bump github/codeql-action/upload-sarif from 4.37.0 to 4.37.1 ([#256](https://github.com/santosr2/TerraTidy/pull/256)) by [@dependabot[bot]](https://github.com/dependabot[bot])
+- **deps**: Bump zizmorcore/zizmor-action from 0.5.7 to 0.6.0 ([#254](https://github.com/santosr2/TerraTidy/pull/254)) by [@dependabot[bot]](https://github.com/dependabot[bot])
+- **deps**: Bump actions/setup-python from 6.3.0 to 7.0.0 ([#253](https://github.com/santosr2/TerraTidy/pull/253)) by [@dependabot[bot]](https://github.com/dependabot[bot])
+- **deps**: Bump actions/setup-go from 6.5.0 to 7.0.0 ([#252](https://github.com/santosr2/TerraTidy/pull/252)) by [@dependabot[bot]](https://github.com/dependabot[bot])
+- **deps**: Bump mkdocs-material from 9.7.6 to 9.7.7 in /docs/site ([#255](https://github.com/santosr2/TerraTidy/pull/255)) by [@dependabot[bot]](https://github.com/dependabot[bot])
+- **deps**: Bump pre-commit from 4.6.0 to 4.6.1 in /.github/requirements ([#260](https://github.com/santosr2/TerraTidy/pull/260)) by [@dependabot[bot]](https://github.com/dependabot[bot])
+- **deps**: Bump github/codeql-action/upload-sarif from 4.37.1 to 4.37.3 ([#261](https://github.com/santosr2/TerraTidy/pull/261)) by [@dependabot[bot]](https://github.com/dependabot[bot])
+- **deps**: Bump zizmorcore/zizmor-action from 0.6.0 to 0.6.1 ([#262](https://github.com/santosr2/TerraTidy/pull/262)) by [@dependabot[bot]](https://github.com/dependabot[bot])
+- **deps**: Bump ossf/scorecard-action from 2.4.3 to 2.4.4 ([#263](https://github.com/santosr2/TerraTidy/pull/263)) by [@dependabot[bot]](https://github.com/dependabot[bot])
+- **deps**: Bump docker/login-action from 4.4.0 to 4.5.2 ([#264](https://github.com/santosr2/TerraTidy/pull/264)) by [@dependabot[bot]](https://github.com/dependabot[bot])
+- **deps**: Bump zizmorcore/zizmor-action from 0.6.1 to 0.6.2 ([#269](https://github.com/santosr2/TerraTidy/pull/269)) by [@dependabot[bot]](https://github.com/dependabot[bot])
+- **deps**: Bump github/codeql-action/upload-sarif from 4.37.3 to 4.37.5 ([#268](https://github.com/santosr2/TerraTidy/pull/268)) by [@dependabot[bot]](https://github.com/dependabot[bot])
+- **deps**: Bump docker/login-action from 4.5.2 to 4.6.0 ([#267](https://github.com/santosr2/TerraTidy/pull/267)) by [@dependabot[bot]](https://github.com/dependabot[bot])
+- **deps**: Bump github.com/santhosh-tekuri/jsonschema/v6 from 6.0.2 to 6.0.3 ([#266](https://github.com/santosr2/TerraTidy/pull/266)) by [@dependabot[bot]](https://github.com/dependabot[bot])
+- **deps**: Bump github.com/open-policy-agent/opa from 1.18.2 to 1.19.0 ([#265](https://github.com/santosr2/TerraTidy/pull/265)) by [@dependabot[bot]](https://github.com/dependabot[bot])
+- **deps**: Bump actions/attest-build-provenance from 4.1.1 to 4.2.2 ([#272](https://github.com/santosr2/TerraTidy/pull/272)) by [@dependabot[bot]](https://github.com/dependabot[bot])
+- **deps**: Bump github/codeql-action/upload-sarif from 4.37.5 to 4.37.6 ([#271](https://github.com/santosr2/TerraTidy/pull/271)) by [@dependabot[bot]](https://github.com/dependabot[bot])
+- **deps**: Bump github.com/stretchr/testify from 1.11.1 to 1.12.0 ([#270](https://github.com/santosr2/TerraTidy/pull/270)) by [@dependabot[bot]](https://github.com/dependabot[bot])
+- **deps**: Bump github/codeql-action/upload-sarif from 4.37.6 to 4.37.7 ([#278](https://github.com/santosr2/TerraTidy/pull/278)) by [@dependabot[bot]](https://github.com/dependabot[bot])
+- **deps**: Bump pre-commit from 4.6.1 to 4.6.2 in /.github/requirements ([#277](https://github.com/santosr2/TerraTidy/pull/277)) by [@dependabot[bot]](https://github.com/dependabot[bot])
+- **deps**: Bump docker/setup-buildx-action from 4.2.0 to 4.3.0 ([#273](https://github.com/santosr2/TerraTidy/pull/273)) by [@dependabot[bot]](https://github.com/dependabot[bot])
+- **deps**: Bump golang.org/x/text from 0.40.0 to 0.41.0 ([#276](https://github.com/santosr2/TerraTidy/pull/276)) by [@dependabot[bot]](https://github.com/dependabot[bot])
+- **deps**: Bump github.com/stretchr/testify from 1.12.0 to 1.12.1 ([#275](https://github.com/santosr2/TerraTidy/pull/275)) by [@dependabot[bot]](https://github.com/dependabot[bot])
+- **deps**: Bump github.com/open-policy-agent/opa from 1.19.0 to 1.19.1 ([#274](https://github.com/santosr2/TerraTidy/pull/274)) by [@dependabot[bot]](https://github.com/dependabot[bot])
+- **deps**: Bump pymdown-extensions from 11.0.1 to 11.0.2 in /docs/site ([#282](https://github.com/santosr2/TerraTidy/pull/282)) by [@dependabot[bot]](https://github.com/dependabot[bot])
+- **deps**: Bump github/codeql-action/upload-sarif from 4.37.7 to 4.37.8 ([#281](https://github.com/santosr2/TerraTidy/pull/281)) by [@dependabot[bot]](https://github.com/dependabot[bot])
+
 ### Documentation
 
 - Update changelog for v0.2.0 ([ffe738c](https://github.com/santosr2/TerraTidy/commit/ffe738c57636dbf03d4ba8f3f915e368752e4e93)) by [@github-actions[bot]](https://github.com/github-actions[bot])
+- Correct changelog attribution for the #251 entry ([6b23df7](https://github.com/santosr2/TerraTidy/commit/6b23df7fdddcf26f2b4e4b4957b4e073be15a72d)) by [@santosr2](https://github.com/santosr2)
+
+### Fixed
+
+- **ci**: Sign releases from the tag ref, not the dispatching branch ([#280](https://github.com/santosr2/TerraTidy/pull/280)) by [@Marukome0743](https://github.com/Marukome0743)
+
+### VS Code Extension
+
+- Refresh bun.lock to pull patched transitive deps ([#283](https://github.com/santosr2/TerraTidy/pull/283)) by [@santosr2](https://github.com/santosr2)
 
 ## [0.2.0] - 2026-07-22
 
@@ -502,9 +545,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fix pre-commit issues and update OPA import ([ca09160](https://github.com/santosr2/TerraTidy/commit/ca0916053469b0ad9e1c233659b138c273486868)) by [@santosr2](https://github.com/santosr2)
 - Exclude test files from complexity rules in revive ([2564974](https://github.com/santosr2/TerraTidy/commit/2564974b584115610107da2427e6fc292a4c3de3)) by [@santosr2](https://github.com/santosr2)
 - **vscode**: Add .gitignore for build artifacts ([854a95f](https://github.com/santosr2/TerraTidy/commit/854a95f9e3e8cadc990d3f4e93a9ae4f65ff0d20)) by [@santosr2](https://github.com/santosr2)
-[Unreleased]: https://github.com/santosr2/TerraTidy/compare/v0.2.0...HEAD
+[0.3.0]: https://github.com/santosr2/TerraTidy/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/santosr2/TerraTidy/compare/v0.2.0-alpha.4...v0.2.0
 [0.2.0-alpha.4]: https://github.com/santosr2/TerraTidy/compare/v0.2.0-alpha.3...v0.2.0-alpha.4
 [0.2.0-alpha.3]: https://github.com/santosr2/TerraTidy/compare/v0.2.0-alpha.2...v0.2.0-alpha.3
 [0.2.0-alpha.2]: https://github.com/santosr2/TerraTidy/compare/v0.2.0-alpha...v0.2.0-alpha.2
 [0.2.0-alpha]: https://github.com/santosr2/TerraTidy/compare/v0.1.0...v0.2.0-alpha
+

@@ -2,7 +2,7 @@
 	"name": "vscode-terratidy",
 	"displayName": "TerraTidy for VS Code",
 	"description": "TerraTidy - Terraform and Terragrunt quality platform for formatting, style checking, linting, and policy enforcement",
-	"version": "0.2.1",
+	"version": "0.3.0",
 	"publisher": "santosr2",
 	"license": "MIT",
 	"repository": {

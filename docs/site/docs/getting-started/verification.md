@@ -18,6 +18,10 @@ sha256sum -c checksums.txt --ignore-missing
 
 Checksums are signed with [Sigstore cosign](https://docs.sigstore.dev/) using keyless signing (tied to the GitHub Actions OIDC identity).
 
+The signing certificate records both the workflow that published the release and the ref that workflow ran on. Pin both:
+an identity matching only the repository URL would also accept a signature produced by any other workflow in the
+repository, running on any branch or tag.
+
 ```bash
 # Install cosign
 go install github.com/sigstore/cosign/v2/cmd/cosign@latest
@@ -25,20 +29,39 @@ go install github.com/sigstore/cosign/v2/cmd/cosign@latest
 # Download checksums and signature bundle
 gh release download v0.2.0 --repo santosr2/terratidy -p 'checksums.txt*'
 
-# Verify the signature
+# Verify the signature, pinning the release workflow and the tag it ran on
 cosign verify-blob checksums.txt \
   --bundle checksums.txt.bundle \
-  --certificate-identity-regexp 'https://github.com/santosr2/TerraTidy' \
+  --certificate-identity 'https://github.com/santosr2/TerraTidy/.github/workflows/release.yml@refs/tags/v0.2.0' \
   --certificate-oidc-issuer 'https://token.actions.githubusercontent.com'
 ```
 
+Substitute the tag you downloaded. Every release from v0.3.0 onward is signed from its own tag ref.
+
+!!! warning "The v0.2.0 certificate names a branch, not its tag"
+    The v0.2.0 artifacts are signed as `.../release.yml@refs/heads/main`, and their certificate
+    claims source commit `bc6433c`, because that release was published by dispatching the workflow
+    from `main` after the tag-triggered run failed. The binaries were built from the tag's commit,
+    but the attestation does not prove it, so the command above fails against v0.2.0. The tag was
+    never re-pointed, and re-signing it is not possible without breaking the Go module proxy entry,
+    so the certificate stays as published.
+
+To check v0.2.0 anyway, drop the ref from the identity
+(`--certificate-identity-regexp '^https://github\.com/santosr2/TerraTidy/'`), or rebuild from the
+`v0.2.0` tag and compare against `checksums.txt` — builds are reproducible (`-trimpath`, verified
+in CI). Prefer v0.3.0 or later if you need the attestation to stand on its own.
+
 ## Verify Build Provenance
 
-GitHub native build attestations are attached to each release. You can verify them with the GitHub CLI:
+GitHub native build attestations are attached to each release. You can verify them with the GitHub CLI, pinning the signing workflow and the tag ref for the same reason:
 
 ```bash
-gh attestation verify checksums.txt --repo santosr2/terratidy
+gh attestation verify checksums.txt --repo santosr2/terratidy \
+  --signer-workflow santosr2/TerraTidy/.github/workflows/release.yml \
+  --source-ref refs/tags/v0.2.0
 ```
+
+`--source-ref` also fails against v0.2.0, for the same reason described above.
 
 ## SBOM (Software Bill of Materials)
 

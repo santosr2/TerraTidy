@@ -10,12 +10,17 @@ on:
   # Re-release an existing tag from its own commit without moving the tag
   # (e.g. after a transient CI failure). The tag is never re-pointed, so the
   # Go module proxy / sum.golang.org entry for that version stays consistent.
+  #
+  # Dispatch this with the tag itself as the ref, not from a branch:
+  #
+  #     gh workflow run release.yml --ref v0.2.0
+  #
+  # cosign's keyless signing and actions/attest-build-provenance both take the
+  # certificate identity from the ref the run is on, which actions/checkout
+  # cannot change. Dispatching from a branch therefore builds the right commit
+  # but signs it as refs/heads/<branch>, and verification pinned to
+  # refs/tags/<version> fails.
   workflow_dispatch:
-    inputs:
-      tag:
-        description: 'Existing tag to (re-)release from its own commit, e.g. v0.2.0'
-        required: true
-        type: string
 
 concurrency:
   group: release-${{ github.ref }}
@@ -35,13 +40,36 @@ jobs:
       attestations: write
     timeout-minutes: 30
     steps:
+      - name: Verify the run is on a releasable tag
+        env:
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          if [ "$REF_TYPE" != "tag" ]; then
+            echo "::error::Release must run on a tag, but this run is on refs/heads/$REF_NAME." >&2
+            echo "::error::Dispatch it with the tag as the ref: gh workflow run release.yml --ref vX.Y.Z" >&2
+            echo "::error::cosign and the provenance attestation take the certificate identity from the ref" >&2
+            echo "::error::of the run, so a branch run publishes artifacts that only verify as a branch." >&2
+            exit 1
+          fi
+          # update-version-tags force-pushes floating aliases (v0, v0.2, v0-alpha,
+          # v0.2-alpha) onto whatever the newest release is. Those are tags too, so
+          # only a full vX.Y.Z tag is releasable -- the same two-dot rule the push
+          # trigger applies with 'v*.*.*'.
+          if ! printf '%s' "$REF_NAME" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'; then
+            echo "::error::$REF_NAME is not a full release tag. Expected vX.Y.Z or vX.Y.Z-prerelease." >&2
+            echo "::error::The floating aliases pushed by update-version-tags must not be released from," >&2
+            echo "::error::because they move, and releasing from one would republish an existing version." >&2
+            exit 1
+          fi
+
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-          # On a tag push this is the tag; on manual dispatch it is the input tag.
-          # Either way GoReleaser builds from the tag's own commit, not from main.
-          ref: ${{ github.event.inputs.tag || github.ref }}
+          # The run is always on the tag, so this is the tag's own commit for
+          # both a tag push and a manual dispatch.
+          ref: ${{ github.ref }}
           persist-credentials: false
 
       - name: Set up Go
@@ -102,7 +130,7 @@ jobs:
           gh release upload "$TAG_NAME" dist/checksums.txt.bundle --clobber
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG_NAME: ${{ github.event.inputs.tag || github.ref_name }}
+          TAG_NAME: ${{ github.ref_name }}
 
       - name: Attest build provenance
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
@@ -125,7 +153,7 @@ jobs:
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
-          image-ref: 'ghcr.io/santosr2/terratidy:${{ github.event.inputs.tag || github.ref_name }}'
+          image-ref: 'ghcr.io/santosr2/terratidy:${{ github.ref_name }}'
           format: 'sarif'
           output: 'trivy-results.sarif'
           severity: 'CRITICAL,HIGH'
@@ -169,7 +197,7 @@ jobs:
 
           echo "Parsed: tag=$TAG_NAME major=$MAJOR minor=$MINOR prerelease=$PRERELEASE"
         env:
-          TAG_NAME: ${{ github.event.inputs.tag || github.ref_name }}
+          TAG_NAME: ${{ github.ref_name }}
 
   update-changelog:
     needs: goreleaser
@@ -208,7 +236,7 @@ jobs:
           git push origin main
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG_NAME: ${{ github.event.inputs.tag || github.ref_name }}
+          TAG_NAME: ${{ github.ref_name }}
 
   update-version-tags:
     needs: [parse-version, goreleaser]
@@ -307,7 +335,7 @@ jobs:
           chmod +x /tmp/terratidy-release/terratidy
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG_NAME: ${{ github.event.inputs.tag || github.ref_name }}
+          TAG_NAME: ${{ github.ref_name }}
 
       - name: Verify version
         run: /tmp/terratidy-release/terratidy version
@@ -317,7 +345,7 @@ jobs:
 
   test-homebrew:
     needs: goreleaser
-    if: ${{ !contains(github.event.inputs.tag || github.ref_name, '-') }}
+    if: ${{ !contains(github.ref_name, '-') }}
     runs-on: macos-latest
     timeout-minutes: 15
     steps:
@@ -355,7 +383,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ github.event.inputs.tag || github.ref }}
+          ref: ${{ github.ref }}
           # Full history + tags so git-cliff can render the finalized changelog below.
           fetch-depth: 0
           persist-credentials: false
@@ -397,11 +425,11 @@ jobs:
       - name: Attach VSIX to GitHub release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ github.event.inputs.tag || github.ref_name }}
+          TAG: ${{ github.ref_name }}
         run: gh release upload "$TAG" vscode/terratidy.vsix --repo "$GITHUB_REPOSITORY" --clobber
 
       - name: Publish to VS Code Marketplace
-        if: ${{ !contains(github.event.inputs.tag || github.ref_name, '-') }}
+        if: ${{ !contains(github.ref_name, '-') }}
         working-directory: vscode
         env:
           VSCE_PAT: ${{ secrets.VSCE_PAT }}

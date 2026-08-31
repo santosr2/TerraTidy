@@ -7,7 +7,7 @@ TerraTidy can be installed in several ways.
 If you have Go installed (1.25+):
 
 ```bash
-go install github.com/santosr2/TerraTidy/cmd/terratidy@v0.2.0
+go install github.com/santosr2/TerraTidy/cmd/terratidy@v0.3.0
 ```
 
 !!! tip "Pin your version"
@@ -62,7 +62,7 @@ Move-Item -Path "terratidy.exe" -Destination "C:\Program Files\TerraTidy\"
 
 ```bash
 # Pin to a specific version (recommended)
-docker pull ghcr.io/santosr2/terratidy:v0.2.0
+docker pull ghcr.io/santosr2/terratidy:v0.3.0
 
 # Or track the most recent stable release
 docker pull ghcr.io/santosr2/terratidy:latest

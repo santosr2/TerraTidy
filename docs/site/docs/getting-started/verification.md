@@ -8,7 +8,7 @@ Every release includes a `checksums.txt` file with SHA-256 hashes for all artifa
 
 ```bash
 # Download the release and checksums
-gh release download v0.2.0 --repo santosr2/terratidy
+gh release download v0.3.0 --repo santosr2/terratidy
 
 # Verify checksum
 sha256sum -c checksums.txt --ignore-missing
@@ -27,12 +27,12 @@ repository, running on any branch or tag.
 go install github.com/sigstore/cosign/v2/cmd/cosign@latest
 
 # Download checksums and signature bundle
-gh release download v0.2.0 --repo santosr2/terratidy -p 'checksums.txt*'
+gh release download v0.3.0 --repo santosr2/terratidy -p 'checksums.txt*'
 
 # Verify the signature, pinning the release workflow and the tag it ran on
 cosign verify-blob checksums.txt \
   --bundle checksums.txt.bundle \
-  --certificate-identity 'https://github.com/santosr2/TerraTidy/.github/workflows/release.yml@refs/tags/v0.2.0' \
+  --certificate-identity 'https://github.com/santosr2/TerraTidy/.github/workflows/release.yml@refs/tags/v0.3.0' \
   --certificate-oidc-issuer 'https://token.actions.githubusercontent.com'
 ```
 
@@ -58,7 +58,7 @@ GitHub native build attestations are attached to each release. You can verify th
 ```bash
 gh attestation verify checksums.txt --repo santosr2/terratidy \
   --signer-workflow santosr2/TerraTidy/.github/workflows/release.yml \
-  --source-ref refs/tags/v0.2.0
+  --source-ref refs/tags/v0.3.0
 ```
 
 `--source-ref` also fails against v0.2.0, for the same reason described above.
@@ -70,7 +70,7 @@ SBOM files are named `<archive>.sbom.json` and are attached to the GitHub releas
 
 ```bash
 # Download and inspect an SBOM
-gh release download v0.2.0 --repo santosr2/terratidy -p '*.sbom.json'
+gh release download v0.3.0 --repo santosr2/terratidy -p '*.sbom.json'
 ```
 
 ## OpenSSF Scorecard

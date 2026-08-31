@@ -40,7 +40,7 @@ pipeline {
 
 ```yaml
 terratidy:
-  image: ghcr.io/santosr2/terratidy:v0.2.0
+  image: ghcr.io/santosr2/terratidy:v0.3.0
   stage: validate
   script:
     - terratidy check --format junit > terratidy-results.xml
@@ -75,7 +75,7 @@ version: 2.1
 jobs:
   terratidy:
     docker:
-      - image: ghcr.io/santosr2/terratidy:v0.2.0
+      - image: ghcr.io/santosr2/terratidy:v0.3.0
     steps:
       - checkout
       - run:
@@ -95,7 +95,7 @@ For any CI system, use the Docker image:
 ```bash
 docker run --rm \
   -v $(pwd):/app \
-  ghcr.io/santosr2/terratidy:v0.2.0 \
+  ghcr.io/santosr2/terratidy:v0.3.0 \
   check --format json
 ```
 

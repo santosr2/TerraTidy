@@ -142,7 +142,7 @@ Use pre-commit for local checks and GitHub Actions for CI:
 # .pre-commit-config.yaml
 repos:
   - repo: https://github.com/santosr2/TerraTidy
-    rev: v0.2.0
+    rev: v0.3.0
     hooks:
       - id: terratidy-fmt
       - id: terratidy-style
@@ -162,7 +162,7 @@ Run TerraTidy in Docker for isolated CI environments:
 ```bash
 docker run --rm \
   -v $(pwd):/app \
-  ghcr.io/santosr2/terratidy:v0.2.0 \
+  ghcr.io/santosr2/terratidy:v0.3.0 \
   check --format json
 ```
 
@@ -170,7 +170,7 @@ In a CI pipeline:
 
 ```yaml
 terratidy:
-  image: ghcr.io/santosr2/terratidy:v0.2.0
+  image: ghcr.io/santosr2/terratidy:v0.3.0
   script:
     - terratidy check --format junit > results.xml
   artifacts:

@@ -9,7 +9,7 @@ Running TerraTidy in Docker containers.
 docker pull ghcr.io/santosr2/terratidy:latest
 
 # Pin to a specific version (recommended for CI)
-docker pull ghcr.io/santosr2/terratidy:v0.2.0
+docker pull ghcr.io/santosr2/terratidy:v0.3.0
 ```
 
 ## Basic Usage
@@ -90,7 +90,7 @@ docker run --rm \
   run: |
     docker run --rm \
       -v ${{ github.workspace }}:/app \
-      ghcr.io/santosr2/terratidy:v0.2.0 \
+      ghcr.io/santosr2/terratidy:v0.3.0 \
       check --format github
 ```
 
@@ -98,7 +98,7 @@ docker run --rm \
 
 ```yaml
 terratidy:
-  image: ghcr.io/santosr2/terratidy:v0.2.0
+  image: ghcr.io/santosr2/terratidy:v0.3.0
   script:
     - terratidy check --format junit > results.xml
   artifacts:

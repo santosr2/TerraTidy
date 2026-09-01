@@ -227,6 +227,13 @@ jobs:
         env:
           OUTPUT: CHANGELOG.md
 
+      # git-cliff ends its output with a blank line. This job commits CHANGELOG.md
+      # without running pre-commit, so that extra newline lands on main and then fails
+      # the end-of-file-fixer hook on every subsequent PR until some unrelated commit
+      # silently repairs it. Collapse trailing newlines to exactly one at the source.
+      - name: Normalize trailing newline
+        run: perl -0pi -e 's/\n+\z/\n/' CHANGELOG.md
+
       - name: Commit changelog
         run: |
           if git diff --quiet CHANGELOG.md; then

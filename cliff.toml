@@ -30,9 +30,22 @@ body = """
             {% elif commit.author.name %} by [@{{ commit.author.name }}](https://github.com/{{ commit.author.name }}){% endif %}\
     {% endfor %}
 {% endfor %}
+{% if github.contributors | filter(attribute="is_first_time", value=true) | length != 0 %}
+    ---
+
+    ### New Contributors
+    {% for contributor in github.contributors | filter(attribute="is_first_time", value=true) %}
+        - @{{ contributor.username }} made their first contribution\
+            {% if contributor.pr_number %} in [#{{ contributor.pr_number }}](https://github.com/santosr2/TerraTidy/pull/{{ contributor.pr_number }}){% endif %}\
+    {% endfor %}
+{% endif %}
 """
 # template for the changelog footer
+# A blank line separates the link-reference definitions from the last list item.
+# Without it markdown treats them as lazy continuation of that item and renders
+# them as literal text instead of consuming them as link definitions.
 footer = """
+
 {% for release in releases -%}
     {% if release.version -%}
         {% if release.previous.version -%}

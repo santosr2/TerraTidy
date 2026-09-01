@@ -1,15 +1,23 @@
 name: Documentation
 
+# docs/site/docs/changelog.md is a symlink to the root CHANGELOG.md. Its own blob is
+# just the constant link target, so regenerating the changelog changes no path under
+# docs/site/** and would never rebuild the site. The root file has to be listed too.
 on:
   push:
     branches: [main]
     paths:
       - "docs/site/**"
+      - "CHANGELOG.md"
       - ".github/workflows/docs.yml"
   pull_request:
     branches: [main]
     paths:
       - "docs/site/**"
+      - "CHANGELOG.md"
+  # The release changelog commit is pushed with GITHUB_TOKEN, which by design cannot
+  # trigger a push run. That job dispatches this workflow explicitly instead.
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -46,7 +54,9 @@ jobs:
           path: docs/site/site
 
   deploy:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # Deploy on push and on manual/dispatched runs, never from a pull request, and
+    # only ever from main so a dispatch on a branch cannot publish that branch.
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     permissions:
       pages: write
       id-token: write

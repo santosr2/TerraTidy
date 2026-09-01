@@ -87,12 +87,18 @@ jobs:
         with:
           syft-version: v1.42.3
 
+      # --strip all, not just the header: the footer emits Keep a Changelog link
+      # reference definitions, which exist so the many version headings in
+      # CHANGELOG.md resolve to their compare views. A single release's notes carry
+      # exactly one, and the page already ends with a Full Changelog link, so keeping
+      # it would only turn the "## [x.y.z]" heading into a stray link. The two
+      # CHANGELOG.md invocations below keep the footer, where it belongs.
       - name: Generate release notes
         uses: orhun/git-cliff-action@f50e11560dce63f7c33227798f90b924471a88b5 # v4.8.0
         id: git-cliff
         with:
           config: cliff.toml
-          args: --latest --strip header
+          args: --latest --strip all
         env:
           OUTPUT: RELEASE_NOTES.md
 

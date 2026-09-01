@@ -218,6 +218,47 @@ jobs:
             exit 1
           fi
 
+  # The release workflow also scans the image, but it runs on tags, so its results
+  # upload under refs/tags/* where the default-branch Security view never shows them.
+  # Scanning here puts Trivy on refs/heads/main alongside the other scanners and
+  # refreshes it per push, so a CVE published between releases surfaces immediately.
+  #
+  # Findings do not fail the build, matching the release workflow: most come from the
+  # Alpine base layer and are not actionable in the moment. The SARIF upload is the
+  # signal.
+  trivy-scan:
+    name: Container Vulnerability Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: [build-test]
+    permissions:
+      security-events: write
+
+    steps:
+      - name: Download Docker image artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: docker-image
+
+      - name: Load Docker image
+        run: |
+          gunzip -c image.tar.gz | docker load
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ env.IMAGE_NAME }}:latest
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'CRITICAL,HIGH'
+
+      - name: Upload Trivy scan results
+        uses: github/codeql-action/upload-sarif@db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28 # v4.37.8
+        if: always()
+        with:
+          sarif_file: 'trivy-results.sarif'
+          category: container-test-trivy
+
   non-root-test:
     name: Container Non-Root
     runs-on: ubuntu-latest

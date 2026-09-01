@@ -211,6 +211,8 @@ jobs:
     timeout-minutes: 10
     permissions:
       contents: write
+      # Dispatching the docs workflow after the changelog lands.
+      actions: write
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -247,6 +249,12 @@ jobs:
           git add CHANGELOG.md
           git commit -m "docs: update changelog for ${TAG_NAME}"
           git push origin main
+
+          # The docs site renders CHANGELOG.md through a symlink, but this push is
+          # authenticated with GITHUB_TOKEN and so raises no push event. Dispatch the
+          # docs workflow directly, or the published changelog stays a release behind.
+          # workflow_dispatch is one of the two events GITHUB_TOKEN may still trigger.
+          gh workflow run docs.yml --ref main
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG_NAME: ${{ github.ref_name }}

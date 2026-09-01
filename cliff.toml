@@ -31,6 +31,8 @@ body = """
     {% endfor %}
 {% endfor %}
 {% if github.contributors | filter(attribute="is_first_time", value=true) | length != 0 %}
+    ---
+
     ### New Contributors
     {% for contributor in github.contributors | filter(attribute="is_first_time", value=true) %}
         - @{{ contributor.username }} made their first contribution\

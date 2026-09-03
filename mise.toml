@@ -1,5 +1,5 @@
 [tools]
-go = "1.26.4"
+go = "1.26.8"
 pre-commit = "4"
 terraform = "1"
 terragrunt = "0"

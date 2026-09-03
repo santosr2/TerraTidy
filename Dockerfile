@@ -3,7 +3,14 @@
 # For local builds: mise run docker:build
 FROM alpine:3.24.1@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b
 
-RUN apk --no-cache add ca-certificates \
+# The base image is pinned by digest, so its package set is frozen at whatever
+# Alpine published for that digest. Security patches land in the v3.24 package
+# repo well before Alpine republishes the tag, so without an explicit upgrade the
+# image keeps shipping known-vulnerable libraries (openssl in particular) until
+# the next base bump. The cost is that image contents track the build date rather
+# than the digest alone.
+RUN apk --no-cache upgrade \
+    && apk --no-cache add ca-certificates \
     && addgroup -S terratidy \
     && adduser -S terratidy -G terratidy
 

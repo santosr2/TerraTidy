@@ -111,13 +111,26 @@ jobs:
       - name: Install osv-scanner
         run: go install github.com/google/osv-scanner/v2/cmd/osv-scanner@v2.3.5
 
+      # Exit 1 means "scanned fine, found vulnerabilities", which must not fail the
+      # job: the SARIF upload is how those surface. Every other non-zero code is a
+      # scanner failure -- notably 127 (general error) and 128 (no packages found,
+      # i.e. the lockfile moved or stopped parsing) -- and has to be loud, because a
+      # silent 128 would look identical to a clean scan. A blanket continue-on-error
+      # cannot make that distinction, and it also leaves the upload below to fail on
+      # a missing file instead of reporting the real problem.
       - name: Run osv-scanner on VSCode extension
-        continue-on-error: true
-        run: osv-scanner scan --lockfile=vscode/bun.lock --format=sarif --output-file=osv-results.sarif
+        run: |
+          code=0
+          osv-scanner scan --lockfile=vscode/bun.lock --format=sarif --output-file=osv-results.sarif || code=$?
+          if [ "$code" -eq 1 ]; then
+            echo "osv-scanner reported vulnerabilities; see the code scanning results."
+          elif [ "$code" -ne 0 ]; then
+            echo "::error::osv-scanner failed with exit code $code" >&2
+            exit "$code"
+          fi
 
       - name: Upload SARIF to GitHub Security
         uses: github/codeql-action/upload-sarif@db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28 # v4.37.8
-        if: always()
         with:
           sarif_file: osv-results.sarif
           category: osv-scanner

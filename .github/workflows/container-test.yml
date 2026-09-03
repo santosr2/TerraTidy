@@ -40,10 +40,18 @@ jobs:
         with:
           persist-credentials: false
 
+      # Deliberately not go-version-file: go.mod. That directive is the minimum
+      # supported Go, and setup-go installs it exactly. The Trivy step below reads
+      # the stdlib version stamped into the compiled binary, so building on the
+      # floor makes the scan report stdlib CVEs against a Go patch release that
+      # never ships. Matching the release build's toolchain keeps the scan a
+      # truthful proxy for the published image, and check-latest means new stdlib
+      # patches are picked up without a manual bump.
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version-file: go.mod
+          go-version: '1.26.x'
+          check-latest: true
           cache: true
 
       - name: Build Go binary
@@ -244,13 +252,16 @@ jobs:
         run: |
           gunzip -c image.tar.gz | docker load
 
+      # No severity filter: trivy-action's `severity` input does not apply to SARIF
+      # output unless `limit-severities-for-sarif` is also set, so a filter here
+      # would read as if it were narrowing the upload while doing nothing. Since
+      # the upload is the signal, reporting every severity is the intent anyway.
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: ${{ env.IMAGE_NAME }}:latest
           format: 'sarif'
           output: 'trivy-results.sarif'
-          severity: 'CRITICAL,HIGH'
 
       - name: Upload Trivy scan results
         uses: github/codeql-action/upload-sarif@db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28 # v4.37.8

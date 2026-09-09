@@ -47,9 +47,39 @@ Substitute the tag you downloaded. Every release from v0.3.0 onward is signed fr
     so the certificate stays as published.
 
 To check v0.2.0 anyway, drop the ref from the identity
-(`--certificate-identity-regexp '^https://github\.com/santosr2/TerraTidy/'`), or rebuild from the
-`v0.2.0` tag and compare against `checksums.txt` — builds are reproducible (`-trimpath`, verified
-in CI). Prefer v0.3.0 or later if you need the attestation to stand on its own.
+(`--certificate-identity-regexp '^https://github\.com/santosr2/TerraTidy/'`). Prefer v0.3.0 or
+later if you need the attestation to stand on its own.
+
+## Reproduce the Build
+
+Release binaries are reproducible: rebuilding a tag on any machine yields the same bytes, so you
+can confirm the published artifacts were built from the published source. Three things make that
+hold, and all three are committed to the tag rather than left to the builder.
+
+| Source of drift | How it is pinned |
+| --- | --- |
+| Go toolchain patch | `.go-version`, read by the release workflow |
+| Absolute build paths | `-trimpath` in `.goreleaser.yml` |
+| Build timestamp | `{{ .CommitDate }}` and `mod_timestamp`, both derived from the commit |
+
+Rebuild through GoReleaser rather than `go build`, so the ldflags and archive layout match:
+
+```bash
+git clone --branch v0.3.0 https://github.com/santosr2/TerraTidy.git
+cd TerraTidy
+cat .go-version                       # install exactly this Go patch release
+goreleaser build --clean --single-target
+sha256sum dist/terratidy_*/terratidy  # compare against the release's checksums.txt
+```
+
+A different Go patch produces a different binary, so a mismatch points at your toolchain before it
+points at the source.
+
+!!! note "Older tags cannot be reproduced this way"
+    Releases published before the toolchain pin and the GoReleaser settings above were built with
+    whichever Go patch was newest that day, and stamped with the wall-clock build time. Neither was
+    recorded, so those tags will not rebuild byte for byte. Verify their signature and provenance
+    instead.
 
 ## Verify Build Provenance
 

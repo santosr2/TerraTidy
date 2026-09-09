@@ -340,7 +340,7 @@ Full documentation is available at [docs/site/docs/](docs/site/docs/).
 ```bash
 git clone https://github.com/santosr2/TerraTidy
 cd TerraTidy
-mise install        # Install Go 1.26 and tools
+mise install        # Install Go 1.27 and tools
 mise run setup      # Download and tidy Go modules
 mise run build      # Build binary
 ```

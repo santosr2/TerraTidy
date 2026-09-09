@@ -10,7 +10,7 @@ This page provides the comprehensive development reference.
 
 ### Prerequisites
 
-- Go 1.25 or later (development uses 1.26)
+- Go 1.26 or later (development uses 1.27)
 - [mise](https://mise.jdx.dev/) task runner
 - Git
 

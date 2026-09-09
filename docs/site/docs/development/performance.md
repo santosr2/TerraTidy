@@ -31,7 +31,7 @@ The official baseline is stored at `benchmarks/baseline.txt`. It was captured on
 
 - **Hardware:** Apple M2 Pro
 - **OS:** darwin/arm64
-- **Go version:** 1.26
+- **Go version:** 1.27
 
 The baseline serves as a reference point for CI regression detection.
 

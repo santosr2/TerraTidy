@@ -61,8 +61,8 @@ version: 1  # Required
 
 ### Go Version
 
-TerraTidy requires Go 1.25 or later to build from source; official releases are built
-with Go 1.26.4. Go plugins (`.so` files) must be compiled with the same Go version as
+TerraTidy requires Go 1.26 or later to build from source; official releases are built
+with Go 1.27. Go plugins (`.so` files) must be compiled with the same Go version as
 the TerraTidy binary you run them against.
 
 ### OPA Version

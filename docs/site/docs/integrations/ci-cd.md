@@ -61,7 +61,7 @@ pipelines:
     '**':
       - step:
           name: TerraTidy
-          image: golang:1.26.4
+          image: golang:1.27.1
           script:
             - go install github.com/santosr2/TerraTidy/cmd/terratidy@latest
             - terratidy check --format text

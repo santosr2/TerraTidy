@@ -8,6 +8,7 @@ on:
       - '**/*.go'
       - 'go.mod'
       - 'go.sum'
+      - '.go-version'
       - '.github/workflows/container-test.yml'
   pull_request:
     branches: [main]
@@ -16,6 +17,7 @@ on:
       - '**/*.go'
       - 'go.mod'
       - 'go.sum'
+      - '.go-version'
       - '.github/workflows/container-test.yml'
 
 permissions:
@@ -44,14 +46,14 @@ jobs:
       # supported Go, and setup-go installs it exactly. The Trivy step below reads
       # the stdlib version stamped into the compiled binary, so building on the
       # floor makes the scan report stdlib CVEs against a Go patch release that
-      # never ships. Matching the release build's toolchain keeps the scan a
-      # truthful proxy for the published image, and check-latest means new stdlib
-      # patches are picked up without a manual bump.
+      # never ships. .go-version is the toolchain release.yml builds with, so the
+      # scan stays a truthful proxy for the published image. It is pinned rather
+      # than floating: a new stdlib patch now surfaces as a scan finding against
+      # the Go version actually shipping, which is the signal to bump .go-version.
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: '1.26.x'
-          check-latest: true
+          go-version-file: .go-version
           cache: true
 
       - name: Build Go binary

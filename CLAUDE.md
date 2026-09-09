@@ -1,6 +1,6 @@
 # TerraTidy
 
-Single-binary Terraform/Terragrunt quality platform. Go 1.25+ (dev: 1.26), library-first, extensible plugin system.
+Single-binary Terraform/Terragrunt quality platform. Go 1.26+ (dev: 1.27), library-first, extensible plugin system.
 
 ## Architecture
 
@@ -142,7 +142,7 @@ plugins:
 
 ```bash
 # Go development
-mise install              # Install Go 1.26 + tools
+mise install              # Install Go 1.27 + tools
 mise run setup            # Install dependencies
 mise run build            # Build binary
 mise run test             # Unit tests
@@ -323,7 +323,7 @@ FILE="$1"
 
 | Workflow | Trigger | Purpose |
 | --- | --- | --- |
-| `test.yml` | push/PR | Tests on 3 OSes x 2 Go versions, coverage to Codecov |
+| `test.yml` | push/PR | Tests on 3 OSes x 2 Go versions, coverage to Codecov, reproducible-build check |
 | `release.yml` | tag `v*` | GoReleaser, Docker, Homebrew, cosign signing, VSCode extension publish |
 | `quality.yml` | push/PR | PR title validation, pre-commit hooks |
 | `security.yml` | push/PR | govulncheck, gitleaks, license check, API compat |

@@ -114,7 +114,8 @@ const (
 
 ### Prerequisites
 
-- Go 1.26.4 or later
+- Go 1.27 (Go's plugin loader requires an exact toolchain match with the TerraTidy
+  binary, so build against the same version the release was built with)
 - TerraTidy SDK (`pkg/sdk`)
 - TerraTidy plugin types (`pkg/plugins`)
 

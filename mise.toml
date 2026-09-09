@@ -1,9 +1,14 @@
+# The Go toolchain is pinned in .go-version, the single source of truth shared
+# with the workflows that build or scan release artifacts. Bumping a Go patch
+# is a deliberate one-line change there, not a silent float.
+[settings]
+idiomatic_version_file_enable_tools = ["go"]
+
 [tools]
-go = "1.26.8"
 pre-commit = "4"
 terraform = "1"
 terragrunt = "0"
-golangci-lint = "2"
+golangci-lint = "2.13"  # must be built with Go >= .go-version; 2.12.x is built with go1.26 and panics under 1.27
 uv = "0"
 bun = "1.2"  # VS Code extension development (pinned to match CI's bun-version 1.2.x)
 "cargo:git-cliff" = "2"  # Changelog generator

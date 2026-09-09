@@ -6,8 +6,10 @@ before:
   hooks:
     - go mod tidy
     - go mod download
-    # Generate version.json for embedded build info
-    - sh -c 'echo "{\"version\":\"{{.Version}}\",\"commit\":\"{{.Commit}}\",\"date\":\"{{.Date}}\"}" > internal/buildinfo/version.json'
+    # Generate version.json for embedded build info. .CommitDate, not .Date:
+    # this file is go:embed-ed into the binary, so a wall-clock timestamp here
+    # lands in the compiled bytes and makes every rebuild of the same tag differ.
+    - sh -c 'echo "{\"version\":\"{{.Version}}\",\"commit\":\"{{.Commit}}\",\"date\":\"{{.CommitDate}}\"}" > internal/buildinfo/version.json'
 
 builds:
   - id: terratidy
@@ -22,11 +24,20 @@ builds:
     goarch:
       - amd64
       - arm64
+    # The three settings below are what make a release rebuildable from its tag,
+    # together with the Go patch pinned in .go-version. -trimpath drops the
+    # builder's absolute paths, CommitDate replaces the wall-clock build time
+    # that would otherwise differ on every run, and mod_timestamp pins the output
+    # file's mtime so the archives hash the same too. See the rebuild procedure in
+    # docs/site/docs/getting-started/verification.md.
+    flags:
+      - -trimpath
+    mod_timestamp: '{{ .CommitTimestamp }}'
     ldflags:
       - -s -w
       - -X github.com/santosr2/TerraTidy/internal/buildinfo.Version={{.Version}}
       - -X github.com/santosr2/TerraTidy/internal/buildinfo.Commit={{.Commit}}
-      - -X github.com/santosr2/TerraTidy/internal/buildinfo.Date={{.Date}}
+      - -X github.com/santosr2/TerraTidy/internal/buildinfo.Date={{.CommitDate}}
 
 archives:
   - id: terratidy

@@ -75,8 +75,12 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: '1.26.x'
-          check-latest: true
+          # .go-version is committed to the tag, so a release can be rebuilt
+          # byte-for-byte from its own commit. That rebuild is the fallback
+          # verification path in docs/site/docs/getting-started/verification.md,
+          # and a floating patch (check-latest) would silently break it by
+          # building each release with whatever Go was newest that day.
+          go-version-file: .go-version
           cache: false  # Disable cache to prevent cache poisoning on tag-triggered releases
 
       - name: Install cosign

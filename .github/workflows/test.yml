@@ -9,6 +9,8 @@ on:
       - 'go.sum'
       - '.golangci.yml'
       - 'revive.toml'
+      - '.goreleaser.yml'
+      - '.go-version'
       - '.github/workflows/test.yml'
   pull_request:
     branches: [main]
@@ -18,6 +20,8 @@ on:
       - 'go.sum'
       - '.golangci.yml'
       - 'revive.toml'
+      - '.goreleaser.yml'
+      - '.go-version'
       - '.github/workflows/test.yml'
 
 permissions:
@@ -32,7 +36,7 @@ jobs:
     strategy:
       matrix:
         os: ${{ github.event_name == 'pull_request' && fromJSON('["ubuntu-latest", "macos-latest", "windows-latest"]') || fromJSON('["ubuntu-latest"]') }}
-        go-version: ['1.25.x', '1.26.x']
+        go-version: ['1.26.x', '1.27.x']
 
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
@@ -82,13 +86,13 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: '1.26.x'
+          go-version: '1.27.x'
           check-latest: true
 
       - name: golangci-lint
         uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
         with:
-          version: v2.11.4
+          version: v2.13.2
 
   build:
     runs-on: ubuntu-latest
@@ -102,7 +106,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: '1.26.x'
+          go-version: '1.27.x'
           check-latest: true
 
       - name: Build
@@ -111,12 +115,54 @@ jobs:
       - name: Verify binary
         run: go run ./cmd/terratidy version
 
-      - name: Reproducibility check
+  reproducible-build:
+    name: Reproducible Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0  # goreleaser derives the snapshot version from git describe
+          persist-credentials: false
+
+      # .go-version, not the floating 1.27.x the other jobs use: this job exists
+      # to check the binary release.yml would publish, and a different Go patch
+      # produces a different binary.
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: .go-version
+          cache: false  # Disable cache: this job builds through goreleaser, same reasoning as release.yml
+
+      - name: Install GoReleaser
+        uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
+        with:
+          distribution: goreleaser
+          version: v2.16.0  # keep in step with release.yml
+          install-only: true
+
+      # Builds through goreleaser, twice, from two paths of different lengths and
+      # a few seconds apart. Both variations earn their place: a build path that
+      # survives into the binary fails the first, and a wall-clock timestamp fails
+      # the second. Running `go build` twice in one directory catches neither,
+      # which is how a {{ .Date }} stamp reached the go:embed-ed version.json and
+      # made every release unreproducible without CI noticing.
+      - name: Build twice and compare
         run: |
-          go build -trimpath -o /tmp/build1 ./cmd/terratidy
-          go build -trimpath -o /tmp/build2 ./cmd/terratidy
-          if ! diff /tmp/build1 /tmp/build2; then
-            echo "Build is not reproducible"
+          set -euo pipefail
+          build() {
+            cp -a "$GITHUB_WORKSPACE" "$1"
+            (cd "$1" && goreleaser build --clean --single-target --snapshot >/dev/null)
+            sha256sum "$1"/dist/*/terratidy | cut -d' ' -f1
+          }
+          first=$(build /tmp/repro-a)
+          sleep 3
+          second=$(build /tmp/repro-b-from-a-longer-path)
+          echo "first:  $first"
+          echo "second: $second"
+          if [ "$first" != "$second" ]; then
+            echo "::error::Release build is not reproducible: the same source produced two different binaries." >&2
             exit 1
           fi
-          echo "Build is reproducible"
+          echo "Release build is reproducible."

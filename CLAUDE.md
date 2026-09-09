@@ -323,7 +323,7 @@ FILE="$1"
 
 | Workflow | Trigger | Purpose |
 | --- | --- | --- |
-| `test.yml` | push/PR | Tests on 3 OSes x 2 Go versions, coverage to Codecov |
+| `test.yml` | push/PR | Tests on 3 OSes x 2 Go versions, coverage to Codecov, reproducible-build check |
 | `release.yml` | tag `v*` | GoReleaser, Docker, Homebrew, cosign signing, VSCode extension publish |
 | `quality.yml` | push/PR | PR title validation, pre-commit hooks |
 | `security.yml` | push/PR | govulncheck, gitleaks, license check, API compat |

@@ -205,6 +205,8 @@ The CI pipeline runs on every PR:
 - **Tests:** `go test -v -race -cover ./...` with coverage collection
 - **Linting:** golangci-lint and revive
 - **Coverage:** Uploaded to Codecov (ubuntu-only)
+- **Reproducible build:** Builds the release artifact through GoReleaser twice, from different
+  paths and seconds apart, and fails if the binaries differ
 
 **Security workflow** (`.github/workflows/security.yml`):
 

@@ -795,6 +795,6 @@ terratidy version --format json-compact
 TerraTidy version 0.3.0
   Commit:      abc1234
   Build date:  2025-12-22
-  Go version:  go1.26.4
+  Go version:  go1.27.1
   Platform:    darwin/arm64
 ```

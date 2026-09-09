@@ -365,7 +365,7 @@ Self-tested in `action-test.yml` on Ubuntu, macOS, Windows.
 
 ## Docker
 
-- **Base**: Alpine 3.23 (pinned digest)
+- **Base**: Alpine 3.24.1 (pinned digest)
 - **User**: Non-root `terratidy` user
 - **Health check**: `terratidy version`
 - **Registry**: `ghcr.io/santosr2/terratidy`

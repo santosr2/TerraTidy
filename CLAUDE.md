@@ -24,7 +24,6 @@ pkg/
 assets/                 # Brand assets, icons, logos
 docs/site/              # MkDocs documentation site
 examples/               # Example configs and custom rules
-Formula/                # Homebrew formula (auto-generated)
 vscode/                 # VS Code extension (TypeScript, Bun)
 tools/scripts/          # Development scripts
 Dockerfile              # Container image definition
@@ -342,7 +341,8 @@ PR requirements: conventional commit title, all tests pass on 3 OSes, coverage m
 ## Release Process
 
 - **Versioning**: Semver with pre-release (`0.2.0-alpha.3`), managed by `bump-my-version`
-- **Version bump**: `mise run bump:patch|minor|major|pre|stage|stable` (updates 20 files).
+- **Version bump**: `mise run bump:patch|minor|major|pre|stage|stable` (updates 19 files;
+  `.bumpversion.toml` is the source of truth for the list).
   `bump:patch|minor|major` open a pre-release cycle (`0.2.0` → `0.3.0-alpha`), since `pre_l` resets
   to `alpha` when a higher part is bumped; a stable release is the bump followed by `bump:stable`.
   `bump:stage` advances one pre-release step (alpha→beta→rc→stable); `bump:stable` drops the suffix
@@ -351,7 +351,8 @@ PR requirements: conventional commit title, all tests pass on 3 OSes, coverage m
 - **Tags**: Format `v<version>`, signed commits required
 - **GoReleaser**: Builds binaries, archives, checksums, SBOMs, Docker images, Homebrew formula
 - **Signing**: Cosign keyless signing on release checksums
-- **Homebrew**: `Formula/terratidy.rb` auto-generated (never edit manually)
+- **Homebrew**: the cask is generated into `santosr2/homebrew-tap` at release time
+  (never edit it there manually; change `.goreleaser.yml` instead)
 
 ## GitHub Action
 

@@ -17,8 +17,8 @@ go install github.com/santosr2/TerraTidy/cmd/terratidy@v0.3.0
 ## Homebrew (macOS/Linux)
 
 ```bash
-brew tap santosr2/tap https://github.com/santosr2/TerraTidy
-brew install santosr2/tap/terratidy
+brew tap santosr2/tap
+brew install --cask santosr2/tap/terratidy
 ```
 
 ## Download Binary

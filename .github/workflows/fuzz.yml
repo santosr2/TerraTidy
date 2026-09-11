@@ -52,16 +52,21 @@ jobs:
         run: |
           set -euo pipefail
 
+          # Note the absence of `grep -q`: it exits on its first match, which
+          # kills `go test -list` with SIGPIPE, which pipefail then reports as a
+          # failed pipeline. Whether a package survived that became a race, and in
+          # CI none did. Plain grep reads its input to the end.
           packages=$(
             for pkg in $(go list ./...); do
-              if go test -list 'Fuzz.*' "$pkg" 2>/dev/null | grep -q '^Fuzz'; then
+              targets=$(go test -list 'Fuzz.*' "$pkg" 2>/dev/null | grep '^Fuzz' || true)
+              if [ -n "$targets" ]; then
                 echo "$pkg"
               fi
             done | jq -R -s -c 'split("\n") | map(select(length > 0))'
           )
 
           if [ "$packages" = "[]" ]; then
-            echo "No fuzz targets found" >&2
+            echo "No fuzz targets found across $(go list ./... | wc -l) packages" >&2
             exit 1
           fi
 

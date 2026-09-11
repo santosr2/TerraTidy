@@ -138,6 +138,20 @@ func TestSerialize_RoundTripInline(t *testing.T) {
 			content: "policy = <<-EOT\n  line one\n  line two\nEOT\n",
 			policy:  DefaultTopLevelPolicy(),
 		},
+		{
+			// The block's only attribute starts immediately after the
+			// opening brace on the same physical line, and its own value
+			// (a tuple of an object) carries a newline before the block
+			// closes on a later line. buildBlock's header/footer used to
+			// derive the opening line's extent with an unbounded forward
+			// scan for "the next newline" — which found the newline
+			// embedded in this nested value instead of the (nonexistent)
+			// opening-line terminator, so the attribute's own raw bytes
+			// duplicated everything the header had already claimed.
+			name:    "attribute starts on opening-brace line, value spans a newline",
+			content: "resource \"aws_instance\" \"web\" {ingress = [{port = {}\n}]}\n",
+			policy:  DefaultTopLevelPolicy(),
+		},
 	}
 
 	for _, tc := range tests {

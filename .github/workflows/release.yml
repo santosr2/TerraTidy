@@ -128,8 +128,8 @@ jobs:
         id: tap-token
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
-          app-id: ${{ secrets.TAP_APP_ID }}
-          private-key: ${{ secrets.TAP_APP_PRIVATE_KEY }}
+          app-id: ${{ secrets.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
           owner: santosr2
           repositories: homebrew-tap
           # Writing the cask file is all this token ever does. Without an explicit
@@ -230,10 +230,26 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
-      contents: write
-      # Dispatching the docs workflow after the changelog lands.
-      actions: write
+      # Read-only: the push and the docs dispatch both go through the App token
+      # minted below, not through GITHUB_TOKEN.
+      contents: read
     steps:
+      # The default-branch ruleset requires every change to main to arrive through
+      # a pull request, which a direct push cannot satisfy no matter how it is
+      # signed, and github-actions[bot] is not on its bypass list. Push as the App,
+      # which is.
+      - name: Mint changelog token
+        id: changelog-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          owner: santosr2
+          repositories: TerraTidy
+          # Committing the changelog and dispatching the docs build, nothing else.
+          permission-contents: write
+          permission-actions: write
+
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -263,8 +279,11 @@ jobs:
             exit 0
           fi
 
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+          # A bot's noreply address is keyed on its user id, which is distinct
+          # from the app or installation id the token step reports.
+          bot_id="$(gh api "/users/${APP_SLUG}%5Bbot%5D" --jq .id)"
+          git config user.name "${APP_SLUG}[bot]"
+          git config user.email "${bot_id}+${APP_SLUG}[bot]@users.noreply.github.com"
           gh auth setup-git
           git add CHANGELOG.md
           git commit -m "docs: update changelog for ${TAG_NAME}"
@@ -276,7 +295,8 @@ jobs:
           # workflow_dispatch is one of the two events GITHUB_TOKEN may still trigger.
           gh workflow run docs.yml --ref main
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ steps.changelog-token.outputs.token }}
+          APP_SLUG: ${{ steps.changelog-token.outputs.app-slug }}
           TAG_NAME: ${{ github.ref_name }}
 
   update-version-tags:

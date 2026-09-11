@@ -98,7 +98,7 @@ jobs:
       # it would only turn the "## [x.y.z]" heading into a stray link. The two
       # CHANGELOG.md invocations below keep the footer, where it belongs.
       - name: Generate release notes
-        uses: orhun/git-cliff-action@f50e11560dce63f7c33227798f90b924471a88b5 # v4.8.0
+        uses: orhun/git-cliff-action@3d96a18cc4ec17e9dc69ddcc424ccafaf1f78ce2 # v4.9.0
         id: git-cliff
         with:
           config: cliff.toml
@@ -226,7 +226,7 @@ jobs:
           persist-credentials: false
 
       - name: Generate full changelog
-        uses: orhun/git-cliff-action@f50e11560dce63f7c33227798f90b924471a88b5 # v4.8.0
+        uses: orhun/git-cliff-action@3d96a18cc4ec17e9dc69ddcc424ccafaf1f78ce2 # v4.9.0
         with:
           config: cliff.toml
           args: --verbose
@@ -420,7 +420,7 @@ jobs:
       # released section. vscode/CHANGELOG.md is a symlink to this root file, so vsce
       # bundles whatever we write here.
       - name: Finalize changelog for this tag
-        uses: orhun/git-cliff-action@f50e11560dce63f7c33227798f90b924471a88b5 # v4.8.0
+        uses: orhun/git-cliff-action@3d96a18cc4ec17e9dc69ddcc424ccafaf1f78ce2 # v4.9.0
         with:
           config: cliff.toml
           args: --verbose

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -49,10 +50,16 @@ func TestRootCmd(t *testing.T) {
 		assert.Empty(t, flag.DefValue)
 	})
 
-	t.Run("has color flag", func(t *testing.T) {
+	t.Run("color flag defaults to what the destination implies", func(t *testing.T) {
+		if os.Getenv("FORCE_COLOR") != "" {
+			t.Skip("FORCE_COLOR overrides the auto-detected default")
+		}
 		flag := rootCmd.PersistentFlags().Lookup("color")
 		assert.NotNil(t, flag)
-		assert.Equal(t, "true", flag.DefValue)
+		// Not pinned to a literal: the default is auto-detected so that callers
+		// bypassing PersistentPreRunE still match the destination. Under `go
+		// test`, stdout is a pipe, so color must default off.
+		assert.Equal(t, "false", flag.DefValue)
 	})
 
 	t.Run("has exclude flag", func(t *testing.T) {

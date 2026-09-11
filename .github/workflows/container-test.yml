@@ -58,7 +58,10 @@ jobs:
 
       - name: Build Go binary
         run: |
-          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o terratidy ./cmd/terratidy
+          # The Dockerfile reads the binary from $TARGETPLATFORM/ so that the
+          # release build can assemble a multi-platform context; BuildKit sets
+          # that to linux/amd64 here.
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o linux/amd64/terratidy ./cmd/terratidy
 
       - name: Build Docker image
         run: |

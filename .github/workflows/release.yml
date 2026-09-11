@@ -415,7 +415,10 @@ jobs:
       # staging a local copy.
       - name: Test Homebrew cask
         run: |
-          brew tap santosr2/tap
+          # No separate `brew tap`: since Homebrew 6.0.0 a non-official tap must
+          # be trusted before anything in it will load, and tapping alone tries to
+          # load every item and fails. The fully qualified name trusts this cask
+          # only, which is also what the install docs tell users to run.
           brew install --cask santosr2/tap/terratidy
           terratidy version
 

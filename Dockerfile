@@ -16,7 +16,10 @@ RUN apk --no-cache upgrade \
 
 WORKDIR /app
 
-COPY terratidy /usr/local/bin/terratidy
+# dockers_v2 lays the build context out per platform, so the binary for the
+# image being built lives under $TARGETPLATFORM rather than at the context root.
+ARG TARGETPLATFORM
+COPY $TARGETPLATFORM/terratidy /usr/local/bin/terratidy
 RUN chmod +x /usr/local/bin/terratidy
 
 USER terratidy

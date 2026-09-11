@@ -132,87 +132,62 @@ release:
 
     **Full Changelog**: https://github.com/santosr2/TerraTidy/compare/{{ .PreviousTag }}...{{ .Tag }}
 
-brews:
+# Casks, not formulas: GoReleaser deprecated `brews`, and the Linuxbrew
+# limitation that made formulas the only option for pre-built binaries no longer
+# applies, so this covers macOS and Linux alike.
+#
+# Published to the standalone santosr2/homebrew-tap repository, which needs a
+# token that can write to a different repo than the one running the workflow.
+# GITHUB_TOKEN is scoped to this repository only and will 403.
+homebrew_casks:
   - name: terratidy
     # Only publish stable releases to Homebrew
     skip_upload: "{{ if .Prerelease }}true{{ else }}false{{ end }}"
     repository:
       owner: santosr2
-      name: TerraTidy
-    directory: Formula
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    directory: Casks
     homepage: https://github.com/santosr2/TerraTidy
     description: "Terraform/Terragrunt quality platform"
-    license: MIT
-    test: |
-      system "#{bin}/terratidy version"
-    install: |
-      bin.install "terratidy"
+    hooks:
+      post:
+        # The released binaries are neither signed nor notarized, so without
+        # clearing the quarantine attribute every macOS install reports the
+        # binary as damaged.
+        install: |
+          if OS.mac?
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/terratidy"]
+          end
 
-# Per-architecture images. GoReleaser builds one image per entry, each pushing a
-# tag-suffixed image (:<tag>-amd64, :<tag>-arm64). The docker_manifests below merge
-# them into the real multi-arch tags. buildx + QEMU are set up in release.yml.
-dockers:
-  - id: docker-amd64
-    goarch: amd64
-    use: buildx
-    image_templates:
-      - "ghcr.io/santosr2/terratidy:{{ .Tag }}-amd64"
+# Multi-platform image built and pushed in one buildx step. dockers_v2 replaces
+# the old per-architecture `dockers` entries plus `docker_manifests` merge, so
+# the intermediate :<tag>-amd64 / :<tag>-arm64 tags are no longer published.
+# buildx + QEMU are set up in release.yml.
+#
+# The tag-specific image ships for every release; the floating aliases
+# (vMAJOR, vMAJOR.MINOR, latest) are stable-only. A tag template that renders
+# empty is dropped, which is how the prerelease gating works here.
+dockers_v2:
+  - images:
+      - "ghcr.io/santosr2/terratidy"
+    tags:
+      - "{{ .Tag }}"
+      - "{{ if not .Prerelease }}v{{ .Major }}{{ end }}"
+      - "{{ if not .Prerelease }}v{{ .Major }}.{{ .Minor }}{{ end }}"
+      - "{{ if not .Prerelease }}latest{{ end }}"
     dockerfile: Dockerfile
-    build_flag_templates:
-      - "--platform=linux/amd64"
-      - "--label=org.opencontainers.image.created={{.Date}}"
-      - "--label=org.opencontainers.image.title={{.ProjectName}}"
-      - "--label=org.opencontainers.image.description=Single-binary Terraform/Terragrunt quality platform"
-      - "--label=org.opencontainers.image.revision={{.FullCommit}}"
-      - "--label=org.opencontainers.image.version={{.Version}}"
-      - "--label=org.opencontainers.image.source=https://github.com/santosr2/TerraTidy"
-      - "--label=org.opencontainers.image.url=https://github.com/santosr2/TerraTidy"
-      - "--label=org.opencontainers.image.documentation=https://santosr2.github.io/TerraTidy/"
-      - "--label=org.opencontainers.image.licenses=MIT"
-      - "--label=org.opencontainers.image.vendor=santosr2"
-
-  - id: docker-arm64
-    goarch: arm64
-    use: buildx
-    image_templates:
-      - "ghcr.io/santosr2/terratidy:{{ .Tag }}-arm64"
-    dockerfile: Dockerfile
-    build_flag_templates:
-      - "--platform=linux/arm64"
-      - "--label=org.opencontainers.image.created={{.Date}}"
-      - "--label=org.opencontainers.image.title={{.ProjectName}}"
-      - "--label=org.opencontainers.image.description=Single-binary Terraform/Terragrunt quality platform"
-      - "--label=org.opencontainers.image.revision={{.FullCommit}}"
-      - "--label=org.opencontainers.image.version={{.Version}}"
-      - "--label=org.opencontainers.image.source=https://github.com/santosr2/TerraTidy"
-      - "--label=org.opencontainers.image.url=https://github.com/santosr2/TerraTidy"
-      - "--label=org.opencontainers.image.documentation=https://santosr2.github.io/TerraTidy/"
-      - "--label=org.opencontainers.image.licenses=MIT"
-      - "--label=org.opencontainers.image.vendor=santosr2"
-
-# Multi-arch manifests merging the per-arch images above.
-# The tag-specific manifest ships for every release; the floating aliases
-# (vMAJOR, vMAJOR.MINOR, latest) are stable-only, gated on .Prerelease.
-docker_manifests:
-  - name_template: "ghcr.io/santosr2/terratidy:{{ .Tag }}"
-    image_templates:
-      - "ghcr.io/santosr2/terratidy:{{ .Tag }}-amd64"
-      - "ghcr.io/santosr2/terratidy:{{ .Tag }}-arm64"
-
-  - name_template: "ghcr.io/santosr2/terratidy:v{{ .Major }}"
-    skip_push: "{{ if .Prerelease }}true{{ else }}false{{ end }}"
-    image_templates:
-      - "ghcr.io/santosr2/terratidy:{{ .Tag }}-amd64"
-      - "ghcr.io/santosr2/terratidy:{{ .Tag }}-arm64"
-
-  - name_template: "ghcr.io/santosr2/terratidy:v{{ .Major }}.{{ .Minor }}"
-    skip_push: "{{ if .Prerelease }}true{{ else }}false{{ end }}"
-    image_templates:
-      - "ghcr.io/santosr2/terratidy:{{ .Tag }}-amd64"
-      - "ghcr.io/santosr2/terratidy:{{ .Tag }}-arm64"
-
-  - name_template: "ghcr.io/santosr2/terratidy:latest"
-    skip_push: "{{ if .Prerelease }}true{{ else }}false{{ end }}"
-    image_templates:
-      - "ghcr.io/santosr2/terratidy:{{ .Tag }}-amd64"
-      - "ghcr.io/santosr2/terratidy:{{ .Tag }}-arm64"
+    platforms:
+      - linux/amd64
+      - linux/arm64
+    labels:
+      org.opencontainers.image.created: "{{.Date}}"
+      org.opencontainers.image.title: "{{.ProjectName}}"
+      org.opencontainers.image.description: "Single-binary Terraform/Terragrunt quality platform"
+      org.opencontainers.image.revision: "{{.FullCommit}}"
+      org.opencontainers.image.version: "{{.Version}}"
+      org.opencontainers.image.source: "https://github.com/santosr2/TerraTidy"
+      org.opencontainers.image.url: "https://github.com/santosr2/TerraTidy"
+      org.opencontainers.image.documentation: "https://santosr2.github.io/TerraTidy/"
+      org.opencontainers.image.licenses: "MIT"
+      org.opencontainers.image.vendor: "santosr2"

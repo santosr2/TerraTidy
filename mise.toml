@@ -194,10 +194,12 @@ VERSION="${VERSION:-dev}"
 COMMIT="$(git rev-parse --short HEAD 2>/dev/null || echo 'unknown')"
 DATE="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
 LDFLAGS="-X main.version=${VERSION} -X main.commit=${COMMIT} -X main.date=${DATE}"
-trap 'rm -f terratidy' EXIT
+ARCH="$(go env GOARCH)"
+trap 'rm -rf linux' EXIT
 echo "Building static linux binary for the image..."
-CGO_ENABLED=0 GOOS=linux GOARCH="$(go env GOARCH)" \
-  go build -ldflags "${LDFLAGS}" -o terratidy ./cmd/terratidy
+# The Dockerfile reads from $TARGETPLATFORM/, which BuildKit sets to linux/<arch>.
+CGO_ENABLED=0 GOOS=linux GOARCH="$ARCH" \
+  go build -ldflags "${LDFLAGS}" -o "linux/$ARCH/terratidy" ./cmd/terratidy
 echo "Building Docker image..."
 docker build -t terratidy-dev .
 """

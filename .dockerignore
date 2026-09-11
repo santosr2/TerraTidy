@@ -1,5 +1,7 @@
 # Exclude everything by default
 *
 
-# Only include the pre-built binary (copied by make docker-build or goreleaser)
-!terratidy
+# The image reads its binary from $TARGETPLATFORM/, so the build context is a
+# per-platform tree (linux/amd64/terratidy, linux/arm64/terratidy). GoReleaser
+# assembles that layout itself; the local and CI builds mirror it.
+!linux

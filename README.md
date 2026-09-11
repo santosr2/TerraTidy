@@ -43,7 +43,6 @@ TerraTidy is a single-binary quality platform for Terraform and Terragrunt that 
 ### Homebrew (macOS/Linux)
 
 ```bash
-brew tap santosr2/tap
 brew install --cask santosr2/tap/terratidy
 ```
 

@@ -242,9 +242,17 @@ jobs:
     timeout-minutes: 10
     needs: [build-test]
     permissions:
+      contents: read
       security-events: write
 
     steps:
+      # Checked out only so Trivy can read .trivyignore; the scanned image
+      # itself comes from the build-test artifact, not from this working tree.
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
       - name: Download Docker image artifact
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
@@ -264,6 +272,7 @@ jobs:
           image-ref: ${{ env.IMAGE_NAME }}:latest
           format: 'sarif'
           output: 'trivy-results.sarif'
+          trivyignores: '.trivyignore'
 
       - name: Upload Trivy scan results
         uses: github/codeql-action/upload-sarif@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4.37.9

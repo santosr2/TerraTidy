@@ -166,7 +166,7 @@ jobs:
           image-ref: 'ghcr.io/santosr2/terratidy:${{ github.ref_name }}'
           format: 'sarif'
           output: 'trivy-results.sarif'
-          severity: 'CRITICAL,HIGH'
+          trivyignores: '.trivyignore'
 
       - name: Upload Trivy scan results
         uses: github/codeql-action/upload-sarif@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4.37.9

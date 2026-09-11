@@ -1,0 +1,64 @@
+name: CodeQL
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '27 4 * * 2'  # Weekly on Tuesday, a day clear of the Monday fuzz run
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-codeql-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    name: Analyze ${{ matrix.language }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      security-events: write  # Upload findings to the code scanning API
+      actions: read           # The actions extractor reads workflow run metadata
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Deliberately narrow. `ruby` is detected only from the GoReleaser-generated
+          # Homebrew formula, and the JavaScript/TypeScript extractor would descend
+          # into vscode/.vscode-test/, which holds whole downloaded VS Code builds.
+          - language: go
+            build-mode: autobuild
+          - language: actions
+            build-mode: none
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # CodeQL otherwise picks a toolchain from go.mod, which tracks the minimum
+      # supported version rather than the one releases are built with. Installing
+      # .go-version first leaves CodeQL's resolver satisfied, so the analysed
+      # toolchain matches the shipped one.
+      - name: Set up Go
+        if: matrix.language == 'go'
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: .go-version
+          cache: false
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4.37.9
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+
+      - name: Analyze
+        uses: github/codeql-action/analyze@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4.37.9
+        with:
+          category: /language:${{ matrix.language }}

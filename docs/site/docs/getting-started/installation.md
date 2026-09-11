@@ -17,9 +17,14 @@ go install github.com/santosr2/TerraTidy/cmd/terratidy@v0.3.0
 ## Homebrew (macOS/Linux)
 
 ```bash
-brew tap santosr2/tap
 brew install --cask santosr2/tap/terratidy
 ```
+
+Since Homebrew 6.0.0, third-party taps must be trusted before their contents will
+load. Installing by the fully qualified name grants that trust to this cask alone,
+which is why there is no separate `brew tap` step. To install by short name, trust
+the tap first with `brew trust santosr2/tap`, which accepts everything it ships now
+and in future.
 
 ## Download Binary
 

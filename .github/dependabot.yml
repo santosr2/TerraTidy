@@ -15,6 +15,15 @@ updates:
       - go
     cooldown:
       default-days: 7
+    groups:
+      # golang.org/x/* modules are released in lockstep and their advisories tend
+      # to land together, so a single PR is easier to review than one per module.
+      # `applies-to` is required: a group without it silently becomes a
+      # version-updates group and never touches a security fix.
+      golang-x-security:
+        applies-to: security-updates
+        patterns:
+          - "golang.org/x/*"
 
   - package-ecosystem: npm
     directory: /vscode

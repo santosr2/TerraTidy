@@ -43,8 +43,8 @@ code --install-extension santosr2.vscode-terratidy
 go install github.com/santosr2/TerraTidy/cmd/terratidy@latest
 
 # Using Homebrew (macOS)
-brew tap santosr2/tap https://github.com/santosr2/TerraTidy
-brew install santosr2/tap/terratidy
+brew tap santosr2/tap
+brew install --cask santosr2/tap/terratidy
 
 # Download from releases
 # https://github.com/santosr2/TerraTidy/releases

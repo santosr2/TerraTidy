@@ -17,16 +17,22 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  fuzz:
-    # Run on schedule, or on PR if 'fuzz' label exists
+  # `go test -fuzz` accepts one target per invocation, so a single job runs every
+  # target back to back and its wall time is (targets x fuzztime). At 40-odd
+  # targets that overruns any sane job timeout on the 5m scheduled setting, so the
+  # packages are enumerated here and fanned out into parallel jobs below.
+  discover:
+    name: Discover fuzz packages
     if: |
       github.event_name == 'schedule' ||
       (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'fuzz'))
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 10
     permissions:
       contents: read
-      pull-requests: write
+    outputs:
+      packages: ${{ steps.list.outputs.packages }}
+      fuzztime: ${{ steps.list.outputs.fuzztime }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -36,81 +42,223 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: '1.27.x'
+          go-version-file: .go-version
           check-latest: true
 
-      - name: Run fuzz tests
-        id: fuzz
+      - name: Enumerate packages with fuzz targets
+        id: list
+        env:
+          IS_SCHEDULED: ${{ github.event_name == 'schedule' }}
         run: |
+          set -euo pipefail
+
+          packages=$(
+            for pkg in $(go list ./...); do
+              if go test -list 'Fuzz.*' "$pkg" 2>/dev/null | grep -q '^Fuzz'; then
+                echo "$pkg"
+              fi
+            done | jq -R -s -c 'split("\n") | map(select(length > 0))'
+          )
+
+          if [ "$packages" = "[]" ]; then
+            echo "No fuzz targets found" >&2
+            exit 1
+          fi
+
           if [ "$IS_SCHEDULED" = "true" ]; then
-            FUZZTIME="5m"
+            fuzztime=5m
           else
-            FUZZTIME="30s"
-          fi
-          echo "fuzztime=$FUZZTIME" >> "$GITHUB_OUTPUT"
-
-          # Run fuzz and capture output
-          set +e
-          ./tools/scripts/fuzz.sh "$FUZZTIME" 2>&1 | tee fuzz-output.txt
-          EXIT_CODE=$?
-          set -e
-
-          if [ $EXIT_CODE -eq 0 ]; then
-            echo "status=passed" >> "$GITHUB_OUTPUT"
-          else
-            echo "status=failed" >> "$GITHUB_OUTPUT"
+            fuzztime=30s
           fi
 
-          # Write summary
+          echo "packages=$packages" >> "$GITHUB_OUTPUT"
+          echo "fuzztime=$fuzztime" >> "$GITHUB_OUTPUT"
+
+          echo "Fuzzing for $fuzztime per target across these packages:"
+          echo "$packages" | jq -r '.[]'
+
+  fuzz:
+    name: Fuzz ${{ matrix.package }}
+    needs: discover
+    runs-on: ubuntu-latest
+    # Worst-case package holds 8 targets; at the 5m scheduled setting that is
+    # 40 minutes of fuzzing before any setup overhead.
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    strategy:
+      # One package failing must not cancel the rest: each is an independent
+      # search and we want every crasher from a run, not just the first.
+      fail-fast: false
+      matrix:
+        package: ${{ fromJSON(needs.discover.outputs.packages) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: .go-version
+          check-latest: true
+
+      - name: Derive cache paths
+        id: paths
+        env:
+          PACKAGE: ${{ matrix.package }}
+        run: |
+          set -euo pipefail
+          echo "corpus=$(go env GOCACHE)/fuzz" >> "$GITHUB_OUTPUT"
+          # Package import paths contain slashes; artifact and cache key names cannot.
+          echo "slug=$(echo "$PACKAGE" | tr '/' '-')" >> "$GITHUB_OUTPUT"
+
+      # Go keeps the inputs it has found interesting in GOCACHE, not in the repo.
+      # Without this the fuzzer restarts from the seed corpus on every run and
+      # never accumulates reach, so each week re-explores the same shallow ground.
+      - name: Restore fuzz corpus
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.paths.outputs.corpus }}
+          key: fuzz-corpus-${{ steps.paths.outputs.slug }}-${{ github.run_id }}
+          restore-keys: |
+            fuzz-corpus-${{ steps.paths.outputs.slug }}-
+
+      - name: Run fuzz targets
+        id: fuzz
+        env:
+          FUZZTIME: ${{ needs.discover.outputs.fuzztime }}
+          PACKAGE: ${{ matrix.package }}
+        run: |
+          set -uo pipefail
+          ./tools/scripts/fuzz.sh "$FUZZTIME" "$PACKAGE" 2>&1 | tee fuzz-output.txt
+          exit_code=${PIPESTATUS[0]}
+
+          if [ "$exit_code" -eq 0 ]; then
+            status=passed
+          else
+            status=failed
+          fi
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          printf '%s\t%s\n' "$PACKAGE" "$status" > "fuzz-status.txt"
+
           {
-            echo "## Fuzz Test Results"
+            echo "## ${PACKAGE}"
             echo ""
-            echo "**Duration:** $FUZZTIME per target"
-            echo "**Status:** $([ $EXIT_CODE -eq 0 ] && echo '✅ Passed' || echo '❌ Failed')"
+            echo "**Duration:** ${FUZZTIME} per target"
+            echo "**Status:** $([ "$exit_code" -eq 0 ] && echo 'Passed' || echo 'Failed')"
             echo ""
             echo '```'
             cat fuzz-output.txt
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
-          exit $EXIT_CODE
-        env:
-          IS_SCHEDULED: ${{ github.event_name == 'schedule' }}
+          exit "$exit_code"
+
+      - name: Upload status
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: fuzz-status-${{ steps.paths.outputs.slug }}
+          path: fuzz-status.txt
+          retention-days: 7
+
+      # A crasher is written into testdata/fuzz in the runner's workspace and is
+      # otherwise destroyed with it. Without this the run tells you a target
+      # failed but not which input did it, and the reproducer has to be
+      # rediscovered by luck.
+      - name: Upload crashers
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: fuzz-crashers-${{ steps.paths.outputs.slug }}
+          path: '**/testdata/fuzz/**'
+          if-no-files-found: ignore
+          retention-days: 30
+
+  report:
+    name: Report fuzz results
+    needs: [discover, fuzz]
+    if: always() && needs.discover.result == 'success' && github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pull-requests: write
+    steps:
+      # A leg killed by the job timeout uploads nothing, so this must not be the
+      # step that fails the report. The script below renders whatever arrived.
+      - name: Download statuses
+        continue-on-error: true
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: fuzz-status-*
+          merge-multiple: true
+          path: statuses
 
       - name: Comment on PR
-        if: github.event_name == 'pull_request' && always()
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
-          FUZZ_STATUS: ${{ steps.fuzz.outputs.status }}
-          FUZZ_TIME: ${{ steps.fuzz.outputs.fuzztime }}
+          FUZZ_TIME: ${{ needs.discover.outputs.fuzztime }}
+          FUZZ_RESULT: ${{ needs.fuzz.result }}
+          FUZZ_PACKAGES: ${{ needs.discover.outputs.packages }}
         with:
           script: |
             const fs = require('fs');
-            const output = fs.readFileSync('fuzz-output.txt', 'utf8');
-            const status = process.env.FUZZ_STATUS;
-            const fuzztime = process.env.FUZZ_TIME;
-            const passed = status === 'passed';
+            const path = require('path');
+
+            // Matrix jobs overwrite each other's outputs, so per-package results
+            // travel as one small artifact each and are reassembled here.
+            const reported = new Map();
+            const dir = 'statuses';
+            if (fs.existsSync(dir)) {
+              for (const entry of fs.readdirSync(dir, { recursive: true })) {
+                const full = path.join(dir, entry);
+                if (!fs.statSync(full).isFile()) continue;
+                for (const line of fs.readFileSync(full, 'utf8').split('\n')) {
+                  const [pkg, status] = line.split('\t');
+                  if (pkg && status) reported.set(pkg, status.trim());
+                }
+              }
+            }
+
+            // Start from the packages that were dispatched, so a leg that died
+            // without uploading shows up as missing instead of vanishing.
+            const rows = JSON.parse(process.env.FUZZ_PACKAGES)
+              .map(pkg => ({ pkg, status: reported.get(pkg) || 'no result' }));
+            rows.sort((a, b) => a.pkg.localeCompare(b.pkg));
+
+            const failed = rows.filter(r => r.status !== 'passed');
+            const passed = process.env.FUZZ_RESULT === 'success' && failed.length === 0;
             const marker = '<!-- fuzz-results -->';
 
-            const body = `${marker}
-            ## Fuzz Test Results
+            const label = {
+              passed: 'Passed',
+              failed: '**Failed**',
+              'no result': '_No result (leg did not finish)_',
+            };
+            const table = rows.length
+              ? ['| Package | Result |', '| --- | --- |',
+                 ...rows.map(r => `| \`${r.pkg}\` | ${label[r.status] || r.status} |`)
+                ].join('\n')
+              : '_No package results were reported._';
 
-            **Duration:** ${fuzztime} per target
-            **Status:** ${passed ? '✅ All fuzz tests passed' : '❌ Some fuzz tests failed'}
+            const body = [
+              marker,
+              '## Fuzz Test Results',
+              '',
+              `**Duration:** ${process.env.FUZZ_TIME} per target`,
+              `**Status:** ${passed ? 'All fuzz targets passed' : 'Some fuzz targets failed'}`,
+              '',
+              table,
+              '',
+              ...(passed ? [] : [
+                'Download the `fuzz-crashers-*` artifact from this run to get the failing',
+                'input, then commit it under the target\'s `testdata/fuzz/` directory so it',
+                'becomes a regression case.',
+              ]),
+            ].join('\n');
 
-            <details>
-            <summary>Fuzz output</summary>
-
-            \`\`\`
-            ${output}
-            \`\`\`
-
-            </details>
-
-            ${!passed ? '**Note:** Please review the fuzz failures before merging.' : ''}
-            `;
-
-            // Find existing comment
             const { data: comments } = await github.rest.issues.listComments({
               issue_number: context.issue.number,
               owner: context.repo.owner,
@@ -123,13 +271,13 @@ jobs:
                 comment_id: existing.id,
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                body: body
+                body,
               });
             } else {
               await github.rest.issues.createComment({
                 issue_number: context.issue.number,
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                body: body
+                body,
               });
             }

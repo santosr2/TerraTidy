@@ -1,0 +1,8 @@
+# Vulnerabilities accepted for the released binary, reviewed on each addition.
+# Format: one advisory ID per line. Remove an entry the moment a fix ships.
+
+# golang.org/x/crypto/openpgp is unmaintained and unsafe by design, with no
+# fixed version upstream. It reaches the binary only as an unused sibling of
+# golang.org/x/crypto/pbkdf2, which OPA pulls in through lestrrat-go/jwx for
+# JWE decoding. TerraTidy never imports or executes any openpgp code path.
+GO-2026-5932

@@ -7,5 +7,13 @@ self-hosted-runner:
 
 config-variables: []
 
-# Disable shellcheck info-level findings (SC2086, SC2035, SC2129)
-# These are style suggestions, not bugs. We can revisit later.
+paths:
+  .github/workflows/**/*.{yml,yaml}:
+    ignore:
+      # GitHub added the self-repository `uses: $/...` form in July 2026, and it
+      # is now the recommended way to reference an action in the same repository.
+      # actionlint has not learned the syntax yet (rhysd/actionlint#711, #732 are
+      # both open, and upstream is currently unmaintained), so it reports every
+      # such reference as a malformed action spec. Drop this entry once a release
+      # understands the syntax.
+      - 'specifying action "\$/.*" in invalid format because ref is missing'

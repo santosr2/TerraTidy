@@ -70,7 +70,7 @@ jobs:
             '}' > test-terraform/main.tf
 
       - name: Run TerraTidy Action (text format)
-        uses: ./
+        uses: $/
         with:
           working-directory: test-terraform
           format: text
@@ -78,7 +78,7 @@ jobs:
 
       - name: Run TerraTidy Action (json format)
         id: json-test
-        uses: ./
+        uses: $/
         with:
           working-directory: test-terraform
           format: json
@@ -118,7 +118,7 @@ jobs:
             '}' > test-terraform/main.tf
 
       - name: Run TerraTidy Action (SARIF format)
-        uses: ./
+        uses: $/
         with:
           working-directory: test-terraform
           format: sarif
@@ -156,7 +156,7 @@ jobs:
 
       - name: Run TerraTidy Action with exclude patterns
         id: exclude-test
-        uses: ./
+        uses: $/
         with:
           working-directory: test-terraform
           format: json
@@ -203,7 +203,7 @@ jobs:
 
       - name: Run TerraTidy Action with no-recurse
         id: no-recurse-test
-        uses: ./
+        uses: $/
         with:
           working-directory: test-terraform
           format: json
@@ -242,7 +242,7 @@ jobs:
 
       - name: Run TerraTidy Action with absolute-paths
         id: absolute-paths-test
-        uses: ./
+        uses: $/
         with:
           working-directory: test-terraform
           format: text
@@ -294,7 +294,7 @@ jobs:
 
       - name: Run TerraTidy Action with profile
         id: profile-test
-        uses: ./
+        uses: $/
         with:
           working-directory: test-terraform
           config: .terratidy.yaml
@@ -343,7 +343,7 @@ jobs:
 
       - name: Run TerraTidy Action with parallel=false
         id: sequential-test
-        uses: ./
+        uses: $/
         with:
           working-directory: test-terraform
           parallel: 'false'
@@ -352,7 +352,7 @@ jobs:
 
       - name: Run TerraTidy Action with parallel=true
         id: parallel-test
-        uses: ./
+        uses: $/
         with:
           working-directory: test-terraform
           parallel: 'true'
@@ -412,7 +412,7 @@ jobs:
 
       - name: Run TerraTidy Action with changed flag
         id: changed-test
-        uses: ./
+        uses: $/
         with:
           working-directory: /tmp/test-changed-repo
           changed: 'true'
@@ -421,7 +421,7 @@ jobs:
 
       - name: Run TerraTidy Action without changed flag (all files)
         id: all-files-test
-        uses: ./
+        uses: $/
         with:
           working-directory: /tmp/test-changed-repo
           changed: 'false'
@@ -469,7 +469,7 @@ jobs:
 
       - name: Run with severity-threshold=error
         id: error-threshold
-        uses: ./
+        uses: $/
         with:
           working-directory: test-terraform
           severity-threshold: error
@@ -478,7 +478,7 @@ jobs:
 
       - name: Run with severity-threshold=warning
         id: warning-threshold
-        uses: ./
+        uses: $/
         with:
           working-directory: test-terraform
           severity-threshold: warning
@@ -487,7 +487,7 @@ jobs:
 
       - name: Run with severity-threshold=info
         id: info-threshold
-        uses: ./
+        uses: $/
         with:
           working-directory: test-terraform
           severity-threshold: info
@@ -545,7 +545,7 @@ jobs:
 
       - name: Run with fail-on-warning=false (should succeed)
         id: no-fail-warning
-        uses: ./
+        uses: $/
         with:
           working-directory: test-terraform
           fail-on-warning: 'false'
@@ -554,7 +554,7 @@ jobs:
 
       - name: Run with fail-on-warning=true (may fail if warnings exist)
         id: fail-warning
-        uses: ./
+        uses: $/
         continue-on-error: true
         with:
           working-directory: test-terraform
@@ -630,7 +630,7 @@ jobs:
 
       - name: Run with skip-policy=false (policy enabled)
         id: with-policy
-        uses: ./
+        uses: $/
         continue-on-error: true
         with:
           working-directory: test-terraform
@@ -641,7 +641,7 @@ jobs:
 
       - name: Run with skip-policy=true (policy skipped)
         id: skip-policy
-        uses: ./
+        uses: $/
         with:
           working-directory: test-terraform
           config: .terratidy.yaml
@@ -694,7 +694,7 @@ jobs:
 
       - name: Run TerraTidy Action (JUnit format)
         id: junit-test
-        uses: ./
+        uses: $/
         with:
           working-directory: test-terraform
           format: junit
@@ -731,7 +731,7 @@ jobs:
 
       - name: Run TerraTidy Action (Markdown format)
         id: markdown-test
-        uses: ./
+        uses: $/
         with:
           working-directory: test-terraform
           format: markdown
@@ -768,7 +768,7 @@ jobs:
 
       - name: Run TerraTidy Action (Table format)
         id: table-test
-        uses: ./
+        uses: $/
         with:
           working-directory: test-terraform
           format: table
@@ -805,7 +805,7 @@ jobs:
 
       - name: Run TerraTidy Action (GitHub format)
         id: github-test
-        uses: ./
+        uses: $/
         with:
           working-directory: test-terraform
           format: github
@@ -859,7 +859,7 @@ jobs:
 
       - name: Test exclude patterns on Windows
         id: exclude-windows
-        uses: ./
+        uses: $/
         with:
           working-directory: test-terraform
           format: json
@@ -868,7 +868,7 @@ jobs:
 
       - name: Test no-recurse on Windows
         id: no-recurse-windows
-        uses: ./
+        uses: $/
         with:
           working-directory: test-terraform
           format: json
@@ -877,7 +877,7 @@ jobs:
 
       - name: Test absolute-paths on Windows
         id: absolute-paths-windows
-        uses: ./
+        uses: $/
         with:
           working-directory: test-terraform
           format: text
@@ -952,7 +952,7 @@ jobs:
 
       - name: Test changed flag on Windows
         id: changed-windows
-        uses: ./
+        uses: $/
         with:
           working-directory: test-changed-repo
           changed: 'true'
@@ -961,7 +961,7 @@ jobs:
 
       - name: Test all files on Windows (baseline)
         id: all-files-windows
-        uses: ./
+        uses: $/
         with:
           working-directory: test-changed-repo
           changed: 'false'
@@ -1020,7 +1020,7 @@ jobs:
 
       - name: Test fail-on-warning=false on Windows
         id: no-fail-warning-windows
-        uses: ./
+        uses: $/
         with:
           working-directory: test-terraform
           fail-on-warning: 'false'
@@ -1029,7 +1029,7 @@ jobs:
 
       - name: Test fail-on-warning=true on Windows
         id: fail-warning-windows
-        uses: ./
+        uses: $/
         continue-on-error: true
         with:
           working-directory: test-terraform

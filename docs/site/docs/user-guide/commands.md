@@ -14,9 +14,28 @@ These flags are available for all commands:
 | `--changed`            | Only check files changed in git                                                                          |
 | `--no-recurse`         | Disable recursive directory traversal (scan only specified directories, not subdirectories)             |
 | `--exclude`            | Glob patterns to exclude (repeatable or comma-separated)                                                 |
-| `--color`              | Enable colored output (default: true)                                                                    |
+| `--color`              | Enable colored output (default: auto-detected; see below)                                                |
 | `--absolute-paths`     | Output absolute file paths instead of relative                                                           |
 | `--severity-threshold` | Minimum severity: `info`, `warning`, `error`                                                             |
+
+### Color Detection
+
+Applies to the `text` and `table` formats only (JSON, SARIF, JUnit, Markdown, and HTML are unaffected).
+
+When `--color` is not passed explicitly, TerraTidy enables color only if stdout is an interactive
+terminal. Precedence, highest to lowest:
+
+1. `--color` / `--color=false` passed explicitly: always honored, regardless of the environment.
+2. [`NO_COLOR`](https://no-color.org) set to any non-empty value: color disabled.
+3. `FORCE_COLOR` set to any non-empty value: color enabled, even when stdout is piped or redirected.
+4. Otherwise: color follows whether stdout is a terminal.
+
+```bash
+terratidy check > report.txt        # no escape codes in the file
+terratidy check | grep error        # clean output through a pipe
+NO_COLOR=1 terratidy check          # force color off
+FORCE_COLOR=1 terratidy check | less -R  # force color on through a pipe
+```
 
 ## Exit Codes
 

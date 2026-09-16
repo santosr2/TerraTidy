@@ -174,7 +174,7 @@ Thresholds: cyclomatic complexity 25, function length 120 lines / 60 statements.
 - Fixture-based tests for HCL parsing/formatting
 - Integration tests for CLI commands (tagged, run via `mise run test:integration`)
 - Benchmarks for performance-critical paths (`mise run benchmark`)
-- Fuzz tests: `FuzzConfigParse`, `FuzzFormat`, `FuzzYAMLRuleParse`
+- Fuzz tests: 40 targets across 14 packages, all run by CI (`mise run fuzz [duration]`)
 - VSCode extension tests: mocha + @vscode/test-cli (`cd vscode && bun run test`)
 - Target: 80%+ coverage
 

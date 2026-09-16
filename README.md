@@ -7,9 +7,9 @@
 <b>A comprehensive quality platform for Terraform and Terragrunt</b>
 
 [![Latest Release](https://img.shields.io/github/v/release/santosr2/TerraTidy?include_prereleases)](https://github.com/santosr2/TerraTidy/releases/latest)
-[![Build Status](https://github.com/santosr2/TerraTidy/workflows/Test/badge.svg)](https://github.com/santosr2/TerraTidy/actions)
+[![Build Status](https://github.com/santosr2/TerraTidy/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/santosr2/TerraTidy/actions/workflows/test.yml?query=branch%3Amain)
 [![codecov](https://codecov.io/gh/santosr2/TerraTidy/branch/main/graph/badge.svg)](https://codecov.io/gh/santosr2/TerraTidy)
-[![Go Report Card](https://goreportcard.com/badge/github.com/santosr2/TerraTidy)](https://goreportcard.com/report/github.com/santosr2/TerraTidy)
+[![golangci-lint](https://img.shields.io/badge/golangci--lint-enabled-brightgreen?logo=go)](https://golangci-lint.run/)
 [![Go Version](https://img.shields.io/github/go-mod/go-version/santosr2/TerraTidy)](go.mod)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit)](https://github.com/pre-commit/pre-commit)
@@ -43,8 +43,7 @@ TerraTidy is a single-binary quality platform for Terraform and Terragrunt that 
 ### Homebrew (macOS/Linux)
 
 ```bash
-brew tap santosr2/tap https://github.com/santosr2/TerraTidy
-brew install santosr2/tap/terratidy
+brew install --cask santosr2/tap/terratidy
 ```
 
 ### Download Binary

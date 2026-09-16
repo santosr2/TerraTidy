@@ -121,6 +121,21 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
 
+      # GITHUB_TOKEN is scoped to this repository, so it cannot write the cask to
+      # santosr2/homebrew-tap. Mint a short-lived installation token for that repo
+      # only; it expires in an hour and carries no permissions here.
+      - name: Mint Homebrew tap token
+        id: tap-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ secrets.RELEASE_BOT_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASE_BOT_PRIVATE_KEY }}
+          owner: santosr2
+          repositories: homebrew-tap
+          # Writing the cask file is all this token ever does. Without an explicit
+          # permission the token inherits everything the installation was granted.
+          permission-contents: write
+
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
         with:
@@ -131,6 +146,7 @@ jobs:
           args: release --clean --release-notes RELEASE_NOTES.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HOMEBREW_TAP_GITHUB_TOKEN: ${{ steps.tap-token.outputs.token }}
 
       - name: Sign checksums with cosign
         run: cosign sign-blob --yes dist/checksums.txt --bundle dist/checksums.txt.bundle
@@ -214,10 +230,26 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
-      contents: write
-      # Dispatching the docs workflow after the changelog lands.
-      actions: write
+      # Read-only: the push and the docs dispatch both go through the App token
+      # minted below, not through GITHUB_TOKEN.
+      contents: read
     steps:
+      # The default-branch ruleset requires every change to main to arrive through
+      # a pull request, which a direct push cannot satisfy no matter how it is
+      # signed, and github-actions[bot] is not on its bypass list. Push as the App,
+      # which is.
+      - name: Mint changelog token
+        id: changelog-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ secrets.RELEASE_BOT_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASE_BOT_PRIVATE_KEY }}
+          owner: santosr2
+          repositories: TerraTidy
+          # Committing the changelog and dispatching the docs build, nothing else.
+          permission-contents: write
+          permission-actions: write
+
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -247,8 +279,11 @@ jobs:
             exit 0
           fi
 
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+          # A bot's noreply address is keyed on its user id, which is distinct
+          # from the app or installation id the token step reports.
+          bot_id="$(gh api "/users/${APP_SLUG}%5Bbot%5D" --jq .id)"
+          git config user.name "${APP_SLUG}[bot]"
+          git config user.email "${bot_id}+${APP_SLUG}[bot]@users.noreply.github.com"
           gh auth setup-git
           git add CHANGELOG.md
           git commit -m "docs: update changelog for ${TAG_NAME}"
@@ -260,7 +295,8 @@ jobs:
           # workflow_dispatch is one of the two events GITHUB_TOKEN may still trigger.
           gh workflow run docs.yml --ref main
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ steps.changelog-token.outputs.token }}
+          APP_SLUG: ${{ steps.changelog-token.outputs.app-slug }}
           TAG_NAME: ${{ github.ref_name }}
 
   update-version-tags:
@@ -374,23 +410,16 @@ jobs:
     runs-on: macos-latest
     timeout-minutes: 15
     steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          # GoReleaser pushes the freshly generated formula to main after the tag
-          # was cut, so check out main (not the tag) to smoke-test the real formula.
-          ref: main
-          persist-credentials: false
-
-      - name: Test Homebrew formula
+      # The cask now lives in santosr2/homebrew-tap, published moments earlier by
+      # the goreleaser job, so this installs the way a user would rather than
+      # staging a local copy.
+      - name: Test Homebrew cask
         run: |
-          # Modern Homebrew refuses `brew install <path/to/formula.rb>`; a formula
-          # must live in a tap. Stage the freshly generated formula in a throwaway
-          # local tap and build-install it from there.
-          TAP_DIR="$(brew --repository)/Library/Taps/terratidy/homebrew-localtest"
-          mkdir -p "$TAP_DIR/Formula"
-          cp Formula/terratidy.rb "$TAP_DIR/Formula/terratidy.rb"
-          brew install --build-from-source terratidy/localtest/terratidy
+          # No separate `brew tap`: since Homebrew 6.0.0 a non-official tap must
+          # be trusted before anything in it will load, and tapping alone tries to
+          # load every item and fails. The fully qualified name trusts this cask
+          # only, which is also what the install docs tell users to run.
+          brew install --cask santosr2/tap/terratidy
           terratidy version
 
   # Every tag attaches the .vsix to the GitHub release. Only stable tags publish to

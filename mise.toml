@@ -143,7 +143,11 @@ echo "View with: go tool pprof -http=:8080 mem.prof"
 
 [tasks.fuzz]
 description = "Run fuzz tests with auto-discovery"
-run = "bash tools/scripts/fuzz.sh ${1:-30s}"
+# A plain-string `run` has task args appended rather than substituted, so the
+# previous `${1:-30s}` never saw the argument and every run silently used the
+# default. A usage spec binds it: `mise run fuzz 5m` now honours 5m.
+usage = 'arg "[fuzztime]" help="Fuzz duration per target (e.g. 30s, 5m)" default="30s"'
+run = 'bash tools/scripts/fuzz.sh "$usage_fuzztime"'
 
 # =============================================================================
 # Code Quality
@@ -179,14 +183,23 @@ depends = ["fmt", "vet", "lint", "vuln", "test"]
 
 [tasks."docker:build"]
 description = "Build Docker image for local development"
-depends = ["build"]
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
+# The image is Alpine (musl) and the host may not even be Linux, so the binary
+# cannot be the `build` task's output: a glibc-linked or Darwin binary dies in
+# the container as a bare "no such file or directory". Match the release build's
+# CGO_ENABLED=0 linux target instead.
+VERSION="${VERSION:-dev}"
+COMMIT="$(git rev-parse --short HEAD 2>/dev/null || echo 'unknown')"
+DATE="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+LDFLAGS="-X main.version=${VERSION} -X main.commit=${COMMIT} -X main.date=${DATE}"
+trap 'rm -f terratidy' EXIT
+echo "Building static linux binary for the image..."
+CGO_ENABLED=0 GOOS=linux GOARCH="$(go env GOARCH)" \
+  go build -ldflags "${LDFLAGS}" -o terratidy ./cmd/terratidy
 echo "Building Docker image..."
-cp bin/terratidy terratidy
 docker build -t terratidy-dev .
-rm -f terratidy
 """
 
 [tasks."docker:run"]
@@ -240,7 +253,10 @@ go clean
 [tasks."clean:all"]
 description = "Clean all generated files and caches"
 run = """
-rm -rf bin/ dist/ coverage/ benchmarks/
+rm -rf bin/ dist/ coverage/
+# Only the timestamped runs; benchmarks/baseline.txt is tracked and is what
+# `mise run benchmark` compares against, per .gitignore's explicit carve-out.
+rm -f benchmarks/benchmark-*.txt
 rm -f coverage.out coverage.html coverage.txt
 rm -f *.test *.prof
 go clean -cache -testcache -modcache

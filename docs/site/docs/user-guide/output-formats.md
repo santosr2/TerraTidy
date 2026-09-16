@@ -99,7 +99,9 @@ Colors:
 - **Yellow**: Warnings
 - **Cyan**: Info
 
-Use `--color=false` to disable colors:
+Colors are disabled automatically when stdout isn't a terminal (e.g. piped or redirected). Use
+`--color=false` or `NO_COLOR=1` to disable colors explicitly; see
+[Color Detection](commands.md#color-detection) for the full precedence rules.
 
 ```bash
 terratidy check --format table --color=false

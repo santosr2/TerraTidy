@@ -86,10 +86,20 @@ type structuralItem struct {
 // source order and filling gaps with BlankLines and StandaloneComments per
 // policy.
 //
-// bodyStartByte/bodyEndByte bound the gap-scan region — for a block body,
-// that is content between the braces; for the top-level body it is the full
-// content. openByte/closeByte are the brace offsets stored on Body for
-// downstream consumers; both are -1 at the top level.
+// bodyStartByte/bodyEndByte bound the gap-scan region. For the top-level
+// body that is the full content (bodyStartByte 0). For a block body, the
+// caller (buildBlock) has already advanced bodyStartByte past the opening
+// brace's own physical line — through any inline opening-brace comment, or
+// through a pure-whitespace run to the next newline — so that a blank-line
+// count here never miscounts that line's terminator as a real blank line,
+// and so buildAttribute/buildBlock can use bodyStartByte as the floor below
+// which a nested item's raw range must never extend (those bytes already
+// belong to the parent's headerRaw). buildBlock and buildBody must agree on
+// where that line ends; they use the shared helpers consumeOpeningLineTail
+// and findInlineComment so the two computations cannot drift apart.
+//
+// openByte/closeByte are the brace offsets stored on Body for downstream
+// consumers; both are -1 at the top level.
 func buildBody(
 	content []byte,
 	tokens hclsyntax.Tokens,
@@ -103,13 +113,6 @@ func buildBody(
 	items := collectStructural(syntaxBody)
 
 	cursor := bodyStartByte
-	// For block bodies, the first newline after `{` is the terminator of
-	// the opening-brace line, not a blank line. Step past it so subsequent
-	// newline counts measure real blank lines. The top-level body has no
-	// such opening to skip.
-	if openByte != -1 {
-		cursor = consumeLineTerminator(content, cursor, bodyEndByte)
-	}
 	for i := range items {
 		item := &items[i]
 
@@ -120,13 +123,13 @@ func buildBody(
 
 		if item.attr != nil {
 			cstAttr, newCursor := buildAttribute(
-				content, tokens, item.attr, leading, leadingStart, bodyEndByte,
+				content, tokens, item.attr, leading, leadingStart, bodyStartByte, bodyEndByte,
 			)
 			body.Items = append(body.Items, cstAttr)
 			cursor = newCursor
 		} else {
 			cstBlock, newCursor := buildBlock(
-				content, tokens, item.block, leading, leadingStart, bodyEndByte,
+				content, tokens, item.block, leading, leadingStart, bodyStartByte, bodyEndByte,
 			)
 			body.Items = append(body.Items, cstBlock)
 			cursor = newCursor
@@ -475,6 +478,14 @@ func tokenToComment(tok hclsyntax.Token) Comment {
 // attaching any leading comments and detecting a same-line inline trailing
 // comment.
 //
+// bodyStartByte floors rawStart: lineStartBefore walks backward to the start
+// of attrStart's physical line, but when this attribute is the first item
+// in its body and begins on the same line as the enclosing `{` (no newline
+// in between), that line start sits before the body even begins — inside
+// bytes the enclosing Block's headerRaw already owns. Without the floor,
+// this attribute's raw would duplicate those header bytes verbatim. At the
+// top level bodyStartByte is 0, so the floor never engages.
+//
 // Returns the attribute and the byte cursor advanced past it. The cursor
 // includes the line terminator (and any inline comment + its newline) so
 // downstream gap processing starts on a clean line boundary.
@@ -484,7 +495,7 @@ func buildAttribute(
 	a *hclsyntax.Attribute,
 	leading []Comment,
 	leadingStart int,
-	bodyEndByte int,
+	bodyStartByte, bodyEndByte int,
 ) (*Attribute, int) {
 	attrStart := a.SrcRange.Start.Byte
 	attrEnd := a.SrcRange.End.Byte
@@ -494,6 +505,9 @@ func buildAttribute(
 		rawStart = leadingStart
 	}
 	rawStart = lineStartBefore(content, rawStart)
+	if rawStart < bodyStartByte {
+		rawStart = bodyStartByte
+	}
 
 	inline, afterInline := findInlineComment(content, tokens, attrEnd, a.SrcRange.End.Line, bodyEndByte)
 	rawEnd := afterInline
@@ -569,6 +583,12 @@ func consumeLineTerminator(content []byte, fromByte, bodyEndByte int) int {
 // the indent verbatim. With raws extended this way, Block.writeRegenerated
 // can emit body items with their original indentation intact when an
 // ancestor block regenerates around a mutated body.
+//
+// lineStartBefore has no lower bound of its own — it will happily walk back
+// past the start of the current body into a parent's territory when there is
+// no newline in between (the first item in a body starting flush against
+// the enclosing `{`). Callers that extend rawStart this way must clamp the
+// result to their own bodyStartByte; see buildAttribute and buildBlock.
 func lineStartBefore(content []byte, byteOffset int) int {
 	if byteOffset > len(content) {
 		byteOffset = len(content)
@@ -576,6 +596,69 @@ func lineStartBefore(content []byte, byteOffset int) int {
 	for i := byteOffset - 1; i >= 0; i-- {
 		if content[i] == '\n' {
 			return i + 1
+		}
+	}
+	return 0
+}
+
+// consumeOpeningLineTail advances fromByte past the line terminator that
+// ends the physical line containing fromByte, but ONLY when every byte
+// between fromByte and that terminator is blank (space, tab, CR). If a
+// non-blank byte is reached first, fromByte's line is shared with real body
+// content — the common case being a body's first item starting immediately
+// after `{` on the same line, whose own raw range already owns that content
+// — so fromByte is returned unchanged rather than scanning further ahead
+// for some unrelated later newline.
+//
+// This is the bounded counterpart to consumeLineTerminator, which performs
+// an unbounded forward scan and is only safe to call from the END of a
+// fully-parsed construct (an attribute's expression end, a block's closing
+// brace end), where HCL guarantees nothing but blanks/an inline comment can
+// precede the mandatory following newline. consumeOpeningLineTail is for the
+// opposite case: a position at the START of not-yet-consumed body content,
+// where that guarantee does not hold — the very next token, not a future
+// newline, is what determines where the current line's ownership ends.
+//
+// limit bounds the scan so a body with no blank tail does not read past its
+// own close.
+func consumeOpeningLineTail(content []byte, fromByte, limit int) int {
+	if limit > len(content) {
+		limit = len(content)
+	}
+	for i := fromByte; i < limit; i++ {
+		switch content[i] {
+		case ' ', '\t', '\r':
+			continue
+		case '\n':
+			return i + 1
+		default:
+			return fromByte
+		}
+	}
+	return fromByte
+}
+
+// lineStartIfBlank mirrors consumeOpeningLineTail for the backward
+// direction used by buildBlock's footerStart: it returns the start of
+// byteOffset's line only when every byte between that line start and
+// byteOffset is blank (space, tab, CR). If a non-blank byte is reached
+// first, byteOffset's line is shared with a preceding body item's own
+// content (reachable only on malformed/partial-tree input, since HCL
+// requires every attribute and block to end its own line with a newline),
+// and byteOffset is returned unchanged so footerRaw does not duplicate
+// bytes that item's raw range already owns.
+func lineStartIfBlank(content []byte, byteOffset int) int {
+	if byteOffset > len(content) {
+		byteOffset = len(content)
+	}
+	for i := byteOffset - 1; i >= 0; i-- {
+		switch content[i] {
+		case ' ', '\t', '\r':
+			continue
+		case '\n':
+			return i + 1
+		default:
+			return byteOffset
 		}
 	}
 	return 0
@@ -617,19 +700,26 @@ func lastNewlineEnd(content []byte, start, end int) int {
 // + footerRaw, so mutations on a nested Body are always visible at the
 // file root without any dirty-marking walk — the always-regenerate path is
 // the contract.
+//
+// bodyStartByte floors headerStart the same way buildAttribute floors
+// rawStart: this block may itself be the first item in its enclosing body,
+// starting on the same line as the enclosing `{`.
 func buildBlock(
 	content []byte,
 	tokens hclsyntax.Tokens,
 	b *hclsyntax.Block,
 	leading []Comment,
 	leadingStart int,
-	bodyEndByte int,
+	bodyStartByte, bodyEndByte int,
 ) (*Block, int) {
 	headerStart := b.Range().Start.Byte
 	if leadingStart >= 0 {
 		headerStart = leadingStart
 	}
 	headerStart = lineStartBefore(content, headerStart)
+	if headerStart < bodyStartByte {
+		headerStart = bodyStartByte
+	}
 	closeEnd := b.CloseBraceRange.End.Byte
 	footerEnd := consumeLineTerminator(content, closeEnd, bodyEndByte)
 
@@ -658,7 +748,7 @@ func buildBlock(
 	// inside the body so it doesn't bleed past `}`. findInlineComment stops
 	// at the first non-comment / non-newline token, so it naturally returns
 	// nil if `{` is followed by a newline (the common multi-line case).
-	openComment, _ := findInlineComment(
+	openComment, afterOpenComment := findInlineComment(
 		content, tokens, innerStart, b.OpenBraceRange.End.Line, innerEnd,
 	)
 	// Closing-brace inline comment (e.g. `} # end of resource`). Bound by
@@ -667,9 +757,25 @@ func buildBlock(
 		content, tokens, b.CloseBraceRange.End.Byte, b.CloseBraceRange.End.Line, bodyEndByte,
 	)
 
+	// bodyContentStart is where this block's actual body content begins,
+	// past the opening brace's own physical line: past afterOpenComment
+	// when there's an inline opening-brace comment (already includes its
+	// trailing newline), otherwise past a pure-whitespace run to the next
+	// newline, or unchanged at innerStart when real content follows `{` on
+	// the same line. This is computed once and reused both as buildBody's
+	// gap-scan floor below and, for non-inline blocks, as headerEnd — so
+	// the two never disagree about which bytes the header line owns. Two
+	// independent recomputations of "where does the header line end" is
+	// exactly what produced the duplicated-content bug this shared value
+	// closes off.
+	bodyContentStart := afterOpenComment
+	if openComment == nil {
+		bodyContentStart = consumeOpeningLineTail(content, innerStart, innerEnd)
+	}
+
 	nestedBody := buildBody(
 		content, tokens, b.Body, DefaultBlockBodyPolicy(),
-		innerStart, innerEnd,
+		bodyContentStart, innerEnd,
 		b.OpenBraceRange.Start.Byte, b.CloseBraceRange.Start.Byte,
 	)
 
@@ -685,8 +791,18 @@ func buildBlock(
 	if inline {
 		cstBlock.wholeRaw = bytes.Clone(content[headerStart:footerEnd])
 	} else {
-		headerEnd := consumeLineTerminator(content, b.OpenBraceRange.End.Byte, b.CloseBraceRange.Start.Byte)
-		footerStart := lineStartBefore(content, b.CloseBraceRange.Start.Byte)
+		// headerEnd is bodyContentStart: the same boundary buildBody used
+		// as its gap-scan floor above, so header and body agree exactly on
+		// where the opening-brace line's ownership ends.
+		headerEnd := bodyContentStart
+		// footerStart: symmetric to headerEnd — only extend back to the
+		// closing brace's line-start when everything between that line
+		// start and the brace is blank. HCL requires every attribute and
+		// block to end with its own newline, so in well-formed input the
+		// last body item's raw always supplies that newline and this never
+		// crosses into it; the guard still matters for a Block built over
+		// a malformed/partial tree, where Build's contract is best-effort.
+		footerStart := lineStartIfBlank(content, b.CloseBraceRange.Start.Byte)
 		if footerStart < headerEnd {
 			footerStart = headerEnd
 		}

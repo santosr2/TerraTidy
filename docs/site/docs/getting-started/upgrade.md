@@ -21,8 +21,12 @@ go install github.com/santosr2/TerraTidy/cmd/terratidy@latest
 ### Homebrew
 
 ```bash
-brew upgrade terratidy
+brew update && brew upgrade --cask terratidy
 ```
+
+If you installed TerraTidy before v0.4.0, it came from a formula in a different tap; see
+[v0.4.0: Homebrew Installs a Cask from a Dedicated Tap](#v040-homebrew-installs-a-cask-from-a-dedicated-tap)
+to move over first.
 
 ### Docker
 
@@ -371,6 +375,68 @@ engines:
 Unrecognized rule keys are ignored rather than rejected, so a config left on the old IDs
 will load without error and silently stop applying your overrides. Grep your configs for
 the old names rather than relying on `terratidy config validate` to catch them.
+
+### v0.4.0: Homebrew Installs a Cask from a Dedicated Tap
+
+TerraTidy is now a Homebrew **cask** published to the
+[`santosr2/homebrew-tap`](https://github.com/santosr2/homebrew-tap) repository. Earlier
+releases shipped a **formula** from this repository, tapped with an explicit URL.
+
+| Before | After |
+|--------|-------|
+| `brew tap santosr2/tap https://github.com/santosr2/TerraTidy` | No separate tap step |
+| `brew install santosr2/tap/terratidy` | `brew install --cask santosr2/tap/terratidy` |
+
+The old tap still points at this repository, which no longer contains a formula, so it
+has to be removed before the new one can be used.
+
+**Migration:**
+
+```bash
+brew uninstall terratidy
+brew untap santosr2/tap
+brew install --cask santosr2/tap/terratidy
+```
+
+Uninstall first: `brew untap` refuses to remove a tap while something installed from it
+is still present.
+
+The separate `brew tap` step is gone because Homebrew 6.0.0 won't load anything from a
+third-party tap until you trust it, and a bare `brew tap santosr2/tap` fails as a result.
+Installing by the fully qualified name trusts only that cask. Once you're on the new tap,
+the old `brew install santosr2/tap/terratidy` stops with a message pointing at the cask
+instead of installing anything. On the old tap it just reports that no formula exists.
+
+### v0.4.0: Building from Source Requires Go 1.26
+
+The module now declares `go 1.26.0`, up from `go 1.25.0`. This affects
+`go install github.com/santosr2/TerraTidy/cmd/terratidy@latest` and anyone building a
+checkout. Pre-built binaries, the Docker image, and the Homebrew cask are unaffected.
+
+**Migration:** upgrade Go to 1.26 or later. Go plugins (`.so` files) must be rebuilt with
+the same Go version as the TerraTidy binary that loads them; official releases are built
+with the version pinned in `.go-version`.
+
+### v0.4.0: Per-Architecture Docker Tags Removed
+
+Releases up to v0.3.0 also published single-architecture images, such as
+`ghcr.io/santosr2/terratidy:v0.3.0-amd64` and `:v0.3.0-arm64`. From v0.4.0 only the
+multi-platform tags are published: `vX.Y.Z` for every release, plus `vX`, `vX.Y` and
+`latest` for stable ones.
+
+**Migration:** replace any `-amd64` or `-arm64` tag with the plain version tag. Docker
+selects the right architecture automatically; pass `--platform linux/amd64` or
+`--platform linux/arm64` if you need a specific one.
+
+### v0.4.0: Colored Output Only on a Terminal
+
+Text and table output used to include ANSI color codes even when piped or redirected.
+Color is now decided per run: `--color` wins if given, then `NO_COLOR`, then
+`FORCE_COLOR`, and otherwise color is used only when stdout is a terminal. JSON, SARIF,
+HTML, and the other machine formats are unchanged.
+
+**Migration:** nothing, unless you relied on color codes surviving a pipe, for example
+`terratidy check | less -R`. For that, pass `--color` or set `FORCE_COLOR=1`.
 
 ### Pre-release to Stable
 

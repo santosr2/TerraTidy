@@ -130,10 +130,11 @@ release:
     - 📖 [User Guide](https://santosr2.github.io/TerraTidy/)
     - 📋 [Full Changelog](https://github.com/santosr2/TerraTidy/blob/main/CHANGELOG.md)
     - 🐛 [Report Issues](https://github.com/santosr2/TerraTidy/issues)
-
+    {{ if .PreviousTag }}
     ---
 
     **Full Changelog**: https://github.com/santosr2/TerraTidy/compare/{{ .PreviousTag }}...{{ .Tag }}
+    {{ end }}
 
 # Casks, not formulas: GoReleaser deprecated `brews`, and the Linuxbrew
 # limitation that made formulas the only option for pre-built binaries no longer

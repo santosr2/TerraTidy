@@ -136,6 +136,22 @@ jobs:
           # permission the token inherits everything the installation was granted.
           permission-contents: write
 
+      # GoReleaser finds the previous release with `git describe`, and the floating
+      # alias tags (v0, v0.4, ...) break that: they point at a release's tag object
+      # rather than its commit, git warns that the alias is "externally known as"
+      # the real tag, and GoReleaser gives up, leaving the release notes' compare
+      # link with no base. Pick the tag here instead: the newest full vX.Y.Z tag
+      # before this one, with each pre-release sorting below its stable release.
+      - name: Determine the previous release tag
+        id: previous-tag
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          tags=$(git -c versionsort.suffix=- tag --list 'v*.*.*' --merged "${TAG}^" --sort=-version:refname)
+          previous=${tags%%$'\n'*}
+          echo "Previous release tag: ${previous:-none}"
+          echo "tag=${previous}" >> "$GITHUB_OUTPUT"
+
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
         with:
@@ -147,6 +163,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           HOMEBREW_TAP_GITHUB_TOKEN: ${{ steps.tap-token.outputs.token }}
+          GORELEASER_PREVIOUS_TAG: ${{ steps.previous-tag.outputs.tag }}
 
       - name: Sign checksums with cosign
         run: cosign sign-blob --yes dist/checksums.txt --bundle dist/checksums.txt.bundle
@@ -320,21 +337,26 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           gh auth setup-git
 
+          # Point the aliases at the release commit, not at the signed tag object.
+          # A lightweight tag naming another tag's object makes git report the alias
+          # as "externally known as" the real tag, which breaks `git describe`.
+          commit="${TAG}^{commit}"
+
           if [[ -n "$PRERELEASE" ]]; then
             echo "Pre-release detected: $PRERELEASE"
 
-            git tag -f "v${MAJOR}-${PRERELEASE}" "$TAG"
+            git tag -f "v${MAJOR}-${PRERELEASE}" "$commit"
             git push -f origin "v${MAJOR}-${PRERELEASE}"
 
-            git tag -f "v${MAJOR}.${MINOR}-${PRERELEASE}" "$TAG"
+            git tag -f "v${MAJOR}.${MINOR}-${PRERELEASE}" "$commit"
             git push -f origin "v${MAJOR}.${MINOR}-${PRERELEASE}"
           else
             echo "Stable release detected"
 
-            git tag -f "v${MAJOR}" "$TAG"
+            git tag -f "v${MAJOR}" "$commit"
             git push -f origin "v${MAJOR}"
 
-            git tag -f "v${MAJOR}.${MINOR}" "$TAG"
+            git tag -f "v${MAJOR}.${MINOR}" "$commit"
             git push -f origin "v${MAJOR}.${MINOR}"
           fi
         env:

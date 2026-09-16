@@ -91,6 +91,9 @@ commit_parsers = [
   { message = "^[a-z]+(\\([^)]+\\))?!:", group = "Breaking Changes" },
   { message = "^feat", group = "Added" },
   { message = "^fix", group = "Fixed" },
+  # The release workflow's own changelog commit. Listing it would put "update
+  # changelog for vX" into the notes of the release after X. Must precede ^doc.
+  { message = "^docs: update changelog for v", skip = true },
   { message = "^doc", group = "Documentation" },
   { message = "^perf", group = "Performance" },
   { message = "^refactor", group = "Changed" },

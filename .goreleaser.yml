@@ -74,19 +74,22 @@ release:
   draft: false
   prerelease: auto
   name_template: "{{.ProjectName}} {{.Version}}"
+  # The Homebrew line is stable-only because homebrew_casks skips pre-releases:
+  # on a pre-release page it would install the previous stable instead.
   header: |
     ## TerraTidy {{ .Version }}
 
     {{ if .Prerelease }}⚠️ **This is a pre-release version.** It may contain bugs and breaking changes.{{ end }}
 
+    Upgrading from an earlier release? Check the [upgrade guide](https://santosr2.github.io/TerraTidy/getting-started/upgrade/#breaking-changes) for breaking changes and migration steps.
+
     ### Installation
 
     ```bash
-    # Homebrew (macOS/Linux)
-    brew tap santosr2/tap https://github.com/santosr2/TerraTidy
-    brew install santosr2/tap/terratidy
+    {{ if not .Prerelease }}# Homebrew (macOS/Linux)
+    brew install --cask santosr2/tap/terratidy
 
-    # Go install
+    {{ end }}# Go install
     go install github.com/santosr2/TerraTidy/cmd/terratidy@{{ .Tag }}
 
     # Docker

@@ -811,7 +811,7 @@ terratidy version --format json-compact
 **Output:**
 
 ```text
-TerraTidy version 0.3.0
+TerraTidy version 0.4.0
   Commit:      abc1234
   Build date:  2025-12-22
   Go version:  go1.27.1

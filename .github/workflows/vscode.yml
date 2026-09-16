@@ -102,6 +102,33 @@ jobs:
         working-directory: vscode
         run: bun run compile
 
+      # vscode-test looks up the latest VS Code release on every run. On hosted
+      # runners that lookup intermittently fails about 300 ms in: Node tries the
+      # service's IPv6 and IPv4 addresses with a 250 ms limit on each and gives up.
+      # test-electron copes with a failed lookup by falling back to a copy already
+      # in .vscode-test/, but a fresh runner has none, so the error ends the job.
+      #
+      # Downloading here first means the test step always has that copy. The longer
+      # per-address limit is set only for this step, never for the tests:
+      # test-electron hands NODE_OPTIONS on to VS Code itself, and Electron accepts
+      # only some Node options. It is also skipped if the runner's Node predates the
+      # flag, because Node refuses to start with an option it doesn't know.
+      - name: Download VS Code for tests
+        working-directory: vscode
+        run: |
+          if node --help | grep -q -- '--network-family-autoselection-attempt-timeout'; then
+            export NODE_OPTIONS=--network-family-autoselection-attempt-timeout=5000
+          fi
+          for attempt in 1 2 3; do
+            if node -e "require('@vscode/test-electron').download().then((p) => console.log('VS Code ready:', p))"; then
+              exit 0
+            fi
+            echo "::warning::VS Code download attempt ${attempt} failed"
+            sleep $((attempt * 10))
+          done
+          echo "::error::Could not download VS Code after 3 attempts" >&2
+          exit 1
+
       - name: Run tests (Linux)
         if: matrix.os == 'ubuntu-latest'
         working-directory: vscode

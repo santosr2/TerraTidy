@@ -247,8 +247,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
-      # Read-only: the push and the docs dispatch both go through the App token
-      # minted below, not through GITHUB_TOKEN.
+      # Read-only: the push goes through the App token minted below, not through
+      # GITHUB_TOKEN.
       contents: read
     steps:
       # The default-branch ruleset requires every change to main to arrive through
@@ -263,9 +263,8 @@ jobs:
           private-key: ${{ secrets.RELEASE_BOT_PRIVATE_KEY }}
           owner: santosr2
           repositories: TerraTidy
-          # Committing the changelog and dispatching the docs build, nothing else.
+          # Committing the changelog, nothing else.
           permission-contents: write
-          permission-actions: write
 
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -304,13 +303,10 @@ jobs:
           gh auth setup-git
           git add CHANGELOG.md
           git commit -m "docs: update changelog for ${TAG_NAME}"
+          # The docs site renders CHANGELOG.md through a symlink. This push is made
+          # with the App token, and unlike a GITHUB_TOKEN push it raises a push
+          # event, so docs.yml rebuilds the site on its own.
           git push origin main
-
-          # The docs site renders CHANGELOG.md through a symlink, but this push is
-          # authenticated with GITHUB_TOKEN and so raises no push event. Dispatch the
-          # docs workflow directly, or the published changelog stays a release behind.
-          # workflow_dispatch is one of the two events GITHUB_TOKEN may still trigger.
-          gh workflow run docs.yml --ref main
         env:
           GITHUB_TOKEN: ${{ steps.changelog-token.outputs.token }}
           APP_SLUG: ${{ steps.changelog-token.outputs.app-slug }}

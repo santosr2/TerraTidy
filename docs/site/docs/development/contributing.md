@@ -270,10 +270,13 @@ Follow [Conventional Commits](https://www.conventionalcommits.org/):
 
 ## Release Process
 
-Releases are fully automated. Pushing a version tag triggers the pipeline:
+Releases are driven by a signed version tag. Pushing it triggers the pipeline:
 
-1. Bump version: `bump-my-version bump <part>` (major, minor, patch, pre_n)
-2. Push the tag: `git push origin v1.2.3`
+1. Bump the version: `mise run bump:patch`, `bump:minor`, or `bump:major`. Each opens a pre-release cycle
+   (`0.3.0` → `0.4.0-alpha`), so for a stable release follow it with `mise run bump:stable`.
+   The bump commits the change but does not tag it.
+2. Create and push a signed tag: `git tag -s v1.2.3 -m "v1.2.3" && git push origin v1.2.3`.
+   Pushing the tag is the only way to get correctly signed release artifacts.
 3. The release workflow handles everything else:
     - GoReleaser cross-compiles binaries, builds Docker images, and publishes the Homebrew cask to `santosr2/homebrew-tap`
     - git-cliff generates release notes from conventional commits

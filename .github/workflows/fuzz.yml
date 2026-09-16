@@ -135,6 +135,7 @@ jobs:
         env:
           FUZZTIME: ${{ needs.discover.outputs.fuzztime }}
           PACKAGE: ${{ matrix.package }}
+          SLUG: ${{ steps.paths.outputs.slug }}
         run: |
           set -uo pipefail
           ./tools/scripts/fuzz.sh "$FUZZTIME" "$PACKAGE" 2>&1 | tee fuzz-output.txt
@@ -146,7 +147,9 @@ jobs:
             status=failed
           fi
           echo "status=$status" >> "$GITHUB_OUTPUT"
-          printf '%s\t%s\n' "$PACKAGE" "$status" > "fuzz-status.txt"
+          # Named per package: the report job downloads every status artifact
+          # into one directory, so a shared filename leaves only the last one.
+          printf '%s\t%s\n' "$PACKAGE" "$status" > "fuzz-status-${SLUG}.txt"
 
           {
             echo "## ${PACKAGE}"
@@ -166,7 +169,7 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: fuzz-status-${{ steps.paths.outputs.slug }}
-          path: fuzz-status.txt
+          path: fuzz-status-${{ steps.paths.outputs.slug }}.txt
           retention-days: 7
 
       # A crasher is written into testdata/fuzz in the runner's workspace and is
@@ -257,10 +260,11 @@ jobs:
               '',
               table,
               '',
+              // One string per paragraph: GitHub reflows markdown, and a hard break
+              // here renders as a ragged line in the comment.
               ...(passed ? [] : [
-                'Download the `fuzz-crashers-*` artifact from this run to get the failing',
-                'input, then commit it under the target\'s `testdata/fuzz/` directory so it',
-                'becomes a regression case.',
+                'Download the `fuzz-crashers-*` artifact from this run to get the failing input, ' +
+                'then commit it under the target\'s `testdata/fuzz/` directory so it becomes a regression case.',
               ]),
             ].join('\n');
 

@@ -275,7 +275,7 @@ Releases are fully automated. Pushing a version tag triggers the pipeline:
 1. Bump version: `bump-my-version bump <part>` (major, minor, patch, pre_n)
 2. Push the tag: `git push origin v1.2.3`
 3. The release workflow handles everything else:
-    - GoReleaser cross-compiles binaries, builds Docker images, and updates the Homebrew formula
+    - GoReleaser cross-compiles binaries, builds Docker images, and publishes the Homebrew cask to `santosr2/homebrew-tap`
     - git-cliff generates release notes from conventional commits
     - CHANGELOG.md is automatically updated and committed to main
     - Version alias tags (e.g., `v1`, `v1.2`) are created for stable releases
@@ -283,7 +283,7 @@ Releases are fully automated. Pushing a version tag triggers the pipeline:
     - Checksums are signed with cosign and build provenance is attested
     - SBOMs are generated for each release archive
     - Post-release smoke tests verify the binary on ubuntu and macOS
-    - Homebrew formula is tested on macOS (stable releases only)
+    - The Homebrew cask is install-tested on macOS (stable releases only)
 
 ## Getting Help
 

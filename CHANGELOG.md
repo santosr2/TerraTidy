@@ -5,6 +5,42 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-09-16
+
+### Breaking Changes
+
+- Require Go 1.26, pin the release toolchain, and make releases reproducible ([#294](https://github.com/santosr2/TerraTidy/pull/294)) by [@santosr2](https://github.com/santosr2)
+- Modernize the release pipeline ([#298](https://github.com/santosr2/TerraTidy/pull/298)) by [@santosr2](https://github.com/santosr2)
+
+### CI/CD
+
+- **container**: Scan the image on main, not only on release tags ([#286](https://github.com/santosr2/TerraTidy/pull/286)) by [@santosr2](https://github.com/santosr2)
+- **docs**: Rebuild the site when the root changelog changes ([#287](https://github.com/santosr2/TerraTidy/pull/287)) by [@santosr2](https://github.com/santosr2)
+- **vscode**: Download VS Code before the tests so a lookup blip can't fail them ([#303](https://github.com/santosr2/TerraTidy/pull/303)) by [@santosr2](https://github.com/santosr2)
+
+### Dependencies
+
+- **deps**: Bump github/codeql-action/upload-sarif from 4.37.8 to 4.37.9 ([#293](https://github.com/santosr2/TerraTidy/pull/293)) by [@dependabot[bot]](https://github.com/dependabot[bot])
+- **deps**: Bump anchore/sbom-action/download-syft from 0.24.0 to 0.24.2 ([#291](https://github.com/santosr2/TerraTidy/pull/291)) by [@dependabot[bot]](https://github.com/dependabot[bot])
+- **deps**: Bump zizmorcore/zizmor-action from 0.6.2 to 0.6.3 ([#289](https://github.com/santosr2/TerraTidy/pull/289)) by [@dependabot[bot]](https://github.com/dependabot[bot])
+- **deps-dev**: Bump mocha from 11.8.0 to 12.0.0 in /vscode ([#292](https://github.com/santosr2/TerraTidy/pull/292)) by [@dependabot[bot]](https://github.com/dependabot[bot])
+- **deps**: Bump docker/setup-qemu-action from 4.2.0 to 4.3.0 ([#302](https://github.com/santosr2/TerraTidy/pull/302)) by [@dependabot[bot]](https://github.com/dependabot[bot])
+- **deps**: Bump orhun/git-cliff-action from 4.8.0 to 4.9.0 ([#301](https://github.com/santosr2/TerraTidy/pull/301)) by [@dependabot[bot]](https://github.com/dependabot[bot])
+- **deps**: Bump actions/deploy-pages from 5.0.0 to 5.0.1 ([#300](https://github.com/santosr2/TerraTidy/pull/300)) by [@dependabot[bot]](https://github.com/dependabot[bot])
+- **deps**: Bump github.com/open-policy-agent/opa from 1.20.1 to 1.20.2 ([#299](https://github.com/santosr2/TerraTidy/pull/299)) by [@dependabot[bot]](https://github.com/dependabot[bot])
+
+### Documentation
+
+- Correct stale Alpine and Go version references ([#295](https://github.com/santosr2/TerraTidy/pull/295)) by [@santosr2](https://github.com/santosr2)
+
+### Fixed
+
+- **changelog**: Repair release notes, contributors, and the generated changelog ([#285](https://github.com/santosr2/TerraTidy/pull/285)) by [@santosr2](https://github.com/santosr2)
+- **security**: Patch container image CVEs and osv-scanner exit handling ([#288](https://github.com/santosr2/TerraTidy/pull/288)) by [@santosr2](https://github.com/santosr2)
+- Resolve open code scanning alerts ([#296](https://github.com/santosr2/TerraTidy/pull/296)) by [@santosr2](https://github.com/santosr2)
+- Repair broken tooling and a serializer correctness bug ([#297](https://github.com/santosr2/TerraTidy/pull/297)) by [@santosr2](https://github.com/santosr2)
+
+
 ## [0.3.0] - 2026-08-31
 
 ### Breaking Changes
@@ -48,7 +84,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Documentation
 
-- Update changelog for v0.2.0 ([ffe738c](https://github.com/santosr2/TerraTidy/commit/ffe738c57636dbf03d4ba8f3f915e368752e4e93)) by [@github-actions[bot]](https://github.com/github-actions[bot])
 - Correct changelog attribution for the #251 entry ([6b23df7](https://github.com/santosr2/TerraTidy/commit/6b23df7fdddcf26f2b4e4b4957b4e073be15a72d)) by [@santosr2](https://github.com/santosr2)
 
 ### Fixed
@@ -58,6 +93,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### VS Code Extension
 
 - Refresh bun.lock to pull patched transitive deps ([#283](https://github.com/santosr2/TerraTidy/pull/283)) by [@santosr2](https://github.com/santosr2)
+
+
+---
+
+### New Contributors
+
+- @Marukome0743 made their first contribution in [#280](https://github.com/santosr2/TerraTidy/pull/280)
 
 ## [0.2.0] - 2026-07-22
 
@@ -213,7 +255,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Documentation
 
-- Update changelog for v0.2.0-alpha.4 ([d267e60](https://github.com/santosr2/TerraTidy/commit/d267e60b2d44c4f94e4718be8a970ec0f16e2778)) by [@github-actions[bot]](https://github.com/github-actions[bot])
 - Comprehensive documentation and examples review ([#104](https://github.com/santosr2/TerraTidy/pull/104)) by [@santosr2](https://github.com/santosr2)
 - Add v0.1.0 deprecation notice and discussion templates ([#106](https://github.com/santosr2/TerraTidy/pull/106)) by [@santosr2](https://github.com/santosr2)
 - Add performance guide, update architecture, and refresh baseline ([9094af6](https://github.com/santosr2/TerraTidy/commit/9094af6d110de7d6ea16cb944f7bff5200c1dfba)) by [@santosr2](https://github.com/santosr2)
@@ -299,6 +340,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **release**: Track discussion template version placeholder ([d918e91](https://github.com/santosr2/TerraTidy/commit/d918e91f0a381153382c4e64c4b162f83f0f9927)) by [@santosr2](https://github.com/santosr2)
 - **release**: Drop stale CHANGELOG.md from release archives ([4487b6c](https://github.com/santosr2/TerraTidy/commit/4487b6cd1fea500a317a63ab41cbb5a21d4e6856)) by [@santosr2](https://github.com/santosr2)
 
+
 ## [0.2.0-alpha.4] - 2026-04-04
 
 ### Added
@@ -349,7 +391,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Documentation
 
-- Update changelog for v0.2.0-alpha.3 ([f188998](https://github.com/santosr2/TerraTidy/commit/f188998f7c6d633d1485cba6c8340d72362d31eb)) by [@github-actions[bot]](https://github.com/github-actions[bot])
 - Align documentation with actual implementation ([#18](https://github.com/santosr2/TerraTidy/pull/18)) by [@santosr2](https://github.com/santosr2)
 - Fix version refs, dead links, and missing output formats ([#21](https://github.com/santosr2/TerraTidy/pull/21)) by [@santosr2](https://github.com/santosr2)
 - Document style rules, commands, and output formats ([#24](https://github.com/santosr2/TerraTidy/pull/24)) by [@santosr2](https://github.com/santosr2)
@@ -397,6 +438,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Remove make_latest (GitHub limitation for prereleases) ([15c013c](https://github.com/santosr2/TerraTidy/commit/15c013c71269c3e074f83b14cfb80d0573a02a97)) by [@santosr2](https://github.com/santosr2)
 
+
+---
+
+### New Contributors
+
+- @dependabot[bot] made their first contribution in [#74](https://github.com/santosr2/TerraTidy/pull/74)
+
 ## [0.2.0-alpha.3] - 2026-01-19
 
 ### Added
@@ -418,7 +466,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Documentation
 
-- Update changelog for v0.2.0-alpha.2 ([96c06be](https://github.com/santosr2/TerraTidy/commit/96c06be3823d47ea0255eeee22d912939954ec6e)) by [@github-actions[bot]](https://github.com/github-actions[bot])
 - Clarify that 'latest' Docker tag includes pre-releases ([e50ac4c](https://github.com/santosr2/TerraTidy/commit/e50ac4c84a473792adc8237b87c189d89b44936d)) by [@santosr2](https://github.com/santosr2)
 
 ### Fixed
@@ -428,6 +475,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **cli**: Fix color flag and add changelog links ([b11560c](https://github.com/santosr2/TerraTidy/commit/b11560c1bab748e08cd634e98d31543257db4798)) by [@santosr2](https://github.com/santosr2)
 - **cli**: Apply global color flag to all commands ([3f50fbb](https://github.com/santosr2/TerraTidy/commit/3f50fbb473810f03efe5e35ba683f6fa31575b41)) by [@santosr2](https://github.com/santosr2)
 - **style**: Preserve inline comments when reordering HCL attributes ([#2](https://github.com/santosr2/TerraTidy/pull/2)) by [@santosr2](https://github.com/santosr2)
+
+
+---
+
+### New Contributors
+
+- @github-actions[bot] made their first contribution
 
 ## [0.2.0-alpha.2] - 2026-01-12
 
@@ -464,6 +518,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add bump-my-version to mise and update bumpversion config ([12e9a9f](https://github.com/santosr2/TerraTidy/commit/12e9a9fed782753fd610d1f4d8efb891ad221493)) by [@santosr2](https://github.com/santosr2)
 - Bump version to 0.2.0-alpha.2 ([a4b88fc](https://github.com/santosr2/TerraTidy/commit/a4b88fcc90c9d3565f8c399a58d40bc98d705316)) by [@santosr2](https://github.com/santosr2)
 
+
 ## [0.2.0-alpha] - 2026-01-08
 
 ### Added
@@ -498,6 +553,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Other
 
 - Update gitignore and mise configuration ([3d4cabc](https://github.com/santosr2/TerraTidy/commit/3d4cabc453cfb8fce22237da700c21d42bb2c923)) by [@santosr2](https://github.com/santosr2)
+
 
 ## [0.1.0] - 2025-12-22
 
@@ -545,6 +601,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fix pre-commit issues and update OPA import ([ca09160](https://github.com/santosr2/TerraTidy/commit/ca0916053469b0ad9e1c233659b138c273486868)) by [@santosr2](https://github.com/santosr2)
 - Exclude test files from complexity rules in revive ([2564974](https://github.com/santosr2/TerraTidy/commit/2564974b584115610107da2427e6fc292a4c3de3)) by [@santosr2](https://github.com/santosr2)
 - **vscode**: Add .gitignore for build artifacts ([854a95f](https://github.com/santosr2/TerraTidy/commit/854a95f9e3e8cadc990d3f4e93a9ae4f65ff0d20)) by [@santosr2](https://github.com/santosr2)
+
+
+---
+
+### New Contributors
+
+- @santosr2 made their first contribution
+- @goreleaserbot made their first contribution
+
+[0.4.0]: https://github.com/santosr2/TerraTidy/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/santosr2/TerraTidy/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/santosr2/TerraTidy/compare/v0.2.0-alpha.4...v0.2.0
 [0.2.0-alpha.4]: https://github.com/santosr2/TerraTidy/compare/v0.2.0-alpha.3...v0.2.0-alpha.4

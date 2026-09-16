@@ -15,8 +15,8 @@ on:
     paths:
       - "docs/site/**"
       - "CHANGELOG.md"
-  # The release changelog commit is pushed with GITHUB_TOKEN, which by design cannot
-  # trigger a push run. That job dispatches this workflow explicitly instead.
+  # For rebuilding the site by hand. The release changelog commit doesn't need it:
+  # it is pushed with the release App's token, so it triggers the push run above.
   workflow_dispatch:
 
 permissions:

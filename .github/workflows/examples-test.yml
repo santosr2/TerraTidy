@@ -3,20 +3,8 @@ name: Test Example Rules
 on:
   push:
     branches: [main]
-    paths:
-      - 'examples/**'
-      - 'internal/cst/**'
-      - 'internal/plugins/**'
-      - 'internal/engines/style/**'
-      - '.github/workflows/examples-test.yml'
   pull_request:
     branches: [main]
-    paths:
-      - 'examples/**'
-      - 'internal/cst/**'
-      - 'internal/plugins/**'
-      - 'internal/engines/style/**'
-      - '.github/workflows/examples-test.yml'
 
 permissions:
   contents: read
@@ -26,7 +14,36 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Decides whether this change touches anything the jobs below test. The path
+  # filter lives here rather than on the triggers so that the workflow always
+  # starts: a workflow skipped by a trigger filter reports nothing, and a
+  # required check that never reports blocks the pull request indefinitely.
+  changes:
+    name: Detect relevant changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read  # List the files a pull request changes
+    outputs:
+      relevant: ${{ steps.match.outputs.relevant }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: tools/scripts
+
+      - name: Match changed files
+        id: match
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PATTERN: '^examples/|^internal/cst/|^internal/plugins/|^internal/engines/style/|^\.github/workflows/examples-test\.yml$|^tools/scripts/changed-files-match\.sh$'
+        run: ./tools/scripts/changed-files-match.sh
+
   test-example-rules:
+    needs: changes
+    if: needs.changes.outputs.relevant == 'true'
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest]
@@ -87,3 +104,30 @@ jobs:
         run: |
           ./bin/terratidy style --config examples/terragrunt.yaml examples/rule-test-files/terragrunt-include-order.hcl 2>&1 | tee output.txt
           grep -q "terragrunt-include-first" output.txt
+
+  # The one check to require for this workflow. It waits on every other job and
+  # passes only if each one succeeded or was skipped because the change did not
+  # touch what it tests. It uses always() rather than !cancelled() on purpose: a
+  # cancelled run has to fail this check, whereas a skipped required check would
+  # count as passing.
+  result:
+    name: Example rules result
+    if: always()
+    needs: [changes, test-example-rules]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: { }
+    steps:
+      - name: Require every job to have passed or been skipped
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          jq -r 'to_entries[] | "\(.key): \(.value.result)"' <<<"$RESULTS"
+          failed=$(jq -r 'to_entries[]
+            | select((.key == "changes" and .value.result != "success")
+                     or (.value.result != "success" and .value.result != "skipped"))
+            | .key' <<<"$RESULTS")
+          if [ -n "$failed" ]; then
+            echo "::error::These jobs did not pass: ${failed//$'\n'/, }"
+            exit 1
+          fi

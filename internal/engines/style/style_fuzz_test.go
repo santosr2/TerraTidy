@@ -6,12 +6,17 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"testing"
 
 	"github.com/hashicorp/hcl/v2"
+	"github.com/hashicorp/hcl/v2/hclsyntax"
+	"github.com/santosr2/TerraTidy/internal/config"
+	"github.com/santosr2/TerraTidy/internal/hcltest"
 	"github.com/santosr2/TerraTidy/pkg/sdk"
 )
 
@@ -107,11 +112,19 @@ resource "test" "example" {} // inline
 	})
 }
 
-// FuzzStyleFix exercises the fix-mode code path which involves:
-// - Multi-pass loop (up to 3 passes)
-// - File write-back via applyFixes
-// - Re-read and re-parse after each fix
-// - Diff generation
+// FuzzStyleFix runs the engine in fix mode (the multi-pass loop, file
+// write-back, re-parse, and diff generation) and checks what it wrote back.
+// For input that parses cleanly, the rewritten file must:
+//
+//  1. still parse;
+//  2. declare the same attributes and blocks, at every depth, as the input.
+//     Fixes reorder and respace; they never add, drop, or move a declaration
+//     into another block;
+//  3. be a fixed point: running the engine again leaves it unchanged. A run
+//     that ends in a style.fix-loop finding is exempt, since the engine gave
+//     up before converging and reported it.
+//
+// Invalid input only has to not panic.
 func FuzzStyleFix(f *testing.F) {
 	// Use same seeds as FuzzStyleCheck
 	f.Add([]byte(mediumConfig))
@@ -146,29 +159,79 @@ resource "test" "example" {}
 variable "b" {}
 `)) // no blank line between blocks
 
+	// Seeds for the opt-in fixers
+	f.Add([]byte("// comment\nresource \"test\" \"a\" {\n  name = \"x\"   \n}\n")) // comment syntax, trailing whitespace
+	f.Add([]byte(`resource "aws_instance" "web" {
+  ami = "ami-123"
+  lifecycle {
+    ignore_changes        = [tags]
+    create_before_destroy = true
+  }
+  provider = aws.west
+  count    = 1
+}
+`)) // meta-argument and lifecycle attribute order
+
 	// Edge cases
 	f.Add([]byte(``))
 	f.Add([]byte(`{`))
 	f.Add([]byte(`resource {}`))
 
-	// Create engine with Fix and Diff enabled
-	engine := New(&Config{
-		Fix:   true,
-		Diff:  true,
-		Rules: make(map[string]RuleConfig),
-	})
+	// Turn on every rule, opt-in ones included, so every Fix is exercised.
+	cfg := &Config{Fix: true, Diff: true, Rules: make(map[string]RuleConfig)}
+	engine := New(cfg)
+	for _, rule := range engine.GetAllRules() {
+		cfg.Rules[rule.Name()] = RuleConfig{Enabled: config.BoolPtr(true)}
+	}
 
 	f.Fuzz(func(t *testing.T, data []byte) {
-		// Write to temp file
-		tmpDir := t.TempDir()
-		tmpFile := filepath.Join(tmpDir, "test.tf")
+		tmpFile := filepath.Join(t.TempDir(), "test.tf")
 		if err := os.WriteFile(tmpFile, data, 0o600); err != nil {
 			t.Fatalf("failed to write temp file: %v", err)
 		}
 
-		// Run style checks with fix mode - should not panic
-		_, _ = engine.Run(context.Background(), []string{tmpFile})
+		findings, err := engine.Run(context.Background(), []string{tmpFile})
+		if !hcltest.IsValid(data) {
+			return
+		}
+		if err != nil {
+			t.Fatalf("fix run failed on valid input: %v\n--- input ---\n%s", err, data)
+		}
+
+		fixed := readFile(t, tmpFile)
+		fixedAST, diags := hclsyntax.ParseConfig(fixed, "test.tf", hcl.InitialPos)
+		if diags.HasErrors() {
+			t.Fatalf("fixed file no longer parses: %v\n--- input ---\n%s\n--- fixed ---\n%s", diags, data, fixed)
+		}
+
+		inputAST, _ := hclsyntax.ParseConfig(data, "test.tf", hcl.InitialPos)
+		want := hcltest.AllNames(inputAST.Body.(*hclsyntax.Body))
+		got := hcltest.AllNames(fixedAST.Body.(*hclsyntax.Body))
+		if !maps.Equal(want, got) {
+			t.Fatalf("fix changed the declarations\nwant: %v\ngot:  %v\n--- input ---\n%s\n--- fixed ---\n%s",
+				slices.Sorted(maps.Keys(want)), slices.Sorted(maps.Keys(got)), data, fixed)
+		}
+
+		if slices.ContainsFunc(findings, func(f sdk.Finding) bool { return f.Rule == "style.fix-loop" }) {
+			return
+		}
+		if _, err := engine.Run(context.Background(), []string{tmpFile}); err != nil {
+			t.Fatalf("second fix run failed: %v\n--- fixed ---\n%s", err, fixed)
+		}
+		if again := readFile(t, tmpFile); !bytes.Equal(fixed, again) {
+			t.Fatalf("second fix run changed the file\n--- input ---\n%s\n--- first run ---\n%s\n--- second run ---\n%s",
+				data, fixed, again)
+		}
 	})
+}
+
+func readFile(t *testing.T, path string) []byte {
+	t.Helper()
+	content, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("failed to read %s: %v", path, err)
+	}
+	return content
 }
 
 // FuzzApplyFixesSorting cross-checks applyFixes against an independent
@@ -178,11 +241,10 @@ variable "b" {}
 // splice must produce byte-identical content and the same multiset of applied
 // rule names. A divergence means either the sort order matters for retained
 // edits (a real bug, since the overlap filter is supposed to guarantee the
-// remaining set commutes) or the filter itself differs from the spec.
+// remaining set commutes) or the two filters disagree.
 //
-// The seed corpus encodes the 10 documented edge cases from the
-// byte-range-textedits plan (lines 304-313): all-disjoint, same-range
-// conflict, partial overlap, whole-file alongside narrow, stacked
+// The seed corpus encodes 10 edge cases of the edit resolution rules:
+// all-disjoint, same-range conflict, partial overlap, whole-file alongside narrow, stacked
 // zero-width insertions, same-offset zero-width conflict, adjacent touching
 // ranges, empty content, end-of-file insertion, and single full-content
 // replacement. Random fuzz inputs mutate these and exercise content + edit

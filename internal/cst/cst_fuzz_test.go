@@ -2,14 +2,15 @@ package cst
 
 import (
 	"errors"
+	"maps"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"testing"
-	"unicode/utf8"
 
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/hclsyntax"
+	"github.com/santosr2/TerraTidy/internal/hcltest"
 )
 
 // FuzzCSTRoundTrip exercises the Build → Bytes syntactic-equality
@@ -32,7 +33,7 @@ func FuzzCSTRoundTrip(f *testing.F) {
 	seedFuzzCorpus(f)
 
 	f.Fuzz(func(t *testing.T, data []byte) {
-		if !isValidHCL(data) {
+		if !hcltest.IsValid(data) {
 			return
 		}
 		file, err := Build(data, "fuzz.tf", DefaultTopLevelPolicy())
@@ -40,7 +41,7 @@ func FuzzCSTRoundTrip(f *testing.F) {
 			t.Fatal("Build returned nil File")
 		}
 		if err != nil {
-			// Defense-in-depth: isValidHCL filtered parse errors, but
+			// Defense-in-depth: hcltest.IsValid filtered parse errors, but
 			// Build may still return a wrapped diag — exempt here.
 			return
 		}
@@ -56,56 +57,13 @@ func FuzzCSTRoundTrip(f *testing.F) {
 		if !ok {
 			t.Fatalf("re-parsed Body is %T, want *hclsyntax.Body", reparsed.Body)
 		}
-		actual := collectHCLSyntaxTopLevelNames(body)
+		actual := hcltest.TopLevelNames(body)
 
-		if !sameNameSet(expected, actual) {
+		if !maps.Equal(expected, actual) {
 			t.Fatalf("syntactic equality violated\nexpected: %v\nactual:   %v\n--- output ---\n%s",
-				sortedKeys(expected), sortedKeys(actual), out)
+				slices.Sorted(maps.Keys(expected)), slices.Sorted(maps.Keys(actual)), out)
 		}
 	})
-}
-
-// isValidHCL reports whether data is well-formed UTF-8 HCL that hclsyntax
-// parses without diagnostics. Used to filter random fuzz inputs down to
-// "valid HCL" before exercising Build / mutate, matching the spec scope of
-// FuzzCSTRoundTrip / FuzzCSTMutateRoundTrip.
-//
-// The UTF-8 check is load-bearing: hclsyntax accepts isolated continuation
-// bytes (e.g. a lone 0xC9 inside an expression) on the FIRST pass but
-// changes its lexer state on the SECOND pass when content is appended
-// after the malformed bytes — splicing an inserted attribute trips
-// "Missing newline after argument" because the lexer drifts on the
-// invalid byte. The HCL spec requires UTF-8 source, so this filter pins
-// the contract rather than papering over a hclsyntax leniency.
-func isValidHCL(data []byte) bool {
-	if !utf8.Valid(data) {
-		return false
-	}
-	_, diags := hclsyntax.ParseConfig(data, "fuzz.tf", hcl.InitialPos)
-	return !diags.HasErrors()
-}
-
-// sameNameSet reports whether a and b contain the same set of keys.
-func sameNameSet(a, b map[string]bool) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for k := range a {
-		if !b[k] {
-			return false
-		}
-	}
-	return true
-}
-
-// sortedKeys returns the keys of m sorted for stable diff output.
-func sortedKeys(m map[string]bool) []string {
-	out := make([]string, 0, len(m))
-	for k := range m {
-		out = append(out, k)
-	}
-	sort.Strings(out)
-	return out
 }
 
 // FuzzCSTMutateRoundTrip exercises the structural mutation invariant: a
@@ -135,7 +93,7 @@ func FuzzCSTMutateRoundTrip(f *testing.F) {
 		// Target scope is "random valid HCL"; filter out parse failures
 		// so Build doesn't trip the known panic on malformed partial-tree
 		// byte ranges.
-		if !isValidHCL(data) {
+		if !hcltest.IsValid(data) {
 			return
 		}
 		// Precondition: input must end with `\n` so every Build-produced
@@ -196,7 +154,7 @@ func FuzzCSTMutateRoundTrip(f *testing.F) {
 		if !ok {
 			t.Fatalf("re-parsed Body is %T, want *hclsyntax.Body", reparsed.Body)
 		}
-		actual := collectHCLSyntaxTopLevelNames(body2)
+		actual := hcltest.TopLevelNames(body2)
 
 		for k := range expected {
 			if !actual[k] {
@@ -245,7 +203,7 @@ func collectTopLevelNames(body *Body) map[string]bool {
 		case *Attribute:
 			out["attr:"+v.Name] = true
 		case *Block:
-			out[blockKey(v.Type, blockLabelTexts(v.Labels))] = true
+			out[hcltest.BlockKey(v.Type, blockLabelTexts(v.Labels))] = true
 		}
 	}
 	return out
@@ -259,22 +217,8 @@ func removeTopLevelName(m map[string]bool, item BodyItem) {
 	case *Attribute:
 		delete(m, "attr:"+v.Name)
 	case *Block:
-		delete(m, blockKey(v.Type, blockLabelTexts(v.Labels)))
+		delete(m, hcltest.BlockKey(v.Type, blockLabelTexts(v.Labels)))
 	}
-}
-
-// collectHCLSyntaxTopLevelNames is the hclsyntax-side mirror of
-// collectTopLevelNames, used to compare against the post-mutation re-parsed
-// AST.
-func collectHCLSyntaxTopLevelNames(body *hclsyntax.Body) map[string]bool {
-	out := make(map[string]bool, len(body.Attributes)+len(body.Blocks))
-	for name := range body.Attributes {
-		out["attr:"+name] = true
-	}
-	for _, blk := range body.Blocks {
-		out[blockKey(blk.Type, blk.Labels)] = true
-	}
-	return out
 }
 
 func blockLabelTexts(labels []Label) []string {
@@ -283,14 +227,6 @@ func blockLabelTexts(labels []Label) []string {
 		out[i] = l.Text
 	}
 	return out
-}
-
-func blockKey(blockType string, labels []string) string {
-	key := "block:" + blockType
-	for _, l := range labels {
-		key += ":" + l
-	}
-	return key
 }
 
 // seedFuzzCorpus loads inline seeds covering every BodyItem variant +

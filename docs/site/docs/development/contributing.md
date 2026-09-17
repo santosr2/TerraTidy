@@ -312,7 +312,7 @@ Releases are driven by a signed version tag. Pushing it triggers the pipeline:
     - Checksums are signed with cosign and build provenance is attested
     - SBOMs are generated for each release archive
     - Post-release smoke tests verify the binary on ubuntu and macOS
-    - The Homebrew cask is install-tested on macOS (stable releases only)
+    - The Homebrew cask is installed and checked with `brew audit` on macOS (stable releases only)
 
 ## Getting Help
 

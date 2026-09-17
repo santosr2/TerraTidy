@@ -440,6 +440,13 @@ jobs:
           brew install --cask santosr2/tap/terratidy
           terratidy version
 
+      # GoReleaser generates the cask, so nobody reviews it before it ships.
+      # --strict adds Homebrew's style checks; --online checks that the download
+      # URLs and homepage resolve. The install above added the tap, which audit
+      # needs before it will load the cask.
+      - name: Audit Homebrew cask
+        run: brew audit --cask --strict --online santosr2/tap/terratidy
+
   # Every tag attaches the .vsix to the GitHub release. Only stable tags publish to
   # the VS Code Marketplace; pre-release testers install the .vsix manually.
   # Depends on goreleaser so the GitHub release is guaranteed to exist before upload.

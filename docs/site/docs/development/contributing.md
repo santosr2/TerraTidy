@@ -219,10 +219,35 @@ The CI pipeline runs on every PR:
 
 **Fuzz workflow** (`.github/workflows/fuzz.yml`):
 
-- Runs fuzz tests for config parsing, HCL formatting, and YAML rule loading
-- 30s on PRs, 5m weekly for deeper exploration
+- Runs every fuzz target in the repository, one parallel job per package
+- 30s per target on PRs labeled `fuzz`, 5m weekly for deeper exploration
 
-All checks must pass before merging. See [Security](security.md) for details on the scanning pipeline.
+See [Security](security.md) for details on the scanning pipeline.
+
+### Required checks
+
+A pull request into `main` can't merge until two groups of checks pass:
+
+- **Checks that run on every pull request:** `pr-title`, `pre-commit`, `govulncheck`,
+  `dependency-review`, `gitleaks`, `licenses`, `osv-scanner`, `zizmor`, `api-compat`,
+  `Analyze go` and `Analyze actions`.
+- **One result check per workflow that only tests some files:** `Test result`,
+  `Container result`, `GitHub Action result`, `VS Code result`, `Example rules result`
+  and `Pre-commit hooks result`.
+
+The workflows behind the result checks run on every pull request, but their first job,
+`Detect relevant changes`, compares the changed files with the paths that workflow
+covers. If none match, the other jobs skip, and the result check passes within seconds.
+Otherwise the jobs run, and the result check passes only if each one passed. A docs-only
+pull request therefore doesn't wait for the full test matrix, while a Go change can't
+merge without it.
+
+If you add a job to one of those workflows, list it in that workflow's `result` job
+`needs`. A job the result check doesn't wait on can fail without blocking a merge; the
+`workflow-result-jobs` pre-commit hook rejects the change if you forget. To change which
+files a workflow covers, edit the `PATTERN` of its `changes` job.
+
+The branch ruleset for `main` is the authoritative list of required checks.
 
 **Benchmark workflow** (`.github/workflows/benchmark.yml`):
 

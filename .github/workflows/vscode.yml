@@ -28,20 +28,27 @@ jobs:
       contents: read
       pull-requests: read  # List the files a pull request changes
     outputs:
-      relevant: ${{ steps.match.outputs.relevant }}
+      relevant: ${{ steps.filter.outputs.relevant }}
     steps:
+      # Pull requests are compared through the API. Pushes are compared with git,
+      # which needs the repository.
       - name: Checkout
+        if: github.event_name == 'push'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          sparse-checkout: tools/scripts
 
+      # Only the true/false output below is used. The action's list of changed
+      # file names is never read.
       - name: Match changed files
-        id: match
-        env:
-          GH_TOKEN: ${{ github.token }}
-          PATTERN: '^vscode/|^internal/lsp/|^\.github/workflows/vscode\.yml$|^tools/scripts/changed-files-match\.sh$'
-        run: ./tools/scripts/changed-files-match.sh
+        id: filter
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        with:
+          filters: |
+            relevant:
+              - 'vscode/**'
+              - 'internal/lsp/**'
+              - '.github/workflows/vscode.yml'
 
   build-and-test:
     needs: changes

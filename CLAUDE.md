@@ -339,7 +339,7 @@ FILE="$1"
 PR requirements: conventional commit title, all tests pass on 3 OSes, coverage maintained.
 
 `test`, `container-test`, `action-test`, `vscode`, `examples-test` and `precommit-test` start on
-every PR. A `changes` job matches the changed files against the workflow's `PATTERN`, the other jobs
+every PR. A `changes` job (`dorny/paths-filter`) matches the changed files against the workflow's globs, the other jobs
 skip when nothing matches, and a final `result` job is the single required check for that workflow.
 A new job in one of these workflows must be added to its `result` job's `needs`; the
 `workflow-result-jobs` pre-commit hook enforces it. Details in `docs/site/docs/development/contributing.md`.

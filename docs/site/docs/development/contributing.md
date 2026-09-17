@@ -245,7 +245,8 @@ merge without it.
 If you add a job to one of those workflows, list it in that workflow's `result` job
 `needs`. A job the result check doesn't wait on can fail without blocking a merge; the
 `workflow-result-jobs` pre-commit hook rejects the change if you forget. To change which
-files a workflow covers, edit the `PATTERN` of its `changes` job.
+files a workflow covers, edit the `relevant` filter of its `changes` job; it takes the
+same glob syntax as a workflow's `paths:`.
 
 The branch ruleset for `main` is the authoritative list of required checks.
 

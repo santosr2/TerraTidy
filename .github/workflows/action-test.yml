@@ -3,22 +3,8 @@ name: Test GitHub Action
 on:
   push:
     branches: [main]
-    paths:
-      - 'action.yml'
-      - 'tools/scripts/run-action.sh'
-      - '**/*.go'
-      - 'go.mod'
-      - 'go.sum'
-      - '.github/workflows/action-test.yml'
   pull_request:
     branches: [main]
-    paths:
-      - 'action.yml'
-      - 'tools/scripts/run-action.sh'
-      - '**/*.go'
-      - 'go.mod'
-      - 'go.sum'
-      - '.github/workflows/action-test.yml'
 
 permissions:
   contents: read
@@ -28,7 +14,46 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Decides whether this change touches anything the jobs below test. The path
+  # filter lives here rather than on the triggers so that the workflow always
+  # starts: a workflow skipped by a trigger filter reports nothing, and a
+  # required check that never reports blocks the pull request indefinitely.
+  changes:
+    name: Detect relevant changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read  # List the files a pull request changes
+    outputs:
+      relevant: ${{ steps.filter.outputs.relevant }}
+    steps:
+      # Pull requests are compared through the API. Pushes are compared with git,
+      # which needs the repository.
+      - name: Checkout
+        if: github.event_name == 'push'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Only the true/false output below is used. The action's list of changed
+      # file names is never read.
+      - name: Match changed files
+        id: filter
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        with:
+          filters: |
+            relevant:
+              - 'action.yml'
+              - 'tools/scripts/run-action.sh'
+              - '**/*.go'
+              - 'go.mod'
+              - 'go.sum'
+              - '.github/workflows/action-test.yml'
+
   test-action:
+    needs: changes
+    if: needs.changes.outputs.relevant == 'true'
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
@@ -96,6 +121,8 @@ jobs:
           STEPS_JSON_TEST_OUTPUTS_WARNINGS_COUNT: ${{ steps.json-test.outputs.warnings-count }}
 
   test-sarif:
+    needs: changes
+    if: needs.changes.outputs.relevant == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -126,6 +153,8 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
   test-exclude:
+    needs: changes
+    if: needs.changes.outputs.relevant == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -173,6 +202,8 @@ jobs:
           STEPS_EXCLUDE_TEST_OUTPUTS_FINDINGS_COUNT: ${{ steps.exclude-test.outputs.findings-count }}
 
   test-no-recurse:
+    needs: changes
+    if: needs.changes.outputs.relevant == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -219,6 +250,8 @@ jobs:
           STEPS_NO_RECURSE_TEST_OUTPUTS_FINDINGS_COUNT: ${{ steps.no-recurse-test.outputs.findings-count }}
 
   test-absolute-paths:
+    needs: changes
+    if: needs.changes.outputs.relevant == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -1058,3 +1091,49 @@ jobs:
           NO_FAIL_OUTCOME: ${{ steps.no-fail-warning-windows.outcome }}
           FAIL_OUTCOME: ${{ steps.fail-warning-windows.outcome }}
           WARNING_COUNT: ${{ steps.no-fail-warning-windows.outputs.warnings-count }}
+
+  # The one check to require for this workflow. It waits on every other job and
+  # passes only if each one succeeded or was skipped because the change did not
+  # touch what it tests. It uses always() rather than !cancelled() on purpose: a
+  # cancelled run has to fail this check, whereas a skipped required check would
+  # count as passing.
+  result:
+    name: GitHub Action result
+    if: always()
+    needs:
+      - changes
+      - test-action
+      - test-sarif
+      - test-exclude
+      - test-no-recurse
+      - test-absolute-paths
+      - test-profile
+      - test-parallel
+      - test-changed
+      - test-severity-threshold
+      - test-fail-on-warning
+      - test-skip-policy
+      - test-format-junit
+      - test-format-markdown
+      - test-format-table
+      - test-format-github
+      - test-windows-paths
+      - test-windows-changed
+      - test-windows-fail-on-warning
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: { }
+    steps:
+      - name: Require every job to have passed or been skipped
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          jq -r 'to_entries[] | "\(.key): \(.value.result)"' <<<"$RESULTS"
+          failed=$(jq -r 'to_entries[]
+            | select((.key == "changes" and .value.result != "success")
+                     or (.value.result != "success" and .value.result != "skipped"))
+            | .key' <<<"$RESULTS")
+          if [ -n "$failed" ]; then
+            echo "::error::These jobs did not pass: ${failed//$'\n'/, }"
+            exit 1
+          fi

@@ -3,22 +3,8 @@ name: Container Tests
 on:
   push:
     branches: [main]
-    paths:
-      - 'Dockerfile'
-      - '**/*.go'
-      - 'go.mod'
-      - 'go.sum'
-      - '.go-version'
-      - '.github/workflows/container-test.yml'
   pull_request:
     branches: [main]
-    paths:
-      - 'Dockerfile'
-      - '**/*.go'
-      - 'go.mod'
-      - 'go.sum'
-      - '.go-version'
-      - '.github/workflows/container-test.yml'
 
 permissions:
   contents: read
@@ -31,7 +17,47 @@ env:
   IMAGE_NAME: terratidy-test
 
 jobs:
+  # Decides whether this change touches anything the jobs below test. The path
+  # filter lives here rather than on the triggers so that the workflow always
+  # starts: a workflow skipped by a trigger filter reports nothing, and a
+  # required check that never reports blocks the pull request indefinitely.
+  changes:
+    name: Detect relevant changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read  # List the files a pull request changes
+    outputs:
+      relevant: ${{ steps.filter.outputs.relevant }}
+    steps:
+      # Pull requests are compared through the API. Pushes are compared with git,
+      # which needs the repository.
+      - name: Checkout
+        if: github.event_name == 'push'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Only the true/false output below is used. The action's list of changed
+      # file names is never read.
+      - name: Match changed files
+        id: filter
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        with:
+          filters: |
+            relevant:
+              - 'Dockerfile'
+              - '.dockerignore'
+              - '**/*.go'
+              - 'go.mod'
+              - 'go.sum'
+              - '.go-version'
+              - '.github/workflows/container-test.yml'
+
   build-test:
+    needs: changes
+    if: needs.changes.outputs.relevant == 'true'
     name: Docker Build
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -330,3 +356,30 @@ jobs:
           fi
 
           echo "Container runs as non-root user: $RUNTIME_USER (UID: $RUNTIME_UID)"
+
+  # The one check to require for this workflow. It waits on every other job and
+  # passes only if each one succeeded or was skipped because the change did not
+  # touch what it tests. It uses always() rather than !cancelled() on purpose: a
+  # cancelled run has to fail this check, whereas a skipped required check would
+  # count as passing.
+  result:
+    name: Container result
+    if: always()
+    needs: [changes, build-test, run-test, check-test, healthcheck-test, trivy-scan, non-root-test]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: { }
+    steps:
+      - name: Require every job to have passed or been skipped
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          jq -r 'to_entries[] | "\(.key): \(.value.result)"' <<<"$RESULTS"
+          failed=$(jq -r 'to_entries[]
+            | select((.key == "changes" and .value.result != "success")
+                     or (.value.result != "success" and .value.result != "skipped"))
+            | .key' <<<"$RESULTS")
+          if [ -n "$failed" ]; then
+            echo "::error::These jobs did not pass: ${failed//$'\n'/, }"
+            exit 1
+          fi

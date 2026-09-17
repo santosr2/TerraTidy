@@ -329,14 +329,20 @@ FILE="$1"
 | `fuzz.yml` | labeled PRs (fuzz) + weekly | Fuzz tests (30s CI, 5m scheduled) |
 | `docs.yml` | push main | MkDocs build + GitHub Pages deploy |
 | `action-test.yml` | push/PR | GitHub Action self-test on 3 OSes |
-| `vscode.yml` | push/PR (paths) | Lint, build, test VSCode extension on Ubuntu + macOS (CI only; publishing lives in `release.yml`) |
+| `vscode.yml` | push/PR (jobs run on `vscode/`, LSP changes) | Lint, build, test VSCode extension on Ubuntu + macOS (CI only; publishing lives in `release.yml`) |
 | `benchmark.yml` | push on benchmarks/baseline.txt + labeled PRs (benchmark) | Performance benchmarks with regression detection |
-| `container-test.yml` | push/PR (Dockerfile, Go) | Docker build, version, check, healthcheck, non-root |
-| `examples-test.yml` | push/PR (examples/) | Test example rules (Go, YAML, Bash) |
-| `precommit-test.yml` | push/PR (.pre-commit-hooks.yaml, Go) | Pre-commit hook validation |
+| `container-test.yml` | push/PR (jobs run on Dockerfile, Go changes) | Docker build, version, check, healthcheck, non-root |
+| `examples-test.yml` | push/PR (jobs run on `examples/`, rule engine changes) | Test example rules (Go, YAML, Bash) |
+| `precommit-test.yml` | push/PR (jobs run on hook definition, Go changes) | Pre-commit hook validation |
 | `scorecard.yml` | weekly + push to main | OpenSSF security scorecard |
 
 PR requirements: conventional commit title, all tests pass on 3 OSes, coverage maintained.
+
+`test`, `container-test`, `action-test`, `vscode`, `examples-test` and `precommit-test` start on
+every PR. A `changes` job (`dorny/paths-filter`) matches the changed files against the workflow's globs, the other jobs
+skip when nothing matches, and a final `result` job is the single required check for that workflow.
+A new job in one of these workflows must be added to its `result` job's `needs`; the
+`workflow-result-jobs` pre-commit hook enforces it. Details in `docs/site/docs/development/contributing.md`.
 
 ## Release Process
 

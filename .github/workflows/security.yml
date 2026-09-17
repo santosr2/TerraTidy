@@ -141,6 +141,9 @@ jobs:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: read  # List the files a pull request changes
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -149,7 +152,7 @@ jobs:
           persist-credentials: false
 
       - name: Check for pkg/sdk changes
-        uses: santosr2/conditional-paths-action@9c124632d1b141a351779440b22130f0c9806166 # v1.0.0
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
         id: filter
         with:
           filters: |

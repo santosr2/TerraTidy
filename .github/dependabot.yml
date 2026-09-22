@@ -69,6 +69,19 @@ updates:
       - ci
     cooldown:
       default-days: 7
+    groups:
+      # init, analyze and upload-sarif ship as one release of github/codeql-action,
+      # but Dependabot sees three dependencies. init stamps its version into the
+      # config analyze reads, and analyze refuses a mismatch, so a PR that bumps
+      # only one of them fails, and so does its sibling. Each group covers one
+      # update type, hence the pair (see the golang.org/x/* group above).
+      codeql-action:
+        patterns:
+          - "github/codeql-action*"
+      codeql-action-security:
+        applies-to: security-updates
+        patterns:
+          - "github/codeql-action*"
 
   # Hash-pinned CI/docs tooling lockfiles (uv pip compile output).
   # .github/requirements: pre-commit + pyyaml for precommit-test.yml.

@@ -1176,11 +1176,12 @@ func (s *Server) prepareFixerInputs(uri string, content []byte) (*hcl.File, stri
 		return nil, "", noop
 	}
 
+	// Native HCL only: hclparse.Parser caches a file under its name even when
+	// parsing fails, so a ParseJSON retry on this parser hands back the
+	// half-parsed HCL file with no diagnostics, and a buffer that doesn't parse
+	// reaches the rules as a partial tree.
 	parser := hclparse.NewParser()
 	file, diags := parser.ParseHCL(content, tempFile)
-	if diags.HasErrors() {
-		file, diags = parser.ParseJSON(content, tempFile)
-	}
 	if diags.HasErrors() || file == nil {
 		cleanup()
 		return nil, "", noop

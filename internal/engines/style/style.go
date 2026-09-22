@@ -188,13 +188,17 @@ func (e *Engine) checkFile(path string) ([]sdk.Finding, error) {
 			suppressions = annotations.Parse(content)
 		}
 
-		// Create fresh parser for each pass to avoid cached results
+		// Create fresh parser for each pass to avoid cached results.
+		//
+		// Native HCL only, no JSON retry. hclparse.Parser caches a file under its
+		// name even when parsing fails, so a ParseJSON retry on the same parser
+		// returned that half-parsed file with no diagnostics, and the check below
+		// never fired: rules ran on a partial tree, and one of them could panic on
+		// a node with an inverted byte range. Terraform's JSON syntax isn't
+		// supported here anyway — the lint and policy engines parse HCL only, and
+		// file discovery collects .tf, .tfvars and .hcl.
 		parser := hclparse.NewParser()
 		file, diags := parser.ParseHCL(content, path)
-		if diags.HasErrors() {
-			// Try as JSON for .tf.json files
-			file, diags = parser.ParseJSON(content, path)
-		}
 
 		if diags.HasErrors() {
 			return []sdk.Finding{{

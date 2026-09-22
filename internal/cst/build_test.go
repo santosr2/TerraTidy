@@ -574,11 +574,12 @@ func TestBuild_BlockBraceComments(t *testing.T) {
 	assert.Equal(t, CommentHash, blk.ClosingBraceComment.Style)
 }
 
-// TestBuild_ParseError_ReturnsPartialAndError pins the partial-tree
-// contract: on parse failure, Build returns a non-nil File plus the
-// hclsyntax diagnostics. Rule Fix migrations rely on this to preserve
-// the no-op-on-parse-error pattern.
-func TestBuild_ParseError_ReturnsPartialAndError(t *testing.T) {
+// TestBuild_ParseError_ReturnsEmptyBodyAndError pins the parse-failure
+// contract: Build returns a non-nil File with an empty Body plus the
+// hclsyntax diagnostics, and never walks the salvaged nodes. Rule Fix
+// methods rely on the non-nil File to preserve the no-op-on-parse-error
+// pattern.
+func TestBuild_ParseError_ReturnsEmptyBodyAndError(t *testing.T) {
 	t.Parallel()
 
 	// Unterminated block: `{` opens, EOF before `}`.
@@ -590,11 +591,26 @@ func TestBuild_ParseError_ReturnsPartialAndError(t *testing.T) {
 	require.NotNil(t, f.Body, "f.Body must be non-nil so rule Fix can pattern-match on it")
 	assert.Equal(t, content, f.Source,
 		"f.Source must round-trip the original bytes even on parse error")
-	// Sentinel brace offsets pin the file-level body shape. The Items
-	// length depends on what hclsyntax salvages from a malformed input
-	// and is intentionally not asserted (per-version variance).
+	assert.Empty(t, f.Body.Items, "a tree that failed to parse must not be walked")
 	assert.Equal(t, -1, f.Body.OpenByte)
 	assert.Equal(t, -1, f.Body.CloseByte)
+}
+
+// TestBuild_ParseError_InvertedExpressionRange covers the shape that used to
+// panic: a truncated call leaves create_before_destroy with an expression
+// range of [127:0], whose end precedes its start, and slicing it panicked with
+// "slice bounds out of range". Found by FuzzStyleFix through
+// LifecycleAttributeOrderRule.Fix.
+func TestBuild_ParseError_InvertedExpressionRange(t *testing.T) {
+	t.Parallel()
+
+	content := []byte("resource \"aws_instance\" \"web\" {\n  ami = \"x\"\n  lifecycle {\n" +
+		"    ignore_changes        = [tags]\n    create_before_destroy = trc(   \"000")
+
+	f, err := Build(content, "broken.tf", DefaultTopLevelPolicy())
+	require.Error(t, err, "truncated call must report a parse error")
+	require.NotNil(t, f)
+	assert.Empty(t, f.Body.Items)
 }
 
 // TestBuild_NoFinalNewline confirms that a file missing its trailing

@@ -2357,3 +2357,53 @@ func TestEngine_RegisterFixerForTesting(t *testing.T) {
 		assert.Empty(t, findings, "shim Check must return no findings — diagnostics come from real rules, not the test seam")
 	})
 }
+
+// TestRun_UnparseableFileReportsParseError pins the parse-failure contract:
+// a file hclsyntax rejects produces one style.parse-error finding, and no rule
+// runs against the salvaged nodes.
+//
+// The engine used to retry with ParseJSON on the same hclparse.Parser. That
+// parser caches a file under its name even when parsing failed, so the retry
+// returned the half-parsed HCL file with no diagnostics: the check below never
+// fired, every rule ran on a partial tree, and `terratidy style` called a
+// broken file clean.
+func TestRun_UnparseableFileReportsParseError(t *testing.T) {
+	t.Parallel()
+
+	path := filepath.Join(t.TempDir(), "broken.tf")
+	require.NoError(t, os.WriteFile(path, []byte("resource \"x\" \"y\" {\n  name = \"value\"\n"), 0o600))
+
+	findings, err := New(&Config{Rules: make(map[string]RuleConfig)}).Run(context.Background(), []string{path})
+	require.NoError(t, err)
+	require.Len(t, findings, 1, "a file that does not parse yields the parse error and nothing else")
+	assert.Equal(t, "style.parse-error", findings[0].Rule)
+	assert.Equal(t, sdk.SeverityError, findings[0].Severity)
+}
+
+// TestRun_FixOnUnparseableFileDoesNotPanic covers the crash FuzzStyleFix found:
+// with every rule enabled, LifecycleAttributeOrderRule.Fix built a CST from a
+// truncated call whose expression range was inverted, and panicked on the
+// slice. Fix mode must report the parse error and leave the file alone.
+func TestRun_FixOnUnparseableFileDoesNotPanic(t *testing.T) {
+	t.Parallel()
+
+	content := []byte("resource \"aws_instance\" \"web\" {\n  ami = \"x\"\n  lifecycle {\n" +
+		"    ignore_changes        = [tags]\n    create_before_destroy = trc(   \"000")
+	path := filepath.Join(t.TempDir(), "broken.tf")
+	require.NoError(t, os.WriteFile(path, content, 0o600))
+
+	cfg := &Config{Fix: true, Diff: true, Rules: make(map[string]RuleConfig)}
+	engine := New(cfg)
+	for _, rule := range engine.GetAllRules() {
+		cfg.Rules[rule.Name()] = RuleConfig{Enabled: config.BoolPtr(true)}
+	}
+
+	findings, err := engine.Run(context.Background(), []string{path})
+	require.NoError(t, err)
+	require.Len(t, findings, 1)
+	assert.Equal(t, "style.parse-error", findings[0].Rule)
+
+	after, err := os.ReadFile(path)
+	require.NoError(t, err)
+	assert.Equal(t, content, after, "a file that does not parse must not be rewritten")
+}

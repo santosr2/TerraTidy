@@ -46,8 +46,18 @@ func Build(content []byte, filename string, policy Policy) (*File, error) {
 		return f, parseErr
 	}
 
+	// A file that failed to parse still yields nodes, but some carry ranges that
+	// describe nothing real: a truncated call like `x = f(   "abc` leaves an
+	// expression range whose end byte is 0, before its start. Slicing that range
+	// panics, so the tree is not walked at all. Every caller no-ops on parseErr,
+	// so an empty body is what they already expect.
+	if parseErr != nil {
+		f.Body = newEmptyBody()
+		return f, parseErr
+	}
+
 	f.Body = buildBody(content, tokens, syntaxBody, policy, 0, len(content), -1, -1)
-	return f, parseErr
+	return f, nil
 }
 
 func newEmptyBody() *Body { return &Body{OpenByte: -1, CloseByte: -1} }

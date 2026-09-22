@@ -26,9 +26,9 @@ import (
 // for rule Fix safety is structural identity, not byte identity.
 //
 // Parse-failed inputs are filtered upstream because this target is scoped
-// to "random valid HCL". Build's robustness on malformed inputs is tracked
-// separately — there is a known panic on partial-tree expressions with
-// inverted byte ranges (e.g. `A=A(`).
+// to "random valid HCL". Build hands back an empty body for anything that
+// failed to parse, so there is no tree to round-trip there anyway; the
+// unit tests in build_test.go pin that.
 func FuzzCSTRoundTrip(f *testing.F) {
 	seedFuzzCorpus(f)
 
@@ -90,9 +90,8 @@ func FuzzCSTMutateRoundTrip(f *testing.F) {
 	seedFuzzCorpus(f)
 
 	f.Fuzz(func(t *testing.T, data []byte) {
-		// Target scope is "random valid HCL"; filter out parse failures
-		// so Build doesn't trip the known panic on malformed partial-tree
-		// byte ranges.
+		// Target scope is "random valid HCL"; Build returns an empty body
+		// for input that failed to parse, which has no mutation to exercise.
 		if !hcltest.IsValid(data) {
 			return
 		}

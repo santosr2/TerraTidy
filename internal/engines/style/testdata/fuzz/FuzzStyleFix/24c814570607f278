@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("resource \"9(s_insta7c8\" \"web\" {\n  ami = \"0mi-120\"\n  lifecycle {\n    ignore_changes        = [tags]\n    create_before_destroy = trc(   \"0000000000000000000000000000000000000000")

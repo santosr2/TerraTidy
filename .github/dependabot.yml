@@ -82,6 +82,18 @@ updates:
         applies-to: security-updates
         patterns:
           - "github/codeql-action*"
+      # The docker/* actions are separate repos with no version constraint between
+      # them, unlike codeql-action above: matching version numbers are a
+      # coincidence, and they drift (setup-buildx reached 4.4.1 while setup-qemu
+      # stayed on 4.4.0). Grouped only to land one PR instead of four. Nothing here
+      # runs outside release.yml, so no pull request exercises these bumps.
+      docker-actions:
+        patterns:
+          - "docker/*"
+      docker-actions-security:
+        applies-to: security-updates
+        patterns:
+          - "docker/*"
 
   # Hash-pinned CI/docs tooling lockfiles (uv pip compile output).
   # .github/requirements: pre-commit + pyyaml for precommit-test.yml.
@@ -99,6 +111,7 @@ updates:
       include: "scope"
     labels:
       - dependencies
+      - ci
       - python
     cooldown:
       default-days: 7

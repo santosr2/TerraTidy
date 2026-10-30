@@ -335,8 +335,9 @@ instance_type="t2.micro"
 // TestFmt_NoPhantomFixOnSecondRun locks in the spec success criterion:
 // "Running fmt --all twice on the same tree results in zero changes the
 // second time (no phantom-fix bug)." The original bug (reproduced 2026-04-30
-// against workera-iac) had the engine reporting "Fixed N style issue(s)" on
-// runs where the file content was actually unchanged — lifecycle-at-end and
+// against a large real-world module repository) had the engine reporting
+// "Fixed N style issue(s)" on runs where the file content was actually
+// unchanged — lifecycle-at-end and
 // tags-at-end fixes cancelled each other out. The hash-based fixed-point
 // detection in internal/engines/style/style.go:152-188 prevents this by
 // refusing to write content the engine has already seen.

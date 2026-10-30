@@ -2924,8 +2924,8 @@ terraform {
 }
 
 // TestTerraformBlockFirst_FloatingSectionHeader_Survives pins the 2026-05-20
-// floating-section-header bug fix. The fixture mirrors a workera-iac
-// terraform/modules/backup/main.tf shape: a standalone `### SNS Notifications`
+// floating-section-header bug fix. The fixture mirrors a real-world backup
+// module's shape: a standalone `### SNS Notifications`
 // header comment sits between two resource blocks, separated by blank lines
 // on both sides, and a misplaced terraform block trails them. Pre-CST, the
 // line-based reorder helper folded the standalone comment into the

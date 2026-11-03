@@ -1,0 +1,27 @@
+# Advisories accepted for the VS Code extension's dependency tree.
+#
+# Each entry needs a reason that holds for this extension specifically, and an
+# ignoreUntil date so the decision is revisited instead of forgotten. When one
+# expires, check whether the parents below have moved to the fixed major; if so,
+# delete the entry and refresh bun.lock.
+
+[[IgnoredVulns]]
+# minimatch: pattern amplification DoS, fixed in 11.0.1.
+id = "GHSA-g3hv-75wg-m249"
+ignoreUntil = 2027-02-01T00:00:00Z
+reason = """\
+Only reachable with optimizationLevel >= 2; the default is 1 and no caller in \
+this tree (vscode-languageclient, @vscode/vsce, mocha, @vscode/test-cli, \
+test-exclude) sets it. The only shipped caller, vscode-languageclient, builds \
+patterns from our own LSP server's registrations, not user input. The fix is \
+a major with breaking API changes that no parent accepts yet (latest \
+vscode-languageclient still requires ^10)."""
+
+[[IgnoredVulns]]
+# glob: walk continues after AbortSignal cancellation, fixed in 14.0.2.
+id = "GHSA-3g3m-2fjr-6pw4"
+ignoreUntil = 2027-02-01T00:00:00Z
+reason = """\
+Dev and test tooling only (mocha, @vscode/test-cli, test-exclude); nothing in \
+the shipped extension depends on glob, and none of these callers pass an \
+AbortSignal. The fix is a major that no parent accepts yet."""

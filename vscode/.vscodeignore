@@ -6,6 +6,7 @@ out/test/**
 node_modules/**
 .gitignore
 biome.json
+osv-scanner.toml
 **/tsconfig.json
 **/*.map
 **/*.ts

@@ -25,7 +25,7 @@ updates:
         patterns:
           - "golang.org/x/*"
 
-  - package-ecosystem: npm
+  - package-ecosystem: bun
     directory: /vscode
     schedule:
       interval: weekly

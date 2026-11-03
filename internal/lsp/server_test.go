@@ -3663,20 +3663,65 @@ severity_threshold: warning
 		time.Sleep(20 * time.Millisecond) // Small delay between writes, total ~100ms
 	}
 
-	// Wait for debounced reload to complete
+	// Wait for the success line, not the new config value: the reload swaps
+	// the config before it logs, so the value alone can arrive too early.
+	var logContent []byte
 	require.Eventually(t, func() bool {
-		server.engineMu.RLock()
-		threshold := server.config.SeverityThreshold
-		server.engineMu.RUnlock()
-		return threshold == "warning"
-	}, 2*time.Second, 10*time.Millisecond, "config should reload with final value")
+		content, readErr := os.ReadFile(logFile)
+		logContent = content
+		return readErr == nil && strings.Contains(string(content), "config reloaded successfully")
+	}, 2*time.Second, 10*time.Millisecond, "config should reload")
 
-	// Verify that only one "config reloaded successfully" message appears
-	// (The debouncing should coalesce the 5 writes into 1 reload)
-	logContent, err := os.ReadFile(logFile)
-	require.NoError(t, err)
+	server.engineMu.RLock()
+	threshold := server.config.SeverityThreshold
+	server.engineMu.RUnlock()
+	assert.Equal(t, "warning", threshold, "config should reload with final value")
+
+	// The debouncing should coalesce the 5 writes into 1 reload
 	reloadCount := strings.Count(string(logContent), "config reloaded successfully")
 	assert.Equal(t, 1, reloadCount, "should have exactly one reload for multiple rapid writes, got log: %s", string(logContent))
+}
+
+// TestServer_Close_WaitsForInFlightConfigReload checks that Close never returns
+// while a reload that has already fired is still running. Timer.Stop doesn't
+// wait for a running callback, so without that wait the reload carries on
+// after Close and its "reloaded successfully" line hits a closed log file.
+func TestServer_Close_WaitsForInFlightConfigReload(t *testing.T) {
+	// Close has to land inside the reload, which only takes a few
+	// milliseconds; repeat so a fast reload can't hide the bug.
+	const attempts = 20
+
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, ".terratidy.yaml")
+	require.NoError(t, os.WriteFile(configPath, []byte("version: 1\n"), 0o644))
+
+	for i := range attempts {
+		logFile := filepath.Join(tmpDir, fmt.Sprintf("server-%d.log", i))
+		server := NewServer(strings.NewReader(""), &safeBuffer{})
+		require.NoError(t, server.SetLogFile(logFile))
+		server.configReloadDelay = 0
+
+		params, err := json.Marshal(InitializeParams{RootURI: pathToFileURI(tmpDir)})
+		require.NoError(t, err)
+		require.NoError(t, server.handleInitialize(RequestMessage{
+			JSONRPC: "2.0",
+			ID:      json.RawMessage(`1`),
+			Method:  "initialize",
+			Params:  params,
+		}))
+
+		server.scheduleConfigReload()
+		require.Eventually(t, func() bool {
+			content, readErr := os.ReadFile(logFile)
+			return readErr == nil && strings.Contains(string(content), "config file changed, reloading...")
+		}, 2*time.Second, time.Millisecond, "attempt %d: reload never started", i)
+		require.NoError(t, server.Close())
+
+		logContent, err := os.ReadFile(logFile)
+		require.NoError(t, err)
+		require.Contains(t, string(logContent), "config reloaded successfully",
+			"attempt %d: Close returned before the in-flight reload finished", i)
+	}
 }
 
 // TestServer_DidChangeConfiguration tests that workspace/didChangeConfiguration

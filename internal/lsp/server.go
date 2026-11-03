@@ -125,6 +125,7 @@ type Server struct {
 	configReloadTimer *time.Timer       // debounce timer for config reload
 	configReloadDelay time.Duration     // configurable delay (default: ConfigReloadDebounceDelay)
 	closing           bool              // true when server is shutting down
+	configReloadWg    sync.WaitGroup    // tracks the reload callback from scheduling until it runs or is canceled
 	republishWg       sync.WaitGroup    // tracks in-flight republishAllDiagnostics goroutines
 
 	// Engine mutex: protects engine and config fields during reload
@@ -180,7 +181,10 @@ func (s *Server) Close() error {
 	// Stop config watcher (cancels pending reload timer)
 	s.stopConfigWatcher()
 
-	// Wait for any in-flight republish operations to complete
+	// Timer.Stop doesn't wait for a callback that already fired, so wait for
+	// it here. It must come before republishWg.Wait: the callback is what
+	// adds to republishWg, and Wait can't see an Add that hasn't happened.
+	s.configReloadWg.Wait()
 	s.republishWg.Wait()
 
 	// Clean up session temp directory
@@ -228,11 +232,8 @@ func (s *Server) stopConfigWatcher() {
 	s.configWatcherMu.Lock()
 	defer s.configWatcherMu.Unlock()
 
-	// Cancel any pending reload
-	if s.configReloadTimer != nil {
-		s.configReloadTimer.Stop()
-		s.configReloadTimer = nil
-	}
+	s.cancelConfigReload()
+	s.configReloadTimer = nil
 
 	if s.configWatcher != nil {
 		if err := s.configWatcher.Close(); err != nil {
@@ -286,13 +287,15 @@ func (s *Server) scheduleConfigReload() {
 		return
 	}
 
-	// Cancel any pending reload
-	if s.configReloadTimer != nil {
-		s.configReloadTimer.Stop()
-	}
+	s.cancelConfigReload()
 
-	// Schedule new reload after debounce delay
+	// Schedule new reload after debounce delay. The closing check above runs
+	// under configWatcherMu, which Close also takes before waiting, so this
+	// Add always happens before Close's Wait.
+	s.configReloadWg.Add(1)
 	s.configReloadTimer = time.AfterFunc(s.configReloadDelay, func() {
+		defer s.configReloadWg.Done()
+
 		// Check closing flag again before executing reload
 		s.configWatcherMu.Lock()
 		isClosing := s.closing
@@ -310,6 +313,15 @@ func (s *Server) scheduleConfigReload() {
 			s.republishWg.Go(s.republishAllDiagnostics)
 		}
 	})
+}
+
+// cancelConfigReload stops the pending reload timer, if any. A callback that
+// Stop prevents from running will never call configReloadWg.Done, so do it
+// here; one that already fired calls Done itself. Caller holds configWatcherMu.
+func (s *Server) cancelConfigReload() {
+	if s.configReloadTimer != nil && s.configReloadTimer.Stop() {
+		s.configReloadWg.Done()
+	}
 }
 
 // reloadConfig reloads the configuration from disk and reinitializes engines.

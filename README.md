@@ -54,7 +54,7 @@ Download the latest release for your platform from [GitHub Releases](https://git
 
 ```bash
 # Pin to a specific version (recommended for reproducible builds)
-docker pull ghcr.io/santosr2/terratidy:v0.4.1-alpha
+docker pull ghcr.io/santosr2/terratidy:v0.4.1
 
 docker run --rm -v $(pwd):/app ghcr.io/santosr2/terratidy check
 ```
@@ -62,7 +62,7 @@ docker run --rm -v $(pwd):/app ghcr.io/santosr2/terratidy check
 ### From Source
 
 ```bash
-go install github.com/santosr2/TerraTidy/cmd/terratidy@v0.4.1-alpha
+go install github.com/santosr2/TerraTidy/cmd/terratidy@v0.4.1
 ```
 
 > **Tip:** Pin to a specific version for reproducible installs.
@@ -240,7 +240,7 @@ Add to `.pre-commit-config.yaml`:
 ```yaml
 repos:
   - repo: https://github.com/santosr2/TerraTidy
-    rev: v0.4.1-alpha
+    rev: v0.4.1
     hooks:
       - id: terratidy-check
 ```
@@ -258,7 +258,7 @@ Available hook IDs: `terratidy-fmt`, `terratidy-fmt-check`, `terratidy-style`, `
     github-token: ${{ secrets.GITHUB_TOKEN }}
 ```
 
-Pin to a specific release for reproducible builds: `santosr2/terratidy@v0.4.1-alpha`
+Pin to a specific release for reproducible builds: `santosr2/terratidy@v0.4.1`
 
 Available inputs: `version`, `config`, `profile`, `format`, `parallel`, `working-directory`,
 `skip-fmt`, `skip-style`, `skip-lint`, `skip-policy`, `exclude`, `no-recurse`, `absolute-paths`,

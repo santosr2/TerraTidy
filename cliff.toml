@@ -30,11 +30,19 @@ body = """
             {% elif commit.author.name %} by [@{{ commit.author.name }}](https://github.com/{{ commit.author.name }}){% endif %}\
     {% endfor %}
 {% endfor %}
-{% if github.contributors | filter(attribute="is_first_time", value=true) | length != 0 %}
+{# Bots are left out: the release App's own changelog commit would otherwise
+   credit it as a new contributor, even though commit_parsers skips that commit. #}\
+{% set_global new_contributors = [] %}\
+{% for contributor in github.contributors | filter(attribute="is_first_time", value=true) %}\
+    {% if contributor.username is not ending_with("[bot]") %}\
+        {% set_global new_contributors = new_contributors | concat(with=contributor) %}\
+    {% endif %}\
+{% endfor %}\
+{% if new_contributors | length != 0 %}
     ---
 
     ### New Contributors
-    {% for contributor in github.contributors | filter(attribute="is_first_time", value=true) %}
+    {% for contributor in new_contributors %}
         - @{{ contributor.username }} made their first contribution\
             {% if contributor.pr_number %} in [#{{ contributor.pr_number }}](https://github.com/santosr2/TerraTidy/pull/{{ contributor.pr_number }}){% endif %}\
     {% endfor %}

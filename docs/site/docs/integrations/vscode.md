@@ -259,6 +259,7 @@ version number, the CLI and extension versions stay aligned.
 | 0.3.0 | 0.3.0 | Marketplace (stable) |
 | 0.4.0-alpha.1 | 0.4.0 | GitHub release `.vsix` only |
 | 0.4.0 | 0.4.0 | Marketplace (stable) |
+| 0.4.1 | 0.4.1 | Marketplace (stable) |
 
 Extension `0.2.1` is offset by one patch because `0.2.0` was already published
 to the Marketplace during the alpha cycle. From `0.3.0` onward the CLI and

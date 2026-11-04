@@ -54,7 +54,7 @@ Pin the TerraTidy version in CI to avoid unexpected behavior from upgrades:
 ```yaml
 - uses: santosr2/terratidy@v0
   with:
-    version: 'v0.4.0'
+    version: 'v0.4.1'
 ```
 
 ### Scan results

@@ -10,7 +10,7 @@ require (
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.3
 	github.com/spf13/cobra v1.10.2
 	github.com/stretchr/testify v1.12.1
-	github.com/zclconf/go-cty v1.19.0
+	github.com/zclconf/go-cty v1.20.0
 	golang.org/x/term v0.47.0
 	golang.org/x/text v0.43.0
 	gopkg.in/yaml.v3 v3.0.1
